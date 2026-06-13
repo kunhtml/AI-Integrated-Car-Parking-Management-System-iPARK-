@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* Globals CSS for iPARK */
 body {
   margin: 0;
