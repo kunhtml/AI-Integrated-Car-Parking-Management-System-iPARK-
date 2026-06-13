@@ -443,14 +443,7 @@ export default function PageHomepage() {
           </div>
           <Bell size={22} />
         </div>
-        <form
-          className="stack-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            simulateAction("Đã ghi nhận phản hồi khách hàng trên giao diện. Cần API lưu phản hồi để hoàn chỉnh.");
-            event.currentTarget.reset();
-          }}
-        >
+        <form className="stack-form" onSubmit={createFeedback}>
           <label>
             Chủ đề
             <input name="subject" placeholder="Ví dụ: nhầm phí gửi xe" required />
@@ -464,12 +457,31 @@ export default function PageHomepage() {
           </button>
         </form>
       </div>
-      <ModuleList
-        icon={<ReceiptText size={22} />}
-        kicker="Lịch sử"
-        title="Phản hồi đã gửi"
-        items={["Yêu cầu miễn phạt PX-1024 - Đang xử lý", "Góp ý khu B thiếu biển chỉ dẫn - Đã tiếp nhận"]}
-      />
+      <div className="panel wide">
+        <div className="panel-heading">
+          <div>
+            <p>Lịch sử</p>
+            <h2>Phản hồi đã gửi</h2>
+          </div>
+          <ReceiptText size={22} />
+        </div>
+        <DataTable
+          headers={["Chủ đề", "Nội dung", "Trạng thái", "Phản hồi", "Thao tác"]}
+          rows={feedbackList.map((item) => [
+            item.subject,
+            item.content,
+            item.status,
+            item.response || "Chưa có",
+            currentUser.role === "admin" && item.status !== "Đã phản hồi" ? (
+              <button className="small-button" key={item.id} onClick={() => updateFeedbackStatus(item.id)} type="button">
+                Phản hồi
+              </button>
+            ) : (
+              "OK"
+            ),
+          ])}
+        />
+      </div>
     </section>
   )
 }
