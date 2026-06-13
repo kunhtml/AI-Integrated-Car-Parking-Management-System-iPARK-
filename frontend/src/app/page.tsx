@@ -13,6 +13,22 @@ import {
   MapPin,
 } from "lucide-react";
 import { parkingConfig } from "../lib/parking-config";
+type View =
+  | "overview"
+  | "sessions"
+  | "users"
+  | "pricing"
+  | "reports"
+  | "profile"
+  | "wallet"
+  | "vehicles"
+  | "feedback"
+  | "notifications"
+  | "shifts"
+  | "incidents"
+  | "ai"
+  | "devices"
+  | "security";
 
 export default function PageHomepage() {
   const [contactSubmitted, setContactSubmitted] = useState(false);
@@ -324,7 +340,37 @@ export default function PageHomepage() {
           </div>
         </div>
       </section>
-
+      {activeView === "profile" && (
+        <section className="content-grid">
+          <div className="panel">
+            <div className="panel-heading">
+              <div>
+                <p>Hồ sơ</p>
+                <h2>{currentUser.name}</h2>
+              </div>
+              <UserRound size={22} />
+            </div>
+            <div className="profile-lines">
+              <span>Email: {currentUser.email}</span>
+              <span>Vai trò: {roleLabels[currentUser.role]}</span>
+              <span>Trạng thái: {currentUser.status}</span>
+            </div>
+          </div>
+          <div className="panel">
+            <div className="panel-heading">
+              <div>
+                <p>Ví điện tử</p>
+                <h2>{currency.format(currentUser.wallet)}</h2>
+              </div>
+              <Wallet size={22} />
+            </div>
+            <div className="profile-lines">
+              <span>Giao dịch gần nhất: Thanh toán gửi xe PX-1027</span>
+              <span>Phương thức: Ví nội bộ MVP</span>
+            </div>
+          </div>
+        </section>
+      )}
       {/* Contact Section */}
       <section id="contact" className="bg-slate-900 text-white py-20">
         <div className="max-w-7xl w-full mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-12">
@@ -421,6 +467,10 @@ export default function PageHomepage() {
           </div>
         </div>
       </section>
+      const navItems = [
+      {id: "feedback" as View, label: "Phản hồi", icon: Bell, roles: ["customer", "admin"] },
+  ].filter((item) => item.roles.includes(currentUser.role));
+
 
       {/* Footer */}
       <footer className="bg-slate-950 text-slate-500 text-xs py-8 border-t border-slate-900 text-center">

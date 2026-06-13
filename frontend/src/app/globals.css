@@ -20,3 +20,8 @@ body {
   background-color: #f3f4f6;
   color: #1f2937;
 }
+
+.profile-lines {
+  display: grid;
+  gap: 16px;
+}
