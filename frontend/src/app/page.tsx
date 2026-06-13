@@ -431,3 +431,45 @@ export default function PageHomepage() {
     </div>
   );
 }
+
+{
+  activeView === "feedback" && (
+    <section className="content-grid">
+      <div className="panel">
+        <div className="panel-heading">
+          <div>
+            <p>Phản hồi</p>
+            <h2>Gửi phản hồi</h2>
+          </div>
+          <Bell size={22} />
+        </div>
+        <form
+          className="stack-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            simulateAction("Đã ghi nhận phản hồi khách hàng trên giao diện. Cần API lưu phản hồi để hoàn chỉnh.");
+            event.currentTarget.reset();
+          }}
+        >
+          <label>
+            Chủ đề
+            <input name="subject" placeholder="Ví dụ: nhầm phí gửi xe" required />
+          </label>
+          <label>
+            Nội dung
+            <input name="content" placeholder="Nhập nội dung phản hồi" required />
+          </label>
+          <button className="full-button" type="submit">
+            Gửi phản hồi
+          </button>
+        </form>
+      </div>
+      <ModuleList
+        icon={<ReceiptText size={22} />}
+        kicker="Lịch sử"
+        title="Phản hồi đã gửi"
+        items={["Yêu cầu miễn phạt PX-1024 - Đang xử lý", "Góp ý khu B thiếu biển chỉ dẫn - Đã tiếp nhận"]}
+      />
+    </section>
+  )
+}
