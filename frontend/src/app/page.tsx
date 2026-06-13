@@ -432,6 +432,40 @@ export default function PageHomepage() {
   );
 }
 
+async function createFeedback(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const response = await apiFetch("/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        subject: String(form.get("subject") || ""),
+        content: String(form.get("content") || ""),
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      setActionLog(data.message || "Không gửi được phản hồi.");
+      return;
+    }
+    setFeedbackList((items) => [data.feedback, ...items]);
+    setActionLog("Đã lưu phản hồi vào MongoDB.");
+    event.currentTarget.reset();
+  }
+
+  async function updateFeedbackStatus(id: string) {
+    const response = await apiFetch(`/feedback/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "Đã phản hồi", response: "Đã tiếp nhận và xử lý." }),
+    });
+    const data = await response.json();
+    if (response.ok) {
+      setFeedbackList((items) => items.map((item) => (item.id === id ? data.feedback : item)));
+      setActionLog("Đã phản hồi khách hàng.");
+    }
+  }
+
 {
   activeView === "feedback" && (
     <section className="content-grid">
