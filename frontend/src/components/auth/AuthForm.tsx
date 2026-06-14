@@ -2,9 +2,11 @@
 
 import React, { useState } from "react";
 import { ParkingCircle, Eye, EyeOff, Lock, Mail, User, Phone } from "lucide-react";
+import ForgotPasswordForm from "./ForgotPasswordForm";
 
 export default function AuthForm() {
   const [isLogin, setIsLogin] = useState(true);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
@@ -25,6 +27,10 @@ export default function AuthForm() {
         ? `Đăng nhập thành công với email: ${formData.email} (Mockup)`
         : `Đăng ký thành công tài khoản: ${formData.name} (Mockup)`
     );
+  }
+
+  if (isForgotPassword) {
+    return <ForgotPasswordForm onBackToLogin={() => setIsForgotPassword(false)} />;
   }
 
   return (
@@ -122,7 +128,7 @@ export default function AuthForm() {
                 href="#"
                 onClick={(e) => {
                   e.preventDefault();
-                  alert("Tính năng quên mật khẩu đang phát triển (Mockup)");
+                  setIsForgotPassword(true);
                 }}
                 className="text-xs font-semibold text-blue-600 hover:text-blue-700"
               >
