@@ -519,3 +519,55 @@ async function createFeedback(event: FormEvent<HTMLFormElement>) {
     </section>
   )
 }
+
+
+async function handleForgotPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const email = String(form.get("email") ?? "").trim();
+    const otp = String(form.get("otp") ?? "").trim();
+    const password = String(form.get("password") ?? "");
+
+    try {
+      const response = await apiFetch(otp && password ? "/auth/reset-password" : "/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(otp && password ? { email, otp, password } : { email }),
+      });
+      const data = await response.json();
+      setAuthError(data.devOtp ? `${data.message} OTP demo: ${data.devOtp}` : data.message || "Đã xử lý OTP.");
+      if (response.ok && otp && password) {
+        setMode("login");
+      }
+    } catch {
+      setAuthError("Không kết nối được API OTP.");
+    }
+  }
+
+<header>
+  <button
+            className="logout-button"
+            onClick={async () => {
+              await apiFetch("/auth/logout", { method: "POST" });
+              setCurrentUser(null);
+              setActionLog("Đã đăng xuất và xóa JWT cookie.");
+            }}
+            type="button"
+          >
+            <LogOut size={18} />
+            Đăng xuất
+          </button>
+        </header>
+<div>
+        <button
+                  onClick={async () => {
+                    await apiFetch("/auth/logout", { method: "POST" });
+                    setCurrentUser(null);
+                    setActionLog("Đã thu hồi phiên hoạt động hiện tại.");
+                  }}
+                  type="button"
+                >
+                  <LogOut size={18} />
+                  Thu hồi phiên
+                </button>
+              </div>
