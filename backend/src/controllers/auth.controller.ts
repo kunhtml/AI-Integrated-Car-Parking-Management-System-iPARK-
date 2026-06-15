@@ -1,6 +1,9 @@
 import bcrypt from "bcryptjs";
 import { Request, Response } from "express";
+import { z } from "zod";
 import { User } from "../models/User.js";
+import { OtpToken } from "../models/OtpToken.js";
+import { sendMail, smtpConfigured } from "../services/mail.service.js";
 
 const cookieName = "parking_session";
 

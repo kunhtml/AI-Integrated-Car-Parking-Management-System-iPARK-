@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, FormEvent } from "react";
 import {
   ParkingCircle,
   LogIn,
@@ -11,11 +11,21 @@ import {
   Phone,
   Mail,
   MapPin,
+  Bell,
+  ReceiptText,
+  LogOut,
 } from "lucide-react";
 import { parkingConfig } from "../lib/parking-config";
 
 export default function PageHomepage() {
   const [contactSubmitted, setContactSubmitted] = useState(false);
+  // Feedback / auth UI state
+  const [feedbackList, setFeedbackList] = useState<Array<any>>([]);
+  const [actionLog, setActionLog] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ role?: string } | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [showForgot, setShowForgot] = useState(false);
+  const [mode, setMode] = useState<"login" | "forgot">("login");
 
   const stats = {
     active: 1,
@@ -27,6 +37,112 @@ export default function PageHomepage() {
     event.preventDefault();
     setContactSubmitted(true);
   }
+
+  // Minimal apiFetch wrapper used by these demo handlers
+  async function apiFetch(path: string, init?: RequestInit) {
+    try {
+      const res = await fetch(path, {
+        credentials: "include",
+        headers: { ...(init && (init.headers as any)), "accept": "application/json" },
+        ...init,
+      });
+      return res;
+    } catch (err) {
+      throw err;
+    }
+  }
+
+  async function createFeedback(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget as HTMLFormElement);
+    try {
+      const response = await apiFetch("/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subject: String(form.get("subject") || ""),
+          content: String(form.get("content") || ""),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setActionLog(data.message || "Không gửi được phản hồi.");
+        return;
+      }
+      setFeedbackList((items) => [data.feedback || { subject: form.get("subject"), content: form.get("content"), status: "Chưa xử lý", id: Date.now().toString() }, ...items]);
+      setActionLog("Đã lưu phản hồi vào MongoDB.");
+      (event.currentTarget as HTMLFormElement).reset();
+    } catch (err) {
+      setActionLog("Lỗi khi gửi phản hồi.");
+    }
+  }
+
+  async function updateFeedbackStatus(id: string) {
+    try {
+      const response = await apiFetch(`/feedback/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "Đã phản hồi", response: "Đã tiếp nhận và xử lý." }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setFeedbackList((items) => items.map((item) => (item.id === id ? data.feedback || { ...item, status: "Đã phản hồi", response: "Đã tiếp nhận và xử lý." } : item)));
+        setActionLog("Đã phản hồi khách hàng.");
+      } else {
+        setActionLog(data.message || "Không thể cập nhật trạng thái.");
+      }
+    } catch (err) {
+      setActionLog("Lỗi khi cập nhật phản hồi.");
+    }
+  }
+
+  async function handleForgotPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget as HTMLFormElement);
+    const email = String(form.get("email") ?? "").trim();
+    const otp = String(form.get("otp") ?? "").trim();
+    const password = String(form.get("password") ?? "");
+
+    try {
+      const response = await apiFetch(otp && password ? "/auth/reset-password" : "/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(otp && password ? { email, otp, password } : { email }),
+      });
+      const data = await response.json();
+      setAuthError(data.devOtp ? `${data.message} OTP demo: ${data.devOtp}` : data.message || "Đã xử lý OTP.");
+      if (response.ok && otp && password) {
+        setMode("login");
+        setShowForgot(false);
+      }
+    } catch (err) {
+      setAuthError("Không kết nối được API OTP.");
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      await apiFetch("/auth/logout", { method: "POST" });
+      setCurrentUser(null);
+      setActionLog("Đã đăng xuất và xóa JWT cookie.");
+    } catch (err) {
+      setActionLog("Lỗi khi đăng xuất.");
+    }
+  }
+
+  // Optionally load some demo feedback on mount
+  useEffect(() => {
+    // fetch existing feedbacks (best-effort)
+    (async () => {
+      try {
+        const res = await apiFetch("/feedback");
+        if (res.ok) {
+          const j = await res.json();
+          setFeedbackList(j.feedbacks || []);
+        }
+      } catch {}
+    })();
+  }, []);
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800">
@@ -65,6 +181,13 @@ export default function PageHomepage() {
           >
             <LogIn size={16} />
             Vào hệ thống
+          </button>
+          <button
+            className="ml-2 text-sm text-slate-600 hover:text-blue-600"
+            type="button"
+            onClick={() => setShowForgot(true)}
+          >
+            Quên mật khẩu
           </button>
         </div>
       </nav>
@@ -420,6 +543,64 @@ export default function PageHomepage() {
             )}
           </div>
         </div>
+          {/* Feedback area (admin/demo) */}
+          <div className="max-w-7xl w-full mx-auto px-6 mt-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-white p-6 rounded-xl shadow-sm col-span-1 text-slate-900">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-slate-500">Phản hồi</p>
+                    <h3 className="font-bold">Gửi phản hồi</h3>
+                  </div>
+                  <Bell />
+                </div>
+                <form className="mt-4 space-y-3" onSubmit={createFeedback}>
+                  <label className="block text-sm">
+                    Chủ đề
+                    <input name="subject" className="mt-1 w-full border rounded px-3 py-2" placeholder="Ví dụ: nhầm phí gửi xe" required />
+                  </label>
+                  <label className="block text-sm">
+                    Nội dung
+                    <textarea name="content" className="mt-1 w-full border rounded px-3 py-2" placeholder="Nhập nội dung phản hồi" required />
+                  </label>
+                  <button className="mt-2 w-full bg-blue-600 text-white py-2 rounded" type="submit">Gửi phản hồi</button>
+                </form>
+                {actionLog && <p className="mt-3 text-xs text-slate-500">{actionLog}</p>}
+              </div>
+
+              <div className="bg-white p-6 rounded-xl shadow-sm col-span-2 text-slate-900">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-slate-500">Lịch sử</p>
+                    <h3 className="font-bold">Phản hồi đã gửi</h3>
+                  </div>
+                  <ReceiptText />
+                </div>
+                <div className="mt-4 space-y-3">
+                  {feedbackList.length === 0 ? (
+                    <p className="text-sm text-slate-600">Chưa có phản hồi.</p>
+                  ) : (
+                    feedbackList.map((item: any) => (
+                      <div key={item.id} className="p-3 border rounded flex items-start justify-between">
+                        <div>
+                          <div className="font-semibold">{item.subject}</div>
+                          <div className="text-sm text-slate-600">{item.content}</div>
+                          <div className="text-xs text-slate-500 mt-1">{item.status}</div>
+                        </div>
+                        <div>
+                          {currentUser?.role === "admin" && item.status !== "Đã phản hồi" ? (
+                            <button onClick={() => updateFeedbackStatus(item.id)} className="px-3 py-1 bg-emerald-600 text-white rounded">Phản hồi</button>
+                          ) : (
+                            <span className="text-xs text-slate-500">OK</span>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
       </section>
 
       {/* Footer */}
@@ -428,146 +609,99 @@ export default function PageHomepage() {
           © 2026 iPARK. All rights reserved. Phát triển bởi nhóm dự án iPARK.
         </p>
       </footer>
+      {/* Forgot password modal */}
+      {showForgot && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold">Quên mật khẩu</h3>
+              <button onClick={() => setShowForgot(false)} className="text-slate-500">Đóng</button>
+            </div>
+            <form className="mt-4 space-y-3" onSubmit={handleForgotPassword}>
+              <label className="block text-sm">
+                Email
+                <input name="email" type="email" required className="mt-1 w-full border rounded px-3 py-2" />
+              </label>
+              {mode === "forgot" && (
+                <>
+                  <label className="block text-sm">
+                    OTP
+                    <input name="otp" className="mt-1 w-full border rounded px-3 py-2" />
+                  </label>
+                  <label className="block text-sm">
+                    Mật khẩu mới
+                    <input name="password" type="password" className="mt-1 w-full border rounded px-3 py-2" />
+                  </label>
+                </>
+              )}
+              <div className="flex items-center gap-2">
+                <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Gửi</button>
+                <button type="button" onClick={() => setMode(mode === "login" ? "forgot" : "login")} className="text-sm text-slate-600">{mode === "login" ? "Yêu cầu OTP" : "Quay lại"}</button>
+              </div>
+              {authError && <div className="text-sm text-red-600">{authError}</div>}
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-async function createFeedback(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const response = await apiFetch("/feedback", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        subject: String(form.get("subject") || ""),
-        content: String(form.get("content") || ""),
-      }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      setActionLog(data.message || "Không gửi được phản hồi.");
-      return;
-    }
-    setFeedbackList((items) => [data.feedback, ...items]);
-    setActionLog("Đã lưu phản hồi vào MongoDB.");
-    event.currentTarget.reset();
-  }
 
-  async function updateFeedbackStatus(id: string) {
-    const response = await apiFetch(`/feedback/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "Đã phản hồi", response: "Đã tiếp nhận và xử lý." }),
-    });
-    const data = await response.json();
-    if (response.ok) {
-      setFeedbackList((items) => items.map((item) => (item.id === id ? data.feedback : item)));
-      setActionLog("Đã phản hồi khách hàng.");
-    }
-  }
 
-{
-  activeView === "feedback" && (
-    <section className="content-grid">
+function Dashboard({
+  active,
+  available,
+  completion,
+  revenue,
+  reportsOnly = false,
+}: {
+  active: number;
+  available: number;
+  completion: number;
+  revenue: number;
+  reportsOnly?: boolean;
+}) {
+  return (
+    <section className="dashboard">
+      <div className="metric-grid">
+        <Metric icon={<Car />} label="Xe đang gửi" value={String(active)} />
+        <Metric icon={<ParkingCircle />} label="Chỗ còn trống" value={String(available)} />
+        <Metric icon={<CreditCard />} label="Doanh thu hôm nay" value={currency.format(revenue)} />
+        <Metric icon={<ReceiptText />} label="Phiên đã hoàn thành" value={String(completion)} />
+      </div>
       <div className="panel">
         <div className="panel-heading">
           <div>
-            <p>Phản hồi</p>
-            <h2>Gửi phản hồi</h2>
+            <p>{reportsOnly ? "Báo cáo" : "Tổng quan"}</p>
+            <h2>Hiệu suất bãi xe trong ngày</h2>
           </div>
-          <Bell size={22} />
+          <BarChart3 size={22} />
         </div>
-        <form className="stack-form" onSubmit={createFeedback}>
-          <label>
-            Chủ đề
-            <input name="subject" placeholder="Ví dụ: nhầm phí gửi xe" required />
-          </label>
-          <label>
-            Nội dung
-            <input name="content" placeholder="Nhập nội dung phản hồi" required />
-          </label>
-          <button className="full-button" type="submit">
-            Gửi phản hồi
-          </button>
-        </form>
-      </div>
-      <div className="panel wide">
-        <div className="panel-heading">
-          <div>
-            <p>Lịch sử</p>
-            <h2>Phản hồi đã gửi</h2>
-          </div>
-          <ReceiptText size={22} />
+        <div className="chart-bars">
+          {[
+            ["06:00", 38],
+            ["08:00", 82],
+            ["10:00", 64],
+            ["12:00", 56],
+            ["14:00", 73],
+            ["16:00", 91],
+          ].map(([label, value]) => (
+            <div className="bar-item" key={label}>
+              <div style={{ height: `${value}%` }} />
+              <span>{label}</span>
+            </div>
+          ))}
         </div>
-        <DataTable
-          headers={["Chủ đề", "Nội dung", "Trạng thái", "Phản hồi", "Thao tác"]}
-          rows={feedbackList.map((item) => [
-            item.subject,
-            item.content,
-            item.status,
-            item.response || "Chưa có",
-            currentUser.role === "admin" && item.status !== "Đã phản hồi" ? (
-              <button className="small-button" key={item.id} onClick={() => updateFeedbackStatus(item.id)} type="button">
-                Phản hồi
-              </button>
-            ) : (
-              "OK"
-            ),
-          ])}
-        />
       </div>
     </section>
-  )
-}
-
-
-async function handleForgotPassword(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const email = String(form.get("email") ?? "").trim();
-    const otp = String(form.get("otp") ?? "").trim();
-    const password = String(form.get("password") ?? "");
-
-    try {
-      const response = await apiFetch(otp && password ? "/auth/reset-password" : "/auth/forgot-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(otp && password ? { email, otp, password } : { email }),
-      });
-      const data = await response.json();
-      setAuthError(data.devOtp ? `${data.message} OTP demo: ${data.devOtp}` : data.message || "Đã xử lý OTP.");
-      if (response.ok && otp && password) {
-        setMode("login");
-      }
-    } catch {
-      setAuthError("Không kết nối được API OTP.");
-    }
-  }
-
-<header>
-  <button
-            className="logout-button"
-            onClick={async () => {
-              await apiFetch("/auth/logout", { method: "POST" });
-              setCurrentUser(null);
-              setActionLog("Đã đăng xuất và xóa JWT cookie.");
-            }}
-            type="button"
-          >
-            <LogOut size={18} />
-            Đăng xuất
-          </button>
-        </header>
-<div>
-        <button
-                  onClick={async () => {
-                    await apiFetch("/auth/logout", { method: "POST" });
-                    setCurrentUser(null);
-                    setActionLog("Đã thu hồi phiên hoạt động hiện tại.");
-                  }}
-                  type="button"
-                >
-                  <LogOut size={18} />
-                  Thu hồi phiên
-                </button>
-              </div>
+  );
+} 
+{activeView === "overview" && (
+          <Dashboard
+            active={stats.active}
+            available={stats.available}
+            completion={stats.completion}
+            revenue={stats.revenue}
+          />
+        )}
