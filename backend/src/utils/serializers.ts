@@ -31,3 +31,15 @@ export function serializeParkingSession(session: any) {
   };
 }
 
+// User serializer
+export function serializeUser(user: any) {
+  return {
+    id: user._id?.toString?.() || user.id || "",
+    name: user.name || user.email || "",
+    email: user.email,
+    role: user.role || "customer",
+    status: user.status || "Đang hoạt động",
+    createdAt: user.createdAt,
+  };
+}
+
