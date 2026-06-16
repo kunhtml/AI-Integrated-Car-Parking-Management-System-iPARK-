@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import {
   ParkingCircle,
   LogIn,
+  LogOut,
   Car,
   ShieldCheck,
   Cpu,
@@ -11,6 +12,8 @@ import {
   Phone,
   Mail,
   MapPin,
+  UserRound,
+  Wallet,
 } from "lucide-react";
 import { parkingConfig } from "../lib/parking-config";
 type View =
@@ -30,8 +33,28 @@ type View =
   | "devices"
   | "security";
 
+const roleLabels: Record<string, string> = {
+  customer: "Khách hàng",
+  staff: "Nhân viên",
+  admin: "Quản trị viên",
+};
+
+const currency = new Intl.NumberFormat("vi-VN", {
+  style: "currency",
+  currency: "VND",
+});
+
+const currentUser = {
+  name: "Nguyễn Văn A",
+  email: "nguyenvana@ipark.vn",
+  role: "customer" as keyof typeof roleLabels,
+  status: "Đang hoạt động",
+  wallet: 250000,
+};
+
 export default function PageHomepage() {
   const [contactSubmitted, setContactSubmitted] = useState(false);
+  const [activeView, setActiveView] = useState<"home" | "profile">("home");
 
   const stats = {
     active: 1,
@@ -78,14 +101,30 @@ export default function PageHomepage() {
           <button
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-all shadow-sm"
             type="button"
+            onClick={() =>
+              setActiveView((view: "home" | "profile") =>
+                view === "profile" ? "home" : "profile"
+              )
+            }
           >
-            <LogIn size={16} />
-            Vào hệ thống
+            {activeView === "profile" ? (
+              <>
+                <LogOut size={16} />
+                Quay lại trang chủ
+              </>
+            ) : (
+              <>
+                <LogIn size={16} />
+                Vào hệ thống
+              </>
+            )}
           </button>
         </div>
       </nav>
 
-      {/* Hero Section */}
+      {activeView === "home" ? (
+        <>
+          {/* Hero Section */}
       <section className="flex-1 max-w-7xl w-full mx-auto px-6 py-16 md:py-24 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
         <div className="lg:col-span-7 space-y-8">
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-semibold tracking-wide uppercase">
@@ -340,38 +379,8 @@ export default function PageHomepage() {
           </div>
         </div>
       </section>
-      {activeView === "profile" && (
-        <section className="content-grid">
-          <div className="panel">
-            <div className="panel-heading">
-              <div>
-                <p>Hồ sơ</p>
-                <h2>{currentUser.name}</h2>
-              </div>
-              <UserRound size={22} />
-            </div>
-            <div className="profile-lines">
-              <span>Email: {currentUser.email}</span>
-              <span>Vai trò: {roleLabels[currentUser.role]}</span>
-              <span>Trạng thái: {currentUser.status}</span>
-            </div>
-          </div>
-          <div className="panel">
-            <div className="panel-heading">
-              <div>
-                <p>Ví điện tử</p>
-                <h2>{currency.format(currentUser.wallet)}</h2>
-              </div>
-              <Wallet size={22} />
-            </div>
-            <div className="profile-lines">
-              <span>Giao dịch gần nhất: Thanh toán gửi xe PX-1027</span>
-              <span>Phương thức: Ví nội bộ MVP</span>
-            </div>
-          </div>
-        </section>
-      )}
-      {/* Contact Section */}
+
+          {/* Contact Section */}
       <section id="contact" className="bg-slate-900 text-white py-20">
         <div className="max-w-7xl w-full mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-12">
           <div className="space-y-8">
@@ -466,11 +475,63 @@ export default function PageHomepage() {
             )}
           </div>
         </div>
-      </section>
-      const navItems = [
-      {id: "feedback" as View, label: "Phản hồi", icon: Bell, roles: ["customer", "admin"] },
-  ].filter((item) => item.roles.includes(currentUser.role));
-
+          </section>
+        </>
+      ) : (
+        <section className="flex-1 max-w-5xl w-full mx-auto px-6 py-16 space-y-8">
+          <div className="space-y-2">
+            <h1 className="text-3xl font-black tracking-tight text-slate-900">
+              Tài khoản của tôi
+            </h1>
+            <p className="text-slate-600">
+              Thông tin hồ sơ và ví điện tử của bạn trong hệ thống iPARK.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Hồ sơ */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                    Hồ sơ
+                  </p>
+                  <h2 className="text-xl font-bold text-slate-900 mt-1">
+                    {currentUser.name}
+                  </h2>
+                </div>
+                <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                  <UserRound size={22} />
+                </div>
+              </div>
+              <div className="profile-lines text-sm text-slate-600">
+                <span>Email: {currentUser.email}</span>
+                <span>Vai trò: {roleLabels[currentUser.role]}</span>
+                <span>Trạng thái: {currentUser.status}</span>
+              </div>
+            </div>
+            {/* Ví điện tử */}
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                    Ví điện tử
+                  </p>
+                  <h2 className="text-xl font-bold text-emerald-600 mt-1">
+                    {currency.format(currentUser.wallet)}
+                  </h2>
+                </div>
+                <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
+                  <Wallet size={22} />
+                </div>
+              </div>
+              <div className="profile-lines text-sm text-slate-600">
+                <span>Giao dịch gần nhất: Thanh toán gửi xe PX-1027</span>
+                <span>Phương thức: Ví nội bộ MVP</span>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Footer */}
       <footer className="bg-slate-950 text-slate-500 text-xs py-8 border-t border-slate-900 text-center">
