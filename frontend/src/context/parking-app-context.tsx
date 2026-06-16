@@ -9,7 +9,22 @@ type State = {
   sessions: Session[];
 };
 
-const ParkingContext = createContext<any>(null);
+type User = { id: string; name: string; email: string; role: string; status: string };
+
+type Stats = {
+  active: number;
+  available: number;
+  revenue: number;
+  completion: number;
+};
+
+type AppContext = {
+  state: State;
+  stats: Stats;
+  userList: User[];
+};
+
+const ParkingContext = createContext<AppContext | null>(null);
 
 export function ParkingProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<State>({ sessions: [] });
@@ -55,13 +70,20 @@ export function ParkingProvider({ children }: { children: React.ReactNode }) {
     };
   }, [state.sessions]);
 
-  return <ParkingContext.Provider value={{ state, stats }}>{children}</ParkingContext.Provider>;
+  // demo user list for admin view (in real app this would come from API)
+  const userList: User[] = [
+    { id: "u1", name: "Nguyễn Văn A", email: "a@example.com", role: "admin", status: "Đang hoạt động" },
+    { id: "u2", name: "Trần Thị B", email: "b@example.com", role: "staff", status: "Đang hoạt động" },
+    { id: "u3", name: "Lê C", email: "c@example.com", role: "customer", status: "Đã khóa" },
+  ];
+
+  return <ParkingContext.Provider value={{ state, stats, userList }}>{children}</ParkingContext.Provider>;
 }
 
 export function useParkingApp() {
   const ctx = useContext(ParkingContext);
   if (!ctx) throw new Error("useParkingApp must be used inside ParkingProvider");
-  return ctx;
+  return ctx as AppContext;
 }
 
 export default ParkingProvider;

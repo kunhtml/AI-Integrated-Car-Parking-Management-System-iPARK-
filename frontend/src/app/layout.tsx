@@ -1,5 +1,7 @@
 import "./globals.css";
 
+import Providers from "./Providers";
+
 export const metadata = {
   title: "iPARK Management System",
   description: "AI-Integrated Car Parking Management System",
@@ -12,7 +14,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="vi">
-      <body>{children}</body>
+      <body>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }

@@ -14,5 +14,6 @@ declare module 'lucide-react' {
   export const LogOut: React.ComponentType<any>;
   export const BarChart: React.ComponentType<any>;
   export const BarChart3: React.ComponentType<any>;
+  export const UsersRound: React.ComponentType<any>;
   export default {} as any;
 }
