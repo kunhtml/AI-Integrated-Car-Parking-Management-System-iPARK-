@@ -12,5 +12,7 @@ declare module 'lucide-react' {
   export const Bell: React.ComponentType<any>;
   export const ReceiptText: React.ComponentType<any>;
   export const LogOut: React.ComponentType<any>;
+  export const BarChart: React.ComponentType<any>;
+  export const BarChart3: React.ComponentType<any>;
   export default {} as any;
 }
