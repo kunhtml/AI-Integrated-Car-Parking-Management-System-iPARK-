@@ -14,13 +14,11 @@ export const parkingConfig = {
   overdueFineRate: 0,
 };
 
-export type SupportedVehicleType =
-  (typeof parkingConfig.supportedVehicleTypes)[number];
+export type SupportedVehicleType = (typeof parkingConfig.supportedVehicleTypes)[number];
 
 export function allocateCarSlot(activeCount: number) {
   const index = activeCount % parkingConfig.totalCapacity;
-  const zone =
-    parkingConfig.zones[Math.floor(index / parkingConfig.slotsPerZone)] ?? "A";
+  const zone = parkingConfig.zones[Math.floor(index / parkingConfig.slotsPerZone)] ?? "A";
   const slotNumber = (index % parkingConfig.slotsPerZone) + 1;
   return `${zone}-${String(slotNumber).padStart(2, "0")}`;
 }

@@ -1,104 +1,61 @@
 "use client";
 
-import React, { useState, useEffect, FormEvent } from "react";
+import React, { FormEvent, useEffect, useState } from "react";
 import {
-  ParkingCircle,
-  LogIn,
   Car,
-  ShieldCheck,
   Cpu,
   CreditCard,
-  Phone,
+  LogIn,
+  LogOut,
   Mail,
   MapPin,
-  Bell,
-  ReceiptText,
-  LogOut,
+  ParkingCircle,
+  Phone,
+  ShieldCheck,
 } from "lucide-react";
-import { parkingConfig } from "../lib/parking-config";
+import { apiFetch } from "@/lib/api";
+import { parkingConfig } from "@/lib/parking-config";
 
 export default function PageHomepage() {
   const [contactSubmitted, setContactSubmitted] = useState(false);
-  // Feedback / auth UI state
-  const [feedbackList, setFeedbackList] = useState<Array<any>>([]);
+  const [currentUser, setCurrentUser] = useState<{ email?: string; role?: string } | null>(null);
   const [actionLog, setActionLog] = useState<string | null>(null);
-  const [currentUser, setCurrentUser] = useState<{ role?: string } | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [showForgot, setShowForgot] = useState(false);
-  const [mode, setMode] = useState<"login" | "forgot">("login");
+  const [mode, setMode] = useState<"request" | "reset">("request");
 
   const stats = {
-    active: 1,
-    available: 29,
+    active: 0,
+    available: 0,
     capacity: parkingConfig.totalCapacity,
   };
+
+  useEffect(() => {
+    const savedUser = window.localStorage.getItem("ipark_current_user");
+    const hasSessionCookie = document.cookie.includes("parking_session=");
+
+    if (savedUser) {
+      try {
+        setCurrentUser(JSON.parse(savedUser));
+        return;
+      } catch {
+        window.localStorage.removeItem("ipark_current_user");
+      }
+    }
+
+    if (hasSessionCookie) {
+      setCurrentUser({});
+    }
+  }, []);
 
   function handleContactSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setContactSubmitted(true);
   }
 
-  // Minimal apiFetch wrapper used by these demo handlers
-  async function apiFetch(path: string, init?: RequestInit) {
-    try {
-      const res = await fetch(path, {
-        credentials: "include",
-        headers: { ...(init && (init.headers as any)), "accept": "application/json" },
-        ...init,
-      });
-      return res;
-    } catch (err) {
-      throw err;
-    }
-  }
-
-  async function createFeedback(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget as HTMLFormElement);
-    try {
-      const response = await apiFetch("/feedback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          subject: String(form.get("subject") || ""),
-          content: String(form.get("content") || ""),
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        setActionLog(data.message || "Không gửi được phản hồi.");
-        return;
-      }
-      setFeedbackList((items) => [data.feedback || { subject: form.get("subject"), content: form.get("content"), status: "Chưa xử lý", id: Date.now().toString() }, ...items]);
-      setActionLog("Đã lưu phản hồi vào MongoDB.");
-      (event.currentTarget as HTMLFormElement).reset();
-    } catch (err) {
-      setActionLog("Lỗi khi gửi phản hồi.");
-    }
-  }
-
-  async function updateFeedbackStatus(id: string) {
-    try {
-      const response = await apiFetch(`/feedback/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "Đã phản hồi", response: "Đã tiếp nhận và xử lý." }),
-      });
-      const data = await response.json();
-      if (response.ok) {
-        setFeedbackList((items) => items.map((item) => (item.id === id ? data.feedback || { ...item, status: "Đã phản hồi", response: "Đã tiếp nhận và xử lý." } : item)));
-        setActionLog("Đã phản hồi khách hàng.");
-      } else {
-        setActionLog(data.message || "Không thể cập nhật trạng thái.");
-      }
-    } catch (err) {
-      setActionLog("Lỗi khi cập nhật phản hồi.");
-    }
-  }
-
   async function handleForgotPassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget as HTMLFormElement);
+    const form = new FormData(event.currentTarget);
     const email = String(form.get("email") ?? "").trim();
     const otp = String(form.get("otp") ?? "").trim();
     const password = String(form.get("password") ?? "");
@@ -109,13 +66,13 @@ export default function PageHomepage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(otp && password ? { email, otp, password } : { email }),
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       setAuthError(data.devOtp ? `${data.message} OTP demo: ${data.devOtp}` : data.message || "Đã xử lý OTP.");
       if (response.ok && otp && password) {
-        setMode("login");
+        setMode("request");
         setShowForgot(false);
       }
-    } catch (err) {
+    } catch {
       setAuthError("Không kết nối được API OTP.");
     }
   }
@@ -123,520 +80,192 @@ export default function PageHomepage() {
   async function handleLogout() {
     try {
       await apiFetch("/auth/logout", { method: "POST" });
+      window.localStorage.removeItem("ipark_current_user");
       setCurrentUser(null);
-      setActionLog("Đã đăng xuất và xóa JWT cookie.");
-    } catch (err) {
+      setActionLog("Đã đăng xuất.");
+    } catch {
       setActionLog("Lỗi khi đăng xuất.");
     }
   }
 
-  // Optionally load some demo feedback on mount
-  useEffect(() => {
-    // fetch existing feedbacks (best-effort)
-    (async () => {
-      try {
-        const res = await apiFetch("/feedback");
-        if (res.ok) {
-          const j = await res.json();
-          setFeedbackList(j.feedbacks || []);
-        }
-      } catch {}
-    })();
-  }, []);
-
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800">
-      {/* Navigation Bar */}
-      <nav className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-30 shadow-sm">
-        <div className="flex items-center gap-2.5">
-          <div className="bg-blue-600 text-white p-2 rounded-xl">
+    <div className="flex min-h-screen flex-col bg-slate-50 text-slate-800">
+      <nav className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4 shadow-sm">
+        <a className="flex items-center gap-2.5" href="/">
+          <div className="rounded-lg bg-blue-600 p-2 text-white">
             <ParkingCircle size={24} />
           </div>
-          <span className="font-extrabold text-xl tracking-tight text-slate-900">
-            {parkingConfig.brandName}
-          </span>
-        </div>
-        <div className="flex items-center gap-6">
-          <a
-            href="#features"
-            className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors"
-          >
+          <span className="text-xl font-extrabold tracking-tight text-slate-900">{parkingConfig.brandName}</span>
+        </a>
+
+        <div className="flex items-center gap-4">
+          <a className="hidden text-sm font-medium text-slate-600 transition-colors hover:text-blue-600 sm:inline" href="#features">
             Tính năng
           </a>
-          <a
-            href="#pricing"
-            className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors"
-          >
-            Bảng giá
-          </a>
-          <a
-            href="#contact"
-            className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors"
-          >
+          <a className="hidden text-sm font-medium text-slate-600 transition-colors hover:text-blue-600 sm:inline" href="#contact">
             Liên hệ
           </a>
-          <button
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-all shadow-sm"
-            type="button"
-          >
-            <LogIn size={16} />
-            Vào hệ thống
-          </button>
-          <button
-            className="ml-2 text-sm text-slate-600 hover:text-blue-600"
-            type="button"
-            onClick={() => setShowForgot(true)}
-          >
-            Quên mật khẩu
-          </button>
+          {currentUser ? (
+            <>
+              <a className="text-sm font-semibold text-slate-700 hover:text-blue-600" href="/change-password">
+                Đổi mật khẩu
+              </a>
+              <button
+                className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+                onClick={handleLogout}
+                type="button"
+              >
+                <LogOut size={16} />
+                Đăng xuất
+              </button>
+            </>
+          ) : (
+            <>
+              <a
+                className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+                href="/overview"
+              >
+                <LogIn size={16} />
+                Vào hệ thống
+              </a>
+              <button className="text-sm text-slate-600 hover:text-blue-600" onClick={() => setShowForgot(true)} type="button">
+                Quên mật khẩu
+              </button>
+            </>
+          )}
         </div>
       </nav>
 
-      {/* Hero Section */}
-      <section className="flex-1 max-w-7xl w-full mx-auto px-6 py-16 md:py-24 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-        <div className="lg:col-span-7 space-y-8">
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-semibold tracking-wide uppercase">
-            Hệ thống quản lý bãi đỗ xe thông minh
-          </div>
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-slate-900 leading-tight">
-            Giải pháp đỗ xe <span className="text-blue-600">iPARK</span>
-          </h1>
-          <p className="text-lg text-slate-600 leading-relaxed max-w-xl">
-            Theo dõi {stats.capacity} chỗ đỗ ô tô khu A/B/C, ghi nhận xe vào/ra
-            bằng ảnh, tính phí tự động sau {parkingConfig.freeMinutes} phút miễn
-            phí và phân quyền vận hành thông minh.
-          </p>
+      {actionLog && <div className="border-b border-blue-100 bg-blue-50 px-6 py-2 text-center text-sm text-blue-700">{actionLog}</div>}
 
-          {/* Stats Strip */}
-          <div className="grid grid-cols-3 gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm max-w-lg">
-            <div className="space-y-1">
-              <span className="text-xs font-medium text-slate-500 block">
-                Đang gửi
-              </span>
-              <strong className="text-2xl font-bold text-slate-900">
-                {stats.active} xe
-              </strong>
+      <main className="flex-1">
+        <section className="mx-auto grid w-full max-w-7xl grid-cols-1 items-center gap-12 px-6 py-16 lg:grid-cols-12 lg:py-24">
+          <div className="space-y-8 lg:col-span-7">
+            <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700">
+              Hệ thống quản lý bãi đỗ xe thông minh
             </div>
-            <div className="space-y-1 border-l border-slate-200 pl-4">
-              <span className="text-xs font-medium text-slate-500 block">
-                Còn trống
-              </span>
-              <strong className="text-2xl font-bold text-emerald-600">
-                {stats.available} chỗ
-              </strong>
-            </div>
-            <div className="space-y-1 border-l border-slate-200 pl-4">
-              <span className="text-xs font-medium text-slate-500 block">
-                Camera AI
-              </span>
-              <strong className="text-2xl font-bold text-blue-600">
-                2 cổng
-              </strong>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-4">
-            <a
-              href="#contact"
-              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all shadow-md hover:shadow-lg"
-            >
-              Đăng ký tư vấn
-            </a>
-            <a
-              href="#features"
-              className="px-6 py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold rounded-xl transition-all shadow-sm"
-            >
-              Tìm hiểu thêm
-            </a>
-          </div>
-        </div>
-
-        {/* Hero Image / Visual Mockup */}
-        <div className="lg:col-span-5 bg-white p-8 rounded-3xl border border-slate-200 shadow-xl space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-            <h3 className="font-bold text-slate-900">
-              Trạng thái bãi xe thực tế
-            </h3>
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-          </div>
-          <div className="space-y-4">
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
-                  <Car size={20} />
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-slate-900">30H-678.90</p>
-                  <p className="text-xs text-slate-500">
-                    Vào lúc 08:15 - Khu A-12
-                  </p>
-                </div>
-              </div>
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
-                Đang gửi
-              </span>
-            </div>
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
-                  <Car size={20} />
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-slate-900">30E-345.67</p>
-                  <p className="text-xs text-slate-500">
-                    Ra lúc 10:20 - Khu B-04
-                  </p>
-                </div>
-              </div>
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
-                Đã thanh toán
-              </span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Features Section */}
-      <section
-        id="features"
-        className="bg-white py-20 border-y border-slate-200"
-      >
-        <div className="max-w-7xl w-full mx-auto px-6">
-          <div className="text-center max-w-2xl mx-auto mb-16 space-y-4">
-            <h2 className="text-3xl font-black text-slate-900">
-              Tính năng nổi bật của iPARK
-            </h2>
-            <p className="text-slate-600">
-              Hệ thống tích hợp công nghệ hiện đại giúp tối ưu hóa quy trình vận
-              hành bãi đỗ xe.
+            <h1 className="text-4xl font-black leading-tight tracking-tight text-slate-900 sm:text-5xl lg:text-6xl">
+              Giải pháp đỗ xe <span className="text-blue-600">iPARK</span>
+            </h1>
+            <p className="max-w-xl text-lg leading-relaxed text-slate-600">
+              Theo dõi {stats.capacity} chỗ đỗ ô tô khu A/B/C, ghi nhận xe vào/ra bằng ảnh, tính phí tự động và phân quyền vận hành.
             </p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="p-8 rounded-2xl border border-slate-100 bg-slate-50/50 space-y-4">
-              <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                <Cpu size={24} />
-              </div>
-              <h3 className="text-xl font-bold text-slate-900">
-                Nhận dạng biển số AI
-              </h3>
-              <p className="text-slate-600 text-sm leading-relaxed">
-                Tự động nhận dạng biển số xe vào/ra với độ chính xác trên 95%,
-                giảm thiểu thời gian chờ đợi tại cổng kiểm soát.
-              </p>
-            </div>
-            <div className="p-8 rounded-2xl border border-slate-100 bg-slate-50/50 space-y-4">
-              <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                <CreditCard size={24} />
-              </div>
-              <h3 className="text-xl font-bold text-slate-900">
-                Thanh toán không tiền mặt
-              </h3>
-              <p className="text-slate-600 text-sm leading-relaxed">
-                Hỗ trợ thanh toán qua ví điện tử nội bộ, quét mã QR nhanh chóng
-                và minh bạch hóa doanh thu bãi xe.
-              </p>
-            </div>
-            <div className="p-8 rounded-2xl border border-slate-100 bg-slate-50/50 space-y-4">
-              <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                <ShieldCheck size={24} />
-              </div>
-              <h3 className="text-xl font-bold text-slate-900">
-                Giám sát & Cảnh báo sự cố
-              </h3>
-              <p className="text-slate-600 text-sm leading-relaxed">
-                Hệ thống tự động phát hiện và cảnh báo các sự cố như camera
-                offline, xe blacklist hoặc lỗi nhận dạng.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
 
-      {/* Pricing Section */}
-      <section id="pricing" className="py-20">
-        <div className="max-w-7xl w-full mx-auto px-6">
-          <div className="text-center max-w-2xl mx-auto mb-16 space-y-4">
-            <h2 className="text-3xl font-black text-slate-900">
-              Bảng giá dịch vụ
-            </h2>
-            <p className="text-slate-600">
-              Linh hoạt và phù hợp với mọi nhu cầu gửi xe của khách hàng.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-            {/* Gói lượt */}
-            <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-6 flex flex-col justify-between">
-              <div className="space-y-4">
-                <h3 className="text-lg font-bold text-slate-900">Gói lượt</h3>
-                <div className="text-3xl font-black text-slate-900">
-                  5.000đ{" "}
-                  <span className="text-sm font-normal text-slate-500">
-                    / giờ
-                  </span>
-                </div>
-                <p className="text-slate-600 text-sm">
-                  Phù hợp cho khách vãng lai gửi xe trong ngày.
-                </p>
+            <div className="grid max-w-lg grid-cols-3 gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+              <div>
+                <span className="block text-xs font-medium text-slate-500">Đang gửi</span>
+                <strong className="text-2xl font-bold text-slate-900">{stats.active} xe</strong>
               </div>
-              <ul className="space-y-3 text-sm text-slate-600 border-t border-slate-100 pt-6">
-                <li className="flex items-center gap-2">
-                  ✓ Miễn phí 20 phút đầu
-                </li>
-                <li className="flex items-center gap-2">
-                  ✓ Nhận dạng biển số tự động
-                </li>
-                <li className="flex items-center gap-2">
-                  ✓ Thanh toán QR nhanh
-                </li>
-              </ul>
-            </div>
-            {/* Gói tháng */}
-            <div className="bg-white p-8 rounded-2xl border-2 border-blue-600 shadow-md space-y-6 flex flex-col justify-between relative">
-              <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
-                Phổ biến nhất
+              <div className="border-l border-slate-200 pl-4">
+                <span className="block text-xs font-medium text-slate-500">Còn trống</span>
+                <strong className="text-2xl font-bold text-emerald-600">{stats.available} chỗ</strong>
               </div>
-              <div className="space-y-4">
-                <h3 className="text-lg font-bold text-slate-900">Gói tháng</h3>
-                <div className="text-3xl font-black text-slate-900">
-                  1.200.000đ{" "}
-                  <span className="text-sm font-normal text-slate-500">
-                    / tháng
-                  </span>
-                </div>
-                <p className="text-slate-600 text-sm">
-                  Dành cho cư dân hoặc nhân viên văn phòng gửi cố định.
-                </p>
-              </div>
-              <ul className="space-y-3 text-sm text-slate-600 border-t border-slate-100 pt-6">
-                <li className="flex items-center gap-2">
-                  ✓ Không giới hạn lượt vào/ra
-                </li>
-                <li className="flex items-center gap-2">
-                  ✓ Cố định vị trí đỗ ưu tiên
-                </li>
-                <li className="flex items-center gap-2">
-                  ✓ Quản lý qua tài khoản riêng
-                </li>
-              </ul>
-            </div>
-            {/* Gói doanh nghiệp */}
-            <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-6 flex flex-col justify-between">
-              <div className="space-y-4">
-                <h3 className="text-lg font-bold text-slate-900">
-                  Doanh nghiệp
-                </h3>
-                <div className="text-3xl font-black text-slate-900">
-                  Liên hệ
-                </div>
-                <p className="text-slate-600 text-sm">
-                  Giải pháp tùy chỉnh cho các tòa nhà, trung tâm thương mại.
-                </p>
-              </div>
-              <ul className="space-y-3 text-sm text-slate-600 border-t border-slate-100 pt-6">
-                <li className="flex items-center gap-2">
-                  ✓ Tích hợp camera RTSP riêng
-                </li>
-                <li className="flex items-center gap-2">
-                  ✓ Báo cáo doanh thu nâng cao
-                </li>
-                <li className="flex items-center gap-2">
-                  ✓ Hỗ trợ kỹ thuật 24/7
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Contact Section */}
-      <section id="contact" className="bg-slate-900 text-white py-20">
-        <div className="max-w-7xl w-full mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-12">
-          <div className="space-y-8">
-            <h2 className="text-3xl font-black">Liên hệ với chúng tôi</h2>
-            <p className="text-slate-400 leading-relaxed">
-              Bạn muốn triển khai hệ thống iPARK cho bãi xe của mình? Hãy để lại
-              thông tin, đội ngũ kỹ thuật của chúng tôi sẽ liên hệ tư vấn trong
-              vòng 24 giờ.
-            </p>
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <Phone className="text-blue-500" size={20} />
-                <span>Hotline: Chưa cung cấp</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <Mail className="text-blue-500" size={20} />
-                <span>Email: support@ipark.vn</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <MapPin className="text-blue-500" size={20} />
-                <span>Địa chỉ: Hòa Lạc, Thạch Thất, Hà Nội</span>
+              <div className="border-l border-slate-200 pl-4">
+                <span className="block text-xs font-medium text-slate-500">Camera AI</span>
+                <strong className="text-2xl font-bold text-blue-600">0 cổng</strong>
               </div>
             </div>
           </div>
 
-          <div className="bg-white text-slate-800 p-8 rounded-2xl shadow-xl">
-            {contactSubmitted ? (
-              <div className="text-center py-12 space-y-4">
-                <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
-                  <ShieldCheck size={32} />
-                </div>
-                <h3 className="text-xl font-bold text-slate-900">
-                  Gửi thông tin thành công!
-                </h3>
-                <p className="text-slate-600 text-sm">
-                  Cảm ơn bạn đã quan tâm. Chúng tôi sẽ liên hệ lại sớm nhất.
-                </p>
-              </div>
-            ) : (
-              <form className="space-y-4" onSubmit={handleContactSubmit}>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase">
-                      Họ và tên
-                    </label>
-                    <input
-                      className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      placeholder="Nguyễn Văn A"
-                      required
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase">
-                      Số điện thoại
-                    </label>
-                    <input
-                      className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      placeholder="0912345678"
-                      required
-                      type="tel"
-                    />
-                  </div>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-bold text-slate-500 uppercase">
-                    Email liên hệ
-                  </label>
-                  <input
-                    className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                    placeholder="name@company.com"
-                    required
-                    type="email"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-bold text-slate-500 uppercase">
-                    Lời nhắn
-                  </label>
-                  <textarea
-                    className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-h-[100px] resize-y"
-                    placeholder="Tôi muốn tư vấn lắp đặt hệ thống cho bãi xe 100 chỗ..."
-                    required
-                  />
-                </div>
-                <button
-                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all shadow-md"
-                  type="submit"
-                >
-                  Gửi yêu cầu tư vấn
-                </button>
-              </form>
-            )}
+          <div className="space-y-6 rounded-lg border border-slate-200 bg-white p-8 shadow-xl lg:col-span-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <h2 className="font-bold text-slate-900">Trạng thái bãi xe</h2>
+              <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
+            </div>
+            <div className="rounded-lg border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+              Chưa có dữ liệu phiên gửi xe từ cơ sở dữ liệu.
+            </div>
           </div>
-        </div>
-          {/* Feedback area (admin/demo) */}
-          <div className="max-w-7xl w-full mx-auto px-6 mt-8">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-white p-6 rounded-xl shadow-sm col-span-1 text-slate-900">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-slate-500">Phản hồi</p>
-                    <h3 className="font-bold">Gửi phản hồi</h3>
+        </section>
+
+        <section className="border-y border-slate-200 bg-white py-20" id="features">
+          <div className="mx-auto w-full max-w-7xl px-6">
+            <div className="mx-auto mb-16 max-w-2xl space-y-4 text-center">
+              <h2 className="text-3xl font-black text-slate-900">Tính năng nổi bật của iPARK</h2>
+              <p className="text-slate-600">Các module vận hành bãi đỗ xe được tách riêng để dễ mở rộng từ backend đến frontend.</p>
+            </div>
+            <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
+              <FeatureCard icon={<Cpu size={24} />} title="Nhận dạng biển số AI" text="Tự động ghi nhận biển số xe vào/ra khi module camera được kết nối." />
+              <FeatureCard icon={<CreditCard size={24} />} title="Thanh toán minh bạch" text="Theo dõi phí, trạng thái thanh toán và doanh thu theo phiên gửi xe." />
+              <FeatureCard icon={<ShieldCheck size={24} />} title="Phân quyền vận hành" text="Quản lý người dùng theo vai trò admin, nhân viên và khách hàng." />
+            </div>
+          </div>
+        </section>
+
+        <section className="bg-slate-900 py-20 text-white" id="contact">
+          <div className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-12 px-6 lg:grid-cols-2">
+            <div className="space-y-8">
+              <h2 className="text-3xl font-black">Liên hệ với chúng tôi</h2>
+              <p className="leading-relaxed text-slate-400">Bạn muốn triển khai hệ thống iPARK cho bãi xe của mình? Hãy để lại thông tin để đội kỹ thuật liên hệ tư vấn.</p>
+              <div className="space-y-4">
+                <ContactLine icon={<Phone size={20} />} text={`Hotline: ${parkingConfig.hotline}`} />
+                <ContactLine icon={<Mail size={20} />} text={`Email: ${parkingConfig.contactEmail}`} />
+                <ContactLine icon={<MapPin size={20} />} text={`Địa chỉ: ${parkingConfig.address}`} />
+              </div>
+            </div>
+
+            <div className="rounded-lg bg-white p-8 text-slate-800 shadow-xl">
+              {contactSubmitted ? (
+                <div className="space-y-4 py-12 text-center">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                    <ShieldCheck size={32} />
                   </div>
-                  <Bell />
+                  <h3 className="text-xl font-bold text-slate-900">Gửi thông tin thành công!</h3>
+                  <p className="text-sm text-slate-600">Cảm ơn bạn đã quan tâm. Chúng tôi sẽ liên hệ lại sớm nhất.</p>
                 </div>
-                <form className="mt-4 space-y-3" onSubmit={createFeedback}>
-                  <label className="block text-sm">
-                    Chủ đề
-                    <input name="subject" className="mt-1 w-full border rounded px-3 py-2" placeholder="Ví dụ: nhầm phí gửi xe" required />
-                  </label>
-                  <label className="block text-sm">
-                    Nội dung
-                    <textarea name="content" className="mt-1 w-full border rounded px-3 py-2" placeholder="Nhập nội dung phản hồi" required />
-                  </label>
-                  <button className="mt-2 w-full bg-blue-600 text-white py-2 rounded" type="submit">Gửi phản hồi</button>
+              ) : (
+                <form className="space-y-4" onSubmit={handleContactSubmit}>
+                  <input className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm" placeholder="Họ và tên" required />
+                  <input className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm" placeholder="Số điện thoại" required type="tel" />
+                  <input className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm" placeholder="Email liên hệ" required type="email" />
+                  <textarea className="min-h-[100px] w-full resize-y rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm" placeholder="Nhu cầu triển khai" required />
+                  <button className="w-full rounded-md bg-blue-600 py-3 font-semibold text-white transition hover:bg-blue-700" type="submit">
+                    Gửi yêu cầu tư vấn
+                  </button>
                 </form>
-                {actionLog && <p className="mt-3 text-xs text-slate-500">{actionLog}</p>}
-              </div>
-
-              <div className="bg-white p-6 rounded-xl shadow-sm col-span-2 text-slate-900">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-slate-500">Lịch sử</p>
-                    <h3 className="font-bold">Phản hồi đã gửi</h3>
-                  </div>
-                  <ReceiptText />
-                </div>
-                <div className="mt-4 space-y-3">
-                  {feedbackList.length === 0 ? (
-                    <p className="text-sm text-slate-600">Chưa có phản hồi.</p>
-                  ) : (
-                    feedbackList.map((item: any) => (
-                      <div key={item.id} className="p-3 border rounded flex items-start justify-between">
-                        <div>
-                          <div className="font-semibold">{item.subject}</div>
-                          <div className="text-sm text-slate-600">{item.content}</div>
-                          <div className="text-xs text-slate-500 mt-1">{item.status}</div>
-                        </div>
-                        <div>
-                          {currentUser?.role === "admin" && item.status !== "Đã phản hồi" ? (
-                            <button onClick={() => updateFeedbackStatus(item.id)} className="px-3 py-1 bg-emerald-600 text-white rounded">Phản hồi</button>
-                          ) : (
-                            <span className="text-xs text-slate-500">OK</span>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
+              )}
             </div>
           </div>
-      </section>
+        </section>
+      </main>
 
-      {/* Footer */}
-      <footer className="bg-slate-950 text-slate-500 text-xs py-8 border-t border-slate-900 text-center">
-        <p>
-          © 2026 iPARK. All rights reserved. Phát triển bởi nhóm dự án iPARK.
-        </p>
+      <footer className="border-t border-slate-900 bg-slate-950 py-8 text-center text-xs text-slate-500">
+        <p>© 2026 iPARK. All rights reserved.</p>
       </footer>
-      {/* Forgot password modal */}
+
       {showForgot && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-lg bg-white p-6">
             <div className="flex items-center justify-between">
-              <h3 className="font-bold">Quên mật khẩu</h3>
-              <button onClick={() => setShowForgot(false)} className="text-slate-500">Đóng</button>
+              <h3 className="font-bold text-slate-900">Quên mật khẩu</h3>
+              <button className="text-slate-500" onClick={() => setShowForgot(false)} type="button">
+                Đóng
+              </button>
             </div>
             <form className="mt-4 space-y-3" onSubmit={handleForgotPassword}>
               <label className="block text-sm">
                 Email
-                <input name="email" type="email" required className="mt-1 w-full border rounded px-3 py-2" />
+                <input className="mt-1 w-full rounded border px-3 py-2" name="email" required type="email" />
               </label>
-              {mode === "forgot" && (
+              {mode === "reset" && (
                 <>
                   <label className="block text-sm">
                     OTP
-                    <input name="otp" className="mt-1 w-full border rounded px-3 py-2" />
+                    <input className="mt-1 w-full rounded border px-3 py-2" name="otp" required />
                   </label>
                   <label className="block text-sm">
                     Mật khẩu mới
-                    <input name="password" type="password" className="mt-1 w-full border rounded px-3 py-2" />
+                    <input className="mt-1 w-full rounded border px-3 py-2" minLength={6} name="password" required type="password" />
                   </label>
                 </>
               )}
               <div className="flex items-center gap-2">
-                <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Gửi</button>
-                <button type="button" onClick={() => setMode(mode === "login" ? "forgot" : "login")} className="text-sm text-slate-600">{mode === "login" ? "Yêu cầu OTP" : "Quay lại"}</button>
+                <button className="rounded bg-blue-600 px-4 py-2 text-white" type="submit">
+                  Gửi
+                </button>
+                <button className="text-sm text-slate-600" onClick={() => setMode(mode === "request" ? "reset" : "request")} type="button">
+                  {mode === "request" ? "Nhập OTP" : "Quay lại"}
+                </button>
               </div>
               {authError && <div className="text-sm text-red-600">{authError}</div>}
             </form>
@@ -647,4 +276,21 @@ export default function PageHomepage() {
   );
 }
 
+function FeatureCard({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
+  return (
+    <div className="space-y-4 rounded-lg border border-slate-100 bg-slate-50/50 p-8">
+      <div className="flex h-12 w-12 items-center justify-center rounded-md bg-blue-50 text-blue-600">{icon}</div>
+      <h3 className="text-xl font-bold text-slate-900">{title}</h3>
+      <p className="text-sm leading-relaxed text-slate-600">{text}</p>
+    </div>
+  );
+}
 
+function ContactLine({ icon, text }: { icon: React.ReactNode; text: string }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-blue-500">{icon}</span>
+      <span>{text}</span>
+    </div>
+  );
+}
