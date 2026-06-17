@@ -1,20 +1,3 @@
-import { FeedbackDocument } from "../models/Feedback.js";
-
-
-export function serializeFeedback(feedback: FeedbackDocument) {
-  return {
-    id: feedback._id.toString(),
-    subject: feedback.subject,
-    content: feedback.content,
-    status: feedback.status,
-    response: feedback.response,
-    createdBy: feedback.createdBy?.toString(),
-    handledAt: feedback.handledAt,
-    createdAt: feedback.createdAt,
-  };
-}
-
-// Parking session serializer
 export function serializeParkingSession(session: any) {
   return {
     id: session._id?.toString(),
@@ -31,7 +14,6 @@ export function serializeParkingSession(session: any) {
   };
 }
 
-// User serializer
 export function serializeUser(user: any) {
   return {
     id: user._id?.toString?.() || user.id || "",
@@ -42,4 +24,3 @@ export function serializeUser(user: any) {
     createdAt: user.createdAt,
   };
 }
-

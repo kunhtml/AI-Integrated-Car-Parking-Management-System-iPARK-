@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+  changePassword,
   forgotPassword,
   logout,
   resetPassword,
@@ -11,4 +12,5 @@ export const authRoutes = Router();
 
 authRoutes.post("/forgot-password", asyncHandler(forgotPassword));
 authRoutes.post("/reset-password", asyncHandler(resetPassword));
+authRoutes.post("/change-password", requireAuth, asyncHandler(changePassword));
 authRoutes.post("/logout", logout);
