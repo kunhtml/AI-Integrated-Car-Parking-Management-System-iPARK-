@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { Save, UsersRound } from "lucide-react";
-
 import { apiFetch } from "@/lib/api";
 import { roleLabels } from "@/lib/constants";
 
@@ -24,7 +23,7 @@ export function UsersView() {
 
     async function loadUsers() {
       try {
-        const response = await apiFetch("/users");
+        const response = await apiFetch("/users?role=customer");
         const data = await response.json().catch(() => ({}));
         if (mounted && response.ok) {
           setUsers(data.users || []);
@@ -61,8 +60,9 @@ export function UsersView() {
         return;
       }
 
-      setUsers((items) => items.map((item) => (item.id === user.id ? data.user || nextUser : item)));
-      setMessage("Đã cập nhật người dùng.");
+      const updated = data.user || nextUser;
+      setUsers((items) => items.filter((item) => item.id !== user.id || updated.role === "customer").map((item) => (item.id === user.id ? updated : item)));
+      setMessage(updated.role === "staff" ? "Đã chuyển khách hàng sang nhân viên." : "Đã cập nhật người dùng.");
     } catch {
       setUsers((items) => items.map((item) => (item.id === user.id ? user : item)));
       setMessage("Không kết nối được API người dùng.");
@@ -70,12 +70,12 @@ export function UsersView() {
   }
 
   return (
-    <section className="min-h-screen bg-slate-50 px-6 py-12">
+    <section className="bg-slate-50 px-6 py-12">
       <div className="mx-auto w-full max-w-6xl rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
         <div className="mb-6 flex items-center justify-between border-b border-slate-100 pb-4">
           <div>
             <p className="text-sm text-slate-500">Admin</p>
-            <h1 className="text-2xl font-bold text-slate-900">Quản lý người dùng & vai trò</h1>
+            <h1 className="text-2xl font-bold text-slate-900">Manage Users & Roles</h1>
           </div>
           <UsersRound className="text-blue-600" size={24} />
         </div>
@@ -83,12 +83,12 @@ export function UsersView() {
         {message && <p className="mb-4 rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-700">{message}</p>}
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-sm">
+          <table className="w-full min-w-[760px] text-left text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-xs uppercase text-slate-500">
-                <th className="py-3 pr-4">Người dùng</th>
+                <th className="py-3 pr-4">Khách hàng</th>
                 <th className="py-3 pr-4">Email</th>
-                <th className="py-3 pr-4">Vai trò</th>
+                <th className="py-3 pr-4">Role</th>
                 <th className="py-3 pr-4">Trạng thái</th>
                 <th className="py-3 text-right">Lưu</th>
               </tr>
@@ -104,9 +104,8 @@ export function UsersView() {
                       onChange={(event) => updateUser(user, { role: event.target.value as User["role"] })}
                       value={user.role}
                     >
-                      <option value="admin">{roleLabels.admin}</option>
-                      <option value="staff">{roleLabels.staff}</option>
                       <option value="customer">{roleLabels.customer}</option>
+                      <option value="staff">{roleLabels.staff}</option>
                     </select>
                   </td>
                   <td className="py-3 pr-4">
@@ -128,10 +127,8 @@ export function UsersView() {
           </table>
         </div>
 
-        {!loading && users.length === 0 && (
-          <p className="py-10 text-center text-sm text-slate-500">Chưa có người dùng để hiển thị.</p>
-        )}
-        {loading && <p className="py-10 text-center text-sm text-slate-500">Đang tải danh sách người dùng...</p>}
+        {!loading && users.length === 0 && <p className="py-10 text-center text-sm text-slate-500">Chưa có tài khoản khách hàng để hiển thị.</p>}
+        {loading && <p className="py-10 text-center text-sm text-slate-500">Đang tải danh sách khách hàng...</p>}
       </div>
     </section>
   );

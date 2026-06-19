@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { CreditCard, ParkingCircle, Save } from "lucide-react";
+import { apiFetch } from "@/lib/api";
 
 type FeeRuleForm = {
   freeMinutes: number;
@@ -32,9 +33,42 @@ const currency = new Intl.NumberFormat("vi-VN", {
   currency: "VND",
 });
 
+function normalizeConfig(config: Partial<FeeRuleForm> & { effectiveFrom?: string | Date }): FeeRuleForm {
+  return {
+    ...defaultRules,
+    ...config,
+    effectiveFrom: config.effectiveFrom ? new Date(config.effectiveFrom).toISOString().slice(0, 10) : defaultRules.effectiveFrom,
+  };
+}
+
 export function ParkingFeeRulesView() {
   const [rules, setRules] = useState<FeeRuleForm>(defaultRules);
   const [message, setMessage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadConfig() {
+      try {
+        const response = await apiFetch("/pricing");
+        const data = await response.json().catch(() => ({}));
+        if (mounted && response.ok) {
+          setRules(normalizeConfig(data.pricingConfig || defaultRules));
+        }
+      } catch {
+        if (mounted) setRules(defaultRules);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+
+    loadConfig();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const previewItems = useMemo(
     () => [
@@ -55,13 +89,38 @@ export function ParkingFeeRulesView() {
     }));
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setMessage("Đã lưu cấu hình phí trên giao diện. Backend sẽ được nối ở bước sau.");
+    setMessage(null);
+    setSaving(true);
+
+    try {
+      const response = await apiFetch("/pricing", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...rules,
+          effectiveFrom: new Date(rules.effectiveFrom).toISOString(),
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setMessage(data.message || "Không lưu được cấu hình phí.");
+        return;
+      }
+
+      setRules(normalizeConfig(data.pricingConfig || rules));
+      setMessage(data.message || "Đã lưu cấu hình phí.");
+    } catch {
+      setMessage("Không kết nối được API cấu hình phí.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <section className="min-h-screen bg-slate-50 px-6 py-12">
+    <section className="bg-slate-50 px-6 py-12">
       <div className="mx-auto w-full max-w-6xl rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
         <div className="mb-6 flex items-center justify-between border-b border-slate-100 pb-4">
           <div>
@@ -72,59 +131,18 @@ export function ParkingFeeRulesView() {
         </div>
 
         {message && <p className="mb-4 rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-700">{message}</p>}
+        {loading && <p className="mb-4 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600">Đang tải cấu hình phí...</p>}
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div className="grid gap-4 md:grid-cols-2">
-              <NumberField
-                label="Số phút miễn phí"
-                min={0}
-                onChange={(value) => updateNumber("freeMinutes", value)}
-                suffix="phút"
-                value={rules.freeMinutes}
-              />
-              <NumberField
-                label="Thời gian miễn phí khi ra cổng"
-                min={0}
-                onChange={(value) => updateNumber("graceExitMinutes", value)}
-                suffix="phút"
-                value={rules.graceExitMinutes}
-              />
-              <NumberField
-                label="Phí gửi theo giờ"
-                min={0}
-                onChange={(value) => updateNumber("hourlyRate", value)}
-                suffix="VND"
-                value={rules.hourlyRate}
-              />
-              <NumberField
-                label="Phí gửi qua đêm"
-                min={0}
-                onChange={(value) => updateNumber("overnightRate", value)}
-                suffix="VND"
-                value={rules.overnightRate}
-              />
-              <NumberField
-                label="Gói gửi xe tháng"
-                min={0}
-                onChange={(value) => updateNumber("monthlyRate", value)}
-                suffix="VND"
-                value={rules.monthlyRate}
-              />
-              <NumberField
-                label="Phí phạt quá hạn"
-                min={0}
-                onChange={(value) => updateNumber("overdueFineRate", value)}
-                suffix="VND"
-                value={rules.overdueFineRate}
-              />
-              <NumberField
-                label="Trần phí trong ngày"
-                min={0}
-                onChange={(value) => updateNumber("dailyMaxRate", value)}
-                suffix="VND"
-                value={rules.dailyMaxRate}
-              />
+              <NumberField label="Số phút miễn phí" min={0} onChange={(value) => updateNumber("freeMinutes", value)} suffix="phút" value={rules.freeMinutes} />
+              <NumberField label="Thời gian miễn phí khi ra cổng" min={0} onChange={(value) => updateNumber("graceExitMinutes", value)} suffix="phút" value={rules.graceExitMinutes} />
+              <NumberField label="Phí gửi theo giờ" min={0} onChange={(value) => updateNumber("hourlyRate", value)} suffix="VND" value={rules.hourlyRate} />
+              <NumberField label="Phí gửi qua đêm" min={0} onChange={(value) => updateNumber("overnightRate", value)} suffix="VND" value={rules.overnightRate} />
+              <NumberField label="Gói gửi xe tháng" min={0} onChange={(value) => updateNumber("monthlyRate", value)} suffix="VND" value={rules.monthlyRate} />
+              <NumberField label="Phí phạt quá hạn" min={0} onChange={(value) => updateNumber("overdueFineRate", value)} suffix="VND" value={rules.overdueFineRate} />
+              <NumberField label="Trần phí trong ngày" min={0} onChange={(value) => updateNumber("dailyMaxRate", value)} suffix="VND" value={rules.dailyMaxRate} />
               <label className="block text-sm font-medium text-slate-700">
                 Ngày áp dụng
                 <input
@@ -151,11 +169,12 @@ export function ParkingFeeRulesView() {
 
             <div className="flex justify-end">
               <button
-                className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+                className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+                disabled={saving}
                 type="submit"
               >
                 <Save size={16} />
-                Lưu cấu hình
+                {saving ? "Đang lưu..." : "Lưu cấu hình"}
               </button>
             </div>
           </form>
@@ -208,13 +227,7 @@ function NumberField({
     <label className="block text-sm font-medium text-slate-700">
       {label}
       <div className="mt-1 flex rounded-md border border-slate-200 bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100">
-        <input
-          className="min-w-0 flex-1 rounded-l-md px-3 py-2 text-sm outline-none"
-          min={min}
-          onChange={(event) => onChange(event.target.value)}
-          type="number"
-          value={value}
-        />
+        <input className="min-w-0 flex-1 rounded-l-md px-3 py-2 text-sm outline-none" min={min} onChange={(event) => onChange(event.target.value)} type="number" value={value} />
         <span className="flex items-center border-l border-slate-200 px-3 text-xs font-semibold text-slate-500">{suffix}</span>
       </div>
     </label>

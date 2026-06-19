@@ -123,7 +123,7 @@ export default function PageHomepage() {
             <>
               <a
                 className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
-                href="/overview"
+                href="/login"
               >
                 <LogIn size={16} />
                 Vào hệ thống
