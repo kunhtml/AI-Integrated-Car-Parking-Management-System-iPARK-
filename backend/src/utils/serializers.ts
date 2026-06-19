@@ -24,3 +24,20 @@ export function serializeUser(user: any) {
     createdAt: user.createdAt,
   };
 }
+
+export function serializePricingConfig(config: any) {
+  return {
+    id: config._id?.toString?.() || config.id || "",
+    freeMinutes: config.freeMinutes || 0,
+    hourlyRate: config.hourlyRate || 0,
+    overnightRate: config.overnightRate || 0,
+    monthlyRate: config.monthlyRate || 0,
+    overdueFineRate: config.overdueFineRate || 0,
+    dailyMaxRate: config.dailyMaxRate || 0,
+    graceExitMinutes: config.graceExitMinutes || 0,
+    effectiveFrom: config.effectiveFrom,
+    isActive: Boolean(config.isActive),
+    createdAt: config.createdAt,
+    updatedAt: config.updatedAt,
+  };
+}

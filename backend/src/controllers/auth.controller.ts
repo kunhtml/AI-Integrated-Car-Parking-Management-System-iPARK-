@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import mongoose from "mongoose";
 import { Request, Response } from "express";
 import { z } from "zod";
 import { User } from "../models/User.js";
@@ -6,6 +7,52 @@ import { OtpToken } from "../models/OtpToken.js";
 import { sendMail, smtpConfigured } from "../services/mail.service.js";
 
 const cookieName = "parking_session";
+
+export async function login(request: Request, response: Response) {
+  const body = z.object({ email: z.email(), password: z.string().min(1) }).parse(request.body);
+  if (mongoose.connection.readyState !== 1) {
+    response.status(503).json({ message: "Chưa kết nối DB nên chưa thể đăng nhập." });
+    return;
+  }
+
+  const user = await User.findOne({ email: body.email.toLowerCase() });
+
+  if (!user || !user.passwordHash || !(await bcrypt.compare(body.password, user.passwordHash))) {
+    response.status(401).json({ message: "Email hoặc mật khẩu không đúng." });
+    return;
+  }
+
+  if (user.status === "Đã khóa") {
+    response.status(403).json({ message: "Tài khoản đã bị khóa." });
+    return;
+  }
+
+  const session = encodeURIComponent(
+    JSON.stringify({
+      id: user._id.toString(),
+      email: user.email,
+      role: user.role || "customer",
+    }),
+  );
+
+  response
+    .cookie(cookieName, session, {
+      httpOnly: false,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    })
+    .json({
+      user: {
+        id: user._id.toString(),
+        name: user.name || user.email,
+        email: user.email,
+        role: user.role || "customer",
+        status: user.status || "Đang hoạt động",
+      },
+      message: "Đăng nhập thành công.",
+    });
+}
 
 export async function forgotPassword(request: Request, response: Response) {
   const body = z.object({ email: z.email() }).parse(request.body);
@@ -81,6 +128,11 @@ export async function changePassword(request: Request, response: Response) {
       newPassword: z.string().min(6),
     })
     .parse(request.body);
+
+  if (mongoose.connection.readyState !== 1) {
+    response.status(503).json({ message: "Chưa kết nối DB nên chưa thể đổi mật khẩu." });
+    return;
+  }
 
   const requester = request.user;
   const user = requester?.id
