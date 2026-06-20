@@ -17,5 +17,6 @@ declare module 'lucide-react' {
   export const UsersRound: React.ComponentType<any>;
   export const KeyRound: React.ComponentType<any>;
   export const Save: React.ComponentType<any>;
+  export const PlusCircle: React.ComponentType<any>;
   export default {} as any;
 }
