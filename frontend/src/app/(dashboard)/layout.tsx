@@ -9,7 +9,9 @@ const navItems = [
   { href: "/overview", label: "Overview" },
   { href: "/users", label: "Customers & Roles" },
   { href: "/staff", label: "Staff Accounts" },
+  { href: "/membership-packages", label: "Membership" },
   { href: "/parking-fee-rules", label: "Fee Rules" },
+  { href: "/revenue-reports", label: "Reports" },
   { href: "/change-password", label: "Change Password" },
 ];
 
