@@ -41,3 +41,34 @@ export function serializePricingConfig(config: any) {
     updatedAt: config.updatedAt,
   };
 }
+
+export function serializeMembershipPackage(pkg: any) {
+  return {
+    id: pkg._id?.toString?.() || pkg.id || "",
+    name: pkg.name,
+    code: pkg.code,
+    billingCycle: pkg.billingCycle,
+    price: pkg.price || 0,
+    durationDays: pkg.durationDays || 0,
+    subscriberCount: pkg.subscriberCount || 0,
+    renewalRate: pkg.renewalRate || 0,
+    status: pkg.status || "Draft",
+    features: pkg.features || [],
+    note: pkg.note || "",
+    createdAt: pkg.createdAt,
+    updatedAt: pkg.updatedAt,
+  };
+}
+
+export function serializeReportExport(item: any) {
+  return {
+    id: item._id?.toString?.() || item.id || "",
+    fileName: item.fileName,
+    reportType: item.reportType || "revenue",
+    format: item.format,
+    period: item.period,
+    createdBy: item.createdBy?.toString?.() || item.createdBy || "System",
+    status: item.status || "Ready",
+    createdAt: item.createdAt,
+  };
+}

@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { BarChart, CreditCard, PlusCircle, Save, UsersRound } from "lucide-react";
+import { apiFetch } from "@/lib/api";
 
 type PackageStatus = "Active" | "Draft" | "Paused";
 
@@ -72,6 +73,33 @@ export function MembershipPackagesView() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"All" | PackageStatus>("All");
   const [message, setMessage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadPackages() {
+      try {
+        const response = await apiFetch("/membership-packages");
+        const data = await response.json().catch(() => ({}));
+        if (mounted && response.ok) {
+          const nextPackages = data.packages || [];
+          setPackages(nextPackages);
+          setSelectedId(nextPackages[0]?.id || "");
+        }
+      } catch {
+        if (mounted) setPackages(initialPackages);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+
+    loadPackages();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const selectedPackage = packages.find((item) => item.id === selectedId) || packages[0];
 
@@ -104,7 +132,7 @@ export function MembershipPackagesView() {
     };
   }, [packages]);
 
-  function handleCreatePlan() {
+  async function handleCreatePlan() {
     const newPlan: MembershipPackage = {
       id: `custom-${Date.now()}`,
       name: "Custom Tier",
@@ -119,9 +147,27 @@ export function MembershipPackagesView() {
       note: "New tier created from UC28 Create New Plan flow.",
     };
 
-    setPackages((items) => [newPlan, ...items]);
-    setSelectedId(newPlan.id);
-    setMessage("Đã tạo bản nháp gói thành viên mới.");
+    setMessage(null);
+    try {
+      const response = await apiFetch("/membership-packages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newPlan),
+      });
+      const data = await response.json().catch(() => ({}));
+      const created = data.package || newPlan;
+
+      if (!response.ok) {
+        setMessage(data.message || "Không tạo được membership package.");
+        return;
+      }
+
+      setPackages((items) => [created, ...items]);
+      setSelectedId(created.id);
+      setMessage(data.message || "Đã tạo bản nháp gói thành viên mới.");
+    } catch {
+      setMessage("Không kết nối được API membership packages.");
+    }
   }
 
   function updateSelected(changes: Partial<MembershipPackage>) {
@@ -129,9 +175,34 @@ export function MembershipPackagesView() {
     setPackages((items) => items.map((item) => (item.id === selectedPackage.id ? { ...item, ...changes } : item)));
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setMessage("Đã cập nhật package settings trên giao diện. UC28: Package settings are updated.");
+    if (!selectedPackage) return;
+
+    setSaving(true);
+    setMessage(null);
+    try {
+      const response = await apiFetch(`/membership-packages/${selectedPackage.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(selectedPackage),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setMessage(data.message || "Không cập nhật được package settings.");
+        return;
+      }
+
+      const updated = data.package || selectedPackage;
+      setPackages((items) => items.map((item) => (item.id === selectedPackage.id ? { ...item, ...updated } : item)));
+      setSelectedId(updated.id || selectedPackage.id);
+      setMessage(data.message || "Package settings are updated.");
+    } catch {
+      setMessage("Không kết nối được API membership packages.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -154,6 +225,7 @@ export function MembershipPackagesView() {
         </div>
 
         {message && <p className="rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-700">{message}</p>}
+        {loading && <p className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600">Loading membership packages...</p>}
 
         <div className="grid gap-6 md:grid-cols-4">
           <SummaryTile icon={<CreditCard size={20} />} label="Active tiers" value={String(summary.activeCount)} />
@@ -286,7 +358,7 @@ export function MembershipPackagesView() {
                 </label>
                 <button className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700" type="submit">
                   <Save size={16} />
-                  Save Package Settings
+                  {saving ? "Saving..." : "Save Package Settings"}
                 </button>
               </div>
             </form>

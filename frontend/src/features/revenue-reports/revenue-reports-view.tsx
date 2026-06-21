@@ -1,37 +1,68 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BarChart, Car, CreditCard, ReceiptText, Save } from "lucide-react";
+import { apiFetch } from "@/lib/api";
 
 type ReportPoint = {
   label: string;
   revenue: number;
   entries: number;
   exits: number;
-  occupancy: number;
 };
 
 type ExportRow = {
+  id?: string;
   fileName: string;
   period: string;
   createdBy: string;
   status: "Ready" | "Processing" | "Failed";
 };
 
-const reportData: ReportPoint[] = [
-  { label: "Mon", revenue: 1850000, entries: 84, exits: 79, occupancy: 58 },
-  { label: "Tue", revenue: 2360000, entries: 103, exits: 98, occupancy: 64 },
-  { label: "Wed", revenue: 2140000, entries: 96, exits: 94, occupancy: 61 },
-  { label: "Thu", revenue: 2920000, entries: 128, exits: 120, occupancy: 73 },
-  { label: "Fri", revenue: 3180000, entries: 142, exits: 137, occupancy: 81 },
-  { label: "Sat", revenue: 1740000, entries: 77, exits: 82, occupancy: 47 },
-  { label: "Sun", revenue: 1260000, entries: 58, exits: 61, occupancy: 39 },
-];
+type ReportState = {
+  kpis: {
+    totalRevenue: number;
+    vehicleCount: number;
+    occupancyRate: number;
+    avgParkingTimeMinutes: number;
+    activeSessions: number;
+  };
+  revenueChart: Array<{ label: string; revenue: number }>;
+  trafficChart: Array<{ label: string; entries: number; exits: number }>;
+  capacity: {
+    occupiedSlots: number;
+    totalSlots: number;
+    threshold: number;
+  };
+  exportHistory: ExportRow[];
+};
 
-const exportHistory: ExportRow[] = [
-  { fileName: "revenue-weekly-2026-06-20.pdf", period: "This week", createdBy: "Parking Manager", status: "Ready" },
-  { fileName: "traffic-capacity-2026-06.xlsx", period: "June 2026", createdBy: "System Admin", status: "Ready" },
-  { fileName: "revenue-daily-2026-06-19.pdf", period: "Yesterday", createdBy: "Parking Manager", status: "Processing" },
+const emptyReport: ReportState = {
+  kpis: {
+    totalRevenue: 0,
+    vehicleCount: 0,
+    occupancyRate: 0,
+    avgParkingTimeMinutes: 0,
+    activeSessions: 0,
+  },
+  revenueChart: [],
+  trafficChart: [],
+  capacity: {
+    occupiedSlots: 0,
+    totalSlots: 30,
+    threshold: 85,
+  },
+  exportHistory: [],
+};
+
+const fallbackPoints: ReportPoint[] = [
+  { label: "Mon", revenue: 1850000, entries: 84, exits: 79 },
+  { label: "Tue", revenue: 2360000, entries: 103, exits: 98 },
+  { label: "Wed", revenue: 2140000, entries: 96, exits: 94 },
+  { label: "Thu", revenue: 2920000, entries: 128, exits: 120 },
+  { label: "Fri", revenue: 3180000, entries: 142, exits: 137 },
+  { label: "Sat", revenue: 1740000, entries: 77, exits: 82 },
+  { label: "Sun", revenue: 1260000, entries: 58, exits: 61 },
 ];
 
 const currency = new Intl.NumberFormat("vi-VN", {
@@ -43,35 +74,82 @@ export function RevenueReportsView() {
   const [dateRange, setDateRange] = useState("this-week");
   const [parkingArea, setParkingArea] = useState("all");
   const [vehicleType, setVehicleType] = useState("car");
+  const [report, setReport] = useState<ReportState>(emptyReport);
   const [message, setMessage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const summary = useMemo(() => {
-    const totalRevenue = reportData.reduce((sum, item) => sum + item.revenue, 0);
-    const totalEntries = reportData.reduce((sum, item) => sum + item.entries, 0);
-    const totalExits = reportData.reduce((sum, item) => sum + item.exits, 0);
-    const avgOccupancy = Math.round(reportData.reduce((sum, item) => sum + item.occupancy, 0) / reportData.length);
-    const activeSessions = Math.max(0, totalEntries - totalExits);
+  async function loadReport() {
+    setLoading(true);
+    setMessage(null);
+    try {
+      const params = new URLSearchParams({ dateRange, parkingArea, vehicleType });
+      const response = await apiFetch(`/reports/revenue?${params.toString()}`);
+      const data = await response.json().catch(() => ({}));
 
-    return {
-      totalRevenue,
-      vehicleCount: totalEntries,
-      avgOccupancy,
-      avgParkingTime: "2h 18m",
-      activeSessions,
-      occupiedSlots: Math.round((30 * avgOccupancy) / 100),
-      totalSlots: 30,
-    };
-  }, []);
+      if (!response.ok) {
+        setMessage(data.message || "Không tải được revenue report.");
+        setReport(emptyReport);
+        return;
+      }
 
-  const maxRevenue = Math.max(...reportData.map((item) => item.revenue));
-  const maxTraffic = Math.max(...reportData.map((item) => item.entries));
-
-  function handleApplyFilter() {
-    setMessage("Đã áp dụng bộ lọc. Dữ liệu mẫu được cập nhật theo trạng thái filtered trong screen spec.");
+      setReport({ ...emptyReport, ...(data.report || {}) });
+    } catch {
+      setMessage("Không kết nối được API revenue reports.");
+      setReport(emptyReport);
+    } finally {
+      setLoading(false);
+    }
   }
 
-  function handleExport(format: "PDF" | "Excel") {
-    setMessage(`Đã tạo yêu cầu xuất báo cáo ${format}. Export history sẽ ghi nhận file sau khi backend được nối.`);
+  useEffect(() => {
+    loadReport();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const chartPoints = useMemo<ReportPoint[]>(() => {
+    if (report.revenueChart.length || report.trafficChart.length) {
+      const trafficByLabel = new Map(report.trafficChart.map((item) => [item.label, item]));
+      return report.revenueChart.map((item) => {
+        const traffic = trafficByLabel.get(item.label);
+        return {
+          label: item.label,
+          revenue: item.revenue,
+          entries: traffic?.entries || 0,
+          exits: traffic?.exits || 0,
+        };
+      });
+    }
+
+    return fallbackPoints;
+  }, [report]);
+
+  const maxRevenue = Math.max(1, ...chartPoints.map((item) => item.revenue));
+  const maxTraffic = Math.max(1, ...chartPoints.map((item) => item.entries));
+  const avgParkingTime = `${Math.floor(report.kpis.avgParkingTimeMinutes / 60)}h ${report.kpis.avgParkingTimeMinutes % 60}m`;
+
+  async function handleExport(format: "PDF" | "Excel") {
+    setMessage(null);
+    try {
+      const response = await apiFetch("/reports/revenue/exports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ format, period: periodLabel(dateRange) }),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setMessage(data.message || `Không xuất được báo cáo ${format}.`);
+        return;
+      }
+
+      setReport((current) => ({
+        ...current,
+        exportHistory: [data.export, ...current.exportHistory].filter(Boolean),
+      }));
+      setMessage(data.message || `Đã tạo yêu cầu xuất báo cáo ${format}.`);
+    } catch {
+      setMessage("Không kết nối được API export report.");
+    }
   }
 
   return (
@@ -80,10 +158,10 @@ export function RevenueReportsView() {
         <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <p className="text-sm text-slate-500">P-04d • FT-08 Reporting & Analytics</p>
+              <p className="text-sm text-slate-500">P-04d - FT-08 Reporting & Analytics</p>
               <h1 className="text-2xl font-bold text-slate-900">Reporting Dashboard - Revenue, Traffic & Capacity</h1>
               <p className="mt-1 text-sm text-slate-500">
-                Last updated: 20/06/2026 13:40 • Selected period: {periodLabel(dateRange)}
+                Last updated: {new Date().toLocaleString("vi-VN")} - Selected period: {periodLabel(dateRange)}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -108,6 +186,7 @@ export function RevenueReportsView() {
         </div>
 
         {message && <p className="rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-700">{message}</p>}
+        {loading && <p className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600">Loading revenue report...</p>}
 
         <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <div className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]">
@@ -131,7 +210,7 @@ export function RevenueReportsView() {
             <div className="flex items-end">
               <button
                 className="h-10 w-full rounded-md bg-slate-900 px-4 text-sm font-semibold text-white transition hover:bg-slate-700 md:w-auto"
-                onClick={handleApplyFilter}
+                onClick={loadReport}
                 type="button"
               >
                 Apply
@@ -146,17 +225,17 @@ export function RevenueReportsView() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-5">
-          <KpiCard icon={<CreditCard size={20} />} label="Total Revenue" value={currency.format(summary.totalRevenue)} />
-          <KpiCard icon={<Car size={20} />} label="Vehicle Count" value={String(summary.vehicleCount)} />
-          <KpiCard icon={<BarChart size={20} />} label="Occupancy Rate" value={`${summary.avgOccupancy}%`} />
-          <KpiCard icon={<ReceiptText size={20} />} label="Avg Parking Time" value={summary.avgParkingTime} />
-          <KpiCard icon={<Car size={20} />} label="Active Sessions" value={String(summary.activeSessions)} />
+          <KpiCard icon={<CreditCard size={20} />} label="Total Revenue" value={currency.format(report.kpis.totalRevenue)} />
+          <KpiCard icon={<Car size={20} />} label="Vehicle Count" value={String(report.kpis.vehicleCount)} />
+          <KpiCard icon={<BarChart size={20} />} label="Occupancy Rate" value={`${report.kpis.occupancyRate}%`} />
+          <KpiCard icon={<ReceiptText size={20} />} label="Avg Parking Time" value={avgParkingTime} />
+          <KpiCard icon={<Car size={20} />} label="Active Sessions" value={String(report.kpis.activeSessions)} />
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
           <ChartPanel title="Revenue Chart" subtitle="Line/bar by day for the selected period">
             <div className="grid h-64 grid-cols-7 items-end gap-3">
-              {reportData.map((item) => (
+              {chartPoints.map((item) => (
                 <div className="flex h-full flex-col items-center justify-end" key={item.label}>
                   <div className="w-full rounded-t bg-blue-100" style={{ height: `${Math.max(6, (item.revenue / maxRevenue) * 100)}%` }} />
                   <span className="mt-2 text-xs font-semibold text-slate-600">{item.label}</span>
@@ -167,7 +246,7 @@ export function RevenueReportsView() {
 
           <ChartPanel title="Vehicle Traffic Chart" subtitle="Entry vs exit volume">
             <div className="grid h-64 grid-cols-7 items-end gap-3">
-              {reportData.map((item) => (
+              {chartPoints.map((item) => (
                 <div className="flex h-full flex-col items-center justify-end gap-1" key={item.label}>
                   <div className="flex h-full w-full items-end gap-1">
                     <div className="flex-1 rounded-t bg-emerald-100" style={{ height: `${Math.max(6, (item.entries / maxTraffic) * 100)}%` }} />
@@ -194,15 +273,12 @@ export function RevenueReportsView() {
               <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">Normal</span>
             </div>
             <div className="mb-3 flex items-end justify-between">
-              <strong className="text-3xl text-slate-900">{summary.occupiedSlots}/{summary.totalSlots}</strong>
-              <span className="text-sm text-slate-500">Threshold 85%</span>
+              <strong className="text-3xl text-slate-900">{report.capacity.occupiedSlots}/{report.capacity.totalSlots}</strong>
+              <span className="text-sm text-slate-500">Threshold {report.capacity.threshold}%</span>
             </div>
             <div className="h-3 rounded-full bg-slate-100">
-              <div className="h-3 rounded-full bg-blue-600" style={{ width: `${summary.avgOccupancy}%` }} />
+              <div className="h-3 rounded-full bg-blue-600" style={{ width: `${report.kpis.occupancyRate}%` }} />
             </div>
-            <button className="mt-5 w-full rounded-md border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50" type="button">
-              Open Capacity Configuration
-            </button>
           </div>
 
           <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
@@ -221,8 +297,8 @@ export function RevenueReportsView() {
                   </tr>
                 </thead>
                 <tbody>
-                  {exportHistory.map((item) => (
-                    <tr className="border-b border-slate-100 last:border-0" key={item.fileName}>
+                  {report.exportHistory.map((item) => (
+                    <tr className="border-b border-slate-100 last:border-0" key={item.id || item.fileName}>
                       <td className="py-3 pr-4 font-mono text-xs text-slate-700">{item.fileName}</td>
                       <td className="py-3 pr-4 text-slate-600">{item.period}</td>
                       <td className="py-3 pr-4 text-slate-600">{item.createdBy}</td>
@@ -233,6 +309,7 @@ export function RevenueReportsView() {
                   ))}
                 </tbody>
               </table>
+              {!report.exportHistory.length && <p className="py-8 text-center text-sm text-slate-500">No report export history yet.</p>}
             </div>
           </div>
         </div>
