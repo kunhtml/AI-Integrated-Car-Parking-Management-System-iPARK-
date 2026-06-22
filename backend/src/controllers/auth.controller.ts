@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import mongoose from "mongoose";
 import { Request, Response } from "express";
 import { randomUUID } from "node:crypto";
 import { generateSecret, generateURI, verifySync } from "otplib";
@@ -13,6 +14,10 @@ import { signSession } from "../services/token.service.js";
 import { serializeUser } from "../utils/serializers.js";
 
 const cookieName = "parking_session";
+
+function dbReady() {
+  return mongoose.connection.readyState === 1;
+}
 
 function cookieOptions() {
   return {
@@ -65,6 +70,11 @@ export async function login(request: Request, response: Response) {
       twoFactorCode: z.string().optional(),
     })
     .parse(request.body);
+
+  if (!dbReady()) {
+    response.status(503).json({ message: "Chưa kết nối DB nên chưa thể đăng nhập." });
+    return;
+  }
 
   const user = await User.findOne({ email: body.email.toLowerCase() });
   if (!user || user.status === "Đã khóa") {
@@ -282,8 +292,18 @@ export async function changePassword(request: Request, response: Response) {
     })
     .parse(request.body);
 
+  if (!dbReady()) {
+    response.status(503).json({ message: "Chưa kết nối DB nên chưa thể đổi mật khẩu." });
+    return;
+  }
+
   const requester = request.user;
-  const user = requester?.id ? await User.findById(requester.id) : null;
+  const user =
+    requester?.id && mongoose.Types.ObjectId.isValid(requester.id)
+      ? await User.findById(requester.id)
+      : requester?.email
+        ? await User.findOne({ email: requester.email.toLowerCase() })
+        : null;
 
   if (!user) {
     response.status(401).json({ message: "Không xác định được tài khoản đang đăng nhập." });
