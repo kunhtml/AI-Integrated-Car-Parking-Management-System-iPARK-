@@ -3,5 +3,10 @@ declare module "@/features/users/users-view" {
 }
 
 declare module "@/lib/constants" {
-  export const roleLabels: { [key: string]: string };
+  import type { Role } from "@/types";
+
+  export const roleLabels: Record<Role, string>;
+  export const currency: Intl.NumberFormat;
+  export const apiBaseUrl: string;
+  export function todayInputValue(): string;
 }

@@ -9,7 +9,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 
 export const membershipPackagesRoutes = Router();
 
-membershipPackagesRoutes.use(requireAuth, requireRole(["admin", "staff"]));
+membershipPackagesRoutes.use(requireAuth, requireRole("admin", "staff"));
 membershipPackagesRoutes.get("/", asyncHandler(listMembershipPackages));
 membershipPackagesRoutes.post("/", asyncHandler(createMembershipPackage));
 membershipPackagesRoutes.patch("/:id", asyncHandler(updateMembershipPackage));

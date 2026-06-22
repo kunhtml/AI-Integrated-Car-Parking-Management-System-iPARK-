@@ -52,7 +52,7 @@ export async function createStaffAccount(request: Request, response: Response) {
     name: body.name,
     email,
     passwordHash: await bcrypt.hash(body.password, 12),
-    provider: "local",
+    provider: "credentials",
     role: "staff",
     status: body.status,
   });

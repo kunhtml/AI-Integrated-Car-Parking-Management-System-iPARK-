@@ -1,71 +1,33 @@
-import { Request, Response, NextFunction } from "express";
+import { NextFunction, Request, Response } from "express";
 import { env } from "../config/env.js";
+import { verifySession } from "../services/token.service.js";
 
-function decodeBase64Url(value: string) {
-  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
-  const padding = "=".repeat((4 - (normalized.length % 4)) % 4);
-  return Buffer.from(`${normalized}${padding}`, "base64").toString("utf8");
-}
-
-function parseSessionUser(rawToken?: string) {
-  if (!rawToken) return null;
-
-  const token = rawToken.replace(/^Bearer\s+/i, "");
-  const candidates = [token, decodeURIComponent(token)];
-  const jwtPayload = token.split(".")[1];
-  if (jwtPayload) {
-    candidates.push(decodeBase64Url(jwtPayload));
-  }
-
-  for (const candidate of candidates) {
-    try {
-      const parsed = JSON.parse(candidate);
-      return {
-        id: parsed.id || parsed.sub || parsed.userId,
-        role: parsed.role || "customer",
-        email: parsed.email,
-      };
-    } catch {
-      // Keep trying other token shapes.
-    }
-  }
-
-  return { id: token, role: "customer" };
-}
-
-// Minimal middleware: in dev you can set SKIP_AUTH=true to bypass checks.
-export function requireAuth(req: Request, res: Response, next: NextFunction) {
-  if (process.env.SKIP_AUTH === "true" || env.skipAuth) {
-    // attach a demo user
-    (req as any).user = { id: "dev-user", role: "admin", email: "dev@local" };
+export async function requireAuth(request: Request, response: Response, next: NextFunction) {
+  if (env.skipAuth) {
+    request.user = { id: "dev-user", role: "admin", email: "dev@local" };
     next();
     return;
   }
 
-  // otherwise expect cookie 'parking_session' or Authorization header (bearer)
-  const cookie = req.cookies?.parking_session;
-  const authHeader = req.headers.authorization;
-  if (!cookie && !authHeader) {
-    res.status(401).json({ message: "Unauthorized" });
+  const token = request.cookies?.parking_session;
+  const user = await verifySession(token);
+
+  if (!user) {
+    response.status(401).json({ message: "Chưa đăng nhập." });
     return;
   }
 
-  req.user = parseSessionUser(authHeader || cookie) || { role: "customer" };
+  request.user = user;
   next();
 }
 
-export function requireRole(roles: string | string[]) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    const user = (req as any).user;
-    const allowedRoles = Array.isArray(roles) ? roles : [roles];
-    if (!user) {
-      res.status(401).json({ message: "Unauthorized" });
+export function requireRole(...roles: string[]) {
+  return (request: Request, response: Response, next: NextFunction) => {
+    if (!request.user || !roles.includes(request.user.role || "")) {
+      response.status(403).json({ message: "Không có quyền truy cập." });
       return;
     }
-    if (!allowedRoles.includes(user.role)) {
-      res.status(403).json({ message: "Forbidden" });
-      return;
-    }
+
     next();
   };
 }

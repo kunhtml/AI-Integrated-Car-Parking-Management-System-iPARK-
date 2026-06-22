@@ -1,19 +1,32 @@
+import type { Metadata } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
+
+import { Providers } from "@/app/providers";
 import "./globals.css";
+import "./ipark-app.css";
 
-import Providers from "./Providers";
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
 
-export const metadata = {
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+export const metadata: Metadata = {
   title: "iPARK Management System",
   description: "AI-Integrated Car Parking Management System",
 };
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
-    <html lang="vi">
+    <html lang="vi" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body>
         <Providers>{children}</Providers>
       </body>

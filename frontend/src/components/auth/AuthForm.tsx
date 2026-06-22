@@ -1,10 +1,15 @@
 "use client";
 
-import React, { useState } from "react";
-import { ParkingCircle, Eye, EyeOff, Lock, Mail, User, Phone } from "lucide-react";
+import { useState, type ChangeEvent, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { ParkingCircle } from "lucide-react";
+import { getDefaultPathForRole } from "@/config/nav-items";
+import { useParkingApp } from "@/context/parking-app-context";
 import ForgotPasswordForm from "./ForgotPasswordForm";
 
 export default function AuthForm() {
+  const router = useRouter();
+  const { handleLogin, handleRegister, authError } = useParkingApp();
   const [isLogin, setIsLogin] = useState(true);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -16,17 +21,16 @@ export default function AuthForm() {
     confirmPassword: "",
   });
 
-  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleChange(e: ChangeEvent<HTMLInputElement>) {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    alert(
-      isLogin
-        ? `Đăng nhập thành công với email: ${formData.email} (Mockup)`
-        : `Đăng ký thành công tài khoản: ${formData.name} (Mockup)`
-    );
+    const user = isLogin ? await handleLogin(e) : await handleRegister(e);
+    if (user) {
+      router.push(getDefaultPathForRole(user.role));
+    }
   }
 
   if (isForgotPassword) {
@@ -49,17 +53,18 @@ export default function AuthForm() {
         </p>
       </div>
 
+      {authError && <p className="form-error">{authError}</p>}
+
       <form onSubmit={handleSubmit} className="space-y-4">
         {!isLogin && (
           <>
-            {/* Họ và tên */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                 Họ và tên
               </label>
               <div className="relative">
-                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-                  <User size={18} />
+                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 text-xs font-bold">
+                  @
                 </span>
                 <input
                   type="text"
@@ -73,14 +78,13 @@ export default function AuthForm() {
               </div>
             </div>
 
-            {/* Số điện thoại */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                 Số điện thoại
               </label>
               <div className="relative">
-                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-                  <Phone size={18} />
+                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 text-xs font-bold">
+                  #
                 </span>
                 <input
                   type="tel"
@@ -96,14 +100,13 @@ export default function AuthForm() {
           </>
         )}
 
-        {/* Email */}
         <div className="space-y-1.5">
           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
             Địa chỉ Email
           </label>
           <div className="relative">
-            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-              <Mail size={18} />
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 text-xs font-bold">
+              @
             </span>
             <input
               type="email"
@@ -117,7 +120,6 @@ export default function AuthForm() {
           </div>
         </div>
 
-        {/* Mật khẩu */}
         <div className="space-y-1.5">
           <div className="flex justify-between items-center">
             <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
@@ -137,8 +139,8 @@ export default function AuthForm() {
             )}
           </div>
           <div className="relative">
-            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-              <Lock size={18} />
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 text-xs font-bold">
+              *
             </span>
             <input
               type={showPassword ? "text" : "password"}
@@ -154,20 +156,19 @@ export default function AuthForm() {
               onClick={() => setShowPassword(!showPassword)}
               className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600"
             >
-              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              {showPassword ? "Ẩn" : "Hiện"}
             </button>
           </div>
         </div>
 
         {!isLogin && (
-          /* Xác nhận mật khẩu */
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
               Xác nhận mật khẩu
             </label>
             <div className="relative">
-              <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-                <Lock size={18} />
+              <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 text-xs font-bold">
+                *
               </span>
               <input
                 type={showPassword ? "text" : "password"}
@@ -182,7 +183,6 @@ export default function AuthForm() {
           </div>
         )}
 
-        {/* Submit Button */}
         <button
           type="submit"
           className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all shadow-md hover:shadow-lg"
@@ -191,7 +191,6 @@ export default function AuthForm() {
         </button>
       </form>
 
-      {/* Toggle Link */}
       <div className="text-center text-sm text-slate-500">
         {isLogin ? (
           <>

@@ -16,6 +16,13 @@ export interface ResetTokenPayload {
   purpose: "reset_password";
 }
 
+export interface SessionUser {
+  id: string;
+  email: string;
+  role: string;
+  name?: string;
+}
+
 export async function signAccessToken(payload: AccessTokenPayload) {
   return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: "HS256" })
@@ -29,6 +36,43 @@ export async function verifyAccessToken(token: string) {
   const { payload } = await jwtVerify(token, jwtSecret);
 
   return payload as unknown as AccessTokenPayload & { sub: string };
+}
+
+export async function signSession(user: SessionUser) {
+  return new SignJWT({
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    name: user.name,
+  })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(user.id)
+    .setIssuedAt()
+    .setExpirationTime(env.jwtExpiresIn)
+    .sign(jwtSecret);
+}
+
+export async function verifySession(token?: string): Promise<SessionUser | null> {
+  if (!token) {
+    return null;
+  }
+
+  try {
+    const { payload } = await jwtVerify(token, jwtSecret);
+    const id = String(payload.id || payload.sub || "");
+    if (!id) {
+      return null;
+    }
+
+    return {
+      id,
+      email: String(payload.email || ""),
+      role: String(payload.role || "customer"),
+      name: payload.name ? String(payload.name) : undefined,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function signResetToken(payload: ResetTokenPayload) {

@@ -1,7 +1,6 @@
 "use client";
 
-import React from "react";
-import { ParkingCircle, ArrowLeft } from "lucide-react";
+import { ParkingCircle } from "lucide-react";
 import Link from "next/link";
 import AuthForm from "@/components/auth/AuthForm";
 
@@ -16,7 +15,7 @@ export default function AuthPage() {
             href="/"
             className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-blue-600 transition-colors"
           >
-            <ArrowLeft size={16} />
+            <span aria-hidden="true">←</span>
             Quay lại trang chủ
           </Link>
         </div>
