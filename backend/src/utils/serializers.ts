@@ -123,3 +123,18 @@ export function serializeReportExport(item: any) {
     createdAt: item.createdAt,
   };
 }
+
+export function serializeZone(zone: any, stats?: { total: number; empty: number; occupied: number }) {
+  return {
+    id: zone._id?.toString?.() || zone.id || "",
+    name: zone.name,
+    description: zone.description,
+    capacity: zone.capacity,
+    allowedVehicleTypes: zone.allowedVehicleTypes || ["Ô tô"],
+    displayOrder: zone.displayOrder ?? 0,
+    isActive: Boolean(zone.isActive),
+    stats: stats ?? { total: zone.capacity, empty: zone.capacity, occupied: 0 },
+    createdAt: zone.createdAt,
+    updatedAt: zone.updatedAt,
+  };
+}

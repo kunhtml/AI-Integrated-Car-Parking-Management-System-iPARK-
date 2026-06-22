@@ -12,6 +12,7 @@ import { revenueReportsRoutes } from "./revenueReports.routes.js";
 import { transactionsRoutes } from "./transactions.routes.js";
 import { usersRoutes } from "./users.routes.js";
 import { vehiclesRoutes } from "./vehicles.routes.js";
+import { zonesRoutes } from "./zones.routes.js";
 
 export const apiRoutes = Router();
 
@@ -32,4 +33,4 @@ apiRoutes.use("/devices", devicesRoutes);
 apiRoutes.use("/feedback", feedbackRoutes);
 apiRoutes.use("/notifications", notificationsRoutes);
 apiRoutes.use("/shifts", shiftsRoutes);
-apiRoutes.use("/incidents", incidentsRoutes);
+apiRoutes.use("/incidents", incidentsRoutes);apiRoutes.use("/zones", zonesRoutes);

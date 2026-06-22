@@ -1,0 +1,35 @@
+[
+  {
+    "_id": { "$oid": "665000000000000000000050" },
+    "name": "Khu A",
+    "description": "Khu đỗ xe tầng trệt cổng chính",
+    "capacity": 10,
+    "allowedVehicleTypes": ["Ô tô"],
+    "displayOrder": 1,
+    "isActive": true,
+    "createdAt": { "$date": "2026-01-01T00:00:00.000Z" },
+    "updatedAt": { "$date": "2026-01-01T00:00:00.000Z" }
+  },
+  {
+    "_id": { "$oid": "665000000000000000000051" },
+    "name": "Khu B",
+    "description": "Khu đỗ xe tầng trệt cổng phụ",
+    "capacity": 10,
+    "allowedVehicleTypes": ["Ô tô"],
+    "displayOrder": 2,
+    "isActive": true,
+    "createdAt": { "$date": "2026-01-01T00:00:00.000Z" },
+    "updatedAt": { "$date": "2026-01-01T00:00:00.000Z" }
+  },
+  {
+    "_id": { "$oid": "665000000000000000000052" },
+    "name": "Khu C",
+    "description": "Khu đỗ xe VIP tầng hầm B1",
+    "capacity": 10,
+    "allowedVehicleTypes": ["Ô tô"],
+    "displayOrder": 3,
+    "isActive": true,
+    "createdAt": { "$date": "2026-01-01T00:00:00.000Z" },
+    "updatedAt": { "$date": "2026-01-01T00:00:00.000Z" }
+  }
+]

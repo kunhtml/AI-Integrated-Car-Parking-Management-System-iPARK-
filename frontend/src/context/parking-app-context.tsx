@@ -9,6 +9,7 @@ import { createMiscActions } from "@/hooks/actions/use-misc-actions";
 import { createPaymentActions } from "@/hooks/actions/use-payment-actions";
 import { createReportActions, useReportSummaryLoader } from "@/hooks/actions/use-report-actions";
 import { createSessionActions } from "@/hooks/actions/use-session-actions";
+import { createZoneActions } from "@/hooks/actions/use-zone-actions";
 import { useOperationalData } from "@/hooks/use-operational-data";
 import { useSessionLoader } from "@/hooks/use-session-loader";
 import { parkingConfig } from "@/lib/parking-config";
@@ -26,6 +27,7 @@ import type {
   ReportSummary,
   ShiftItem,
   TransactionItem,
+  Zone,
 } from "@/types";
 import type { FormEvent } from "react";
 
@@ -53,6 +55,7 @@ type ParkingAppContextValue = {
   deviceList: DeviceItem[];
   shiftList: ShiftItem[];
   incidentList: IncidentItem[];
+  zoneList: Zone[];
   twoFactorQr: string;
   reportFrom: string;
   setReportFrom: (from: string) => void;
@@ -98,6 +101,9 @@ type ParkingAppContextValue = {
   simulateAction: (message: string) => void;
   createFeedback: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   updateFeedbackStatus: (id: string) => Promise<void>;
+  createZone: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  updateZone: (id: string, updates: Partial<Zone>) => Promise<void>;
+  deleteZone: (id: string) => Promise<void>;
   markNotificationRead: (id: string) => Promise<void>;
   startShift: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   endShift: (id: string) => Promise<void>;
@@ -189,6 +195,14 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       })),
     [],
   );
+  const setZoneList = useCallback(
+    (zoneList: Zone[] | ((items: Zone[]) => Zone[])) =>
+      setState((s) => ({
+        ...s,
+        zoneList: typeof zoneList === "function" ? zoneList(s.zoneList) : zoneList,
+      })),
+    [],
+  );
   const setTwoFactorQr = useCallback((twoFactorQr: string) => setState((s) => ({ ...s, twoFactorQr })), []);
   const setReportFrom = useCallback((reportFrom: string) => setState((s) => ({ ...s, reportFrom })), []);
   const setReportTo = useCallback((reportTo: string) => setState((s) => ({ ...s, reportTo })), []);
@@ -224,6 +238,7 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
     setDeviceList,
     setShiftList,
     setIncidentList,
+    setZoneList,
     setActionLog,
   });
 
@@ -319,6 +334,11 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
     [setFeedbackList, setNotificationList, setShiftList, setIncidentList, setRegisteredVehicles, setActionLog],
   );
 
+  const zoneActions = useMemo(
+    () => createZoneActions({ setZoneList, setActionLog }),
+    [setZoneList, setActionLog],
+  );
+
   const stats = useMemo(() => {
     const active = state.sessions.filter((item) => item.status === "Đang gửi").length;
     const revenue = state.sessions.reduce((sum, item) => sum + item.fee, 0);
@@ -363,6 +383,7 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       deviceList: state.deviceList,
       shiftList: state.shiftList,
       incidentList: state.incidentList,
+      zoneList: state.zoneList,
       twoFactorQr: state.twoFactorQr,
       reportFrom: state.reportFrom,
       setReportFrom,
@@ -380,8 +401,9 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       ...deviceActions,
       ...reportActions,
       ...miscActions,
+      ...zoneActions,
     }),
-    [state, stats, filteredSessions, authActions, sessionActions, paymentActions, deviceActions, reportActions, miscActions],
+    [state, stats, filteredSessions, authActions, sessionActions, paymentActions, deviceActions, reportActions, miscActions, zoneActions],
   );
 
   return <ParkingAppContext.Provider value={value}>{children}</ParkingAppContext.Provider>;

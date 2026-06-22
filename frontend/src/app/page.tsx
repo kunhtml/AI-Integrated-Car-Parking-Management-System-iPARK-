@@ -78,14 +78,11 @@ export default function PageHomepage() {
   }
 
   async function handleLogout() {
-    try {
-      await apiFetch("/auth/logout", { method: "POST" });
-      window.localStorage.removeItem("ipark_current_user");
-      setCurrentUser(null);
-      setActionLog("Đã đăng xuất.");
-    } catch {
-      setActionLog("Lỗi khi đăng xuất.");
-    }
+    window.localStorage.removeItem("ipark_current_user");
+    setCurrentUser(null);
+    setActionLog("Đã đăng xuất.");
+    void apiFetch("/auth/logout", { keepalive: true, method: "POST" }).catch(() => undefined);
+    window.location.href = "/";
   }
 
   return (

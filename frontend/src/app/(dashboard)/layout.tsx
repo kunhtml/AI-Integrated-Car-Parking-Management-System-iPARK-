@@ -20,6 +20,7 @@ const navItems = [
   { href: "/overview", label: "Tổng quan", icon: BarChart },
   { href: "/membership-packages", label: "Gói đăng ký", icon: ParkingCircle },
   { href: "/parking-fee-rules", label: "Cấu hình phí", icon: CreditCard },
+  { href: "/zones", label: "Khu vực đỗ xe", icon: ParkingCircle },
   { href: "/users", label: "Người dùng", icon: UsersRound },
   { href: "/staff", label: "Nhân viên", icon: UsersRound },
   { href: "/devices", label: "Camera & thiết bị", icon: ShieldCheck },
@@ -33,8 +34,6 @@ const placeholderItems = [
   { label: "Ví & thanh toán", icon: CreditCard },
   { label: "Thông báo", icon: ReceiptText },
   { label: "AI biển số", icon: ShieldCheck },
-  { label: "Khu vực đỗ xe", icon: ParkingCircle },
-  { label: "Đặt chỗ trước", icon: ReceiptText },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -42,14 +41,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [message, setMessage] = useState<string | null>(null);
 
   async function handleLogout() {
-    try {
-      await apiFetch("/auth/logout", { method: "POST" });
-      window.localStorage.removeItem("ipark_current_user");
-      setMessage("Đã đăng xuất.");
-      window.location.href = "/";
-    } catch {
-      setMessage("Không đăng xuất được. Vui lòng thử lại.");
-    }
+    window.localStorage.removeItem("ipark_current_user");
+    setMessage("Đã đăng xuất.");
+    void apiFetch("/auth/logout", { keepalive: true, method: "POST" }).catch(() => undefined);
+    window.location.href = "/";
   }
 
   return (

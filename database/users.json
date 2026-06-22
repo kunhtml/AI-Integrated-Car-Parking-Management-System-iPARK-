@@ -1,0 +1,54 @@
+[
+  {
+    "_id": { "$oid": "665000000000000000000001" },
+    "name": "Super Admin iPARK",
+    "email": "admin@ipark.vn",
+    "passwordHash": "$2a$10$PLACEHOLDER_ADMIN_HASH",
+    "role": "admin",
+    "status": "Đang hoạt động",
+    "wallet": 0,
+    "provider": "credentials",
+    "twoFactorEnabled": false,
+    "createdAt": { "$date": "2026-01-01T00:00:00.000Z" },
+    "updatedAt": { "$date": "2026-01-01T00:00:00.000Z" }
+  },
+  {
+    "_id": { "$oid": "665000000000000000000002" },
+    "name": "Nhân viên cổng 1",
+    "email": "nv.1@ipark.vn",
+    "passwordHash": "$2a$10$PLACEHOLDER_STAFF_HASH",
+    "role": "staff",
+    "status": "Đang hoạt động",
+    "wallet": 0,
+    "provider": "credentials",
+    "twoFactorEnabled": false,
+    "createdAt": { "$date": "2026-01-01T00:00:00.000Z" },
+    "updatedAt": { "$date": "2026-01-01T00:00:00.000Z" }
+  },
+  {
+    "_id": { "$oid": "665000000000000000000003" },
+    "name": "Nhân viên cổng 2",
+    "email": "nv.2@ipark.vn",
+    "passwordHash": "$2a$10$PLACEHOLDER_STAFF_HASH",
+    "role": "staff",
+    "status": "Đang hoạt động",
+    "wallet": 0,
+    "provider": "credentials",
+    "twoFactorEnabled": false,
+    "createdAt": { "$date": "2026-01-01T00:00:00.000Z" },
+    "updatedAt": { "$date": "2026-01-01T00:00:00.000Z" }
+  },
+  {
+    "_id": { "$oid": "665000000000000000000004" },
+    "name": "Khách hàng mẫu",
+    "email": "kh.1@gmail.com",
+    "passwordHash": "$2a$10$PLACEHOLDER_STAFF_HASH",
+    "role": "customer",
+    "status": "Đang hoạt động",
+    "wallet": 500000,
+    "provider": "credentials",
+    "twoFactorEnabled": false,
+    "createdAt": { "$date": "2026-01-01T00:00:00.000Z" },
+    "updatedAt": { "$date": "2026-01-01T00:00:00.000Z" }
+  }
+]

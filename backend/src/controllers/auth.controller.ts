@@ -393,7 +393,7 @@ export async function disableTwoFactor(request: Request, response: Response) {
 }
 
 export function logout(_request: Request, response: Response) {
-  response.clearCookie(cookieName, { path: "/" }).json({ ok: true });
+  response.clearCookie(cookieName, cookieOptions()).json({ ok: true });
 }
 
 export function me(request: Request, response: Response) {

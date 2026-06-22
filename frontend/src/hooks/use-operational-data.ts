@@ -13,6 +13,7 @@ import type {
   RegisteredVehicle,
   ShiftItem,
   TransactionItem,
+  Zone,
 } from "@/types";
 
 type OperationalDataParams = {
@@ -34,6 +35,7 @@ type OperationalDataParams = {
   setDeviceList: (devices: DeviceItem[] | ((items: DeviceItem[]) => DeviceItem[])) => void;
   setShiftList: (shifts: ShiftItem[] | ((items: ShiftItem[]) => ShiftItem[])) => void;
   setIncidentList: (incidents: IncidentItem[] | ((items: IncidentItem[]) => IncidentItem[])) => void;
+  setZoneList: (zones: Zone[] | ((items: Zone[]) => Zone[])) => void;
   setActionLog: (log: string) => void;
 };
 
@@ -50,6 +52,7 @@ export function useOperationalData({
   setDeviceList,
   setShiftList,
   setIncidentList,
+  setZoneList,
   setActionLog,
 }: OperationalDataParams) {
   const loadedForUserRef = useRef<string | null>(null);
@@ -144,6 +147,11 @@ export function useOperationalData({
             const data = await incidentResponse.json();
             setIncidentList(data.incidents);
           }
+          const zoneResponse = await apiFetch("/zones");
+          if (!cancelled && zoneResponse.ok) {
+            const data = await zoneResponse.json();
+            setZoneList(data.zones);
+          }
         }
       } catch {
         if (!cancelled) {
@@ -171,6 +179,7 @@ export function useOperationalData({
     setDeviceList,
     setShiftList,
     setIncidentList,
+    setZoneList,
     setActionLog,
   ]);
 }
