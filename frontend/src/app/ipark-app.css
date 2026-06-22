@@ -9,7 +9,7 @@
   --accent: #475467;
   --success: #16803c;
   --warning: #b25e09;
-  --sidebar: #1f2937;
+  --sidebar: #0f172a;
 }
 
 html {
@@ -367,52 +367,73 @@ th {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
+  grid-template-columns: 256px minmax(0, 1fr);
   min-height: 100vh;
 }
 
 .sidebar {
   background: var(--sidebar);
   color: #fff;
-  padding: 22px;
+  padding: 20px 13px;
 }
 
 .app-brand {
-  margin-bottom: 32px;
+  margin-bottom: 28px;
+  padding: 0 8px;
+}
+
+.brand-mark {
+  align-items: center;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 18px;
+  font-weight: 800;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
 }
 
 .sidebar nav {
   display: grid;
-  gap: 8px;
+  gap: 4px;
+  max-height: calc(100vh - 92px);
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .sidebar button,
 .sidebar a {
   background: transparent;
-  color: #d0d5dd;
+  border-radius: 8px;
+  color: #f8fafc;
   justify-content: flex-start;
   width: 100%;
   text-decoration: none;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 11px;
+  min-height: 38px;
+  padding: 0 12px;
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .sidebar button.active,
 .sidebar button:hover,
 .sidebar a.active,
 .sidebar a:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: rgba(37, 99, 235, 0.26);
+  color: #3b82f6;
 }
 
 .workspace {
   min-width: 0;
-  padding: 24px;
+  padding: 26px 32px;
 }
 
 .app-header {
-  margin-bottom: 24px;
+  margin-bottom: 30px;
 }
 
 .system-log {
@@ -440,7 +461,8 @@ th {
 }
 
 .logout-button {
-  background: #344054;
+  background: #475569;
+  font-weight: 800;
 }
 
 .dashboard,

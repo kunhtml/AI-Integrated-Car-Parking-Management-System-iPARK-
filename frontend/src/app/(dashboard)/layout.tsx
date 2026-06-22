@@ -22,6 +22,7 @@ const navItems = [
   { href: "/parking-fee-rules", label: "Cấu hình phí", icon: CreditCard },
   { href: "/users", label: "Người dùng", icon: UsersRound },
   { href: "/staff", label: "Nhân viên", icon: UsersRound },
+  { href: "/devices", label: "Camera & thiết bị", icon: ShieldCheck },
   { href: "/revenue-reports", label: "Báo cáo", icon: ReceiptText },
   { href: "/change-password", label: "Bảo mật", icon: KeyRound },
 ];
@@ -32,7 +33,6 @@ const placeholderItems = [
   { label: "Ví & thanh toán", icon: CreditCard },
   { label: "Thông báo", icon: ReceiptText },
   { label: "AI biển số", icon: ShieldCheck },
-  { label: "Camera & thiết bị", icon: ShieldCheck },
   { label: "Khu vực đỗ xe", icon: ParkingCircle },
   { label: "Đặt chỗ trước", icon: ReceiptText },
 ];

@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ParkingCircle } from "lucide-react";
 
 import { getNavItemsForRole } from "@/config/nav-items";
 import { parkingConfig } from "@/lib/parking-config";
@@ -21,7 +20,7 @@ export function Sidebar({ currentUser, mobileNavOpen, onNavigate }: SidebarProps
   return (
     <aside className={mobileNavOpen ? "sidebar open" : "sidebar"}>
       <div className="brand app-brand">
-        <ParkingCircle size={28} />
+        <span className="brand-mark">P</span>
         <span>{parkingConfig.brandName}</span>
       </div>
       <nav>
