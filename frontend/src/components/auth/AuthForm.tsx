@@ -1,10 +1,15 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState, type ChangeEvent, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { ParkingCircle, Eye, EyeOff, Lock, Mail, User, Phone } from "lucide-react";
+import { getDefaultPathForRole } from "@/config/nav-items";
+import { useParkingApp } from "@/context/parking-app-context";
 import ForgotPasswordForm from "./ForgotPasswordForm";
 
 export default function AuthForm() {
+  const router = useRouter();
+  const { handleLogin, handleRegister, authError } = useParkingApp();
   const [isLogin, setIsLogin] = useState(true);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -16,17 +21,16 @@ export default function AuthForm() {
     confirmPassword: "",
   });
 
-  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleChange(e: ChangeEvent<HTMLInputElement>) {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    alert(
-      isLogin
-        ? `Đăng nhập thành công với email: ${formData.email} (Mockup)`
-        : `Đăng ký thành công tài khoản: ${formData.name} (Mockup)`
-    );
+    const user = isLogin ? await handleLogin(e) : await handleRegister(e);
+    if (user) {
+      router.push(getDefaultPathForRole(user.role));
+    }
   }
 
   if (isForgotPassword) {
@@ -48,6 +52,8 @@ export default function AuthForm() {
             : "Đăng ký để trải nghiệm hệ thống quản lý bãi đỗ xe thông minh."}
         </p>
       </div>
+
+      {authError && <p className="form-error">{authError}</p>}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {!isLogin && (

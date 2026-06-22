@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import { ParkingCircle, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import AuthForm from "@/components/auth/AuthForm";
