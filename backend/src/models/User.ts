@@ -12,7 +12,7 @@ export type UserDocument = {
   wallet: number;
   phone?: string;
   avatarUrl?: string;
-  provider: "credentials" | "google" | "mixed";
+  provider: "credentials" | "google" | "mixed" | "local";
   googleId?: string;
   twoFactorEnabled: boolean;
   twoFactorSecret?: string;
@@ -31,7 +31,11 @@ const userSchema = new Schema<UserDocument>(
     wallet: { type: Number, default: 0 },
     phone: { type: String },
     avatarUrl: { type: String },
-    provider: { type: String, enum: ["credentials", "google", "mixed"], default: "credentials" },
+    provider: {
+      type: String,
+      enum: ["credentials", "google", "mixed", "local"],
+      default: "credentials",
+    },
     googleId: { type: String, index: true },
     twoFactorEnabled: { type: Boolean, default: false },
     twoFactorSecret: { type: String },

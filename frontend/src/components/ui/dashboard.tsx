@@ -9,20 +9,22 @@ export function Dashboard({
   completion,
   revenue,
   reportsOnly = false,
+  loading = false,
 }: {
   active: number;
   available: number;
   completion: number;
   revenue: number;
   reportsOnly?: boolean;
+  loading?: boolean;
 }) {
   return (
     <section className="dashboard">
       <div className="metric-grid">
-        <Metric icon={<Car />} label="Xe đang gửi" value={String(active)} />
-        <Metric icon={<ParkingCircle />} label="Chỗ còn trống" value={String(available)} />
-        <Metric icon={<CreditCard />} label="Doanh thu hôm nay" value={currency.format(revenue)} />
-        <Metric icon={<ReceiptText />} label="Phiên đã hoàn thành" value={String(completion)} />
+        <Metric icon={<Car />} label="Xe đang gửi" value={loading ? "..." : String(active)} />
+        <Metric icon={<ParkingCircle />} label="Chỗ còn trống" value={loading ? "..." : String(available)} />
+        <Metric icon={<CreditCard />} label="Doanh thu hôm nay" value={loading ? "..." : currency.format(revenue)} />
+        <Metric icon={<ReceiptText />} label="Phiên đã hoàn thành" value={loading ? "..." : String(completion)} />
       </div>
       <div className="panel">
         <div className="panel-heading">
@@ -47,6 +49,9 @@ export function Dashboard({
             </div>
           ))}
         </div>
+        {!loading && active === 0 && completion === 0 && revenue === 0 && (
+          <p className="mt-4 text-center text-sm text-slate-500">Chưa có dữ liệu từ cơ sở dữ liệu.</p>
+        )}
       </div>
     </section>
   );

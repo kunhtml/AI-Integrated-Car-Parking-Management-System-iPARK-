@@ -274,6 +274,40 @@ export async function resetPassword(request: Request, response: Response) {
   response.json({ ok: true, message: "Đã đặt lại mật khẩu." });
 }
 
+export async function changePassword(request: Request, response: Response) {
+  const body = z
+    .object({
+      currentPassword: z.string().min(1),
+      newPassword: z.string().min(6),
+    })
+    .parse(request.body);
+
+  const requester = request.user;
+  const user = requester?.id ? await User.findById(requester.id) : null;
+
+  if (!user) {
+    response.status(401).json({ message: "Không xác định được tài khoản đang đăng nhập." });
+    return;
+  }
+
+  if (!user.passwordHash) {
+    response.status(400).json({ message: "Tài khoản này chưa có mật khẩu cục bộ." });
+    return;
+  }
+
+  const passwordMatches = await bcrypt.compare(body.currentPassword, user.passwordHash);
+  if (!passwordMatches) {
+    response.status(400).json({ message: "Mật khẩu hiện tại không đúng." });
+    return;
+  }
+
+  user.passwordHash = await bcrypt.hash(body.newPassword, 12);
+  user.provider = user.provider === "google" ? "mixed" : user.provider;
+  await user.save();
+
+  response.json({ ok: true, message: "Đã thay đổi mật khẩu." });
+}
+
 export async function setupTwoFactor(request: Request, response: Response) {
   const user = await User.findById(request.user?.id);
   if (!user || user.role !== "admin") {

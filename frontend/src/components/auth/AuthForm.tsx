@@ -2,7 +2,7 @@
 
 import { useState, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { ParkingCircle, Eye, EyeOff, Lock, Mail, User, Phone } from "lucide-react";
+import { ParkingCircle } from "lucide-react";
 import { getDefaultPathForRole } from "@/config/nav-items";
 import { useParkingApp } from "@/context/parking-app-context";
 import ForgotPasswordForm from "./ForgotPasswordForm";
@@ -63,8 +63,8 @@ export default function AuthForm() {
                 Họ và tên
               </label>
               <div className="relative">
-                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-                  <User size={18} />
+                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 text-xs font-bold">
+                  @
                 </span>
                 <input
                   type="text"
@@ -83,8 +83,8 @@ export default function AuthForm() {
                 Số điện thoại
               </label>
               <div className="relative">
-                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-                  <Phone size={18} />
+                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 text-xs font-bold">
+                  #
                 </span>
                 <input
                   type="tel"
@@ -105,8 +105,8 @@ export default function AuthForm() {
             Địa chỉ Email
           </label>
           <div className="relative">
-            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-              <Mail size={18} />
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 text-xs font-bold">
+              @
             </span>
             <input
               type="email"
@@ -139,8 +139,8 @@ export default function AuthForm() {
             )}
           </div>
           <div className="relative">
-            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-              <Lock size={18} />
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 text-xs font-bold">
+              *
             </span>
             <input
               type={showPassword ? "text" : "password"}
@@ -156,7 +156,7 @@ export default function AuthForm() {
               onClick={() => setShowPassword(!showPassword)}
               className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600"
             >
-              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              {showPassword ? "Ẩn" : "Hiện"}
             </button>
           </div>
         </div>
@@ -167,8 +167,8 @@ export default function AuthForm() {
               Xác nhận mật khẩu
             </label>
             <div className="relative">
-              <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-                <Lock size={18} />
+              <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 text-xs font-bold">
+                *
               </span>
               <input
                 type={showPassword ? "text" : "password"}

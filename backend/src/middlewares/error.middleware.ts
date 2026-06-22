@@ -1,23 +1,7 @@
-import type { NextFunction, Request, Response } from "express";
-import { AppError } from "../utils/AppError.js";
+import { Request, Response, NextFunction } from "express";
 
-export function errorMiddleware(
-  error: Error,
-  _req: Request,
-  res: Response,
-  _next: NextFunction
-) {
-  if (error instanceof AppError) {
-    return res.status(error.statusCode).json({
-      success: false,
-      message: error.message,
-    });
-  }
-
-  console.error(error);
-
-  return res.status(500).json({
-    success: false,
-    message: "Lỗi hệ thống",
-  });
+export function errorMiddleware(err: any, _req: Request, res: Response, _next: NextFunction) {
+  console.error(err);
+  const status = err?.status || 500;
+  res.status(status).json({ message: err?.message || "Internal Server Error" });
 }

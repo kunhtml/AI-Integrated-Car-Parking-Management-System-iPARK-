@@ -1,50 +1,32 @@
 import { Router } from "express";
 import {
+  changePassword,
+  disableTwoFactor,
+  forgotPassword,
+  googleCallback,
+  googleLogin,
   login,
   logout,
   me,
   register,
-  resendForgotPasswordOtpController,
-  resetPasswordController,
-  sendForgotPasswordOtpController,
-  verifyForgotPasswordOtpController,
+  resetPassword,
+  setupTwoFactor,
+  verifyTwoFactor,
 } from "../controllers/auth.controller.js";
-import { authMiddleware } from "../middlewares/auth.middleware.js";
-import { validate } from "../middlewares/validate.middleware.js";
-import {
-  forgotPasswordEmailSchema,
-  loginSchema,
-  registerSchema,
-  resetPasswordSchema,
-  verifyOtpSchema,
-} from "../validations/auth.validation.js";
+import { requireAuth } from "../middlewares/auth.middleware.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
 
-const router = Router();
+export const authRoutes = Router();
 
-router.post("/register", validate(registerSchema), register);
-router.post("/login", validate(loginSchema), login);
-router.get("/me", authMiddleware, me);
-router.post("/logout", authMiddleware, logout);
-
-router.post(
-  "/forgot-password/send-otp",
-  validate(forgotPasswordEmailSchema),
-  sendForgotPasswordOtpController
-);
-router.post(
-  "/forgot-password/resend-otp",
-  validate(forgotPasswordEmailSchema),
-  resendForgotPasswordOtpController
-);
-router.post(
-  "/forgot-password/verify-otp",
-  validate(verifyOtpSchema),
-  verifyForgotPasswordOtpController
-);
-router.post(
-  "/forgot-password/reset-password",
-  validate(resetPasswordSchema),
-  resetPasswordController
-);
-
-export default router;
+authRoutes.post("/register", asyncHandler(register));
+authRoutes.post("/login", asyncHandler(login));
+authRoutes.get("/google", googleLogin);
+authRoutes.get("/google/callback", asyncHandler(googleCallback));
+authRoutes.get("/me", requireAuth, me);
+authRoutes.post("/forgot-password", asyncHandler(forgotPassword));
+authRoutes.post("/reset-password", asyncHandler(resetPassword));
+authRoutes.post("/change-password", requireAuth, asyncHandler(changePassword));
+authRoutes.post("/2fa/setup", requireAuth, asyncHandler(setupTwoFactor));
+authRoutes.post("/2fa/verify", requireAuth, asyncHandler(verifyTwoFactor));
+authRoutes.post("/2fa/disable", requireAuth, asyncHandler(disableTwoFactor));
+authRoutes.post("/logout", logout);
