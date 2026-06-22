@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { Phone, Mail, MapPin, ShieldCheck } from "lucide-react";
 import { parkingConfig } from "@/lib/parking-config";
 
 export default function ContactSection() {
   const [contactSubmitted, setContactSubmitted] = useState(false);
 
-  function handleContactSubmit(event: React.FormEvent<HTMLFormElement>) {
+  function handleContactSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setContactSubmitted(true);
   }

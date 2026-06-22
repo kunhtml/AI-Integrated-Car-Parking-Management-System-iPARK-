@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { ParkingCircle, Mail, Lock, KeyRound, ArrowLeft, ShieldCheck } from "lucide-react";
 
 interface ForgotPasswordFormProps {
@@ -26,7 +26,7 @@ export default function ForgotPasswordForm({ onBackToLogin }: ForgotPasswordForm
     return () => clearTimeout(timer);
   }, [countdown]);
 
-  function handleSendOtp(e: React.FormEvent) {
+  function handleSendOtp(e: FormEvent) {
     e.preventDefault();
     if (!email) return;
 
@@ -51,7 +51,7 @@ export default function ForgotPasswordForm({ onBackToLogin }: ForgotPasswordForm
     }, 1000);
   }
 
-  function handleVerifyOtp(e: React.FormEvent) {
+  function handleVerifyOtp(e: FormEvent) {
     e.preventDefault();
     if (!otp) return;
 
@@ -59,7 +59,7 @@ export default function ForgotPasswordForm({ onBackToLogin }: ForgotPasswordForm
     setStep("reset");
   }
 
-  function handleResetPassword(e: React.FormEvent) {
+  function handleResetPassword(e: FormEvent) {
     e.preventDefault();
     if (newPassword !== confirmPassword) {
       alert("Mật khẩu xác nhận không khớp!");
