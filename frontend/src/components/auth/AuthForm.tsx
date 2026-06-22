@@ -2,9 +2,10 @@
 
 import { useState, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { ParkingCircle } from "lucide-react";
+import { ParkingCircle, LogIn } from "lucide-react";
 import { getDefaultPathForRole } from "@/config/nav-items";
 import { useParkingApp } from "@/context/parking-app-context";
+import { buildApiUrl } from "@/lib/api";
 import ForgotPasswordForm from "./ForgotPasswordForm";
 
 export default function AuthForm() {
@@ -38,123 +39,113 @@ export default function AuthForm() {
   }
 
   return (
-    <div className="w-full max-w-md mx-auto my-auto py-12 space-y-8">
-      <div className="space-y-3 text-center lg:text-left">
-        <div className="inline-flex bg-blue-600 text-white p-2.5 rounded-2xl mb-2">
-          <ParkingCircle size={28} />
+    <div className="w-full max-w-md mx-auto my-auto py-8 space-y-6">
+      {/* Logo iPARK */}
+      <div className="flex flex-col items-center justify-center mb-6">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-indigo-600/20 flex items-center justify-center text-indigo-400 font-bold text-xl border border-indigo-500/30">
+            P
+          </div>
+          <span className="text-3xl font-black tracking-tight text-white">iPARK</span>
         </div>
-        <h1 className="text-3xl font-black tracking-tight text-slate-900">
-          {isLogin ? "Chào mừng trở lại" : "Tạo tài khoản mới"}
-        </h1>
-        <p className="text-sm text-slate-500">
-          {isLogin
-            ? "Vui lòng đăng nhập để quản lý bãi đỗ xe của bạn."
-            : "Đăng ký để trải nghiệm hệ thống quản lý bãi đỗ xe thông minh."}
-        </p>
       </div>
 
-      {authError && <p className="form-error">{authError}</p>}
+      {/* Tab Đăng nhập / Đăng ký */}
+      <div className="grid grid-cols-2 gap-1 p-1 bg-[#0b0f19] border border-slate-800 rounded-xl">
+        <button
+          type="button"
+          onClick={() => setIsLogin(true)}
+          className={`py-2.5 text-sm font-semibold rounded-lg transition-all ${
+            isLogin
+              ? "bg-[#1e293b] text-white shadow-sm"
+              : "text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          Đăng nhập
+        </button>
+        <button
+          type="button"
+          onClick={() => setIsLogin(false)}
+          className={`py-2.5 text-sm font-semibold rounded-lg transition-all ${
+            !isLogin
+              ? "bg-[#1e293b] text-white shadow-sm"
+              : "text-slate-400 hover:text-slate-200"
+          }`}
+        >
+          Đăng ký
+        </button>
+      </div>
+
+      {authError && <p className="form-error text-red-500 text-sm bg-red-500/10 border border-red-500/20 rounded-xl p-3">{authError}</p>}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {!isLogin && (
           <>
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              <label className="block text-sm font-semibold text-slate-300">
                 Họ và tên
               </label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 text-xs font-bold">
-                  @
-                </span>
-                <input
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  required
-                  placeholder="Nguyễn Văn A"
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                />
-              </div>
+              <input
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleChange}
+                required
+                placeholder="Nguyễn Văn A"
+                className="w-full px-4 py-3 bg-[#0b0f19] border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              <label className="block text-sm font-semibold text-slate-300">
                 Số điện thoại
               </label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 text-xs font-bold">
-                  #
-                </span>
-                <input
-                  type="tel"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleChange}
-                  required
-                  placeholder="0912345678"
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                />
-              </div>
+              <input
+                type="tel"
+                name="phone"
+                value={formData.phone}
+                onChange={handleChange}
+                required
+                placeholder="0912345678"
+                className="w-full px-4 py-3 bg-[#0b0f19] border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              />
             </div>
           </>
         )}
 
         <div className="space-y-1.5">
-          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-            Địa chỉ Email
+          <label className="block text-sm font-semibold text-slate-300">
+            Email
           </label>
-          <div className="relative">
-            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 text-xs font-bold">
-              @
-            </span>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              required
-              placeholder="name@company.com"
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-            />
-          </div>
+          <input
+            type="email"
+            name="email"
+            value={formData.email}
+            onChange={handleChange}
+            required
+            placeholder="admin@ipark.vn"
+            className="w-full px-4 py-3 bg-[#0b0f19] border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+          />
         </div>
 
         <div className="space-y-1.5">
-          <div className="flex justify-between items-center">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              Mật khẩu
-            </label>
-            {isLogin && (
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setIsForgotPassword(true);
-                }}
-                className="text-xs font-semibold text-blue-600 hover:text-blue-700"
-              >
-                Quên mật khẩu?
-              </a>
-            )}
-          </div>
+          <label className="block text-sm font-semibold text-slate-300">
+            Mật khẩu
+          </label>
           <div className="relative">
-            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 text-xs font-bold">
-              *
-            </span>
             <input
               type={showPassword ? "text" : "password"}
               name="password"
               value={formData.password}
               onChange={handleChange}
               required
-              placeholder="••••••••"
-              className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              placeholder="•••••"
+              className="w-full px-4 py-3 bg-[#0b0f19] border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600"
+              className="absolute inset-y-0 right-0 flex items-center pr-4 text-slate-400 hover:text-slate-200 text-xs font-semibold"
             >
               {showPassword ? "Ẩn" : "Hiện"}
             </button>
@@ -163,57 +154,81 @@ export default function AuthForm() {
 
         {!isLogin && (
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+            <label className="block text-sm font-semibold text-slate-300">
               Xác nhận mật khẩu
             </label>
-            <div className="relative">
-              <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 text-xs font-bold">
-                *
-              </span>
-              <input
-                type={showPassword ? "text" : "password"}
-                name="confirmPassword"
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                required
-                placeholder="••••••••"
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-              />
-            </div>
+            <input
+              type={showPassword ? "text" : "password"}
+              name="confirmPassword"
+              value={formData.confirmPassword}
+              onChange={handleChange}
+              required
+              placeholder="•••••"
+              className="w-full px-4 py-3 bg-[#0b0f19] border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+            />
           </div>
         )}
 
         <button
           type="submit"
-          className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all shadow-md hover:shadow-lg"
+          className="w-full py-3 bg-gradient-to-r from-blue-500 to-cyan-400 hover:from-blue-600 hover:to-cyan-500 text-white font-bold rounded-xl transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2"
         >
+          <LogIn size={18} />
           {isLogin ? "Đăng nhập" : "Đăng ký tài khoản"}
         </button>
       </form>
 
-      <div className="text-center text-sm text-slate-500">
-        {isLogin ? (
-          <>
-            Chưa có tài khoản?{" "}
-            <button
-              onClick={() => setIsLogin(false)}
-              className="font-semibold text-blue-600 hover:text-blue-700"
-            >
-              Đăng ký ngay
-            </button>
-          </>
-        ) : (
-          <>
-            Đã có tài khoản?{" "}
-            <button
-              onClick={() => setIsLogin(true)}
-              className="font-semibold text-blue-600 hover:text-blue-700"
-            >
-              Đăng nhập ngay
-            </button>
-          </>
-        )}
+      {/* HOẶC */}
+      <div className="relative flex py-2 items-center">
+        <div className="flex-grow border-t border-slate-800"></div>
+        <span className="flex-shrink mx-4 text-xs font-bold text-slate-500 tracking-wider">HOẶC</span>
+        <div className="flex-grow border-t border-slate-800"></div>
       </div>
+
+      {/* Đăng nhập với Google */}
+      <button
+        type="button"
+        onClick={() => {
+          window.location.href = buildApiUrl("/auth/google");
+        }}
+        className="w-full py-3 bg-[#0b0f19] border border-slate-800 hover:bg-slate-900 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-3"
+      >
+        <svg className="w-5 h-5" viewBox="0 0 24 24">
+          <path
+            fill="#EA4335"
+            d="M5.266 9.765A7.077 7.077 0 0 1 12 4.909c1.69 0 3.218.6 4.418 1.582l3.51-3.51C17.642 1.09 14.974 0 12 0 7.354 0 3.307 2.67 1.242 6.56l4.024 3.205z"
+          />
+          <path
+            fill="#4285F4"
+            d="M23.49 12.275c0-.818-.073-1.609-.21-2.373H12v4.582h6.455c-.278 1.464-1.102 2.705-2.343 3.541l3.65 2.832c2.136-1.973 3.728-4.873 3.728-8.582z"
+          />
+          <path
+            fill="#FBBC05"
+            d="M5.266 14.235L1.242 17.44A11.966 11.966 0 0 0 12 24c2.93 0 5.67-.97 7.762-2.62l-3.65-2.832A7.12 7.12 0 0 1 12 19.091c-3.04 0-5.642-2.055-6.734-4.856z"
+          />
+          <path
+            fill="#34A853"
+            d="M1.242 6.56C.45 8.17 0 9.97 0 11.885c0 1.915.45 3.715 1.242 5.325l4.024-3.205a7.037 7.037 0 0 1 0-4.24L1.242 6.56z"
+          />
+        </svg>
+        <span>Đăng nhập với Google</span>
+      </button>
+
+      {/* Quên mật khẩu */}
+      {isLogin && (
+        <div className="text-center">
+          <a
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              setIsForgotPassword(true);
+            }}
+            className="text-sm font-semibold text-blue-400 hover:text-blue-300 transition-colors"
+          >
+            Quên mật khẩu?
+          </a>
+        </div>
+      )}
     </div>
   );
 }

@@ -3,15 +3,18 @@
 import React, { FormEvent, useEffect, useState } from "react";
 import {
   Car,
+  CalendarDays,
   Cpu,
   CreditCard,
   LogIn,
   LogOut,
   Mail,
   MapPin,
+  Moon,
   ParkingCircle,
   Phone,
   ShieldCheck,
+  Star,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { parkingConfig } from "@/lib/parking-config";
@@ -24,11 +27,30 @@ export default function PageHomepage() {
   const [showForgot, setShowForgot] = useState(false);
   const [mode, setMode] = useState<"request" | "reset">("request");
 
-  const stats = {
-    active: 0,
-    available: 0,
-    capacity: parkingConfig.totalCapacity,
-  };
+  const [stats, setStats] = useState({ active: 0, available: 0, capacity: parkingConfig.totalCapacity });
+  const [zones, setZones] = useState<{ name: string; capacity: number; occupied: number; available: number }[]>([]);
+  const [activeSessions, setActiveSessions] = useState<{ plate: string; owner: string; slot: string; checkIn: string }[]>([]);
+  const [pricing, setPricing] = useState({ hourlyRate: 0, dailyMaxRate: 0, monthlyRate: 0, overnightRate: 0, freeMinutes: 0 });
+
+  useEffect(() => {
+    apiFetch("/dashboard/public-overview")
+      .then((r) => r.json())
+      .then((data) => {
+        setStats({ active: data.active ?? 0, available: data.available ?? 0, capacity: data.totalCapacity ?? parkingConfig.totalCapacity });
+        setZones(data.zones ?? []);
+        setActiveSessions(data.sessions ?? []);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    apiFetch("/dashboard/public-pricing")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.pricing) setPricing(data.pricing);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const savedUser = window.localStorage.getItem("ipark_current_user");
@@ -99,6 +121,9 @@ export default function PageHomepage() {
           <a className="hidden text-sm font-medium text-slate-600 transition-colors hover:text-blue-600 sm:inline" href="#features">
             Tính năng
           </a>
+          <a className="hidden text-sm font-medium text-slate-600 transition-colors hover:text-blue-600 sm:inline" href="#pricing">
+            Bảng giá
+          </a>
           <a className="hidden text-sm font-medium text-slate-600 transition-colors hover:text-blue-600 sm:inline" href="#contact">
             Liên hệ
           </a>
@@ -117,18 +142,13 @@ export default function PageHomepage() {
               </button>
             </>
           ) : (
-            <>
-              <a
-                className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
-                href="/login"
-              >
-                <LogIn size={16} />
-                Vào hệ thống
-              </a>
-              <button className="text-sm text-slate-600 hover:text-blue-600" onClick={() => setShowForgot(true)} type="button">
-                Quên mật khẩu
-              </button>
-            </>
+            <a
+              className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+              href="/auth"
+            >
+              <LogIn size={16} />
+              Vào hệ thống
+            </a>
           )}
         </div>
       </nav>
@@ -167,11 +187,56 @@ export default function PageHomepage() {
           <div className="space-y-6 rounded-lg border border-slate-200 bg-white p-8 shadow-xl lg:col-span-5">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <h2 className="font-bold text-slate-900">Trạng thái bãi xe</h2>
-              <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
             </div>
-            <div className="rounded-lg border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
-              Chưa có dữ liệu phiên gửi xe từ cơ sở dữ liệu.
-            </div>
+
+            {/* Thống kê theo zone */}
+            {zones.length > 0 && (
+              <div className="grid grid-cols-3 gap-3">
+                {zones.map((z) => (
+                  <div key={z.name} className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-center">
+                    <span className="block text-xs font-medium text-slate-500">Khu {z.name}</span>
+                    <strong className="text-lg font-bold text-slate-900">{z.occupied}/{z.capacity}</strong>
+                    <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{
+                          width: `${z.capacity > 0 ? (z.occupied / z.capacity) * 100 : 0}%`,
+                          backgroundColor: z.occupied >= z.capacity ? "#ef4444" : z.occupied / z.capacity > 0.7 ? "#f59e0b" : "#10b981",
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Danh sách xe đang gửi */}
+            {activeSessions.length > 0 ? (
+              <div className="max-h-48 space-y-2 overflow-y-auto">
+                {activeSessions.map((s, i) => (
+                  <div key={i} className="flex items-center justify-between rounded-md border border-slate-100 bg-white px-3 py-2 text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex h-7 min-w-[2.5rem] items-center justify-center rounded bg-blue-50 px-1 text-xs font-bold text-blue-700 whitespace-nowrap">
+                        {s.slot}
+                      </span>
+                      <div>
+                        <span className="block font-semibold text-slate-900">{s.plate}</span>
+                        <span className="block text-xs text-slate-500">{s.owner}</span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="block text-xs text-slate-500">Vào lúc</span>
+                      <span className="text-xs text-slate-700">{s.checkIn}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-slate-100 bg-slate-50 p-4 text-center text-sm text-slate-500">
+                Hiện chưa có xe nào đang gửi.
+              </div>
+            )}
           </div>
         </section>
 
@@ -185,6 +250,50 @@ export default function PageHomepage() {
               <FeatureCard icon={<Cpu size={24} />} title="Nhận dạng biển số AI" text="Tự động ghi nhận biển số xe vào/ra khi module camera được kết nối." />
               <FeatureCard icon={<CreditCard size={24} />} title="Thanh toán minh bạch" text="Theo dõi phí, trạng thái thanh toán và doanh thu theo phiên gửi xe." />
               <FeatureCard icon={<ShieldCheck size={24} />} title="Phân quyền vận hành" text="Quản lý người dùng theo vai trò admin, nhân viên và khách hàng." />
+            </div>
+          </div>
+        </section>
+
+        <section className="bg-white py-20" id="pricing">
+          <div className="mx-auto w-full max-w-7xl px-6">
+            <div className="mb-12 text-center">
+              <h2 className="text-3xl font-black text-slate-900">Bảng giá dịch vụ</h2>
+              <p className="mt-2 text-slate-600">Các gói gửi xe linh hoạt phù hợp với mọi nhu cầu của bạn</p>
+            </div>
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              <PricingCard
+                title="Gói lượt"
+                price={pricing.hourlyRate}
+                unit="giờ"
+                description={`Miễn phí ${pricing.freeMinutes} phút đầu, tối đa ${(pricing.dailyMaxRate / 1000).toLocaleString()}K/ngày`}
+                badge=""
+                icon={<ParkingCircle size={28} />}
+              />
+              <PricingCard
+                title="Gói qua đêm"
+                price={pricing.overnightRate}
+                unit="đêm"
+                description="Gửi từ 22:00 - 06:00 hôm sau"
+                badge="Phổ biến"
+                highlight
+                icon={<Moon size={28} />}
+              />
+              <PricingCard
+                title="Gói tháng"
+                price={pricing.monthlyRate}
+                unit="tháng"
+                description="Gửi không giới hạn trong 30 ngày"
+                badge=""
+                icon={<CalendarDays size={28} />}
+              />
+              <PricingCard
+                title="Gói VIP"
+                price={pricing.monthlyRate * 2}
+                unit="tháng"
+                description="Ưu tiên slot, hỗ trợ 24/7"
+                badge="Cao cấp"
+                icon={<Star size={28} />}
+              />
             </div>
           </div>
         </section>
@@ -269,6 +378,43 @@ export default function PageHomepage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function PricingCard({
+  icon,
+  title,
+  price,
+  unit,
+  description,
+  badge,
+  highlight,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  price: number;
+  unit: string;
+  description: string;
+  badge: string;
+  highlight?: boolean;
+  }) {
+  return (
+    <div className={`relative flex flex-col rounded-xl border p-6 ${highlight ? "border-blue-200 bg-blue-50 shadow-md" : "border-slate-200 bg-white"}`}>
+      {badge && (
+        <span className={`absolute -top-3 left-4 rounded-full px-3 py-0.5 text-xs font-bold ${highlight ? "bg-blue-600 text-white" : "bg-slate-900 text-white"}`}>
+          {badge}
+        </span>
+      )}
+      <div className={`mb-4 flex h-14 w-14 items-center justify-center rounded-lg ${highlight ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-600"}`}>
+        {icon}
+      </div>
+      <h3 className="text-lg font-bold text-slate-900">{title}</h3>
+      <div className="mt-2 flex items-baseline gap-1">
+        <span className="text-3xl font-black text-slate-900">{price > 0 ? price.toLocaleString("vi-VN") : "—"}</span>
+        <span className="text-sm text-slate-500">đ/{unit}</span>
+      </div>
+      <p className="mt-3 text-sm leading-relaxed text-slate-600">{description}</p>
     </div>
   );
 }
