@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
 import { Request, Response } from "express";
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomInt } from "node:crypto";
 import { generateSecret, generateURI, verifySync } from "otplib";
 import QRCode from "qrcode";
 import { z } from "zod";
@@ -35,12 +35,15 @@ function googleOAuthConfigured() {
   );
 }
 
+// Password regex: Yêu cầu ít nhất 1 chữ hoa, 1 chữ thường, 1 chữ số và 1 ký tự đặc biệt
+const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+
 export async function register(request: Request, response: Response) {
   const body = z
     .object({
       name: z.string().min(2),
       email: z.email(),
-      password: z.string().min(6),
+      password: z.string().regex(passwordRegex),
     })
     .parse(request.body);
 
@@ -256,15 +259,26 @@ export async function forgotPassword(request: Request, response: Response) {
   const body = z.object({ email: z.email() }).parse(request.body);
   const email = body.email.toLowerCase();
   const user = await User.findOne({ email });
-  const otp = String(Math.floor(100000 + Math.random() * 900000));
+  
+  // Sử dụng crypto.randomInt để sinh OTP an toàn, tránh Math.random()
+  const otpVal = randomInt(100000, 999999);
+  const otp = String(otpVal);
 
   if (user) {
     const otpHash = await bcrypt.hash(otp, 12);
+    // Vô hiệu hoá tất cả OTP cũ của email này trước khi tạo OTP mới
+    await OtpToken.updateMany(
+      { email, purpose: "reset-password", usedAt: { $exists: false } },
+      { $set: { usedAt: new Date() } }
+    );
+
     await OtpToken.create({
       email,
       otpHash,
       purpose: "reset-password",
       expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+      attempts: 0,
+      verified: false,
     });
 
     await sendMail(
@@ -283,12 +297,11 @@ export async function forgotPassword(request: Request, response: Response) {
   });
 }
 
-export async function resetPassword(request: Request, response: Response) {
+export async function verifyOtp(request: Request, response: Response) {
   const body = z
     .object({
-      email: z.email(),
+      email: z.string().email(),
       otp: z.string().min(6).max(6),
-      password: z.string().min(6),
     })
     .parse(request.body);
 
@@ -300,8 +313,57 @@ export async function resetPassword(request: Request, response: Response) {
     expiresAt: { $gt: new Date() },
   }).sort({ createdAt: -1 });
 
-  if (!token || !(await bcrypt.compare(body.otp, token.otpHash))) {
+  if (!token) {
+    response.status(400).json({ message: "Không tìm thấy yêu cầu OTP hoặc OTP đã hết hạn." });
+    return;
+  }
+
+  // Chống brute-force: Giới hạn tối đa 5 lần thử sai cho mỗi mã OTP
+  if (token.attempts >= 5) {
+    token.usedAt = new Date(); // Vô hiệu hoá mã OTP ngay lập tức
+    await token.save();
+    response.status(400).json({ message: "OTP đã bị vô hiệu hóa do thử sai quá 5 lần. Vui lòng yêu cầu mã mới." });
+    return;
+  }
+
+  const isMatched = await bcrypt.compare(body.otp, token.otpHash);
+  if (!isMatched) {
+    token.attempts += 1;
+    if (token.attempts >= 5) {
+      token.usedAt = new Date();
+    }
+    await token.save();
     response.status(400).json({ message: "OTP không đúng hoặc đã hết hạn." });
+    return;
+  }
+
+  // Đánh dấu đã xác thực OTP thành công
+  token.verified = true;
+  await token.save();
+
+  response.json({ ok: true, message: "Mã OTP hợp lệ." });
+}
+
+export async function resetPassword(request: Request, response: Response) {
+  const body = z
+    .object({
+      email: z.email(),
+      otp: z.string().min(6).max(6),
+      password: z.string().regex(passwordRegex),
+    })
+    .parse(request.body);
+
+  const email = body.email.toLowerCase();
+  const token = await OtpToken.findOne({
+    email,
+    purpose: "reset-password",
+    usedAt: { $exists: false },
+    expiresAt: { $gt: new Date() },
+    verified: true, // Yêu cầu OTP phải được verify thành công trước đó
+  }).sort({ createdAt: -1 });
+
+  if (!token) {
+    response.status(400).json({ message: "Phiên làm việc không hợp lệ hoặc đã hết hạn. Vui lòng xác thực lại OTP." });
     return;
   }
 
@@ -323,7 +385,7 @@ export async function changePassword(request: Request, response: Response) {
   const body = z
     .object({
       currentPassword: z.string().min(1),
-      newPassword: z.string().min(6),
+      newPassword: z.string().regex(passwordRegex),
     })
     .parse(request.body);
 

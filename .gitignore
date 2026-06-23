@@ -133,6 +133,7 @@ desktop.ini
 
 # Test files
 __tests__/
+tests/
 *.test.ts
 *.test.tsx
 *.test.js
@@ -140,3 +141,4 @@ __tests__/
 jest.config.*
 jest.setup.*
 tsconfig.test.json
+coverage/

@@ -3,6 +3,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { ParkingCircle } from "lucide-react";
 
+import { apiFetch } from "@/lib/api";
+
 interface ForgotPasswordFormProps {
   onBackToLogin: () => void;
 }
@@ -17,6 +19,7 @@ export default function ForgotPasswordForm({ onBackToLogin }: ForgotPasswordForm
   const [confirmPassword, setConfirmPassword] = useState("");
   const [countdown, setCountdown] = useState(0);
   const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
     if (countdown <= 0) {
@@ -29,52 +32,117 @@ export default function ForgotPasswordForm({ onBackToLogin }: ForgotPasswordForm
     return () => clearTimeout(timer);
   }, [countdown]);
 
-  function handleSendOtp(e: FormEvent) {
+  async function handleSendOtp(e: FormEvent) {
     e.preventDefault();
     if (!email) {
       return;
     }
 
     setIsSendingOtp(true);
-    setTimeout(() => {
-      setIsSendingOtp(false);
+    setErrorMsg("");
+    try {
+      const response = await apiFetch("/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || "Không thể gửi OTP");
+      }
       setStep("otp");
       setCountdown(30);
-      alert(`Mã OTP đã được gửi tới email: ${email} (Mockup)`);
-    }, 1000);
+      if (data.devOtp) {
+        alert(`Mã OTP (Demo/Mockup): ${data.devOtp}`);
+      } else {
+        alert("Mã OTP đã được gửi tới email của bạn!");
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || "Đã xảy ra lỗi khi gửi OTP.");
+      alert(err.message || "Đã xảy ra lỗi khi gửi OTP.");
+    } finally {
+      setIsSendingOtp(false);
+    }
   }
 
-  function handleResendOtp() {
+  async function handleResendOtp() {
     if (countdown > 0) {
       return;
     }
 
     setIsSendingOtp(true);
-    setTimeout(() => {
-      setIsSendingOtp(false);
+    setErrorMsg("");
+    try {
+      const response = await apiFetch("/auth/resend-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || "Không thể gửi lại OTP");
+      }
       setCountdown(30);
-      alert(`Mã OTP mới đã được gửi lại tới email: ${email} (Mockup)`);
-    }, 1000);
+      if (data.devOtp) {
+        alert(`Mã OTP mới (Demo/Mockup): ${data.devOtp}`);
+      } else {
+        alert("Mã OTP mới đã được gửi lại tới email của bạn!");
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || "Đã xảy ra lỗi khi gửi lại OTP.");
+      alert(err.message || "Đã xảy ra lỗi khi gửi lại OTP.");
+    } finally {
+      setIsSendingOtp(false);
+    }
   }
 
-  function handleVerifyOtp(e: FormEvent) {
+  async function handleVerifyOtp(e: FormEvent) {
     e.preventDefault();
-    if (!otp) {
+    if (!otp || otp.length !== 6) {
+      alert("Vui lòng nhập đầy đủ mã OTP 6 chữ số.");
       return;
     }
-
-    setStep("reset");
+    
+    setErrorMsg("");
+    try {
+      const response = await apiFetch("/auth/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, otp }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || "Mã OTP không đúng hoặc đã hết hạn.");
+      }
+      setStep("reset");
+    } catch (err: any) {
+      setErrorMsg(err.message || "Mã OTP không chính xác.");
+      alert(err.message || "Mã OTP không chính xác.");
+    }
   }
 
-  function handleResetPassword(e: FormEvent) {
+  async function handleResetPassword(e: FormEvent) {
     e.preventDefault();
     if (newPassword !== confirmPassword) {
       alert("Mật khẩu xác nhận không khớp!");
       return;
     }
 
-    alert("Đổi mật khẩu thành công! Vui lòng đăng nhập lại.");
-    onBackToLogin();
+    try {
+      const response = await apiFetch("/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, otp, password: newPassword }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || "Không thể đặt lại mật khẩu");
+      }
+      alert("Đổi mật khẩu thành công! Vui lòng đăng nhập lại.");
+      onBackToLogin();
+    } catch (err: any) {
+      alert(err.message || "Đã xảy ra lỗi khi đặt lại mật khẩu.");
+    }
   }
 
   return (
