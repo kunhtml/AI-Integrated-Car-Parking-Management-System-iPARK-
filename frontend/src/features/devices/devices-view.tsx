@@ -1,159 +1,204 @@
 "use client";
 
-import { Camera, RefreshCcw, Wrench } from "lucide-react";
+import { useState } from "react";
+import { Camera, ClipboardList, Power, RefreshCcw, Wrench } from "lucide-react";
 
+import { DataTable } from "@/components/ui/data-table";
 import { useParkingApp } from "@/context/parking-app-context";
-import { fallbackDevices } from "@/lib/mock-data";
+import { apiFetch } from "@/lib/client-api";
 
-function statusLabel(status: string) {
-  return status === "online" ? "online" : status === "offline" ? "offline" : "offline";
-}
+type MaintenanceLog = {
+  id: string;
+  deviceName: string;
+  type: string;
+  description: string;
+  performedAt: string;
+  cost: number;
+  status: string;
+};
 
 export function DevicesView() {
-  const { deviceList, saveDevice, snapshotDevice, cameraEntry, cameraExit } = useParkingApp();
+  const { currentUser, deviceList, saveDevice, snapshotDevice, cameraEntry, cameraExit } = useParkingApp();
+  const [activeTab, setActiveTab] = useState<"devices" | "maintenance">("devices");
+  const [logs, setLogs] = useState<MaintenanceLog[]>([]);
+  const [logsLoaded, setLogsLoaded] = useState(false);
+  const [msg, setMsg] = useState("");
 
-  const displayDevices = deviceList.length ? deviceList : fallbackDevices();
+  const displayDevices = deviceList;
+  const isAdmin = currentUser?.role === "admin";
+
+  async function restartDevice(id: string) {
+    setMsg("Đang khởi động lại...");
+    const response = await apiFetch(`/devices/${id}/restart`, { method: "POST" });
+    const data = await response.json();
+    setMsg(data.message || (response.ok ? "Đã khởi động lại." : "Lỗi."));
+  }
+
+  async function loadMaintenanceLogs() {
+    const response = await apiFetch("/devices/health");
+    if (response.ok) {
+      const data = await response.json();
+      // Load all maintenance logs
+      const allLogs: MaintenanceLog[] = [];
+      for (const device of displayDevices) {
+        const logRes = await apiFetch(`/devices/${device.id}/maintenance`);
+        if (logRes.ok) {
+          const logData = await logRes.json();
+          allLogs.push(...logData.logs);
+        }
+      }
+      setLogs(allLogs);
+      setLogsLoaded(true);
+    }
+  }
+
+  async function createMaintenanceLog(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const deviceId = String(form.get("deviceId") || "");
+    const body = {
+      type: String(form.get("type") || "scheduled"),
+      description: String(form.get("description") || ""),
+      cost: Number(form.get("cost") || 0),
+      status: String(form.get("status") || "completed"),
+    };
+    const response = await apiFetch(`/devices/${deviceId}/maintenance`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    const data = await response.json();
+    if (response.ok) {
+      setLogs((prev) => [data.log, ...prev]);
+      setMsg("Đã lưu nhật ký bảo trì.");
+      event.currentTarget.reset();
+    } else {
+      setMsg(data.message || "Lỗi.");
+    }
+  }
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white px-6 py-6 shadow-sm">
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <p className="mb-2 text-sm font-medium text-slate-500">Camera &amp; Thiết bị</p>
-          <h2 className="text-xl font-bold text-slate-950">Quản lý thiết bị</h2>
+    <section className="content-single">
+      <div className="panel">
+        <div className="panel-heading">
+          <div>
+            <p>Camera & Thiết bị</p>
+            <h2>Quản lý thiết bị</h2>
+          </div>
+          <Camera size={22} />
         </div>
-        <Camera className="mt-4 text-slate-400" size={22} />
-      </div>
 
-      <div className="mb-5 inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
-        <button className="min-h-0 rounded-md bg-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-sm" type="button">
-          Thiết bị
-        </button>
-        <button className="min-h-0 rounded-md bg-transparent px-4 py-2 text-sm font-semibold text-slate-500" type="button">
-          Bảo trì
-        </button>
-      </div>
-
-      <form className="mb-9 grid gap-3" onSubmit={saveDevice}>
-        <input
-          aria-label="Tên camera"
-          className="h-10 rounded-lg border-slate-200 text-sm placeholder:text-slate-400"
-          name="name"
-          placeholder="Tên camera"
-          required
-        />
-        <select aria-label="Cổng" className="h-10 rounded-lg border-slate-200 text-sm" name="gate">
-          <option value="entry">Cổng vào</option>
-          <option value="exit">Cổng ra</option>
-        </select>
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_100px_100px_80px]">
-          <input
-            aria-label="RTSP URL"
-            className="h-10 rounded-lg border-slate-200 text-sm placeholder:text-slate-400"
-            name="rtspUrl"
-            placeholder="rtsp://..."
-            required
-          />
-          <input
-            aria-label="Username"
-            className="h-10 rounded-lg border-slate-200 text-sm placeholder:text-slate-400"
-            name="username"
-            placeholder="Username"
-          />
-          <input
-            aria-label="Password"
-            className="h-10 rounded-lg border-slate-200 text-sm placeholder:text-slate-400"
-            name="password"
-            placeholder="Password"
-            type="password"
-          />
-          <button
-            className="h-10 min-h-0 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-950 hover:bg-slate-50"
-            type="submit"
-          >
-            <Wrench size={15} />
-            Lưu
+        <div className="tab-bar">
+          <button className={`tab-item${activeTab === "devices" ? " tab-active" : ""}`} onClick={() => setActiveTab("devices")} type="button">
+            Thiết bị
+          </button>
+          <button className={`tab-item${activeTab === "maintenance" ? " tab-active" : ""}`} onClick={() => { setActiveTab("maintenance"); if (!logsLoaded) loadMaintenanceLogs(); }} type="button">
+            Bảo trì
           </button>
         </div>
-      </form>
 
-      <div className="overflow-x-auto">
-        <table className="min-w-[860px]">
-          <thead>
-            <tr className="bg-slate-50">
-              <th className="px-3 py-4 text-xs font-bold uppercase text-slate-500">Thiết bị</th>
-              <th className="px-3 py-4 text-xs font-bold uppercase text-slate-500">Cổng</th>
-              <th className="px-3 py-4 text-xs font-bold uppercase text-slate-500">Trạng thái</th>
-              <th className="px-3 py-4 text-xs font-bold uppercase text-slate-500">Ảnh</th>
-              <th className="px-3 py-4 text-xs font-bold uppercase text-slate-500">ROI</th>
-              <th className="px-3 py-4 text-xs font-bold uppercase text-slate-500">Thao tác</th>
-            </tr>
-          </thead>
-          <tbody>
-            {displayDevices.map((item) => (
-              <tr key={item.id}>
-                <td className="px-3 py-3 text-sm text-slate-950">{item.name}</td>
-                <td className="px-3 py-3 text-sm text-slate-950">{item.gate === "entry" ? "Vào" : "Ra"}</td>
-                <td className="px-3 py-3 text-sm">
-                  <span className="inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-500">
-                    {statusLabel(item.status)}
-                  </span>
-                </td>
-                <td className="px-3 py-3 text-sm text-slate-600">
-                  {item.lastSnapshotUrl ? (
-                    <a className="font-semibold text-blue-600" href={item.lastSnapshotUrl} rel="noreferrer" target="_blank">
-                      Xem ảnh
-                    </a>
-                  ) : (
-                    "-"
+        {msg && <p className="muted-cell" style={{ marginBottom: 12 }}>{msg}</p>}
+
+        {/* Devices Tab */}
+        {activeTab === "devices" && (
+          <>
+            {isAdmin && (
+              <form className="stack-form" onSubmit={saveDevice} style={{ marginBottom: 20 }}>
+                <div className="filter-row">
+                  <input name="name" placeholder="Tên camera" required style={{ flex: 1 }} />
+                  <select name="gate">
+                    <option value="entry">Cổng vào</option>
+                    <option value="exit">Cổng ra</option>
+                  </select>
+                  <input name="rtspUrl" placeholder="rtsp://..." required style={{ flex: 2 }} />
+                  <input name="username" placeholder="Username" style={{ width: 100 }} />
+                  <input name="password" placeholder="Password" style={{ width: 100 }} type="password" />
+                  <button className="small-button" type="submit"><Wrench size={14} /> Lưu</button>
+                </div>
+              </form>
+            )}
+
+            <DataTable
+              headers={["Thiết bị", "Cổng", "Trạng thái", "Ảnh", "ROI", "Thao tác"]}
+              rows={displayDevices.map((item) => [
+                item.name,
+                item.gate === "entry" ? "Vào" : "Ra",
+                <span className={item.status === "online" ? "badge success" : item.status === "offline" ? "badge warning" : "badge"} key={`${item.id}-st`}>
+                  {item.status}
+                </span>,
+                item.lastSnapshotUrl ? (
+                  <a href={item.lastSnapshotUrl} key={`${item.id}-shot`} rel="noreferrer" target="_blank">Xem</a>
+                ) : "—",
+                item.roiNote || "—",
+                <div className="inline-actions" key={item.id}>
+                  {deviceList.length > 0 && (
+                    <>
+                      <button className="small-button" onClick={() => snapshotDevice(item.id)} title="Snapshot" type="button">
+                        <Camera size={13} />
+                      </button>
+                      {isAdmin && (
+                        <button className="small-button" onClick={() => restartDevice(item.id)} title="Restart" type="button">
+                          <Power size={13} />
+                        </button>
+                      )}
+                      {item.gate === "entry" && (
+                        <button className="small-button" onClick={() => cameraEntry(item.id)} type="button">Xe vào</button>
+                      )}
+                      {item.gate === "exit" && (
+                        <button className="small-button" onClick={() => cameraExit(item.id)} type="button">Xe ra</button>
+                      )}
+                    </>
                   )}
-                </td>
-                <td className="px-3 py-3 text-sm text-slate-950">{item.roiNote || "Biển số trước"}</td>
-                <td className="px-3 py-3">
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      aria-label={`Chụp ảnh ${item.name}`}
-                      className="h-9 min-h-0 w-10 rounded-lg border border-slate-200 bg-white p-0 text-slate-700 hover:bg-slate-50"
-                      disabled={!deviceList.length}
-                      onClick={() => snapshotDevice(item.id)}
-                      title="Snapshot"
-                      type="button"
-                    >
-                      <Camera size={15} />
-                    </button>
-                    <button
-                      aria-label={`Bật tắt ${item.name}`}
-                      className="h-9 min-h-0 w-10 rounded-lg border border-slate-200 bg-white p-0 text-slate-700 hover:bg-slate-50"
-                      disabled={!deviceList.length}
-                      title="Bật/tắt camera"
-                      type="button"
-                    >
-                      <RefreshCcw size={15} />
-                    </button>
-                    {item.gate === "entry" ? (
-                      <button
-                        className="h-9 min-h-0 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-950 hover:bg-slate-50"
-                        disabled={!deviceList.length}
-                        onClick={() => cameraEntry(item.id)}
-                        type="button"
-                      >
-                        Xe vào
-                      </button>
-                    ) : (
-                      <button
-                        className="h-9 min-h-0 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-950 hover:bg-slate-50"
-                        disabled={!deviceList.length}
-                        onClick={() => cameraExit(item.id)}
-                        type="button"
-                      >
-                        Xe ra
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </div>,
+              ])}
+            />
+          </>
+        )}
+
+        {/* Maintenance Tab */}
+        {activeTab === "maintenance" && (
+          <>
+            {isAdmin && (
+              <form className="stack-form" onSubmit={createMaintenanceLog} style={{ marginBottom: 20 }}>
+                <div className="panel-heading"><div><p>Thêm</p><h2>Ghi nhật ký bảo trì</h2></div><ClipboardList size={20} /></div>
+                <div className="filter-row">
+                  <select name="deviceId" required>
+                    <option value="">Chọn thiết bị</option>
+                    {displayDevices.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
+                  <select name="type">
+                    <option value="scheduled">Định kỳ</option>
+                    <option value="repair">Sửa chữa</option>
+                    <option value="inspection">Kiểm tra</option>
+                    <option value="replacement">Thay thế</option>
+                  </select>
+                  <input name="description" placeholder="Mô tả công việc..." required style={{ flex: 2 }} />
+                  <input name="cost" placeholder="Chi phí" style={{ width: 100 }} type="number" />
+                  <select name="status">
+                    <option value="completed">Hoàn thành</option>
+                    <option value="planned">Lên kế hoạch</option>
+                    <option value="in_progress">Đang thực hiện</option>
+                  </select>
+                  <button className="small-button" type="submit"><Wrench size={14} /> Lưu</button>
+                </div>
+              </form>
+            )}
+
+            <DataTable
+              headers={["Thiết bị", "Loại", "Mô tả", "Chi phí", "Ngày", "Trạng thái"]}
+              rows={logs.map((log) => [
+                log.deviceName,
+                log.type === "scheduled" ? "Định kỳ" : log.type === "repair" ? "Sửa chữa" : log.type === "inspection" ? "Kiểm tra" : "Thay thế",
+                log.description,
+                `${log.cost.toLocaleString("vi-VN")} đ`,
+                new Date(log.performedAt).toLocaleDateString("vi-VN"),
+                <span className={log.status === "completed" ? "badge success" : "badge warning"} key={log.id}>
+                  {log.status === "completed" ? "Xong" : log.status === "planned" ? "Kế hoạch" : "Đang làm"}
+                </span>,
+              ])}
+            />
+            {logs.length === 0 && logsLoaded && <p className="muted-cell">Chưa có nhật ký bảo trì.</p>}
+          </>
+        )}
       </div>
     </section>
   );
