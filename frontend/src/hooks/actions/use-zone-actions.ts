@@ -7,7 +7,10 @@ type ZoneActionsParams = {
   setActionLog: (log: string) => void;
 };
 
-export function createZoneActions({ setZoneList, setActionLog }: ZoneActionsParams) {
+export function createZoneActions({
+  setZoneList,
+  setActionLog,
+}: ZoneActionsParams) {
   async function createZone(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formEl = event.currentTarget;

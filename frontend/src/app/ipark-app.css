@@ -382,6 +382,21 @@ th {
   padding: 0 8px;
 }
 
+.sidebar a.app-brand {
+  font-size: 20px;
+  font-weight: 800;
+  padding: 0 8px;
+  min-height: auto;
+  color: inherit;
+  width: auto;
+}
+
+.sidebar a.app-brand:hover {
+  background: transparent;
+  color: inherit;
+  opacity: 0.85;
+}
+
 .brand-mark {
   align-items: center;
   border: 2px solid rgba(255, 255, 255, 0.9);

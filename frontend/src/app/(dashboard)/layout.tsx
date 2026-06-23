@@ -36,14 +36,20 @@ const placeholderItems = [
   { label: "AI biển số", icon: ShieldCheck },
 ];
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const pathname = usePathname();
   const [message, setMessage] = useState<string | null>(null);
 
   async function handleLogout() {
     window.localStorage.removeItem("ipark_current_user");
     setMessage("Đã đăng xuất.");
-    void apiFetch("/auth/logout", { keepalive: true, method: "POST" }).catch(() => undefined);
+    void apiFetch("/auth/logout", { keepalive: true, method: "POST" }).catch(
+      () => undefined,
+    );
     window.location.href = "/";
   }
 
@@ -54,7 +60,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="flex h-9 w-9 items-center justify-center rounded-full border border-white/80 text-sm font-black">
             P
           </div>
-          <span className="text-lg font-extrabold tracking-tight">{parkingConfig.brandName}</span>
+          <span className="text-lg font-extrabold tracking-tight">
+            {parkingConfig.brandName}
+          </span>
         </a>
 
         <nav className="flex-1 space-y-1 overflow-y-auto pr-1">
@@ -64,7 +72,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             return (
               <a
                 className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition ${
-                  active ? "bg-blue-600/20 text-blue-200" : "text-slate-300 hover:bg-white/10 hover:text-white"
+                  active
+                    ? "bg-blue-600/20 text-blue-200"
+                    : "text-slate-300 hover:bg-white/10 hover:text-white"
                 }`}
                 href={item.href}
                 key={item.href}
@@ -102,7 +112,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             Đăng xuất
           </button>
           <div className="mt-4 flex items-center gap-3 px-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-950 text-sm font-bold">A</div>
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-950 text-sm font-bold">
+              A
+            </div>
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-white">Admin</p>
               <p className="truncate text-xs text-slate-400">Hồ sơ</p>
@@ -112,7 +124,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       <main className="min-w-0 flex-1">
-        {message && <div className="border-b border-blue-100 bg-blue-50 px-6 py-2 text-center text-sm text-blue-700">{message}</div>}
+        {message && (
+          <div className="border-b border-blue-100 bg-blue-50 px-6 py-2 text-center text-sm text-blue-700">
+            {message}
+          </div>
+        )}
         {children}
       </main>
     </div>

@@ -18,23 +18,41 @@ import type {
 
 type OperationalDataParams = {
   currentUser: DemoUser | null;
-  setSessions: (sessions: ParkingSession[] | ((items: ParkingSession[]) => ParkingSession[])) => void;
+  setSessions: (
+    sessions:
+      | ParkingSession[]
+      | ((items: ParkingSession[]) => ParkingSession[]),
+  ) => void;
   setRegisteredVehicles: (
-    vehicles: RegisteredVehicle[] | ((items: RegisteredVehicle[]) => RegisteredVehicle[]),
+    vehicles:
+      | RegisteredVehicle[]
+      | ((items: RegisteredVehicle[]) => RegisteredVehicle[]),
   ) => void;
   setUserList: (users: DemoUser[]) => void;
   setPricingConfigState: (config: PricingConfig) => void;
   setPaymentConfigState: (config: PaymentConfig) => void;
   setTransactionList: (
-    transactions: TransactionItem[] | ((items: TransactionItem[]) => TransactionItem[]),
+    transactions:
+      | TransactionItem[]
+      | ((items: TransactionItem[]) => TransactionItem[]),
   ) => void;
   setNotificationList: (
-    notifications: NotificationItem[] | ((items: NotificationItem[]) => NotificationItem[]),
+    notifications:
+      | NotificationItem[]
+      | ((items: NotificationItem[]) => NotificationItem[]),
   ) => void;
-  setFeedbackList: (feedback: FeedbackItem[] | ((items: FeedbackItem[]) => FeedbackItem[])) => void;
-  setDeviceList: (devices: DeviceItem[] | ((items: DeviceItem[]) => DeviceItem[])) => void;
-  setShiftList: (shifts: ShiftItem[] | ((items: ShiftItem[]) => ShiftItem[])) => void;
-  setIncidentList: (incidents: IncidentItem[] | ((items: IncidentItem[]) => IncidentItem[])) => void;
+  setFeedbackList: (
+    feedback: FeedbackItem[] | ((items: FeedbackItem[]) => FeedbackItem[]),
+  ) => void;
+  setDeviceList: (
+    devices: DeviceItem[] | ((items: DeviceItem[]) => DeviceItem[]),
+  ) => void;
+  setShiftList: (
+    shifts: ShiftItem[] | ((items: ShiftItem[]) => ShiftItem[]),
+  ) => void;
+  setIncidentList: (
+    incidents: IncidentItem[] | ((items: IncidentItem[]) => IncidentItem[]),
+  ) => void;
   setZoneList: (zones: Zone[] | ((items: Zone[]) => Zone[])) => void;
   setActionLog: (log: string) => void;
 };
@@ -101,7 +119,12 @@ export function useOperationalData({
           const data = await pricingResponse.json();
           setPricingConfigState(data.pricingConfig);
         }
-        const [paymentResponse, transactionResponse, notificationResponse, feedbackResponse] = await Promise.all([
+        const [
+          paymentResponse,
+          transactionResponse,
+          notificationResponse,
+          feedbackResponse,
+        ] = await Promise.all([
           apiFetch("/payment-config"),
           apiFetch("/transactions"),
           apiFetch("/notifications"),
@@ -127,11 +150,12 @@ export function useOperationalData({
           setFeedbackList(data.feedback);
         }
         if (activeUser.role !== "customer") {
-          const [deviceResponse, shiftResponse, incidentResponse] = await Promise.all([
-            apiFetch("/devices"),
-            apiFetch("/shifts"),
-            apiFetch("/incidents"),
-          ]);
+          const [deviceResponse, shiftResponse, incidentResponse] =
+            await Promise.all([
+              apiFetch("/devices"),
+              apiFetch("/shifts"),
+              apiFetch("/incidents"),
+            ]);
           if (cancelled) {
             return;
           }

@@ -27,7 +27,8 @@ function StatsBar({ zone }: { zone: Zone }) {
 }
 
 export function ZonesView() {
-  const { currentUser, zoneList, createZone, updateZone, deleteZone } = useParkingApp();
+  const { currentUser, zoneList, createZone, updateZone, deleteZone } =
+    useParkingApp();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editDesc, setEditDesc] = useState("");
@@ -43,7 +44,11 @@ export function ZonesView() {
   }
 
   async function saveEdit(id: string) {
-    await updateZone(id, { name: editName, description: editDesc, capacity: editCapacity });
+    await updateZone(id, {
+      name: editName,
+      description: editDesc,
+      capacity: editCapacity,
+    });
     setEditingId(null);
   }
 
@@ -69,7 +74,13 @@ export function ZonesView() {
             </label>
             <label>
               Sức chứa (số chỗ tối đa)
-              <input defaultValue={10} min={1} name="capacity" required type="number" />
+              <input
+                defaultValue={10}
+                min={1}
+                name="capacity"
+                required
+                type="number"
+              />
             </label>
             <label>
               Thứ tự hiển thị
@@ -134,7 +145,9 @@ export function ZonesView() {
                       <input
                         className="inline-input"
                         min={1}
-                        onChange={(e) => setEditCapacity(Number(e.target.value))}
+                        onChange={(e) =>
+                          setEditCapacity(Number(e.target.value))
+                        }
                         style={{ width: 60 }}
                         type="number"
                         value={editCapacity}

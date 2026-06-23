@@ -15,7 +15,10 @@ const emptyOverview = {
   recent: [] as ReturnType<typeof serializeParkingSession>[],
 };
 
-export async function getDashboardOverview(_request: Request, response: Response) {
+export async function getDashboardOverview(
+  _request: Request,
+  response: Response,
+) {
   if (mongoose.connection.readyState !== 1) {
     response.json({ overview: emptyOverview });
     return;
@@ -25,11 +28,16 @@ export async function getDashboardOverview(_request: Request, response: Response
     ParkingSession.countDocuments({}),
     ParkingSession.countDocuments({ status: "Đang gửi" }),
     ParkingSession.countDocuments({ status: "Đã hoàn thành" }),
-    ParkingSession.find({ status: "Đã hoàn thành", paymentStatus: "paid" }).select("fee").lean(),
+    ParkingSession.find({ status: "Đã hoàn thành", paymentStatus: "paid" })
+      .select("fee")
+      .lean(),
     ParkingSession.find({}).sort({ createdAt: -1 }).limit(8),
   ]);
 
-  const revenue = paidSessions.reduce((sum, session) => sum + Number(session.fee || 0), 0);
+  const revenue = paidSessions.reduce(
+    (sum, session) => sum + Number(session.fee || 0),
+    0,
+  );
 
   response.json({
     overview: {
@@ -46,7 +54,12 @@ export async function getDashboardOverview(_request: Request, response: Response
 /** Public endpoint – không yêu cầu đăng nhập, dùng cho trang chủ */
 export async function getPublicOverview(_request: Request, response: Response) {
   if (mongoose.connection.readyState !== 1) {
-    response.json({ active: 0, available: parkingConfig.totalCapacity, zones: [], sessions: [] });
+    response.json({
+      active: 0,
+      available: parkingConfig.totalCapacity,
+      zones: [],
+      sessions: [],
+    });
     return;
   }
 
@@ -64,10 +77,13 @@ export async function getPublicOverview(_request: Request, response: Response) {
   const slotCountByZone: Record<string, number> = {};
   for (const s of activeSessions) {
     const zoneName = s.slot?.split("-")[0];
-    if (zoneName) slotCountByZone[zoneName] = (slotCountByZone[zoneName] || 0) + 1;
+    if (zoneName)
+      slotCountByZone[zoneName] = (slotCountByZone[zoneName] || 0) + 1;
   }
 
-  const totalCapacity = zones.reduce((sum, z) => sum + (z.capacity || 0), 0) || parkingConfig.totalCapacity;
+  const totalCapacity =
+    zones.reduce((sum, z) => sum + (z.capacity || 0), 0) ||
+    parkingConfig.totalCapacity;
 
   response.json({
     active: activeCount,
@@ -109,7 +125,9 @@ export async function getPublicPricing(_request: Request, response: Response) {
     return;
   }
 
-  const config = await PricingConfig.findOne({ isActive: true }).sort({ updatedAt: -1 }).lean();
+  const config = await PricingConfig.findOne({ isActive: true })
+    .sort({ updatedAt: -1 })
+    .lean();
   response.json({
     pricing: {
       hourlyRate: config?.hourlyRate ?? 10000,

@@ -3,7 +3,10 @@ function formatTime(value?: Date) {
     return undefined;
   }
 
-  return new Date(value).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  return new Date(value).toLocaleTimeString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export function serializeParkingSession(session: any) {
@@ -124,7 +127,10 @@ export function serializeReportExport(item: any) {
   };
 }
 
-export function serializeZone(zone: any, stats?: { total: number; empty: number; occupied: number }) {
+export function serializeZone(
+  zone: any,
+  stats?: { total: number; empty: number; occupied: number },
+) {
   return {
     id: zone._id?.toString?.() || zone.id || "",
     name: zone.name,

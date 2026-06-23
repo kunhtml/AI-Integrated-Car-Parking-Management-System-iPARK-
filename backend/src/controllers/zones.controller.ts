@@ -1,6 +1,12 @@
 import { Request, Response } from "express";
 import { z } from "zod";
-import { createZone, deleteZone, getZoneById, listZones, updateZone } from "../services/zone.service.js";
+import {
+  createZone,
+  deleteZone,
+  getZoneById,
+  listZones,
+  updateZone,
+} from "../services/zone.service.js";
 import { serializeZone } from "../utils/serializers.js";
 
 const zoneBodySchema = z.object({
@@ -13,7 +19,9 @@ const zoneBodySchema = z.object({
 
 export async function listZonesHandler(_request: Request, response: Response) {
   const rows = await listZones();
-  response.json({ zones: rows.map(({ zone, stats }) => serializeZone(zone, stats)) });
+  response.json({
+    zones: rows.map(({ zone, stats }) => serializeZone(zone, stats)),
+  });
 }
 
 export async function getZoneHandler(request: Request, response: Response) {

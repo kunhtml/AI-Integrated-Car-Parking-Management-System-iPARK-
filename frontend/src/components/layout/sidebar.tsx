@@ -19,10 +19,10 @@ export function Sidebar({ currentUser, mobileNavOpen, onNavigate }: SidebarProps
 
   return (
     <aside className={mobileNavOpen ? "sidebar open" : "sidebar"}>
-      <div className="brand app-brand">
+      <Link href="/" className="brand app-brand">
         <span className="brand-mark">P</span>
         <span>{parkingConfig.brandName}</span>
-      </div>
+      </Link>
       <nav>
         {navItems.map((item) => {
           const Icon = item.icon;

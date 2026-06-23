@@ -35,7 +35,9 @@ export default function AuthForm() {
   }
 
   if (isForgotPassword) {
-    return <ForgotPasswordForm onBackToLogin={() => setIsForgotPassword(false)} />;
+    return (
+      <ForgotPasswordForm onBackToLogin={() => setIsForgotPassword(false)} />
+    );
   }
 
   return (
@@ -46,7 +48,9 @@ export default function AuthForm() {
           <div className="w-10 h-10 rounded-full bg-indigo-600/20 flex items-center justify-center text-indigo-400 font-bold text-xl border border-indigo-500/30">
             P
           </div>
-          <span className="text-3xl font-black tracking-tight text-white">iPARK</span>
+          <span className="text-3xl font-black tracking-tight text-white">
+            iPARK
+          </span>
         </div>
       </div>
 
@@ -76,7 +80,11 @@ export default function AuthForm() {
         </button>
       </div>
 
-      {authError && <p className="form-error text-red-500 text-sm bg-red-500/10 border border-red-500/20 rounded-xl p-3">{authError}</p>}
+      {authError && (
+        <p className="form-error text-red-500 text-sm bg-red-500/10 border border-red-500/20 rounded-xl p-3">
+          {authError}
+        </p>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {!isLogin && (
@@ -181,7 +189,9 @@ export default function AuthForm() {
       {/* HOẶC */}
       <div className="relative flex py-2 items-center">
         <div className="flex-grow border-t border-slate-800"></div>
-        <span className="flex-shrink mx-4 text-xs font-bold text-slate-500 tracking-wider">HOẶC</span>
+        <span className="flex-shrink mx-4 text-xs font-bold text-slate-500 tracking-wider">
+          HOẶC
+        </span>
         <div className="flex-grow border-t border-slate-800"></div>
       </div>
 

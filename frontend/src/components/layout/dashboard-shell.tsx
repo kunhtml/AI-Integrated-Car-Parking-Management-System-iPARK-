@@ -17,10 +17,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
     <main className="app-shell">
       <aside className="sidebar">
-        <div className="brand app-brand">
+        <Link href="/" className="brand app-brand">
           <ParkingCircle size={28} />
           <span>iPARK</span>
-        </div>
+        </Link>
         <nav>
           {navItems.map((item) => {
             const Icon = item.icon;

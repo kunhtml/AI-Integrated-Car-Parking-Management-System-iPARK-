@@ -2,7 +2,13 @@ import { Router } from "express";
 import { authRoutes } from "./auth.routes.js";
 import { dashboardRoutes } from "./dashboard.routes.js";
 import { devicesRoutes } from "./devices.routes.js";
-import { feedbackRoutes, incidentsRoutes, notificationsRoutes, reportsRoutes, shiftsRoutes } from "./misc.routes.js";
+import {
+  feedbackRoutes,
+  incidentsRoutes,
+  notificationsRoutes,
+  reportsRoutes,
+  shiftsRoutes,
+} from "./misc.routes.js";
 import { membershipPackagesRoutes } from "./membershipPackages.routes.js";
 import { parkingSessionsRoutes } from "./parkingSessions.routes.js";
 import { paymentConfigRoutes } from "./paymentConfig.routes.js";
@@ -16,7 +22,9 @@ import { zonesRoutes } from "./zones.routes.js";
 
 export const apiRoutes = Router();
 
-apiRoutes.get("/health", (_request, response) => response.json({ ok: true, service: "ipark-backend" }));
+apiRoutes.get("/health", (_request, response) =>
+  response.json({ ok: true, service: "ipark-backend" }),
+);
 apiRoutes.use("/auth", authRoutes);
 apiRoutes.use("/dashboard", dashboardRoutes);
 apiRoutes.use("/membership-packages", membershipPackagesRoutes);
@@ -33,4 +41,5 @@ apiRoutes.use("/devices", devicesRoutes);
 apiRoutes.use("/feedback", feedbackRoutes);
 apiRoutes.use("/notifications", notificationsRoutes);
 apiRoutes.use("/shifts", shiftsRoutes);
-apiRoutes.use("/incidents", incidentsRoutes);apiRoutes.use("/zones", zonesRoutes);
+apiRoutes.use("/incidents", incidentsRoutes);
+apiRoutes.use("/zones", zonesRoutes);

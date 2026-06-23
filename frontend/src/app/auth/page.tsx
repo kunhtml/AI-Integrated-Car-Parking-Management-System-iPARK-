@@ -49,7 +49,9 @@ export default function AuthPage() {
             Hệ thống quản lý bãi đỗ xe thông minh tích hợp AI
           </h2>
           <p className="text-blue-100 text-lg leading-relaxed">
-            Tự động hóa quy trình kiểm soát xe vào/ra, nhận diện biển số chính xác, thanh toán không tiền mặt và tối ưu hóa doanh thu bãi đỗ xe của bạn.
+            Tự động hóa quy trình kiểm soát xe vào/ra, nhận diện biển số chính
+            xác, thanh toán không tiền mặt và tối ưu hóa doanh thu bãi đỗ xe của
+            bạn.
           </p>
         </div>
 

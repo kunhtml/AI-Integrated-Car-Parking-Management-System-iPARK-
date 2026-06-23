@@ -44,68 +44,37 @@ export function WalletView() {
 
   return (
     <section className="content-grid">
-      <div className="panel">
-        <div className="panel-heading">
-          <div>
-            <p>Số dư ví</p>
-            <h2>{currency.format(currentUser.wallet || 0)}</h2>
-          </div>
-          <Wallet size={22} />
-        </div>
-        <div className="profile-lines">
-          <span>Gói thành viên: {membershipActive ? `Đang hoạt động đến ${membershipExpiresAt}` : "Chưa kích hoạt"}</span>
-          <span>Giá gói tháng: {currency.format(pricingConfigState.monthlyRate)}</span>
-        </div>
-      </div>
-
       {currentUser.role !== "admin" && (
-        <>
-          <div className="panel">
-            <div className="panel-heading">
-              <div>
-                <p>Nạp ví</p>
-                <h2>Top Up Wallet</h2>
-              </div>
-              <CreditCard size={22} />
+        <div className="panel">
+          <div className="panel-heading">
+            <div>
+              <p>Gói gửi xe</p>
+              <h2>Mua / gia hạn gói tháng</h2>
             </div>
-            <form className="stack-form" onSubmit={topUpWallet}>
-              <label>
-                Số tiền nạp (VND)
-                <input min={10000} name="amount" placeholder="100000" required type="number" />
-              </label>
-              <button className="full-button" type="submit">
-                Nạp tiền vào ví
-              </button>
-            </form>
+            <Package size={22} />
           </div>
-
-          <div className="panel">
-            <div className="panel-heading">
-              <div>
-                <p>Gói gửi xe</p>
-                <h2>Mua / gia hạn gói tháng</h2>
-              </div>
-              <Package size={22} />
-            </div>
-            <form className="stack-form" onSubmit={purchaseParkingPackage}>
-              <label>
-                Số tháng
-                <select defaultValue="1" name="months">
-                  <option value="1">1 tháng</option>
-                  <option value="3">3 tháng</option>
-                  <option value="6">6 tháng</option>
-                  <option value="12">12 tháng</option>
-                </select>
-              </label>
-              <button className="full-button" type="submit">
-                Mua / gia hạn gói
-              </button>
-              <button className="full-button" onClick={activateMembership} type="button">
-                Kích hoạt gói thành viên
-              </button>
-            </form>
+          <div className="profile-lines mb-4">
+            <span>Gói thành viên: {membershipActive ? `Đang hoạt động đến ${membershipExpiresAt}` : "Chưa kích hoạt"}</span>
+            <span>Giá gói tháng: {currency.format(pricingConfigState.monthlyRate)}</span>
           </div>
-        </>
+          <form className="stack-form" onSubmit={purchaseParkingPackage}>
+            <label>
+              Số tháng
+              <select defaultValue="1" name="months">
+                <option value="1">1 tháng</option>
+                <option value="3">3 tháng</option>
+                <option value="6">6 tháng</option>
+                <option value="12">12 tháng</option>
+              </select>
+            </label>
+            <button className="full-button" type="submit">
+              Mua / gia hạn gói
+            </button>
+            <button className="full-button" onClick={activateMembership} type="button">
+              Kích hoạt gói thành viên
+            </button>
+          </form>
+        </div>
       )}
 
       <div className="panel">
