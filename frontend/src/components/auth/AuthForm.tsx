@@ -21,13 +21,92 @@ export default function AuthForm() {
     password: "",
     confirmPassword: "",
   });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const validateField = (name: string, value: string) => {
+    let err = "";
+    const emailRegex =
+      /^[a-zA-Z0-9][a-zA-Z0-9._%+-]*@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (isLogin) {
+      if (name === "email") {
+        if (!value.trim()) err = "Email không được để trống.";
+        else if (!emailRegex.test(value))
+          err = "Email không đúng định dạng hoặc chứa ký tự đặc biệt ở đầu.";
+      } else if (name === "password") {
+        if (!value) err = "Mật khẩu không được để trống.";
+      }
+    } else {
+      if (name === "name") {
+        if (!value.trim()) err = "Họ và tên không được để trống.";
+        else if (value.trim().length < 2)
+          err = "Họ và tên phải có ít nhất 2 ký tự.";
+      } else if (name === "phone") {
+        if (!value.trim()) err = "Số điện thoại không được để trống.";
+        else if (!/^\d{9,11}$/.test(value.trim()))
+          err = "Số điện thoại phải từ 9 đến 11 chữ số.";
+      } else if (name === "email") {
+        if (!value.trim()) err = "Email không được để trống.";
+        else if (!emailRegex.test(value))
+          err = "Email không đúng định dạng hoặc chứa ký tự đặc biệt ở đầu.";
+      } else if (name === "password") {
+        const passwordRegex =
+          /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+        if (!value) err = "Mật khẩu không được để trống.";
+        else if (!passwordRegex.test(value)) {
+          err =
+            "Mật khẩu phải dài ít nhất 8 ký tự, bao gồm chữ hoa, chữ thường, số và ký tự đặc biệt (@$!%*?&).";
+        }
+      } else if (name === "confirmPassword") {
+        if (!value) err = "Vui lòng xác nhận mật khẩu.";
+        else if (value !== formData.password)
+          err = "Mật khẩu xác nhận không khớp.";
+      }
+    }
+    return err;
+  };
 
   function handleChange(e: ChangeEvent<HTMLInputElement>) {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData({ ...formData, [name]: value });
+    const err = validateField(name, value);
+    setErrors((prev) => ({ ...prev, [name]: err }));
   }
+
+  function handleBlur(e: ChangeEvent<HTMLInputElement>) {
+    const { name, value } = e.target;
+    const err = validateField(name, value);
+    setErrors((prev) => ({ ...prev, [name]: err }));
+  }
+
+  const handleTabChange = (loginMode: boolean) => {
+    setIsLogin(loginMode);
+    setErrors({});
+    setFormData({
+      name: "",
+      email: "",
+      phone: "",
+      password: "",
+      confirmPassword: "",
+    });
+  };
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+
+    const newErrors: Record<string, string> = {};
+    Object.keys(formData).forEach((key) => {
+      if (isLogin && ["name", "phone", "confirmPassword"].includes(key)) return;
+      const err = validateField(key, formData[key as keyof typeof formData]);
+      if (err) {
+        newErrors[key] = err;
+      }
+    });
+
+    setErrors(newErrors);
+    if (Object.values(newErrors).some((err) => err)) {
+      return;
+    }
+
     const user = isLogin ? await handleLogin(e) : await handleRegister(e);
     if (user) {
       router.push(getDefaultPathForRole(user.role));
@@ -54,11 +133,10 @@ export default function AuthForm() {
         </div>
       </div>
 
-      {/* Tab Đăng nhập / Đăng ký */}
       <div className="grid grid-cols-2 gap-1 p-1 bg-[#0b0f19] border border-slate-800 rounded-xl">
         <button
           type="button"
-          onClick={() => setIsLogin(true)}
+          onClick={() => handleTabChange(true)}
           className={`py-2.5 text-sm font-semibold rounded-lg transition-all ${
             isLogin
               ? "bg-[#1e293b] text-white shadow-sm"
@@ -69,7 +147,7 @@ export default function AuthForm() {
         </button>
         <button
           type="button"
-          onClick={() => setIsLogin(false)}
+          onClick={() => handleTabChange(false)}
           className={`py-2.5 text-sm font-semibold rounded-lg transition-all ${
             !isLogin
               ? "bg-[#1e293b] text-white shadow-sm"
@@ -98,10 +176,20 @@ export default function AuthForm() {
                 name="name"
                 value={formData.name}
                 onChange={handleChange}
+                onBlur={handleBlur}
                 required
                 placeholder="Nguyễn Văn A"
-                className="w-full px-4 py-3 bg-[#0b0f19] border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                className={`w-full px-4 py-3 bg-[#0b0f19] border ${
+                  errors.name
+                    ? "border-red-500 focus:ring-red-500"
+                    : "border-slate-800 focus:ring-blue-500"
+                } rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:border-transparent transition-all`}
               />
+              {errors.name && (
+                <p className="text-red-500 text-xs font-medium mt-1">
+                  {errors.name}
+                </p>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -113,10 +201,20 @@ export default function AuthForm() {
                 name="phone"
                 value={formData.phone}
                 onChange={handleChange}
+                onBlur={handleBlur}
                 required
                 placeholder="0912345678"
-                className="w-full px-4 py-3 bg-[#0b0f19] border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                className={`w-full px-4 py-3 bg-[#0b0f19] border ${
+                  errors.phone
+                    ? "border-red-500 focus:ring-red-500"
+                    : "border-slate-800 focus:ring-blue-500"
+                } rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:border-transparent transition-all`}
               />
+              {errors.phone && (
+                <p className="text-red-500 text-xs font-medium mt-1">
+                  {errors.phone}
+                </p>
+              )}
             </div>
           </>
         )}
@@ -130,10 +228,20 @@ export default function AuthForm() {
             name="email"
             value={formData.email}
             onChange={handleChange}
+            onBlur={handleBlur}
             required
             placeholder="admin@ipark.vn"
-            className="w-full px-4 py-3 bg-[#0b0f19] border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+            className={`w-full px-4 py-3 bg-[#0b0f19] border ${
+              errors.email
+                ? "border-red-500 focus:ring-red-500"
+                : "border-slate-800 focus:ring-blue-500"
+            } rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:border-transparent transition-all`}
           />
+          {errors.email && (
+            <p className="text-red-500 text-xs font-medium mt-1">
+              {errors.email}
+            </p>
+          )}
         </div>
 
         <div className="space-y-1.5">
@@ -146,9 +254,14 @@ export default function AuthForm() {
               name="password"
               value={formData.password}
               onChange={handleChange}
+              onBlur={handleBlur}
               required
               placeholder="•••••"
-              className="w-full px-4 py-3 bg-[#0b0f19] border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              className={`w-full px-4 py-3 bg-[#0b0f19] border ${
+                errors.password
+                  ? "border-red-500 focus:ring-red-500"
+                  : "border-slate-800 focus:ring-blue-500"
+              } rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:border-transparent transition-all`}
             />
             <button
               type="button"
@@ -158,6 +271,11 @@ export default function AuthForm() {
               {showPassword ? "Ẩn" : "Hiện"}
             </button>
           </div>
+          {errors.password && (
+            <p className="text-red-500 text-xs font-medium mt-1">
+              {errors.password}
+            </p>
+          )}
         </div>
 
         {!isLogin && (
@@ -170,10 +288,20 @@ export default function AuthForm() {
               name="confirmPassword"
               value={formData.confirmPassword}
               onChange={handleChange}
+              onBlur={handleBlur}
               required
               placeholder="•••••"
-              className="w-full px-4 py-3 bg-[#0b0f19] border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              className={`w-full px-4 py-3 bg-[#0b0f19] border ${
+                errors.confirmPassword
+                  ? "border-red-500 focus:ring-red-500"
+                  : "border-slate-800 focus:ring-blue-500"
+              } rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:border-transparent transition-all`}
             />
+            {errors.confirmPassword && (
+              <p className="text-red-500 text-xs font-medium mt-1">
+                {errors.confirmPassword}
+              </p>
+            )}
           </div>
         )}
 

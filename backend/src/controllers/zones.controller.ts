@@ -10,11 +10,25 @@ import {
 import { serializeZone } from "../utils/serializers.js";
 
 const zoneBodySchema = z.object({
-  name: z.string().min(1).max(50),
-  description: z.string().optional(),
-  capacity: z.number().int().min(1),
-  allowedVehicleTypes: z.array(z.string().min(1)).min(1),
-  displayOrder: z.number().int().optional(),
+  name: z
+    .string({ required_error: "Tên khu vực là bắt buộc." })
+    .min(1, "Tên khu vực là bắt buộc.")
+    .max(50, "Tên khu vực không được dài quá 50 ký tự.")
+    .trim()
+    .refine((v) => v.length > 0, "Tên khu vực không được chỉ chứa khoảng trắng."),
+  description: z.string().max(255, "Mô tả không được dài quá 255 ký tự.").optional(),
+  capacity: z
+    .number({ required_error: "Sức chứa là bắt buộc." })
+    .int("Sức chứa phải là số nguyên.")
+    .min(1, "Sức chứa phải lớn hơn 0."),
+  allowedVehicleTypes: z
+    .array(z.string().min(1))
+    .min(1, "Phải chọn ít nhất một loại xe."),
+  displayOrder: z
+    .number()
+    .int("Thứ tự phải là số nguyên.")
+    .min(0, "Thứ tự hiển thị không được là số âm.")
+    .optional(),
 });
 
 export async function listZonesHandler(_request: Request, response: Response) {

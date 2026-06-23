@@ -24,13 +24,34 @@ export default function PageHomepage() {
   const [showForgot, setShowForgot] = useState(false);
   const [mode, setMode] = useState<"request" | "reset">("request");
 
-  const stats = {
+  const [stats, setStats] = useState({
     active: 0,
     available: 0,
     capacity: parkingConfig.totalCapacity,
-  };
+    zones: [] as { name: string; capacity: number; occupied: number; available: number }[],
+    sessions: [] as { plate: string; owner: string; slot: string; checkIn: string }[],
+  });
 
   useEffect(() => {
+    async function loadPublicData() {
+      try {
+        const response = await apiFetch("/dashboard/public-overview");
+        if (response.ok) {
+          const data = await response.json();
+          setStats({
+            active: data.active,
+            available: data.available,
+            capacity: data.totalCapacity,
+            zones: data.zones || [],
+            sessions: data.sessions || [],
+          });
+        }
+      } catch (err) {
+        console.error("Lỗi khi tải dữ liệu bãi đỗ xe công cộng:", err);
+      }
+    }
+    loadPublicData();
+
     const savedUser = window.localStorage.getItem("ipark_current_user");
     const hasSessionCookie = document.cookie.includes("parking_session=");
 
@@ -162,11 +183,41 @@ export default function PageHomepage() {
           <div className="space-y-6 rounded-lg border border-slate-200 bg-white p-8 shadow-xl lg:col-span-5">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <h2 className="font-bold text-slate-900">Trạng thái bãi xe</h2>
-              <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
+              <span className={`h-2.5 w-2.5 rounded-full ${stats.active > 0 ? "bg-emerald-500 animate-pulse" : "bg-slate-300"}`} />
             </div>
-            <div className="rounded-lg border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
-              Chưa có dữ liệu phiên gửi xe từ cơ sở dữ liệu.
-            </div>
+            {stats.sessions.length > 0 ? (
+              <div className="max-h-[300px] overflow-y-auto space-y-3">
+                {stats.sessions.map((s, idx) => (
+                  <div key={idx} className="flex justify-between items-center p-3 rounded-lg bg-slate-50 border border-slate-100 text-sm">
+                    <div>
+                      <strong className="block text-slate-900">{s.plate}</strong>
+                      <span className="text-xs text-slate-500">{s.owner} • {s.slot}</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-xs font-semibold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full">
+                      <LogIn size={10} />
+                      <span>{s.checkIn}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+                Chưa có dữ liệu phiên gửi xe từ cơ sở dữ liệu.
+              </div>
+            )}
+            {stats.zones.length > 0 && (
+              <div className="border-t border-slate-100 pt-4 mt-4 space-y-2">
+                <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Trạng thái phân khu</span>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  {stats.zones.map((z, idx) => (
+                    <div key={idx} className="p-2.5 rounded-lg bg-slate-50 border border-slate-100 flex flex-col gap-1">
+                      <span className="font-bold text-slate-800">Khu {z.name}</span>
+                      <span className="text-slate-500">{z.occupied}/{z.capacity} đang đỗ</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </section>
 

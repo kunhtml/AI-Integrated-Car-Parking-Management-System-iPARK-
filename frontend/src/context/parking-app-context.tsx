@@ -189,6 +189,7 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
     (actionLog: string) => setState((s) => ({ ...s, actionLog })),
     [],
   );
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const setExitSessionId = useCallback(
     (exitSessionId: string) => setState((s) => ({ ...s, exitSessionId })),
     [],
@@ -451,8 +452,8 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
   );
 
   const zoneActions = useMemo(
-    () => createZoneActions({ setZoneList, setActionLog }),
-    [setZoneList, setActionLog],
+    () => createZoneActions({ setZoneList, setActionLog, onServerError: setFormErrors }),
+    [setZoneList, setActionLog, setFormErrors],
   );
 
   const stats = useMemo(() => {
@@ -516,6 +517,8 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       membershipExpiresAt: state.membershipExpiresAt,
       stats,
       filteredSessions,
+      formErrors,
+      setFormErrors,
       ...authActions,
       ...sessionActions,
       ...paymentActions,

@@ -36,14 +36,17 @@ function googleOAuthConfigured() {
 }
 
 // Password regex: Yêu cầu ít nhất 1 chữ hoa, 1 chữ thường, 1 chữ số và 1 ký tự đặc biệt
-const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+const passwordRegex =
+  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+const passwordErrorMessage =
+  "Mật khẩu phải dài ít nhất 8 ký tự, bao gồm chữ hoa, chữ thường, số và ký tự đặc biệt (@$!%*?&)";
 
 export async function register(request: Request, response: Response) {
   const body = z
     .object({
       name: z.string().min(2),
       email: z.email(),
-      password: z.string().regex(passwordRegex),
+      password: z.string().regex(passwordRegex, passwordErrorMessage),
     })
     .parse(request.body);
 
@@ -165,11 +168,9 @@ export async function googleCallback(request: Request, response: Response) {
   const expectedState = request.cookies?.google_oauth_state;
 
   if (!code || !state || !expectedState || state !== expectedState) {
-    response
-      .status(400)
-      .json({
-        message: "Phiên đăng nhập Google không hợp lệ hoặc đã hết hạn.",
-      });
+    response.status(400).json({
+      message: "Phiên đăng nhập Google không hợp lệ hoặc đã hết hạn.",
+    });
     return;
   }
 
@@ -259,7 +260,7 @@ export async function forgotPassword(request: Request, response: Response) {
   const body = z.object({ email: z.email() }).parse(request.body);
   const email = body.email.toLowerCase();
   const user = await User.findOne({ email });
-  
+
   // Sử dụng crypto.randomInt để sinh OTP an toàn, tránh Math.random()
   const otpVal = randomInt(100000, 999999);
   const otp = String(otpVal);
@@ -269,7 +270,7 @@ export async function forgotPassword(request: Request, response: Response) {
     // Vô hiệu hoá tất cả OTP cũ của email này trước khi tạo OTP mới
     await OtpToken.updateMany(
       { email, purpose: "reset-password", usedAt: { $exists: false } },
-      { $set: { usedAt: new Date() } }
+      { $set: { usedAt: new Date() } },
     );
 
     await OtpToken.create({
@@ -314,7 +315,9 @@ export async function verifyOtp(request: Request, response: Response) {
   }).sort({ createdAt: -1 });
 
   if (!token) {
-    response.status(400).json({ message: "Không tìm thấy yêu cầu OTP hoặc OTP đã hết hạn." });
+    response
+      .status(400)
+      .json({ message: "Không tìm thấy yêu cầu OTP hoặc OTP đã hết hạn." });
     return;
   }
 
@@ -322,7 +325,12 @@ export async function verifyOtp(request: Request, response: Response) {
   if (token.attempts >= 5) {
     token.usedAt = new Date(); // Vô hiệu hoá mã OTP ngay lập tức
     await token.save();
-    response.status(400).json({ message: "OTP đã bị vô hiệu hóa do thử sai quá 5 lần. Vui lòng yêu cầu mã mới." });
+    response
+      .status(400)
+      .json({
+        message:
+          "OTP đã bị vô hiệu hóa do thử sai quá 5 lần. Vui lòng yêu cầu mã mới.",
+      });
     return;
   }
 
@@ -349,7 +357,7 @@ export async function resetPassword(request: Request, response: Response) {
     .object({
       email: z.email(),
       otp: z.string().min(6).max(6),
-      password: z.string().regex(passwordRegex),
+      password: z.string().regex(passwordRegex, passwordErrorMessage),
     })
     .parse(request.body);
 
@@ -363,7 +371,12 @@ export async function resetPassword(request: Request, response: Response) {
   }).sort({ createdAt: -1 });
 
   if (!token) {
-    response.status(400).json({ message: "Phiên làm việc không hợp lệ hoặc đã hết hạn. Vui lòng xác thực lại OTP." });
+    response
+      .status(400)
+      .json({
+        message:
+          "Phiên làm việc không hợp lệ hoặc đã hết hạn. Vui lòng xác thực lại OTP.",
+      });
     return;
   }
 
@@ -385,7 +398,7 @@ export async function changePassword(request: Request, response: Response) {
   const body = z
     .object({
       currentPassword: z.string().min(1),
-      newPassword: z.string().regex(passwordRegex),
+      newPassword: z.string().regex(passwordRegex, passwordErrorMessage),
     })
     .parse(request.body);
 

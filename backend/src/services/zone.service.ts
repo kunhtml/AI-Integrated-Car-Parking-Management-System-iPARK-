@@ -38,6 +38,13 @@ export type CreateZoneData = {
 };
 
 export async function createZone(data: CreateZoneData): Promise<ZoneDocument> {
+  if (typeof data.capacity !== "number" || data.capacity < 1) {
+    const err = new Error("Sức chứa phải lớn hơn 0.") as Error & {
+      status: number;
+    };
+    err.status = 400;
+    throw err;
+  }
   const existed = await Zone.findOne({ name: data.name.trim() });
   if (existed) {
     const err = new Error(`Zone "${data.name}" đã tồn tại.`) as Error & {
@@ -45,6 +52,26 @@ export async function createZone(data: CreateZoneData): Promise<ZoneDocument> {
     };
     err.status = 409;
     throw err;
+  }
+  if (typeof data.displayOrder === "number" && data.displayOrder < 0) {
+    const err = new Error("Thứ tự hiển thị không được là số âm.") as Error & {
+      status: number;
+    };
+    err.status = 400;
+    throw err;
+  }
+  if (typeof data.displayOrder === "number") {
+    const duplicateOrder = await Zone.findOne({
+      displayOrder: data.displayOrder,
+      isActive: true,
+    });
+    if (duplicateOrder) {
+      const err = new Error(
+        `Thứ tự ${data.displayOrder} đã được sử dụng.`,
+      ) as Error & { status: number };
+      err.status = 409;
+      throw err;
+    }
   }
   const zone = await Zone.create({
     name: data.name.trim(),
@@ -74,6 +101,34 @@ export async function updateZone(
       const err = new Error(`Zone "${data.name}" đã tồn tại.`) as Error & {
         status: number;
       };
+      err.status = 409;
+      throw err;
+    }
+  }
+  if (data.capacity !== undefined && data.capacity < 1) {
+    const err = new Error("Sức chứa phải lớn hơn 0.") as Error & {
+      status: number;
+    };
+    err.status = 400;
+    throw err;
+  }
+  if (data.displayOrder !== undefined && data.displayOrder < 0) {
+    const err = new Error("Thứ tự hiển thị không được là số âm.") as Error & {
+      status: number;
+    };
+    err.status = 400;
+    throw err;
+  }
+  if (data.displayOrder !== undefined) {
+    const duplicateOrder = await Zone.findOne({
+      displayOrder: data.displayOrder,
+      isActive: true,
+      _id: { $ne: zone._id },
+    });
+    if (duplicateOrder) {
+      const err = new Error(
+        `Thứ tự ${data.displayOrder} đã được sử dụng.`,
+      ) as Error & { status: number };
       err.status = 409;
       throw err;
     }
