@@ -71,12 +71,7 @@ function validateDisplayOrder(value: number): string | undefined {
 
 // ---------- main component ----------
 export function ZonesView() {
-  const {
-    currentUser,
-    zoneList,
-    setZoneList,
-    setFormErrors,
-  } = useParkingApp();
+  const { currentUser, zoneList, setZoneList, setFormErrors } = useParkingApp();
 
   // actions use context setFormErrors for server errors, setActionLog for toast
   const { createZone, updateZone, deleteZone } = useMemo(
@@ -97,10 +92,7 @@ export function ZonesView() {
   // merge context errors (server) with local (blur) — context wins for server errors
   const allErrors: FieldErrors = formErrors;
 
-  function handleCreateBlur(
-    field: keyof FieldErrors,
-    value: string | number,
-  ) {
+  function handleCreateBlur(field: keyof FieldErrors, value: string | number) {
     const err =
       field === "name"
         ? validateName(String(value))
@@ -110,9 +102,7 @@ export function ZonesView() {
     setLocalErrors((prev) => ({ ...prev, [field]: err }));
   }
 
-  async function handleCreateSubmit(
-    e: React.FormEvent<HTMLFormElement>,
-  ) {
+  async function handleCreateSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
 
@@ -130,23 +120,18 @@ export function ZonesView() {
 
     setFormPending(true);
     try {
-      await createZone(
-        e as unknown as React.FormEvent<HTMLFormElement>,
-      );
+      await createZone(e as unknown as React.FormEvent<HTMLFormElement>);
     } finally {
       setFormPending(false);
       setLocalErrors({});
       setFormErrors({});
       e.currentTarget.reset();
       const capInput =
-        e.currentTarget.querySelector<HTMLInputElement>(
-          '[name="capacity"]',
-        );
+        e.currentTarget.querySelector<HTMLInputElement>('[name="capacity"]');
       if (capInput) capInput.value = "10";
-      const orderInput =
-        e.currentTarget.querySelector<HTMLInputElement>(
-          '[name="displayOrder"]',
-        );
+      const orderInput = e.currentTarget.querySelector<HTMLInputElement>(
+        '[name="displayOrder"]',
+      );
       if (orderInput) orderInput.value = "0";
     }
   }
@@ -259,8 +244,9 @@ export function ZonesView() {
   }
 
   // ----- delete -----
-  const [deleteConfirm, setDeleteConfirm] =
-    useState<DeleteConfirm | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirm | null>(
+    null,
+  );
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function confirmDelete() {
@@ -302,9 +288,7 @@ export function ZonesView() {
               <input
                 maxLength={50}
                 name="name"
-                onBlur={(e) =>
-                  handleCreateBlur("name", e.target.value)
-                }
+                onBlur={(e) => handleCreateBlur("name", e.target.value)}
                 placeholder="A, B, VIP, Tầng B1..."
                 required
                 type="text"
@@ -356,10 +340,7 @@ export function ZonesView() {
                 min={0}
                 name="displayOrder"
                 onBlur={(e) =>
-                  handleCreateBlur(
-                    "displayOrder",
-                    Number(e.target.value),
-                  )
+                  handleCreateBlur("displayOrder", Number(e.target.value))
                 }
                 step={1}
                 type="number"
@@ -420,10 +401,7 @@ export function ZonesView() {
                 const isConfirming = deleteConfirm?.id === zone.id;
 
                 return (
-                  <tr
-                    key={zone.id}
-                    className={isEditing ? "row-editing" : ""}
-                  >
+                  <tr key={zone.id} className={isEditing ? "row-editing" : ""}>
                     {/* Name */}
                     <td>
                       {isEditing ? (
@@ -432,18 +410,10 @@ export function ZonesView() {
                             className="inline-input"
                             maxLength={50}
                             onBlur={(e) =>
-                              handleDraftBlur(
-                                zone.id,
-                                "name",
-                                e.target.value,
-                              )
+                              handleDraftBlur(zone.id, "name", e.target.value)
                             }
                             onChange={(e) =>
-                              handleDraftChange(
-                                zone.id,
-                                "name",
-                                e.target.value,
-                              )
+                              handleDraftChange(zone.id, "name", e.target.value)
                             }
                             value={draft?.name ?? zone.name}
                           />
@@ -471,9 +441,7 @@ export function ZonesView() {
                               e.target.value,
                             )
                           }
-                          value={
-                            draft?.description ?? zone.description ?? ""
-                          }
+                          value={draft?.description ?? zone.description ?? ""}
                         />
                       ) : (
                         zone.description || (
@@ -552,9 +520,7 @@ export function ZonesView() {
                             step={1}
                             style={{ width: 64 }}
                             type="number"
-                            value={
-                              draft?.displayOrder ?? zone.displayOrder
-                            }
+                            value={draft?.displayOrder ?? zone.displayOrder}
                           />
                           {draft?.fieldErrors.displayOrder && (
                             <div className="inline-error">
@@ -581,10 +547,7 @@ export function ZonesView() {
                               type="button"
                             >
                               {isSaving ? (
-                                <Loader2
-                                  className="spin"
-                                  size={14}
-                                />
+                                <Loader2 className="spin" size={14} />
                               ) : (
                                 <Check size={14} />
                               )}
@@ -609,10 +572,7 @@ export function ZonesView() {
                               type="button"
                             >
                               {isDeleting ? (
-                                <Loader2
-                                  className="spin"
-                                  size={14}
-                                />
+                                <Loader2 className="spin" size={14} />
                               ) : (
                                 <Check size={14} />
                               )}
@@ -674,29 +634,23 @@ export function ZonesView() {
       {deleteConfirm && (
         <div
           className="modal-overlay"
-          onClick={() =>
-            !deletingId && setDeleteConfirm(null)
-          }
+          onClick={() => !deletingId && setDeleteConfirm(null)}
         >
-          <div
-            className="modal"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <AlertCircle className="text-danger" size={24} />
               <h3>Xác nhận xóa khu vực</h3>
             </div>
             <p className="modal-body">
               Bạn có chắc chắn muốn vô hiệu hóa khu vực{" "}
-              <strong>&quot;{deleteConfirm.name}&quot;</strong>{" "}
-              không?
+              <strong>&quot;{deleteConfirm.name}&quot;</strong> không?
               <br />
               Hành động này không thể hoàn tác.
             </p>
             <div className="modal-footer">
               <button
                 className="secondary-button"
-                disabled={deletingId}
+                disabled={!!deletingId}
                 onClick={() => setDeleteConfirm(null)}
                 type="button"
               >
@@ -704,7 +658,7 @@ export function ZonesView() {
               </button>
               <button
                 className="danger-button"
-                disabled={deletingId}
+                disabled={!!deletingId}
                 onClick={confirmDelete}
                 type="button"
               >

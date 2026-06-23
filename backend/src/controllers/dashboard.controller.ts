@@ -116,10 +116,12 @@ export async function getPublicPricing(_request: Request, response: Response) {
     response.json({
       pricing: {
         hourlyRate: 10000,
-        dailyMaxRate: 100000,
-        monthlyRate: 1500000,
-        overnightRate: 50000,
+        dailyMaxRate: 120000,
+        monthlyRate: 1200000,
+        overnightRate: 80000,
         freeMinutes: 20,
+        overdueFineRate: 50000,
+        graceExitMinutes: 10,
       },
     });
     return;
@@ -131,10 +133,12 @@ export async function getPublicPricing(_request: Request, response: Response) {
   response.json({
     pricing: {
       hourlyRate: config?.hourlyRate ?? 10000,
-      dailyMaxRate: config?.dailyMaxRate ?? 100000,
-      monthlyRate: config?.monthlyRate ?? 1500000,
-      overnightRate: config?.overnightRate ?? 50000,
+      dailyMaxRate: config?.dailyMaxRate ?? 120000,
+      monthlyRate: config?.monthlyRate ?? 1200000,
+      overnightRate: config?.overnightRate ?? 80000,
       freeMinutes: config?.freeMinutes ?? 20,
+      overdueFineRate: config?.overdueFineRate ?? 50000,
+      graceExitMinutes: config?.graceExitMinutes ?? 10,
     },
   });
 }

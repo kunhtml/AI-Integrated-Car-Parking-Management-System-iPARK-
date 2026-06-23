@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { ZodError } from "zod";
+import { ZodError, ZodIssue } from "zod";
 
 export function errorMiddleware(
   err: any,
@@ -8,8 +8,13 @@ export function errorMiddleware(
   _next: NextFunction,
 ) {
   if (err instanceof ZodError) {
-    const messages = err.errors.map((e) => e.message).filter(Boolean);
-    res.status(400).json({ message: messages[0] || "Dữ liệu không hợp lệ.", errors: messages });
+    const messages = err.issues.map((e: ZodIssue) => e.message).filter(Boolean);
+    res
+      .status(400)
+      .json({
+        message: messages[0] || "Dữ liệu không hợp lệ.",
+        errors: messages,
+      });
     return;
   }
   console.error(err);

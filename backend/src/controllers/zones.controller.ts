@@ -11,14 +11,20 @@ import { serializeZone } from "../utils/serializers.js";
 
 const zoneBodySchema = z.object({
   name: z
-    .string({ required_error: "Tên khu vực là bắt buộc." })
+    .string({ message: "Tên khu vực là bắt buộc." })
     .min(1, "Tên khu vực là bắt buộc.")
     .max(50, "Tên khu vực không được dài quá 50 ký tự.")
     .trim()
-    .refine((v) => v.length > 0, "Tên khu vực không được chỉ chứa khoảng trắng."),
-  description: z.string().max(255, "Mô tả không được dài quá 255 ký tự.").optional(),
+    .refine(
+      (v) => v.length > 0,
+      "Tên khu vực không được chỉ chứa khoảng trắng.",
+    ),
+  description: z
+    .string()
+    .max(255, "Mô tả không được dài quá 255 ký tự.")
+    .optional(),
   capacity: z
-    .number({ required_error: "Sức chứa là bắt buộc." })
+    .number({ message: "Sức chứa là bắt buộc." })
     .int("Sức chứa phải là số nguyên.")
     .min(1, "Sức chứa phải lớn hơn 0."),
   allowedVehicleTypes: z

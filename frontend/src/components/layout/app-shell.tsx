@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle, XCircle } from "lucide-react";
+import { CheckCircle2, CircleAlert } from "lucide-react";
 import { AppHeader } from "@/components/layout/app-header";
 import { Sidebar } from "@/components/layout/sidebar";
 import { useParkingApp } from "@/context/parking-app-context";
@@ -49,11 +49,17 @@ export function AppShell({
         />
 
         {visible && message && (
-          <div className={`toast-banner ${message.includes("không") || message.includes("thất bại") || message.includes("lỗi") || message.includes("đã tồn") ? "toast-error" : ""}`} role="alert">
-            {message.includes("không") || message.includes("thất bại") || message.includes("lỗi") || message.includes("đã tồn") ? (
-              <XCircle size={16} />
+          <div
+            className={`toast-banner ${message.includes("không") || message.includes("thất bại") || message.includes("lỗi") || message.includes("đã tồn") ? "toast-error" : ""}`}
+            role="alert"
+          >
+            {message.includes("không") ||
+            message.includes("thất bại") ||
+            message.includes("lỗi") ||
+            message.includes("đã tồn") ? (
+              <CircleAlert size={16} />
             ) : (
-              <CheckCircle size={16} />
+              <CheckCircle2 size={16} />
             )}
             {message}
             <button
