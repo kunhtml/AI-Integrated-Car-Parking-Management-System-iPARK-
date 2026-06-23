@@ -1,34 +1,41 @@
 import { Request, Response } from "express";
+import { z } from "zod";
 import { Device } from "../models/Device.js";
+import { captureDeviceSnapshot } from "../services/device.service.js";
+import { serializeDevice } from "../utils/serializers.js";
+
+const deviceSchema = z.object({
+  name: z.string().min(2),
+  gate: z.enum(["entry", "exit"]),
+  rtspUrl: z.string().min(4),
+  username: z.string().optional(),
+  password: z.string().optional(),
+  roiNote: z.string().optional(),
+});
 
 export async function listDevices(_request: Request, response: Response) {
-  const devices = await Device.find({}).sort({ createdAt: -1 }).limit(100);
-  response.json({
-    devices: devices.map((device) => ({
-      id: device._id.toString(),
-      name: device.name,
-      gate: device.gate,
-      status: device.status,
-      lastSnapshotUrl: device.lastSnapshotUrl,
-      lastSnapshotAt: device.lastSnapshotAt,
-    })),
-  });
+  const devices = await Device.find().sort({ gate: 1, createdAt: -1 });
+  response.json({ devices: devices.map(serializeDevice) });
 }
 
-export async function saveDevice(request: Request, response: Response) {
-  const body = request.body as { id?: string; name: string; gate: "entry" | "exit" };
-  const device = body.id
-    ? await Device.findByIdAndUpdate(body.id, { name: body.name, gate: body.gate }, { new: true })
-    : await Device.create({ name: body.name, gate: body.gate, status: "offline" });
-
-  response.json({
-    device: {
-      id: device?._id.toString(),
-      name: device?.name,
-      gate: device?.gate,
-      status: device?.status,
-    },
+export async function createDevice(request: Request, response: Response) {
+  const body = deviceSchema.parse(request.body);
+  const device = await Device.create({
+    ...body,
+    createdBy: request.user?.id,
   });
+  response.status(201).json({ device: serializeDevice(device) });
+}
+
+export async function updateDevice(request: Request, response: Response) {
+  const body = deviceSchema.partial().parse(request.body);
+  const device = await Device.findByIdAndUpdate(request.params.id, body, { new: true });
+  if (!device) {
+    response.status(404).json({ message: "Không tìm thấy thiết bị." });
+    return;
+  }
+
+  response.json({ device: serializeDevice(device) });
 }
 
 export async function snapshotDevice(request: Request, response: Response) {
@@ -38,8 +45,20 @@ export async function snapshotDevice(request: Request, response: Response) {
     return;
   }
 
-  device.status = "online";
-  device.lastSnapshotAt = new Date();
-  await device.save();
-  response.json({ ok: true, deviceId: device._id.toString() });
+  try {
+    const snapshot = await captureDeviceSnapshot(device);
+    device.status = "online";
+    device.lastSnapshotUrl = snapshot.imageUrl;
+    device.lastSnapshotAt = new Date();
+    await device.save();
+
+    response.json({ device: serializeDevice(device), snapshotUrl: snapshot.imageUrl });
+  } catch (error) {
+    device.status = "offline";
+    await device.save();
+    response.status(502).json({
+      message: error instanceof Error ? error.message : "Không chụp được camera.",
+      device: serializeDevice(device),
+    });
+  }
 }
