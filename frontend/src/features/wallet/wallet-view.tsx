@@ -1,12 +1,13 @@
 "use client";
 
+import { Package, QrCode, Settings, Wallet } from "lucide-react";
 import { useState, useEffect, type FormEvent } from "react";
 import { CreditCard, ExternalLink, Loader2, PlusCircle, QrCode, RefreshCw } from "lucide-react";
 
-import { DataTable } from "@/components/ui/data-table";
 import { useParkingApp } from "@/context/parking-app-context";
 import { apiFetch } from "@/lib/client-api";
 import { currency } from "@/lib/constants";
+import { TransactionHistoryView } from "@/features/wallet/transaction-history-view";
 import { QRCodeSVG } from "qrcode.react";
 
 function StatusBadge({
@@ -43,6 +44,13 @@ function StatusBadge({
 export function WalletView() {
   const {
     currentUser,
+    paymentConfigState,
+    pricingConfigState,
+    membershipActive,
+    membershipExpiresAt,
+    updatePaymentConfig,
+    purchaseParkingPackage,
+    activateMembership,
     sessions,
     setSessions,
     transactionList,
@@ -404,6 +412,7 @@ export function WalletView() {
             ) : null}
           </div>
 
+      <TransactionHistoryView />
           {/* QR Payment */}
           {payosData ? (
             <div style={{ background: "var(--bg-secondary)", borderRadius: "12px", padding: "20px", textAlign: "center", marginBottom: "16px" }}>
