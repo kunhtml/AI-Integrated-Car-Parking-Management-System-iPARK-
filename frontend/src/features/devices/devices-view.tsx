@@ -76,6 +76,31 @@ export function DevicesView() {
     }
   }
 
+  // Thống kê nhanh
+  const totalCount = displayDevices.length;
+  const onlineCount = displayDevices.filter(
+    (d) => d.status === "online",
+  ).length;
+  const offlineCount = totalCount - onlineCount;
+
+  const handleEditClick = (device: any) => {
+    setEditingDevice({
+      id: device.id,
+      name: device.name,
+      gate: device.gate,
+      rtspUrl: device.rtspUrl || "",
+      username: device.username || "",
+      password: device.password || "",
+      roiNote: device.roiNote || "Biển số trước",
+    });
+  };
+
+  const handleFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    await saveDevice(e);
+    setEditingDevice(null);
+  };
+
   return (
     <section className="content-single">
       <div className="panel">

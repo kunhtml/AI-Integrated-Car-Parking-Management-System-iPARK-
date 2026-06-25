@@ -11,7 +11,7 @@ export function VehiclesView() {
   function getRealtimeStatus(plate: string) {
     const activeSession = sessions.find((session) => session.plate === plate && session.status === "Đang gửi");
     if (activeSession) {
-      return `Đang gửi tại ${activeSession.slot} (từ ${activeSession.checkIn})`;
+      return `Đang gửi tại ${activeSession.slot} (vào lúc ${activeSession.checkIn})`;
     }
     const lastSession = sessions.find((session) => session.plate === plate);
     if (lastSession?.status === "Đã hoàn thành") {

@@ -1,14 +1,26 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 
 import { createInitialState } from "@/context/parking-app-state";
 import { createAuthActions } from "@/hooks/actions/use-auth-actions";
 import { createDeviceActions } from "@/hooks/actions/use-device-actions";
 import { createMiscActions } from "@/hooks/actions/use-misc-actions";
 import { createPaymentActions } from "@/hooks/actions/use-payment-actions";
-import { createReportActions, useReportSummaryLoader } from "@/hooks/actions/use-report-actions";
+import {
+  createReportActions,
+  useReportSummaryLoader,
+} from "@/hooks/actions/use-report-actions";
 import { createSessionActions } from "@/hooks/actions/use-session-actions";
+import { createZoneActions } from "@/hooks/actions/use-zone-actions";
 import { useOperationalData } from "@/hooks/use-operational-data";
 import { useSessionLoader } from "@/hooks/use-session-loader";
 import { parkingConfig } from "@/lib/parking-config";
@@ -26,6 +38,7 @@ import type {
   ReportSummary,
   ShiftItem,
   TransactionItem,
+  Zone,
 } from "@/types";
 import type { FormEvent } from "react";
 
@@ -53,6 +66,7 @@ type ParkingAppContextValue = {
   deviceList: DeviceItem[];
   shiftList: ShiftItem[];
   incidentList: IncidentItem[];
+  zoneList: Zone[];
   twoFactorQr: string;
   reportFrom: string;
   setReportFrom: (from: string) => void;
@@ -69,8 +83,13 @@ type ParkingAppContextValue = {
     completion: number;
   };
   filteredSessions: ParkingSession[];
+  formErrors: Record<string, string>;
+  setFormErrors: (errors: Record<string, string>) => void;
+  setZoneList: (zoneList: Zone[] | ((items: Zone[]) => Zone[])) => void;
   handleLogin: (event: FormEvent<HTMLFormElement>) => Promise<DemoUser | null>;
-  handleRegister: (event: FormEvent<HTMLFormElement>) => Promise<DemoUser | null>;
+  handleRegister: (
+    event: FormEvent<HTMLFormElement>,
+  ) => Promise<DemoUser | null>;
   handleForgotPassword: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   logout: () => Promise<void>;
   setupTwoFactor: () => Promise<void>;
@@ -93,11 +112,18 @@ type ParkingAppContextValue = {
   paymentStatusLabel: (status: TransactionItem["status"]) => string;
   saveDevice: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   snapshotDevice: (id: string) => Promise<void>;
+  deleteDevice: (id: string) => Promise<void>;
   loadReportSummary: (from: string, to: string) => Promise<void>;
-  downloadReport: (type: "sessions" | "revenue", format?: "xlsx" | "pdf") => Promise<void>;
+  downloadReport: (
+    type: "sessions" | "revenue",
+    format?: "xlsx" | "pdf",
+  ) => Promise<void>;
   simulateAction: (message: string) => void;
   createFeedback: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   updateFeedbackStatus: (id: string) => Promise<void>;
+  createZone: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  updateZone: (id: string, updates: Partial<Zone>) => Promise<void>;
+  deleteZone: (id: string) => Promise<void>;
   markNotificationRead: (id: string) => Promise<void>;
   startShift: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   endShift: (id: string) => Promise<void>;
@@ -111,57 +137,119 @@ const ParkingAppContext = createContext<ParkingAppContextValue | null>(null);
 export function ParkingAppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState(createInitialState);
 
-  const setMode = useCallback((mode: AuthMode) => setState((s) => ({ ...s, mode })), []);
-  const setCurrentUser = useCallback((currentUser: DemoUser | null) => setState((s) => ({ ...s, currentUser })), []);
-  const setSessions = useCallback(
-    (sessions: ParkingSession[] | ((items: ParkingSession[]) => ParkingSession[])) =>
-      setState((s) => ({ ...s, sessions: typeof sessions === "function" ? sessions(s.sessions) : sessions })),
+  const setMode = useCallback(
+    (mode: AuthMode) => setState((s) => ({ ...s, mode })),
     [],
   );
-  const setRegisteredVehicles = useCallback(
-    (registeredVehicles: RegisteredVehicle[] | ((items: RegisteredVehicle[]) => RegisteredVehicle[])) =>
+  const setCurrentUser = useCallback(
+    (currentUser: DemoUser | null) => setState((s) => ({ ...s, currentUser })),
+    [],
+  );
+  const setSessions = useCallback(
+    (
+      sessions:
+        | ParkingSession[]
+        | ((items: ParkingSession[]) => ParkingSession[]),
+    ) =>
       setState((s) => ({
         ...s,
-        registeredVehicles:
-          typeof registeredVehicles === "function" ? registeredVehicles(s.registeredVehicles) : registeredVehicles,
+        sessions:
+          typeof sessions === "function" ? sessions(s.sessions) : sessions,
       })),
     [],
   );
-  const setUserList = useCallback((userList: DemoUser[]) => setState((s) => ({ ...s, userList })), []);
-  const setSearchText = useCallback((searchText: string) => setState((s) => ({ ...s, searchText })), []);
-  const setAuthError = useCallback((authError: string) => setState((s) => ({ ...s, authError })), []);
-  const setMobileNavOpen = useCallback((mobileNavOpen: boolean) => setState((s) => ({ ...s, mobileNavOpen })), []);
-  const setActionLog = useCallback((actionLog: string) => setState((s) => ({ ...s, actionLog })), []);
-  const setExitSessionId = useCallback((exitSessionId: string) => setState((s) => ({ ...s, exitSessionId })), []);
+  const setRegisteredVehicles = useCallback(
+    (
+      registeredVehicles:
+        | RegisteredVehicle[]
+        | ((items: RegisteredVehicle[]) => RegisteredVehicle[]),
+    ) =>
+      setState((s) => ({
+        ...s,
+        registeredVehicles:
+          typeof registeredVehicles === "function"
+            ? registeredVehicles(s.registeredVehicles)
+            : registeredVehicles,
+      })),
+    [],
+  );
+  const setUserList = useCallback(
+    (userList: DemoUser[]) => setState((s) => ({ ...s, userList })),
+    [],
+  );
+  const setSearchText = useCallback(
+    (searchText: string) => setState((s) => ({ ...s, searchText })),
+    [],
+  );
+  const setAuthError = useCallback(
+    (authError: string) => setState((s) => ({ ...s, authError })),
+    [],
+  );
+  const setMobileNavOpen = useCallback(
+    (mobileNavOpen: boolean) => setState((s) => ({ ...s, mobileNavOpen })),
+    [],
+  );
+  const setActionLog = useCallback(
+    (actionLog: string) => setState((s) => ({ ...s, actionLog })),
+    [],
+  );
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const setExitSessionId = useCallback(
+    (exitSessionId: string) => setState((s) => ({ ...s, exitSessionId })),
+    [],
+  );
   const setPricingConfigState = useCallback(
-    (pricingConfigState: PricingConfig) => setState((s) => ({ ...s, pricingConfigState })),
+    (pricingConfigState: PricingConfig) =>
+      setState((s) => ({ ...s, pricingConfigState })),
     [],
   );
   const setPaymentConfigState = useCallback(
-    (paymentConfigState: PaymentConfig) => setState((s) => ({ ...s, paymentConfigState })),
+    (paymentConfigState: PaymentConfig) =>
+      setState((s) => ({ ...s, paymentConfigState })),
     [],
   );
   const setTransactionList = useCallback(
-    (transactionList: TransactionItem[] | ((items: TransactionItem[]) => TransactionItem[])) =>
+    (
+      transactionList:
+        | TransactionItem[]
+        | ((items: TransactionItem[]) => TransactionItem[]),
+    ) =>
       setState((s) => ({
         ...s,
-        transactionList: typeof transactionList === "function" ? transactionList(s.transactionList) : transactionList,
+        transactionList:
+          typeof transactionList === "function"
+            ? transactionList(s.transactionList)
+            : transactionList,
       })),
     [],
   );
   const setNotificationList = useCallback(
-    (notificationList: NotificationItem[] | ((items: NotificationItem[]) => NotificationItem[])) =>
+    (
+      notificationList:
+        | NotificationItem[]
+        | ((items: NotificationItem[]) => NotificationItem[]),
+    ) =>
       setState((s) => ({
         ...s,
-        notificationList: typeof notificationList === "function" ? notificationList(s.notificationList) : notificationList,
+        notificationList:
+          typeof notificationList === "function"
+            ? notificationList(s.notificationList)
+            : notificationList,
       })),
     [],
   );
   const setFeedbackList = useCallback(
-    (feedbackList: FeedbackItem[] | ((items: FeedbackItem[]) => FeedbackItem[])) =>
+    (
+      feedbackList:
+        | FeedbackItem[]
+        | ((items: FeedbackItem[]) => FeedbackItem[]),
+    ) =>
       setState((s) => ({
         ...s,
-        feedbackList: typeof feedbackList === "function" ? feedbackList(s.feedbackList) : feedbackList,
+        feedbackList:
+          typeof feedbackList === "function"
+            ? feedbackList(s.feedbackList)
+            : feedbackList,
       })),
     [],
   );
@@ -169,7 +257,10 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
     (deviceList: DeviceItem[] | ((items: DeviceItem[]) => DeviceItem[])) =>
       setState((s) => ({
         ...s,
-        deviceList: typeof deviceList === "function" ? deviceList(s.deviceList) : deviceList,
+        deviceList:
+          typeof deviceList === "function"
+            ? deviceList(s.deviceList)
+            : deviceList,
       })),
     [],
   );
@@ -177,23 +268,50 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
     (shiftList: ShiftItem[] | ((items: ShiftItem[]) => ShiftItem[])) =>
       setState((s) => ({
         ...s,
-        shiftList: typeof shiftList === "function" ? shiftList(s.shiftList) : shiftList,
+        shiftList:
+          typeof shiftList === "function" ? shiftList(s.shiftList) : shiftList,
       })),
     [],
   );
   const setIncidentList = useCallback(
-    (incidentList: IncidentItem[] | ((items: IncidentItem[]) => IncidentItem[])) =>
+    (
+      incidentList:
+        | IncidentItem[]
+        | ((items: IncidentItem[]) => IncidentItem[]),
+    ) =>
       setState((s) => ({
         ...s,
-        incidentList: typeof incidentList === "function" ? incidentList(s.incidentList) : incidentList,
+        incidentList:
+          typeof incidentList === "function"
+            ? incidentList(s.incidentList)
+            : incidentList,
       })),
     [],
   );
-  const setTwoFactorQr = useCallback((twoFactorQr: string) => setState((s) => ({ ...s, twoFactorQr })), []);
-  const setReportFrom = useCallback((reportFrom: string) => setState((s) => ({ ...s, reportFrom })), []);
-  const setReportTo = useCallback((reportTo: string) => setState((s) => ({ ...s, reportTo })), []);
+  const setZoneList = useCallback(
+    (zoneList: Zone[] | ((items: Zone[]) => Zone[])) =>
+      setState((s) => ({
+        ...s,
+        zoneList:
+          typeof zoneList === "function" ? zoneList(s.zoneList) : zoneList,
+      })),
+    [],
+  );
+  const setTwoFactorQr = useCallback(
+    (twoFactorQr: string) => setState((s) => ({ ...s, twoFactorQr })),
+    [],
+  );
+  const setReportFrom = useCallback(
+    (reportFrom: string) => setState((s) => ({ ...s, reportFrom })),
+    [],
+  );
+  const setReportTo = useCallback(
+    (reportTo: string) => setState((s) => ({ ...s, reportTo })),
+    [],
+  );
   const setReportSummary = useCallback(
-    (reportSummary: ReportSummary | null) => setState((s) => ({ ...s, reportSummary })),
+    (reportSummary: ReportSummary | null) =>
+      setState((s) => ({ ...s, reportSummary })),
     [],
   );
   const setSessionLoading = useCallback(
@@ -201,15 +319,28 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
     [],
   );
   const setMembershipActive = useCallback(
-    (membershipActive: boolean) => setState((s) => ({ ...s, membershipActive })),
+    (membershipActive: boolean) =>
+      setState((s) => ({ ...s, membershipActive })),
     [],
   );
   const setMembershipExpiresAt = useCallback(
-    (membershipExpiresAt: string) => setState((s) => ({ ...s, membershipExpiresAt })),
+    (membershipExpiresAt: string) =>
+      setState((s) => ({ ...s, membershipExpiresAt })),
     [],
   );
 
   useSessionLoader({ setCurrentUser, setActionLog, setSessionLoading });
+
+  useEffect(() => {
+    if (state.currentUser) {
+      window.localStorage.setItem(
+        "ipark_current_user",
+        JSON.stringify(state.currentUser),
+      );
+    } else {
+      window.localStorage.removeItem("ipark_current_user");
+    }
+  }, [state.currentUser]);
 
   useOperationalData({
     currentUser: state.currentUser,
@@ -224,6 +355,7 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
     setDeviceList,
     setShiftList,
     setIncidentList,
+    setZoneList,
     setActionLog,
   });
 
@@ -316,24 +448,46 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
         setRegisteredVehicles,
         setActionLog,
       }),
-    [setFeedbackList, setNotificationList, setShiftList, setIncidentList, setRegisteredVehicles, setActionLog],
+    [
+      setFeedbackList,
+      setNotificationList,
+      setShiftList,
+      setIncidentList,
+      setRegisteredVehicles,
+      setActionLog,
+    ],
+  );
+
+  const zoneActions = useMemo(
+    () =>
+      createZoneActions({
+        setZoneList,
+        setActionLog,
+        onServerError: setFormErrors,
+      }),
+    [setZoneList, setActionLog, setFormErrors],
   );
 
   const stats = useMemo(() => {
-    const active = state.sessions.filter((item) => item.status === "Đang gửi").length;
+    const active = state.sessions.filter(
+      (item) => item.status === "Đang gửi",
+    ).length;
     const revenue = state.sessions.reduce((sum, item) => sum + item.fee, 0);
 
     return {
       active,
       available: parkingConfig.totalCapacity - active,
       revenue,
-      completion: state.sessions.filter((item) => item.status === "Đã hoàn thành").length,
+      completion: state.sessions.filter(
+        (item) => item.status === "Đã hoàn thành",
+      ).length,
     };
   }, [state.sessions]);
 
   const filteredSessions = useMemo(() => {
     return state.sessions.filter((session) => {
-      const value = `${session.plate} ${session.owner} ${session.id}`.toLowerCase();
+      const value =
+        `${session.plate} ${session.owner} ${session.id}`.toLowerCase();
       return value.includes(state.searchText.toLowerCase());
     });
   }, [state.sessions, state.searchText]);
@@ -363,6 +517,7 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       deviceList: state.deviceList,
       shiftList: state.shiftList,
       incidentList: state.incidentList,
+      zoneList: state.zoneList,
       twoFactorQr: state.twoFactorQr,
       reportFrom: state.reportFrom,
       setReportFrom,
@@ -374,17 +529,39 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       membershipExpiresAt: state.membershipExpiresAt,
       stats,
       filteredSessions,
+      formErrors,
+      setFormErrors,
+      setZoneList,
       ...authActions,
       ...sessionActions,
       ...paymentActions,
       ...deviceActions,
       ...reportActions,
       ...miscActions,
+      ...zoneActions,
     }),
-    [state, stats, filteredSessions, authActions, sessionActions, paymentActions, deviceActions, reportActions, miscActions],
+    [
+      state,
+      stats,
+      filteredSessions,
+      formErrors,
+      setFormErrors,
+      setZoneList,
+      authActions,
+      sessionActions,
+      paymentActions,
+      deviceActions,
+      reportActions,
+      miscActions,
+      zoneActions,
+    ],
   );
 
-  return <ParkingAppContext.Provider value={value}>{children}</ParkingAppContext.Provider>;
+  return (
+    <ParkingAppContext.Provider value={value}>
+      {children}
+    </ParkingAppContext.Provider>
+  );
 }
 
 export function useParkingApp() {

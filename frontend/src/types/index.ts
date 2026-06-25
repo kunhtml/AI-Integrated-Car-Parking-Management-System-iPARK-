@@ -6,6 +6,11 @@ export type View =
   | "users"
   | "pricing"
   | "reports"
+  | "membershipPackages"
+  | "parkingFeeRules"
+  | "revenueReports"
+  | "staffAccounts"
+  | "changePassword"
   | "profile"
   | "wallet"
   | "vehicles"
@@ -15,7 +20,8 @@ export type View =
   | "incidents"
   | "ai"
   | "devices"
-  | "security";
+  | "security"
+  | "zones";
 
 export type DemoUser = {
   id: number | string;
@@ -165,3 +171,18 @@ export type IncidentItem = {
 };
 
 export type AuthMode = "login" | "register" | "forgot";
+
+export type Zone = {
+  id: string;
+  name: string;
+  description?: string;
+  capacity: number;
+  allowedVehicleTypes: string[];
+  displayOrder: number;
+  isActive: boolean;
+  stats?: {
+    total: number;
+    empty: number;
+    occupied: number;
+  };
+};

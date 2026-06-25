@@ -1,0 +1,13 @@
+[
+  {
+    "_id": { "$oid": "665000000000000000000060" },
+    "plate": "30H-123.45",
+    "vehicleType": "Ô tô",
+    "color": "Trắng",
+    "brand": "Toyota",
+    "userId": { "$oid": "665000000000000000000004" },
+    "isDefault": true,
+    "createdAt": { "$date": "2026-01-01T00:00:00.000Z" },
+    "updatedAt": { "$date": "2026-01-01T00:00:00.000Z" }
+  }
+]

@@ -6,14 +6,14 @@ import AuthForm from "@/components/auth/AuthForm";
 
 export default function AuthPage() {
   return (
-    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-12 bg-slate-50 text-slate-800">
+    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-12 bg-[#0b0f19] text-white">
       {/* Left Column - Form */}
-      <div className="lg:col-span-5 flex flex-col justify-between p-6 sm:p-12 bg-white shadow-xl z-10">
+      <div className="lg:col-span-5 flex flex-col justify-between p-6 sm:p-12 bg-[#0b0f19] border-r border-slate-900 shadow-xl z-10">
         {/* Header */}
         <div className="flex items-center justify-between">
           <Link
             href="/"
-            className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-blue-600 transition-colors"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-slate-400 hover:text-blue-400 transition-colors"
           >
             <span aria-hidden="true">←</span>
             Quay lại trang chủ
@@ -24,7 +24,7 @@ export default function AuthPage() {
         <AuthForm />
 
         {/* Footer */}
-        <div className="text-center text-xs text-slate-400">
+        <div className="text-center text-xs text-slate-500">
           © 2026 iPARK. Bảo mật thông tin tuyệt đối.
         </div>
       </div>
@@ -49,7 +49,9 @@ export default function AuthPage() {
             Hệ thống quản lý bãi đỗ xe thông minh tích hợp AI
           </h2>
           <p className="text-blue-100 text-lg leading-relaxed">
-            Tự động hóa quy trình kiểm soát xe vào/ra, nhận diện biển số chính xác, thanh toán không tiền mặt và tối ưu hóa doanh thu bãi đỗ xe của bạn.
+            Tự động hóa quy trình kiểm soát xe vào/ra, nhận diện biển số chính
+            xác, thanh toán không tiền mặt và tối ưu hóa doanh thu bãi đỗ xe của
+            bạn.
           </p>
         </div>
 

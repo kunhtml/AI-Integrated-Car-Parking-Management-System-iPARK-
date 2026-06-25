@@ -1,0 +1,28 @@
+[
+  {
+    "_id": { "$oid": "665000000000000000000040" },
+    "name": "Gói Ngày Cơ Bản",
+    "code": "DAY_BASIC",
+    "billingCycle": "Daily",
+    "price": 15000,
+    "durationDays": 1,
+    "status": "Active",
+    "features": ["Gửi xe 24h", "Không giới hạn lượt ra vào"],
+    "createdBy": { "$oid": "665000000000000000000001" },
+    "createdAt": { "$date": "2026-01-01T00:00:00.000Z" },
+    "updatedAt": { "$date": "2026-01-01T00:00:00.000Z" }
+  },
+  {
+    "_id": { "$oid": "665000000000000000000041" },
+    "name": "Gói Tháng Tiêu Chuẩn",
+    "code": "MONTH_STANDARD",
+    "billingCycle": "Monthly",
+    "price": 300000,
+    "durationDays": 30,
+    "status": "Active",
+    "features": ["Gửi xe 30 ngày", "Không giới hạn lượt ra vào", "Hỗ trợ 24/7"],
+    "createdBy": { "$oid": "665000000000000000000001" },
+    "createdAt": { "$date": "2026-01-01T00:00:00.000Z" },
+    "updatedAt": { "$date": "2026-01-01T00:00:00.000Z" }
+  }
+]

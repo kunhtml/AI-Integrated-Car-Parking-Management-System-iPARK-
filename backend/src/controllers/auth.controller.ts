@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
 import { Request, Response } from "express";
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomInt } from "node:crypto";
 import { generateSecret, generateURI, verifySync } from "otplib";
 import QRCode from "qrcode";
 import { z } from "zod";
@@ -30,15 +30,23 @@ function cookieOptions() {
 }
 
 function googleOAuthConfigured() {
-  return Boolean(env.googleClientId && env.googleClientSecret && env.googleCallbackUrl);
+  return Boolean(
+    env.googleClientId && env.googleClientSecret && env.googleCallbackUrl,
+  );
 }
+
+// Password regex: Yêu cầu ít nhất 1 chữ hoa, 1 chữ thường, 1 chữ số và 1 ký tự đặc biệt
+const passwordRegex =
+  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+const passwordErrorMessage =
+  "Mật khẩu phải dài ít nhất 8 ký tự, bao gồm chữ hoa, chữ thường, số và ký tự đặc biệt (@$!%*?&)";
 
 export async function register(request: Request, response: Response) {
   const body = z
     .object({
       name: z.string().min(2),
       email: z.email(),
-      password: z.string().min(6),
+      password: z.string().regex(passwordRegex, passwordErrorMessage),
     })
     .parse(request.body);
 
@@ -59,7 +67,10 @@ export async function register(request: Request, response: Response) {
   const serialized = serializeUser(user);
   const token = await signSession(serialized);
 
-  response.cookie(cookieName, token, cookieOptions()).status(201).json({ user: serialized });
+  response
+    .cookie(cookieName, token, cookieOptions())
+    .status(201)
+    .json({ user: serialized });
 }
 
 export async function login(request: Request, response: Response) {
@@ -72,7 +83,9 @@ export async function login(request: Request, response: Response) {
     .parse(request.body);
 
   if (!dbReady()) {
-    response.status(503).json({ message: "Chưa kết nối DB nên chưa thể đăng nhập." });
+    response
+      .status(503)
+      .json({ message: "Chưa kết nối DB nên chưa thể đăng nhập." });
     return;
   }
 
@@ -90,7 +103,9 @@ export async function login(request: Request, response: Response) {
 
   if (user.twoFactorEnabled) {
     if (!body.twoFactorCode || !user.twoFactorSecret) {
-      response.status(202).json({ requiresTwoFactor: true, message: "Vui lòng nhập mã 2FA." });
+      response
+        .status(202)
+        .json({ requiresTwoFactor: true, message: "Vui lòng nhập mã 2FA." });
       return;
     }
 
@@ -105,7 +120,9 @@ export async function login(request: Request, response: Response) {
   const serialized = serializeUser(user);
   const token = await signSession(serialized);
 
-  response.cookie(cookieName, token, cookieOptions()).json({ user: serialized });
+  response
+    .cookie(cookieName, token, cookieOptions())
+    .json({ user: serialized });
 }
 
 export function googleLogin(_request: Request, response: Response) {
@@ -128,8 +145,13 @@ export function googleLogin(_request: Request, response: Response) {
   });
 
   response
-    .cookie("google_oauth_state", state, { ...cookieOptions(), maxAge: 10 * 60 * 1000 })
-    .redirect(`https://accounts.google.com/o/oauth2/v2/auth?${searchParams.toString()}`);
+    .cookie("google_oauth_state", state, {
+      ...cookieOptions(),
+      maxAge: 10 * 60 * 1000,
+    })
+    .redirect(
+      `https://accounts.google.com/o/oauth2/v2/auth?${searchParams.toString()}`,
+    );
 }
 
 export async function googleCallback(request: Request, response: Response) {
@@ -146,7 +168,9 @@ export async function googleCallback(request: Request, response: Response) {
   const expectedState = request.cookies?.google_oauth_state;
 
   if (!code || !state || !expectedState || state !== expectedState) {
-    response.status(400).json({ message: "Phiên đăng nhập Google không hợp lệ hoặc đã hết hạn." });
+    response.status(400).json({
+      message: "Phiên đăng nhập Google không hợp lệ hoặc đã hết hạn.",
+    });
     return;
   }
 
@@ -163,16 +187,22 @@ export async function googleCallback(request: Request, response: Response) {
       grant_type: "authorization_code",
     }),
   });
-  const tokenData = (await tokenResponse.json()) as { access_token?: string; error?: string };
+  const tokenData = (await tokenResponse.json()) as {
+    access_token?: string;
+    error?: string;
+  };
 
   if (!tokenResponse.ok || !tokenData.access_token) {
     response.status(502).json({ message: "Không lấy được token Google." });
     return;
   }
 
-  const profileResponse = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
-    headers: { Authorization: `Bearer ${tokenData.access_token}` },
-  });
+  const profileResponse = await fetch(
+    "https://openidconnect.googleapis.com/v1/userinfo",
+    {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    },
+  );
   const profile = (await profileResponse.json()) as {
     sub?: string;
     email?: string;
@@ -181,13 +211,22 @@ export async function googleCallback(request: Request, response: Response) {
     picture?: string;
   };
 
-  if (!profileResponse.ok || !profile.sub || !profile.email || !profile.email_verified) {
-    response.status(502).json({ message: "Không lấy được email Google đã xác minh." });
+  if (
+    !profileResponse.ok ||
+    !profile.sub ||
+    !profile.email ||
+    !profile.email_verified
+  ) {
+    response
+      .status(502)
+      .json({ message: "Không lấy được email Google đã xác minh." });
     return;
   }
 
   const email = profile.email.toLowerCase();
-  let user = await User.findOne({ $or: [{ googleId: profile.sub }, { email }] });
+  let user = await User.findOne({
+    $or: [{ googleId: profile.sub }, { email }],
+  });
 
   if (user?.status === "Đã khóa") {
     response.status(403).json({ message: "Tài khoản đã bị khóa." });
@@ -221,15 +260,26 @@ export async function forgotPassword(request: Request, response: Response) {
   const body = z.object({ email: z.email() }).parse(request.body);
   const email = body.email.toLowerCase();
   const user = await User.findOne({ email });
-  const otp = String(Math.floor(100000 + Math.random() * 900000));
+
+  // Sử dụng crypto.randomInt để sinh OTP an toàn, tránh Math.random()
+  const otpVal = randomInt(100000, 999999);
+  const otp = String(otpVal);
 
   if (user) {
     const otpHash = await bcrypt.hash(otp, 12);
+    // Vô hiệu hoá tất cả OTP cũ của email này trước khi tạo OTP mới
+    await OtpToken.updateMany(
+      { email, purpose: "reset-password", usedAt: { $exists: false } },
+      { $set: { usedAt: new Date() } },
+    );
+
     await OtpToken.create({
       email,
       otpHash,
       purpose: "reset-password",
       expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+      attempts: 0,
+      verified: false,
     });
 
     await sendMail(
@@ -248,12 +298,11 @@ export async function forgotPassword(request: Request, response: Response) {
   });
 }
 
-export async function resetPassword(request: Request, response: Response) {
+export async function verifyOtp(request: Request, response: Response) {
   const body = z
     .object({
-      email: z.email(),
+      email: z.string().email(),
       otp: z.string().min(6).max(6),
-      password: z.string().min(6),
     })
     .parse(request.body);
 
@@ -265,8 +314,69 @@ export async function resetPassword(request: Request, response: Response) {
     expiresAt: { $gt: new Date() },
   }).sort({ createdAt: -1 });
 
-  if (!token || !(await bcrypt.compare(body.otp, token.otpHash))) {
+  if (!token) {
+    response
+      .status(400)
+      .json({ message: "Không tìm thấy yêu cầu OTP hoặc OTP đã hết hạn." });
+    return;
+  }
+
+  // Chống brute-force: Giới hạn tối đa 5 lần thử sai cho mỗi mã OTP
+  if (token.attempts >= 5) {
+    token.usedAt = new Date(); // Vô hiệu hoá mã OTP ngay lập tức
+    await token.save();
+    response
+      .status(400)
+      .json({
+        message:
+          "OTP đã bị vô hiệu hóa do thử sai quá 5 lần. Vui lòng yêu cầu mã mới.",
+      });
+    return;
+  }
+
+  const isMatched = await bcrypt.compare(body.otp, token.otpHash);
+  if (!isMatched) {
+    token.attempts += 1;
+    if (token.attempts >= 5) {
+      token.usedAt = new Date();
+    }
+    await token.save();
     response.status(400).json({ message: "OTP không đúng hoặc đã hết hạn." });
+    return;
+  }
+
+  // Đánh dấu đã xác thực OTP thành công
+  token.verified = true;
+  await token.save();
+
+  response.json({ ok: true, message: "Mã OTP hợp lệ." });
+}
+
+export async function resetPassword(request: Request, response: Response) {
+  const body = z
+    .object({
+      email: z.email(),
+      otp: z.string().min(6).max(6),
+      password: z.string().regex(passwordRegex, passwordErrorMessage),
+    })
+    .parse(request.body);
+
+  const email = body.email.toLowerCase();
+  const token = await OtpToken.findOne({
+    email,
+    purpose: "reset-password",
+    usedAt: { $exists: false },
+    expiresAt: { $gt: new Date() },
+    verified: true, // Yêu cầu OTP phải được verify thành công trước đó
+  }).sort({ createdAt: -1 });
+
+  if (!token) {
+    response
+      .status(400)
+      .json({
+        message:
+          "Phiên làm việc không hợp lệ hoặc đã hết hạn. Vui lòng xác thực lại OTP.",
+      });
     return;
   }
 
@@ -288,12 +398,14 @@ export async function changePassword(request: Request, response: Response) {
   const body = z
     .object({
       currentPassword: z.string().min(1),
-      newPassword: z.string().min(6),
+      newPassword: z.string().regex(passwordRegex, passwordErrorMessage),
     })
     .parse(request.body);
 
   if (!dbReady()) {
-    response.status(503).json({ message: "Chưa kết nối DB nên chưa thể đổi mật khẩu." });
+    response
+      .status(503)
+      .json({ message: "Chưa kết nối DB nên chưa thể đổi mật khẩu." });
     return;
   }
 
@@ -306,16 +418,23 @@ export async function changePassword(request: Request, response: Response) {
         : null;
 
   if (!user) {
-    response.status(401).json({ message: "Không xác định được tài khoản đang đăng nhập." });
+    response
+      .status(401)
+      .json({ message: "Không xác định được tài khoản đang đăng nhập." });
     return;
   }
 
   if (!user.passwordHash) {
-    response.status(400).json({ message: "Tài khoản này chưa có mật khẩu cục bộ." });
+    response
+      .status(400)
+      .json({ message: "Tài khoản này chưa có mật khẩu cục bộ." });
     return;
   }
 
-  const passwordMatches = await bcrypt.compare(body.currentPassword, user.passwordHash);
+  const passwordMatches = await bcrypt.compare(
+    body.currentPassword,
+    user.passwordHash,
+  );
   if (!passwordMatches) {
     response.status(400).json({ message: "Mật khẩu hiện tại không đúng." });
     return;
@@ -336,7 +455,11 @@ export async function setupTwoFactor(request: Request, response: Response) {
   }
 
   const secret = generateSecret();
-  const otpauthUrl = generateURI({ issuer: env.totpIssuer, label: user.email, secret });
+  const otpauthUrl = generateURI({
+    issuer: env.totpIssuer,
+    label: user.email,
+    secret,
+  });
   user.twoFactorPendingSecret = encryptSecret(secret);
   await user.save();
 
@@ -378,7 +501,13 @@ export async function disableTwoFactor(request: Request, response: Response) {
   }
 
   if (user.twoFactorEnabled && user.twoFactorSecret) {
-    if (!body.code || !verifySync({ token: body.code, secret: decryptSecret(user.twoFactorSecret) }).valid) {
+    if (
+      !body.code ||
+      !verifySync({
+        token: body.code,
+        secret: decryptSecret(user.twoFactorSecret),
+      }).valid
+    ) {
       response.status(400).json({ message: "Mã 2FA không đúng." });
       return;
     }
@@ -393,7 +522,7 @@ export async function disableTwoFactor(request: Request, response: Response) {
 }
 
 export function logout(_request: Request, response: Response) {
-  response.clearCookie(cookieName, { path: "/" }).json({ ok: true });
+  response.clearCookie(cookieName, cookieOptions()).json({ ok: true });
 }
 
 export function me(request: Request, response: Response) {

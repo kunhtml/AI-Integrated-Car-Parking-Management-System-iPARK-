@@ -20,6 +20,7 @@ import type {
   ReportSummary,
   ShiftItem,
   TransactionItem,
+  Zone,
 } from "@/types";
 
 export type ParkingAppState = {
@@ -41,6 +42,7 @@ export type ParkingAppState = {
   deviceList: DeviceItem[];
   shiftList: ShiftItem[];
   incidentList: IncidentItem[];
+  zoneList: Zone[];
   twoFactorQr: string;
   reportFrom: string;
   reportTo: string;
@@ -70,6 +72,7 @@ export function createInitialState(): ParkingAppState {
     deviceList: [],
     shiftList: [],
     incidentList: [],
+    zoneList: [],
     twoFactorQr: "",
     reportFrom: todayInputValue(),
     reportTo: todayInputValue(),

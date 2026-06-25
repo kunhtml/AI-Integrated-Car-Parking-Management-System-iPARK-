@@ -1,0 +1,14 @@
+[
+  {
+    "_id": { "$oid": "665000000000000000000020" },
+    "bankName": "VietinBank",
+    "bankBin": "970415",
+    "accountNumber": "101876543210",
+    "accountName": "CONG TY IPARK VIET NAM",
+    "transferPrefix": "IPARK",
+    "isActive": true,
+    "updatedBy": { "$oid": "665000000000000000000001" },
+    "createdAt": { "$date": "2026-01-01T00:00:00.000Z" },
+    "updatedAt": { "$date": "2026-01-01T00:00:00.000Z" }
+  }
+]

@@ -1,0 +1,20 @@
+[
+  {
+    "_id": { "$oid": "665000000000000000000070" },
+    "plate": "30H-123.45",
+    "vehicleType": "Ô tô",
+    "zone": "Khu A",
+    "slotCode": "A-01",
+    "checkInAt": { "$date": "2026-06-22T08:00:00.000Z" },
+    "checkOutAt": null,
+    "status": "Đang gửi",
+    "fee": 0,
+    "userId": { "$oid": "665000000000000000000004" },
+    "checkInBy": { "$oid": "665000000000000000000002" },
+    "checkOutBy": null,
+    "checkInImage": null,
+    "checkOutImage": null,
+    "createdAt": { "$date": "2026-06-22T08:00:00.000Z" },
+    "updatedAt": { "$date": "2026-06-22T08:00:00.000Z" }
+  }
+]

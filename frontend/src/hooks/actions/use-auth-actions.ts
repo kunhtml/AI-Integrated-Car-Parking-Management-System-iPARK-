@@ -104,9 +104,11 @@ export function createAuthActions({
   }
 
   async function logout() {
-    await apiFetch("/auth/logout", { method: "POST" });
+    window.localStorage.removeItem("ipark_current_user");
     setCurrentUser(null);
-    setActionLog("Đã đăng xuất và xóa JWT cookie.");
+    setActionLog("Đã đăng xuất.");
+    void apiFetch("/auth/logout", { keepalive: true, method: "POST" }).catch(() => undefined);
+    window.location.href = "/";
   }
 
   async function setupTwoFactor() {

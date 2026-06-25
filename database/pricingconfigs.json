@@ -1,0 +1,16 @@
+[
+  {
+    "_id": { "$oid": "665000000000000000000010" },
+    "freeMinutes": 20,
+    "hourlyRate": 10000,
+    "overnightRate": 50000,
+    "monthlyRate": 1500000,
+    "overdueFineRate": 20000,
+    "dailyMaxRate": 100000,
+    "graceExitMinutes": 10,
+    "isActive": true,
+    "updatedBy": { "$oid": "665000000000000000000001" },
+    "createdAt": { "$date": "2026-01-01T00:00:00.000Z" },
+    "updatedAt": { "$date": "2026-01-01T00:00:00.000Z" }
+  }
+]

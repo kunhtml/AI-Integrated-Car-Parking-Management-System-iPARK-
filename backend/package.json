@@ -7,7 +7,9 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
-    "seed": "tsx src/seed.ts"
+    "seed": "tsx src/seed.ts",
+    "test": "jest --config jest.config.cjs",
+    "test:watch": "jest --config jest.config.cjs --watch"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -16,6 +18,7 @@
     "dotenv": "^17.2.3",
     "exceljs": "^4.4.0",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.5.2",
     "jose": "^6.2.3",
     "mongoose": "^9.6.3",
     "morgan": "^1.10.1",
@@ -30,12 +33,15 @@
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
     "@types/morgan": "^1.9.10",
     "@types/multer": "^2.0.0",
     "@types/node": "^20",
     "@types/nodemailer": "^8.0.1",
     "@types/pdfkit": "^0.17.6",
     "@types/qrcode": "^1.5.6",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.11",
     "tsx": "^4.21.0",
     "typescript": "^5"
   }

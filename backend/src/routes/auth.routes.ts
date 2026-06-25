@@ -3,6 +3,7 @@ import {
   changePassword,
   disableTwoFactor,
   forgotPassword,
+  verifyOtp,
   googleCallback,
   googleLogin,
   login,
@@ -24,6 +25,7 @@ authRoutes.get("/google", googleLogin);
 authRoutes.get("/google/callback", asyncHandler(googleCallback));
 authRoutes.get("/me", requireAuth, me);
 authRoutes.post("/forgot-password", asyncHandler(forgotPassword));
+authRoutes.post("/verify-otp", asyncHandler(verifyOtp));
 authRoutes.post("/reset-password", asyncHandler(resetPassword));
 authRoutes.post("/change-password", requireAuth, asyncHandler(changePassword));
 authRoutes.post("/2fa/setup", requireAuth, asyncHandler(setupTwoFactor));

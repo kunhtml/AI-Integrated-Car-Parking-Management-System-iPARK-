@@ -130,3 +130,15 @@ desktop.ini
 .vscode/
 *.swp
 *.swo
+
+# Test files
+__tests__/
+tests/
+*.test.ts
+*.test.tsx
+*.test.js
+*.test.jsx
+jest.config.*
+jest.setup.*
+tsconfig.test.json
+coverage/

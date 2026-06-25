@@ -1,0 +1,22 @@
+[
+  {
+    "_id": { "$oid": "665000000000000000000030" },
+    "name": "Camera Cổng Vào 1",
+    "gate": "entry",
+    "status": "online",
+    "rtspUrl": null,
+    "lastSnapshot": null,
+    "createdAt": { "$date": "2026-01-01T00:00:00.000Z" },
+    "updatedAt": { "$date": "2026-01-01T00:00:00.000Z" }
+  },
+  {
+    "_id": { "$oid": "665000000000000000000031" },
+    "name": "Camera Cổng Ra 1",
+    "gate": "exit",
+    "status": "online",
+    "rtspUrl": null,
+    "lastSnapshot": null,
+    "createdAt": { "$date": "2026-01-01T00:00:00.000Z" },
+    "updatedAt": { "$date": "2026-01-01T00:00:00.000Z" }
+  }
+]
