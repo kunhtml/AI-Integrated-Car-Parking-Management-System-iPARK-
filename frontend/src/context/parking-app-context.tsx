@@ -2,6 +2,8 @@
 
 import {
   createContext,
+  type Dispatch,
+  type SetStateAction,
   useCallback,
   useContext,
   useEffect,
@@ -85,11 +87,7 @@ type ParkingAppContextValue = {
   };
   filteredSessions: ParkingSession[];
   formErrors: Record<string, string>;
-  setFormErrors: (errors: Record<string, string>) => void;
-<<<<<<< HEAD
-=======
-  setZoneList: (zoneList: Zone[] | ((items: Zone[]) => Zone[])) => void;
->>>>>>> 49bfd09c69d8e4d4c7df76f95d064c30a0512d62
+  setFormErrors: Dispatch<SetStateAction<Record<string, string>>>;
   handleLogin: (event: FormEvent<HTMLFormElement>) => Promise<DemoUser | null>;
   handleRegister: (
     event: FormEvent<HTMLFormElement>,
@@ -106,14 +104,8 @@ type ParkingAppContextValue = {
   cameraEntry: (deviceId: string) => Promise<void>;
   cameraExit: (deviceId: string) => Promise<void>;
   updatePricing: (event: FormEvent<HTMLFormElement>) => Promise<void>;
-  updatePaymentConfig: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   confirmTransaction: (id: string) => Promise<void>;
   createPaymentForSession: (id: string) => Promise<void>;
-  topUpWallet: (event: FormEvent<HTMLFormElement>) => Promise<void>;
-  payWithWallet: (transactionId: string) => Promise<void>;
-  purchaseParkingPackage: (event: FormEvent<HTMLFormElement>) => Promise<void>;
-  activateMembership: () => void;
-  paymentStatusLabel: (status: TransactionItem["status"]) => string;
   saveDevice: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   snapshotDevice: (id: string) => Promise<void>;
   deleteDevice: (id: string) => Promise<void>;
@@ -397,27 +389,15 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
   const paymentActions = useMemo(
     () =>
       createPaymentActions({
-        currentUser: state.currentUser,
-        setCurrentUser,
-        pricingConfigState: state.pricingConfigState,
+        setSessions,
         setPricingConfigState,
-        setPaymentConfigState,
         setTransactionList,
-        transactionList: state.transactionList,
-        setMembershipActive,
-        setMembershipExpiresAt,
         setActionLog,
       }),
     [
-      state.currentUser,
-      state.pricingConfigState,
-      state.transactionList,
-      setCurrentUser,
+      setSessions,
       setPricingConfigState,
-      setPaymentConfigState,
       setTransactionList,
-      setMembershipActive,
-      setMembershipExpiresAt,
       setActionLog,
     ],
   );
@@ -536,7 +516,6 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       filteredSessions,
       formErrors,
       setFormErrors,
-      setZoneList,
       ...authActions,
       ...sessionActions,
       ...paymentActions,
