@@ -4,9 +4,10 @@ export type MembershipPackageDocument = {
   _id: mongoose.Types.ObjectId;
   name: string;
   code: string;
-  billingCycle: "Daily" | "Monthly" | "Quarterly" | "Custom";
+  billingCycle: "Daily" | "Monthly" | "Quarterly" | "Yearly" | "Custom";
   price: number;
   durationDays: number;
+  maxPlates: number;
   subscriberCount: number;
   renewalRate: number;
   status: "Active" | "Draft" | "Paused";
@@ -22,9 +23,10 @@ const membershipPackageSchema = new Schema<MembershipPackageDocument>(
   {
     name: { type: String, required: true, trim: true, maxlength: 100 },
     code: { type: String, required: true, trim: true, uppercase: true, unique: true, index: true },
-    billingCycle: { type: String, enum: ["Daily", "Monthly", "Quarterly", "Custom"], default: "Monthly" },
+    billingCycle: { type: String, enum: ["Daily", "Monthly", "Quarterly", "Yearly", "Custom"], default: "Monthly" },
     price: { type: Number, default: 0, min: 0 },
     durationDays: { type: Number, default: 30, min: 1 },
+    maxPlates: { type: Number, default: -1, min: -1 },
     subscriberCount: { type: Number, default: 0, min: 0 },
     renewalRate: { type: Number, default: 0, min: 0, max: 100 },
     status: { type: String, enum: ["Active", "Draft", "Paused"], default: "Draft" },

@@ -8,6 +8,7 @@ declare module "lucide-react" {
 
   export type LucideIcon = FC<LucideProps>;
 
+  export const AlertCircle: LucideIcon;
   export const ArrowLeft: LucideIcon;
   export const Ban: LucideIcon;
   export const BarChart: LucideIcon;
@@ -18,6 +19,7 @@ declare module "lucide-react" {
   export const Camera: LucideIcon;
   export const Car: LucideIcon;
   export const Check: LucideIcon;
+  export const CheckCircle: LucideIcon;
   export const CheckCircle2: LucideIcon;
   export const CircleAlert: LucideIcon;
   export const Clock3: LucideIcon;
@@ -28,6 +30,7 @@ declare module "lucide-react" {
   export const FileDown: LucideIcon;
   export const KeyRound: LucideIcon;
   export const LayoutDashboard: LucideIcon;
+  export const Loader2: LucideIcon;
   export const Lock: LucideIcon;
   export const LogIn: LucideIcon;
   export const LogOut: LucideIcon;
@@ -38,6 +41,7 @@ declare module "lucide-react" {
   export const ParkingCircle: LucideIcon;
   export const Pencil: LucideIcon;
   export const Phone: LucideIcon;
+  export const Plus: LucideIcon;
   export const PlusCircle: LucideIcon;
   export const QrCode: LucideIcon;
   export const ReceiptText: LucideIcon;
@@ -56,4 +60,5 @@ declare module "lucide-react" {
   export const Wallet: LucideIcon;
   export const Wrench: LucideIcon;
   export const X: LucideIcon;
+  export const XCircle: LucideIcon;
 }

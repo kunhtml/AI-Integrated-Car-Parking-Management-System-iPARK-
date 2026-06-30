@@ -88,6 +88,7 @@ export function serializeMembershipPackage(pkg: any) {
     billingCycle: pkg.billingCycle,
     price: pkg.price || 0,
     durationDays: pkg.durationDays || 0,
+    maxPlates: pkg.maxPlates ?? -1,
     subscriberCount: pkg.subscriberCount || 0,
     renewalRate: pkg.renewalRate || 0,
     status: pkg.status || "Draft",

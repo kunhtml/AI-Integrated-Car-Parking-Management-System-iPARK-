@@ -60,8 +60,8 @@ export const navItems: NavItem[] = [
   {
     id: "membershipPackages",
     path: "/dashboard/membership-packages",
-    label: "Manage Membership Packages",
-    icon: ParkingCircle,
+    label: "Gói đăng ký",
+    icon: CreditCard,
     roles: ["admin"],
   },
   {

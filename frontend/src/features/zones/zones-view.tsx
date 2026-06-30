@@ -696,7 +696,7 @@ export function ZonesView() {
             <div className="modal-footer">
               <button
                 className="secondary-button"
-                disabled={deletingId}
+                disabled={Boolean(deletingId)}
                 onClick={() => setDeleteConfirm(null)}
                 type="button"
               >
@@ -704,7 +704,7 @@ export function ZonesView() {
               </button>
               <button
                 className="danger-button"
-                disabled={deletingId}
+                disabled={Boolean(deletingId)}
                 onClick={confirmDelete}
                 type="button"
               >

@@ -67,6 +67,7 @@ type ParkingAppContextValue = {
   shiftList: ShiftItem[];
   incidentList: IncidentItem[];
   zoneList: Zone[];
+  setZoneList: (zones: Zone[] | ((items: Zone[]) => Zone[])) => void;
   twoFactorQr: string;
   reportFrom: string;
   setReportFrom: (from: string) => void;
@@ -83,6 +84,8 @@ type ParkingAppContextValue = {
     completion: number;
   };
   filteredSessions: ParkingSession[];
+  formErrors: Record<string, string>;
+  setFormErrors: (errors: Record<string, string>) => void;
   handleLogin: (event: FormEvent<HTMLFormElement>) => Promise<DemoUser | null>;
   handleRegister: (
     event: FormEvent<HTMLFormElement>,
@@ -506,6 +509,7 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       shiftList: state.shiftList,
       incidentList: state.incidentList,
       zoneList: state.zoneList,
+      setZoneList,
       twoFactorQr: state.twoFactorQr,
       reportFrom: state.reportFrom,
       setReportFrom,
