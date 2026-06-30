@@ -86,6 +86,10 @@ type ParkingAppContextValue = {
   filteredSessions: ParkingSession[];
   formErrors: Record<string, string>;
   setFormErrors: (errors: Record<string, string>) => void;
+<<<<<<< HEAD
+=======
+  setZoneList: (zoneList: Zone[] | ((items: Zone[]) => Zone[])) => void;
+>>>>>>> 49bfd09c69d8e4d4c7df76f95d064c30a0512d62
   handleLogin: (event: FormEvent<HTMLFormElement>) => Promise<DemoUser | null>;
   handleRegister: (
     event: FormEvent<HTMLFormElement>,
@@ -112,6 +116,7 @@ type ParkingAppContextValue = {
   paymentStatusLabel: (status: TransactionItem["status"]) => string;
   saveDevice: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   snapshotDevice: (id: string) => Promise<void>;
+  deleteDevice: (id: string) => Promise<void>;
   loadReportSummary: (from: string, to: string) => Promise<void>;
   downloadReport: (
     type: "sessions" | "revenue",
@@ -332,7 +337,10 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (state.currentUser) {
-      window.localStorage.setItem("ipark_current_user", JSON.stringify(state.currentUser));
+      window.localStorage.setItem(
+        "ipark_current_user",
+        JSON.stringify(state.currentUser),
+      );
     } else {
       window.localStorage.removeItem("ipark_current_user");
     }
@@ -455,7 +463,12 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
   );
 
   const zoneActions = useMemo(
-    () => createZoneActions({ setZoneList, setActionLog, onServerError: setFormErrors }),
+    () =>
+      createZoneActions({
+        setZoneList,
+        setActionLog,
+        onServerError: setFormErrors,
+      }),
     [setZoneList, setActionLog, setFormErrors],
   );
 
@@ -523,6 +536,7 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       filteredSessions,
       formErrors,
       setFormErrors,
+      setZoneList,
       ...authActions,
       ...sessionActions,
       ...paymentActions,
@@ -535,6 +549,9 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       state,
       stats,
       filteredSessions,
+      formErrors,
+      setFormErrors,
+      setZoneList,
       authActions,
       sessionActions,
       paymentActions,
