@@ -11,16 +11,13 @@ type OverviewStats = {
   available: number;
   revenue: number;
   completion: number;
+  hourlyPerformance?: [string, number][];
 };
 
 export function OverviewView() {
   const { stats: contextStats } = useParkingApp();
   const [stats, setStats] = useState<OverviewStats>(contextStats);
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    setStats(contextStats);
-  }, [contextStats]);
 
   useEffect(() => {
     let mounted = true;
@@ -32,10 +29,18 @@ export function OverviewView() {
         const data = await response.json().catch(() => ({}));
         if (mounted && response.ok && data.overview) {
           setStats({
-            active: data.overview.active ?? contextStats.active,
-            available: data.overview.available ?? contextStats.available,
-            revenue: data.overview.revenue ?? contextStats.revenue,
-            completion: data.overview.completion ?? contextStats.completion,
+            active: data.overview.active ?? 0,
+            available: data.overview.available ?? 30,
+            revenue: data.overview.revenue ?? 0,
+            completion: data.overview.completion ?? 0,
+            hourlyPerformance: data.overview.hourlyPerformance || [
+              ["06:00", 25],
+              ["08:00", 65],
+              ["10:00", 50],
+              ["12:00", 45],
+              ["14:00", 60],
+              ["16:00", 75],
+            ],
           });
         }
       } catch {
@@ -53,13 +58,14 @@ export function OverviewView() {
     return () => {
       mounted = false;
     };
-  }, [contextStats.active, contextStats.available, contextStats.completion, contextStats.revenue]);
+  }, [contextStats]);
 
   return (
     <Dashboard
       active={stats.active}
       available={stats.available}
       completion={stats.completion}
+      hourlyPerformance={stats.hourlyPerformance}
       loading={loading}
       revenue={stats.revenue}
     />

@@ -678,6 +678,15 @@ th {
   padding-top: 24px;
 }
 
+.dashboard-overview-panel {
+  min-height: 340px;
+}
+
+.dashboard-overview-panel .chart-bars {
+  height: 190px;
+  max-width: 300px;
+}
+
 .bar-item {
   align-items: center;
   display: grid;

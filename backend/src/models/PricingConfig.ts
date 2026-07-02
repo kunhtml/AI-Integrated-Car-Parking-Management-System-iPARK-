@@ -5,6 +5,8 @@ export type PricingConfigDocument = {
   freeMinutes: number;
   hourlyRate: number;
   overnightRate: number;
+  dayStartHour: number;
+  nightStartHour: number;
   monthlyRate: number;
   overdueFineRate: number;
   dailyMaxRate: number;
@@ -19,8 +21,10 @@ export type PricingConfigDocument = {
 const pricingConfigSchema = new Schema<PricingConfigDocument>(
   {
     freeMinutes: { type: Number, default: 20, min: 0 },
-    hourlyRate: { type: Number, default: 10000, min: 0 },
-    overnightRate: { type: Number, default: 80000, min: 0 },
+    hourlyRate: { type: Number, default: 5000, min: 0 },
+    overnightRate: { type: Number, default: 10000, min: 0 },
+    dayStartHour: { type: Number, default: 6, min: 0, max: 23 },
+    nightStartHour: { type: Number, default: 22, min: 0, max: 23 },
     monthlyRate: { type: Number, default: 1200000, min: 0 },
     overdueFineRate: { type: Number, default: 50000, min: 0 },
     dailyMaxRate: { type: Number, default: 120000, min: 0 },

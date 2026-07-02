@@ -12,6 +12,14 @@ const emptyOverview = {
   available: parkingConfig.totalCapacity,
   revenue: 0,
   completion: 0,
+  hourlyPerformance: [
+    ["06:00", 0],
+    ["08:00", 0],
+    ["10:00", 0],
+    ["12:00", 0],
+    ["14:00", 0],
+    ["16:00", 0],
+  ],
   recent: [] as ReturnType<typeof serializeParkingSession>[],
 };
 
@@ -24,20 +32,51 @@ export async function getDashboardOverview(
     return;
   }
 
-  const [total, active, completed, paidSessions, recent] = await Promise.all([
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const [total, active, completed, paidSessions, recent, todaySessions] = await Promise.all([
     ParkingSession.countDocuments({}),
     ParkingSession.countDocuments({ status: "Đang gửi" }),
     ParkingSession.countDocuments({ status: "Đã hoàn thành" }),
-    ParkingSession.find({ status: "Đã hoàn thành", paymentStatus: "paid" })
+    ParkingSession.find({ status: "Đã hoàn thành", paymentStatus: "paid", updatedAt: { $gte: startOfDay } })
       .select("fee")
       .lean(),
     ParkingSession.find({}).sort({ createdAt: -1 }).limit(8),
+    ParkingSession.find({ createdAt: { $gte: startOfDay } }).select("checkInAt createdAt").lean(),
   ]);
 
   const revenue = paidSessions.reduce(
     (sum, session) => sum + Number(session.fee || 0),
     0,
   );
+
+  // Hourly counts calculation
+  const hourBuckets: Record<string, number> = {
+    "06:00": 0,
+    "08:00": 0,
+    "10:00": 0,
+    "12:00": 0,
+    "14:00": 0,
+    "16:00": 0,
+  };
+
+  for (const session of todaySessions) {
+    const date = session.checkInAt ? new Date(session.checkInAt) : new Date(session.createdAt);
+    const hour = date.getHours();
+    if (hour >= 5 && hour < 7) hourBuckets["06:00"]++;
+    else if (hour >= 7 && hour < 9) hourBuckets["08:00"]++;
+    else if (hour >= 9 && hour < 11) hourBuckets["10:00"]++;
+    else if (hour >= 11 && hour < 13) hourBuckets["12:00"]++;
+    else if (hour >= 13 && hour < 15) hourBuckets["14:00"]++;
+    else if (hour >= 15 && hour < 17) hourBuckets["16:00"]++;
+  }
+
+  const maxCount = Math.max(...Object.values(hourBuckets), 1);
+  const hourlyPerformance = Object.entries(hourBuckets).map(([label, count]) => [
+    label,
+    todaySessions.length === 0 ? 0 : Math.round((count / maxCount) * 100),
+  ]);
 
   response.json({
     overview: {
@@ -46,6 +85,7 @@ export async function getDashboardOverview(
       available: Math.max(parkingConfig.totalCapacity - active, 0),
       revenue,
       completion: completed || 0,
+      hourlyPerformance,
       recent: recent.map(serializeParkingSession),
     },
   });
@@ -73,7 +113,6 @@ export async function getPublicOverview(_request: Request, response: Response) {
     Zone.find({ isActive: true }).sort({ displayOrder: 1, name: 1 }).lean(),
   ]);
 
-  // Tính toán số chỗ trống theo từng zone dựa trên số xe đang gửi trong zone đó
   const slotCountByZone: Record<string, number> = {};
   for (const s of activeSessions) {
     const zoneName = s.slot?.split("-")[0];
@@ -115,10 +154,10 @@ export async function getPublicPricing(_request: Request, response: Response) {
   if (mongoose.connection.readyState !== 1) {
     response.json({
       pricing: {
-        hourlyRate: 10000,
+        hourlyRate: 5000,
         dailyMaxRate: 120000,
         monthlyRate: 1200000,
-        overnightRate: 80000,
+        overnightRate: 10000,
         freeMinutes: 20,
         overdueFineRate: 50000,
         graceExitMinutes: 10,
@@ -132,10 +171,10 @@ export async function getPublicPricing(_request: Request, response: Response) {
     .lean();
   response.json({
     pricing: {
-      hourlyRate: config?.hourlyRate ?? 10000,
+      hourlyRate: config?.hourlyRate ?? 5000,
       dailyMaxRate: config?.dailyMaxRate ?? 120000,
       monthlyRate: config?.monthlyRate ?? 1200000,
-      overnightRate: config?.overnightRate ?? 80000,
+      overnightRate: config?.overnightRate ?? 10000,
       freeMinutes: config?.freeMinutes ?? 20,
       overdueFineRate: config?.overdueFineRate ?? 50000,
       graceExitMinutes: config?.graceExitMinutes ?? 10,

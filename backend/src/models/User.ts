@@ -11,6 +11,20 @@ export type UserDocument = {
   status: "Đang hoạt động" | "Đã khóa";
   wallet: number;
   phone?: string;
+  firstName?: string;
+  lastName?: string;
+  gender?: string;
+  dob?: string;
+  idCardNumber?: string;
+  idCardIssueDate?: string;
+  idCardExpiryDate?: string;
+  address?: string;
+  city?: string;
+  district?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  company?: string;
+  taxId?: string;
   avatarUrl?: string;
   provider: "credentials" | "google" | "mixed" | "local";
   googleId?: string;
@@ -30,6 +44,20 @@ const userSchema = new Schema<UserDocument>(
     status: { type: String, enum: ["Đang hoạt động", "Đã khóa"], default: "Đang hoạt động" },
     wallet: { type: Number, default: 0 },
     phone: { type: String },
+    firstName: { type: String },
+    lastName: { type: String },
+    gender: { type: String },
+    dob: { type: String },
+    idCardNumber: { type: String },
+    idCardIssueDate: { type: String },
+    idCardExpiryDate: { type: String },
+    address: { type: String },
+    city: { type: String },
+    district: { type: String },
+    emergencyContactName: { type: String },
+    emergencyContactPhone: { type: String },
+    company: { type: String },
+    taxId: { type: String },
     avatarUrl: { type: String },
     provider: {
       type: String,
