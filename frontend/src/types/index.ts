@@ -21,6 +21,7 @@ export type View =
   | "ai"
   | "devices"
   | "security"
+  | "systemProcess"
   | "zones";
 
 export type DemoUser = {
@@ -64,21 +65,37 @@ export type ParkingSession = {
   entryConfidence?: number;
   exitConfidence?: number;
   vehicleMatchScore?: number;
-  matchStatus?: "Chưa checkout" | "Khớp" | "Không khớp";
-  verificationStatus?: "Không cần" | "Chờ duyệt" | "Đã duyệt" | "Từ chối";
+  matchStatus?: "Khớp" | "Không khớp";
+  verificationStatus?: "Không cần" | "Chờ duyệt" | "Đã duyệt";
   manualPlate?: string;
   verificationNote?: string;
-  paymentStatus?: "unpaid" | "pending" | "paid";
-  transactionId?: string;
   feeBreakdown?: FeeBreakdown;
+  transactionId?: string;
+  paymentStatus?: "pending" | "paid" | "failed";
+  createdAt?: string;
 };
 
-export type RegisteredVehicle = {
-  id?: string;
+export type ParkingZone = {
+  id: string;
+  name: string;
+  description: string;
+  capacity: number;
+  allowedVehicleTypes: string[];
+  displayOrder: number;
+  isActive: boolean;
+  stats: {
+    total: number;
+    empty: number;
+    occupied: number;
+  };
+};
+
+export type Vehicle = {
+  id: string;
   plate: string;
   owner: string;
-  type: "Ô tô" | string;
-  status: "Đã đăng ký" | "Cần duyệt" | "Blacklist" | string;
+  type: string;
+  status: "Đang hoạt động" | "Đã khóa";
 };
 
 export type PricingConfig = {
@@ -88,101 +105,9 @@ export type PricingConfig = {
   overnightRate: number;
   monthlyRate: number;
   overdueFineRate: number;
+  dailyMaxRate: number;
+  graceExitMinutes: number;
+  effectiveFrom: string;
   isActive: boolean;
-  updatedAt?: string;
-};
-
-export type ReportSummary = {
-  from: string;
-  to: string;
-  entryCount: number;
-  exitCount: number;
-  activeCount: number;
-  revenue: number;
-  freeSessionCount: number;
-  paidSessionCount: number;
-};
-
-export type PaymentConfig = {
-  id: string;
-  bankName: string;
-  bankBin: string;
-  accountNumber: string;
-  accountName: string;
-  transferPrefix: string;
-};
-
-export type TransactionItem = {
-  id: string;
-  sessionId?: string;
-  method: string;
-  amount: number;
-  status: "pending" | "paid" | "failed" | "cancelled";
-  content: string;
-  qrUrl?: string;
-  paidAt?: string;
-  createdAt: string;
-};
-
-export type NotificationItem = {
-  id: string;
-  title: string;
-  content: string;
-  read: boolean;
-  createdAt: string;
-};
-
-export type FeedbackItem = {
-  id: string;
-  subject: string;
-  content: string;
-  status: "Đang xử lý" | "Đã phản hồi" | "Đã đóng";
-  response?: string;
-  createdAt: string;
-};
-
-export type DeviceItem = {
-  id: string;
-  name: string;
-  gate: "entry" | "exit";
-  rtspUrl: string;
-  username?: string;
-  roiNote?: string;
-  status: "online" | "offline" | "unknown";
-  lastSnapshotUrl?: string;
-};
-
-export type ShiftItem = {
-  id: string;
-  name: string;
-  startAt: string;
-  endAt?: string;
-  status: "Đang làm" | "Đã kết thúc";
-  note?: string;
-};
-
-export type IncidentItem = {
-  id: string;
-  type: string;
-  note: string;
-  plate?: string;
-  status: "Mới" | "Đang xử lý" | "Đã xử lý";
-  createdAt: string;
-};
-
-export type AuthMode = "login" | "register" | "forgot";
-
-export type Zone = {
-  id: string;
-  name: string;
-  description?: string;
-  capacity: number;
-  allowedVehicleTypes: string[];
-  displayOrder: number;
-  isActive: boolean;
-  stats?: {
-    total: number;
-    empty: number;
-    occupied: number;
-  };
+  updatedAt?: string | null;
 };
