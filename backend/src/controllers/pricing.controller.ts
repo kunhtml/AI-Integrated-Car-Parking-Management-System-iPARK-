@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import { Request, Response } from "express";
 import { z } from "zod";
 import { PricingConfig } from "../models/PricingConfig.js";
+import { runAutomatedSystemProcess } from "../services/pricing.service.js";
 import { serializePricingConfig } from "../utils/serializers.js";
 
 const defaultPricingConfig = {
@@ -91,4 +92,27 @@ export async function updatePricingConfig(
       pricingConfig: serializePricingConfig(config),
       message: "Đã lưu bảng giá thành công.",
     });
+}
+
+export async function runAutomatedProcessController(request: Request, response: Response) {
+  const body = z
+    .object({
+      plate: z.string().optional(),
+      ownerUserId: z.string().optional(),
+      checkInAt: z.coerce.date(),
+      checkOutAt: z.coerce.date(),
+    })
+    .parse(request.body);
+
+  const result = await runAutomatedSystemProcess({
+    plate: body.plate,
+    ownerUserId: body.ownerUserId,
+    checkInAt: body.checkInAt,
+    checkOutAt: body.checkOutAt,
+  });
+
+  response.json({
+    success: true,
+    result,
+  });
 }
