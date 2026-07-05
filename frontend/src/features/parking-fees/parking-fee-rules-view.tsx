@@ -1,13 +1,15 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { CreditCard, ParkingCircle, Save } from "lucide-react";
+import { FormEvent, useEffect, useState } from "react";
+import { Settings } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
-type FeeRuleForm = {
+type PricingConfigState = {
   freeMinutes: number;
   hourlyRate: number;
   overnightRate: number;
+  dayStartHour: number;
+  nightStartHour: number;
   monthlyRate: number;
   overdueFineRate: number;
   dailyMaxRate: number;
@@ -16,36 +18,26 @@ type FeeRuleForm = {
   isActive: boolean;
 };
 
-const defaultRules: FeeRuleForm = {
+const defaultConfig: PricingConfigState = {
   freeMinutes: 20,
-  hourlyRate: 0,
-  overnightRate: 0,
-  monthlyRate: 0,
-  overdueFineRate: 0,
-  dailyMaxRate: 0,
+  hourlyRate: 5000,
+  overnightRate: 10000,
+  dayStartHour: 6,
+  nightStartHour: 22,
+  monthlyRate: 1200000,
+  overdueFineRate: 50000,
+  dailyMaxRate: 120000,
   graceExitMinutes: 10,
   effectiveFrom: new Date().toISOString().slice(0, 10),
   isActive: true,
 };
 
-const currency = new Intl.NumberFormat("vi-VN", {
-  style: "currency",
-  currency: "VND",
-});
-
-function normalizeConfig(config: Partial<FeeRuleForm> & { effectiveFrom?: string | Date }): FeeRuleForm {
-  return {
-    ...defaultRules,
-    ...config,
-    effectiveFrom: config.effectiveFrom ? new Date(config.effectiveFrom).toISOString().slice(0, 10) : defaultRules.effectiveFrom,
-  };
-}
-
 export function ParkingFeeRulesView() {
-  const [rules, setRules] = useState<FeeRuleForm>(defaultRules);
-  const [message, setMessage] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"price" | "fine" | "template">("price");
+  const [config, setConfig] = useState<PricingConfigState>(defaultConfig);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -54,11 +46,26 @@ export function ParkingFeeRulesView() {
       try {
         const response = await apiFetch("/pricing");
         const data = await response.json().catch(() => ({}));
-        if (mounted && response.ok) {
-          setRules(normalizeConfig(data.pricingConfig || defaultRules));
+        if (mounted && response.ok && data.pricingConfig) {
+          const cfg = data.pricingConfig;
+          setConfig({
+            freeMinutes: cfg.freeMinutes ?? defaultConfig.freeMinutes,
+            hourlyRate: cfg.hourlyRate ?? defaultConfig.hourlyRate,
+            overnightRate: cfg.overnightRate ?? defaultConfig.overnightRate,
+            dayStartHour: cfg.dayStartHour ?? defaultConfig.dayStartHour,
+            nightStartHour: cfg.nightStartHour ?? defaultConfig.nightStartHour,
+            monthlyRate: cfg.monthlyRate ?? defaultConfig.monthlyRate,
+            overdueFineRate: cfg.overdueFineRate ?? defaultConfig.overdueFineRate,
+            dailyMaxRate: cfg.dailyMaxRate ?? defaultConfig.dailyMaxRate,
+            graceExitMinutes: cfg.graceExitMinutes ?? defaultConfig.graceExitMinutes,
+            effectiveFrom: cfg.effectiveFrom
+              ? new Date(cfg.effectiveFrom).toISOString().slice(0, 10)
+              : defaultConfig.effectiveFrom,
+            isActive: Boolean(cfg.isActive),
+          });
         }
       } catch {
-        if (mounted) setRules(defaultRules);
+        if (mounted) setConfig(defaultConfig);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -70,25 +77,6 @@ export function ParkingFeeRulesView() {
     };
   }, []);
 
-  const previewItems = useMemo(
-    () => [
-      { label: "Miễn phí ban đầu", value: `${rules.freeMinutes} phút` },
-      { label: "Phí theo giờ", value: currency.format(rules.hourlyRate) },
-      { label: "Phí qua đêm", value: currency.format(rules.overnightRate) },
-      { label: "Gói tháng", value: currency.format(rules.monthlyRate) },
-      { label: "Phạt quá hạn", value: currency.format(rules.overdueFineRate) },
-      { label: "Trần phí ngày", value: currency.format(rules.dailyMaxRate) },
-    ],
-    [rules],
-  );
-
-  function updateNumber(field: keyof FeeRuleForm, value: string) {
-    setRules((current) => ({
-      ...current,
-      [field]: Math.max(0, Number(value || 0)),
-    }));
-  }
-
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage(null);
@@ -98,138 +86,248 @@ export function ParkingFeeRulesView() {
       const response = await apiFetch("/pricing", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...rules,
-          effectiveFrom: new Date(rules.effectiveFrom).toISOString(),
-        }),
+        body: JSON.stringify(config),
       });
       const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        setMessage(data.message || "Không lưu được cấu hình phí.");
-        return;
+      if (response.ok) {
+        setMessage(data.message || "Đã lưu bảng giá thành công.");
+        if (data.pricingConfig) {
+          const cfg = data.pricingConfig;
+          setConfig((current) => ({
+            ...current,
+            ...cfg,
+          }));
+        }
+      } else {
+        setMessage(data.message || "Không lưu được bảng giá.");
       }
-
-      setRules(normalizeConfig(data.pricingConfig || rules));
-      setMessage(data.message || "Đã lưu cấu hình phí.");
     } catch {
-      setMessage("Không kết nối được API cấu hình phí.");
+      setMessage("Không kết nối được máy chủ API.");
     } finally {
       setSaving(false);
     }
   }
 
+  const formattedDayRate = new Intl.NumberFormat("vi-VN").format(config.hourlyRate) + " đ/ngày";
+  const formattedNightRate = new Intl.NumberFormat("vi-VN").format(config.overnightRate) + " đ/ngày";
+
   return (
-    <section className="bg-slate-50 px-6 py-12">
-      <div className="mx-auto w-full max-w-6xl rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="mb-6 flex items-center justify-between border-b border-slate-100 pb-4">
-          <div>
-            <p className="text-sm text-slate-500">Admin</p>
-            <h1 className="text-2xl font-bold text-slate-900">Configure Parking Fee Rules</h1>
-          </div>
-          <CreditCard className="text-blue-600" size={24} />
+    <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="mb-6 flex items-center justify-between border-b border-slate-100 pb-4">
+        <div>
+          <p className="text-xs font-medium text-slate-400">Admin</p>
+          <h1 className="text-xl font-bold text-slate-900">Cấu hình hệ thống</h1>
         </div>
+        <Settings className="text-slate-400" size={22} />
+      </div>
 
-        {message && <p className="mb-4 rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-700">{message}</p>}
-        {loading && <p className="mb-4 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600">Đang tải cấu hình phí...</p>}
+      {/* Tabs */}
+      <div className="mb-6 flex items-center gap-2">
+        <button
+          className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+            activeTab === "price"
+              ? "bg-blue-600 text-white shadow-sm"
+              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+          }`}
+          onClick={() => setActiveTab("price")}
+          type="button"
+        >
+          Bảng giá
+        </button>
+        <button
+          className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+            activeTab === "fine"
+              ? "bg-blue-600 text-white shadow-sm"
+              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+          }`}
+          onClick={() => setActiveTab("fine")}
+          type="button"
+        >
+          Giá phạt
+        </button>
+        <button
+          className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+            activeTab === "template"
+              ? "bg-blue-600 text-white shadow-sm"
+              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+          }`}
+          onClick={() => setActiveTab("template")}
+          type="button"
+        >
+          Mẫu thông báo
+        </button>
+      </div>
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-          <form className="space-y-6" onSubmit={handleSubmit}>
-            <div className="grid gap-4 md:grid-cols-2">
-              <NumberField label="Số phút miễn phí" min={0} onChange={(value) => updateNumber("freeMinutes", value)} suffix="phút" value={rules.freeMinutes} />
-              <NumberField label="Thời gian miễn phí khi ra cổng" min={0} onChange={(value) => updateNumber("graceExitMinutes", value)} suffix="phút" value={rules.graceExitMinutes} />
-              <NumberField label="Phí gửi theo giờ" min={0} onChange={(value) => updateNumber("hourlyRate", value)} suffix="VND" value={rules.hourlyRate} />
-              <NumberField label="Phí gửi qua đêm" min={0} onChange={(value) => updateNumber("overnightRate", value)} suffix="VND" value={rules.overnightRate} />
-              <NumberField label="Gói gửi xe tháng" min={0} onChange={(value) => updateNumber("monthlyRate", value)} suffix="VND" value={rules.monthlyRate} />
-              <NumberField label="Phí phạt quá hạn" min={0} onChange={(value) => updateNumber("overdueFineRate", value)} suffix="VND" value={rules.overdueFineRate} />
-              <NumberField label="Trần phí trong ngày" min={0} onChange={(value) => updateNumber("dailyMaxRate", value)} suffix="VND" value={rules.dailyMaxRate} />
-              <label className="block text-sm font-medium text-slate-700">
-                Ngày áp dụng
+      {message && (
+        <div className="mb-6 rounded-md bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-700">
+          {message}
+        </div>
+      )}
+
+      {loading ? (
+        <p className="py-12 text-center text-sm text-slate-400">Đang tải cấu hình hệ thống...</p>
+      ) : activeTab === "price" ? (
+        <div className="grid gap-8 lg:grid-cols-2">
+          {/* Form Left */}
+          <form className="space-y-5" onSubmit={handleSubmit}>
+            <div>
+              <h2 className="text-base font-bold text-slate-900">Bảng giá khách vãng lai</h2>
+              <p className="mt-1 text-xs text-slate-400">
+                Phí tính theo giờ ra trong ngày: trong khung ngày áp giá ngày, ngoài khung áp giá đêm.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  Giá ban ngày (VND/ngày)
+                </label>
                 <input
-                  className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  onChange={(event) => setRules((current) => ({ ...current, effectiveFrom: event.target.value }))}
-                  type="date"
-                  value={rules.effectiveFrom}
+                  className="w-full rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  min={0}
+                  onChange={(e) => setConfig({ ...config, hourlyRate: Number(e.target.value) })}
+                  type="number"
+                  value={config.hourlyRate}
                 />
-              </label>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  Giá ban đêm (VND/ngày)
+                </label>
+                <input
+                  className="w-full rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  min={0}
+                  onChange={(e) => setConfig({ ...config, overnightRate: Number(e.target.value) })}
+                  type="number"
+                  value={config.overnightRate}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  Giờ bắt đầu ngày (0-23)
+                </label>
+                <input
+                  className="w-full rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  max={23}
+                  min={0}
+                  onChange={(e) => setConfig({ ...config, dayStartHour: Number(e.target.value) })}
+                  type="number"
+                  value={config.dayStartHour}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  Giờ bắt đầu đêm (0-23)
+                </label>
+                <input
+                  className="w-full rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  max={23}
+                  min={0}
+                  onChange={(e) => setConfig({ ...config, nightStartHour: Number(e.target.value) })}
+                  type="number"
+                  value={config.nightStartHour}
+                />
+              </div>
             </div>
 
-            <label className="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-3">
-              <span>
-                <span className="block text-sm font-semibold text-slate-900">Kích hoạt bộ quy tắc này</span>
-                <span className="block text-xs text-slate-500">Chỉ bộ quy tắc đang hoạt động mới được dùng để tính phí.</span>
-              </span>
-              <input
-                checked={rules.isActive}
-                className="h-5 w-5 accent-blue-600"
-                onChange={(event) => setRules((current) => ({ ...current, isActive: event.target.checked }))}
-                type="checkbox"
-              />
-            </label>
-
-            <div className="flex justify-end">
-              <button
-                className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
-                disabled={saving}
-                type="submit"
-              >
-                <Save size={16} />
-                {saving ? "Đang lưu..." : "Lưu cấu hình"}
-              </button>
-            </div>
+            <button
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+              disabled={saving}
+              type="submit"
+            >
+              <Settings size={16} />
+              {saving ? "Đang lưu..." : "Lưu bảng giá"}
+            </button>
           </form>
 
-          <aside className="rounded-lg border border-slate-200 bg-slate-50 p-5">
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-md bg-blue-50 text-blue-600">
-                <ParkingCircle size={20} />
-              </div>
-              <div>
-                <h2 className="font-bold text-slate-900">Preview</h2>
-                <p className="text-xs text-slate-500">Tóm tắt cấu hình hiện tại</p>
-              </div>
+          {/* Table Right */}
+          <div>
+            <h2 className="text-base font-bold text-slate-900 mb-4">Bảng giá hiện tại</h2>
+            <div className="overflow-hidden rounded-lg border border-slate-100">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100 text-xs font-semibold uppercase text-slate-400">
+                    <th className="py-3 px-4">HẠNG MỤC</th>
+                    <th className="py-3 px-4">GIÁ TRỊ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  <tr>
+                    <td className="py-3.5 px-4 font-medium text-slate-700">Khung ngày</td>
+                    <td className="py-3.5 px-4 text-slate-600">{config.dayStartHour}h - {config.nightStartHour}h</td>
+                  </tr>
+                  <tr>
+                    <td className="py-3.5 px-4 font-medium text-slate-700">Giá ban ngày</td>
+                    <td className="py-3.5 px-4 text-slate-600">{formattedDayRate}</td>
+                  </tr>
+                  <tr>
+                    <td className="py-3.5 px-4 font-medium text-slate-700">Giá ban đêm</td>
+                    <td className="py-3.5 px-4 text-slate-600">{formattedNightRate}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
-
-            <div className="space-y-3">
-              {previewItems.map((item) => (
-                <div className="flex items-center justify-between border-b border-slate-200 pb-2 last:border-0" key={item.label}>
-                  <span className="text-sm text-slate-600">{item.label}</span>
-                  <strong className="text-sm text-slate-900">{item.value}</strong>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-5 rounded-md bg-white p-3 text-sm text-slate-600">
-              <span className="font-semibold text-slate-900">Trạng thái: </span>
-              {rules.isActive ? "Đang hoạt động" : "Tạm tắt"} từ ngày {rules.effectiveFrom || "chưa chọn"}.
-            </div>
-          </aside>
+          </div>
         </div>
-      </div>
-    </section>
-  );
-}
+      ) : activeTab === "fine" ? (
+        <form className="max-w-xl space-y-5" onSubmit={handleSubmit}>
+          <div>
+            <h2 className="text-base font-bold text-slate-900">Cấu hình giá phạt & Phụ phí</h2>
+            <p className="mt-1 text-xs text-slate-400">Điều chỉnh mức phạt quá hạn và các mốc thời gian miễn phí.</p>
+          </div>
 
-function NumberField({
-  label,
-  min,
-  onChange,
-  suffix,
-  value,
-}: {
-  label: string;
-  min: number;
-  onChange: (value: string) => void;
-  suffix: string;
-  value: number;
-}) {
-  return (
-    <label className="block text-sm font-medium text-slate-700">
-      {label}
-      <div className="mt-1 flex rounded-md border border-slate-200 bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100">
-        <input className="min-w-0 flex-1 rounded-l-md px-3 py-2 text-sm outline-none" min={min} onChange={(event) => onChange(event.target.value)} type="number" value={value} />
-        <span className="flex items-center border-l border-slate-200 px-3 text-xs font-semibold text-slate-500">{suffix}</span>
-      </div>
-    </label>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Mức phạt quá hạn (VND)</label>
+              <input
+                className="w-full rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-blue-500"
+                min={0}
+                onChange={(e) => setConfig({ ...config, overdueFineRate: Number(e.target.value) })}
+                type="number"
+                value={config.overdueFineRate}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Số phút miễn phí ban đầu</label>
+              <input
+                className="w-full rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-blue-500"
+                min={0}
+                onChange={(e) => setConfig({ ...config, freeMinutes: Number(e.target.value) })}
+                type="number"
+                value={config.freeMinutes}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Trần phí ngày (VND)</label>
+              <input
+                className="w-full rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-blue-500"
+                min={0}
+                onChange={(e) => setConfig({ ...config, dailyMaxRate: Number(e.target.value) })}
+                type="number"
+                value={config.dailyMaxRate}
+              />
+            </div>
+          </div>
+
+          <button
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+            disabled={saving}
+            type="submit"
+          >
+            <Settings size={16} />
+            {saving ? "Đang lưu..." : "Lưu giá phạt"}
+          </button>
+        </form>
+      ) : (
+        <div className="py-12 text-center text-sm text-slate-400">
+          Chưa có mẫu thông báo nào được cấu hình.
+        </div>
+      )}
+    </div>
   );
 }
