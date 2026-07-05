@@ -99,6 +99,9 @@ dist
 # vuepress build output
 .vuepress/dist
 
+# Documentation and analysis files (internal notes, meeting notes, use case drafts)
+docs/
+
 # vuepress v2.x temp and cache directory
 .temp
 .cache

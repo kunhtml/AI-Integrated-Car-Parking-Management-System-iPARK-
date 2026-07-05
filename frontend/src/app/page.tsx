@@ -83,9 +83,32 @@ export default function PageHomepage() {
     }
   }, []);
 
-  function handleContactSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleContactSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setContactSubmitted(true);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const name = String(form.get("name") || "").trim();
+    const phone = String(form.get("phone") || "").trim();
+    const email = String(form.get("email") || "").trim();
+    const message = String(form.get("message") || "").trim();
+
+    try {
+      const response = await apiFetch("/feedback/public", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, phone, email, message }),
+      });
+      if (response.ok) {
+        setContactSubmitted(true);
+        formElement.reset();
+      } else {
+        const data = await response.json().catch(() => ({}));
+        alert(data.message || "Có lỗi xảy ra khi gửi yêu cầu.");
+      }
+    } catch (err) {
+      console.error("Lỗi gửi liên hệ:", err);
+      alert("Không thể kết nối tới máy chủ.");
+    }
   }
 
   async function handleForgotPassword(event: FormEvent<HTMLFormElement>) {
@@ -168,7 +191,7 @@ export default function PageHomepage() {
                 className="text-sm font-semibold text-slate-700 hover:text-blue-600"
                 href="/dashboard/sessions"
               >
-                Vào Dashboard
+                Vào Hệ Thống
               </a>
               <button
                 className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
@@ -375,23 +398,27 @@ export default function PageHomepage() {
                 <form className="space-y-4" onSubmit={handleContactSubmit}>
                   <input
                     className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
+                    name="name"
                     placeholder="Họ và tên"
                     required
                   />
                   <input
                     className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
+                    name="phone"
                     placeholder="Số điện thoại"
                     required
                     type="tel"
                   />
                   <input
                     className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
+                    name="email"
                     placeholder="Email liên hệ"
                     required
                     type="email"
                   />
                   <textarea
                     className="min-h-[100px] w-full resize-y rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
+                    name="message"
                     placeholder="Nhu cầu triển khai"
                     required
                   />

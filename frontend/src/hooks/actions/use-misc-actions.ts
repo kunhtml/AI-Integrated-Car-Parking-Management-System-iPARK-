@@ -26,7 +26,8 @@ export function createMiscActions({
 
   async function createFeedback(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const response = await apiFetch("/feedback", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -42,7 +43,7 @@ export function createMiscActions({
     }
     setFeedbackList((items) => [data.feedback, ...items]);
     setActionLog("Đã lưu phản hồi vào MongoDB.");
-    event.currentTarget.reset();
+    if (formElement) formElement.reset();
   }
 
   async function updateFeedbackStatus(id: string) {
@@ -68,7 +69,8 @@ export function createMiscActions({
 
   async function startShift(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const response = await apiFetch("/shifts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -78,7 +80,7 @@ export function createMiscActions({
     if (response.ok) {
       setShiftList((items) => [data.shift, ...items]);
       setActionLog("Đã bắt đầu ca làm việc.");
-      event.currentTarget.reset();
+      if (formElement) formElement.reset();
     }
   }
 
@@ -93,7 +95,8 @@ export function createMiscActions({
 
   async function createIncident(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const response = await apiFetch("/incidents", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -107,7 +110,7 @@ export function createMiscActions({
     if (response.ok) {
       setIncidentList((items) => [data.incident, ...items]);
       setActionLog("Đã lưu sự cố vào MongoDB.");
-      event.currentTarget.reset();
+      if (formElement) formElement.reset();
     }
   }
 

@@ -70,7 +70,7 @@ export async function createPendingTransactionForSession(session: ParkingSession
     }),
   });
 
-  session.transactionId = transaction._id;
+  session.transactionId = transaction._id as mongoose.Types.ObjectId;
   session.paymentStatus = "pending";
   return transaction;
 }

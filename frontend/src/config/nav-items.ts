@@ -135,6 +135,13 @@ export const navItems: NavItem[] = [
     roles: ["admin", "staff"],
   },
   {
+    id: "recognitionLogs",
+    path: "/dashboard/recognition-logs",
+    label: "Lịch sử nhận diện",
+    icon: ScanLine,
+    roles: ["admin", "staff"],
+  },
+  {
     id: "devices",
     path: "/dashboard/devices",
     label: "Camera & thiết bị",

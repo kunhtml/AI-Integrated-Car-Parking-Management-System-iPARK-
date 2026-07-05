@@ -6,7 +6,7 @@ export type TransactionDocument = {
   _id: mongoose.Types.ObjectId;
   sessionId?: mongoose.Types.ObjectId;
   userId?: mongoose.Types.ObjectId;
-  method: "payos" | "wallet" | "cash";
+  method: "payos" | "wallet" | "cash" | "vietqr";
   amount: number;
   status: TransactionStatus;
   content?: string;
@@ -54,7 +54,7 @@ const transactionSchema = new Schema<TransactionDocument>(
   {
     sessionId: { type: Schema.Types.ObjectId, ref: "ParkingSession", index: true },
     userId: { type: Schema.Types.ObjectId, ref: "User", index: true },
-    method: { type: String, enum: ["payos", "wallet", "cash"], default: "payos" },
+    method: { type: String, enum: ["payos", "wallet", "cash", "vietqr"], default: "payos" },
     amount: { type: Number, required: true, min: 0 },
     status: { type: String, enum: ["pending", "paid", "failed", "cancelled"], default: "pending" },
     content: { type: String },

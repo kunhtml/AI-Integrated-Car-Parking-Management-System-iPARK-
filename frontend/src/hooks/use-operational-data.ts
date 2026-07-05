@@ -150,12 +150,11 @@ export function useOperationalData({
           setFeedbackList(data.feedback);
         }
         if (activeUser.role !== "customer") {
-          const [deviceResponse, shiftResponse, incidentResponse] =
-            await Promise.all([
-              apiFetch("/devices"),
-              apiFetch("/shifts"),
-              apiFetch("/incidents"),
-            ]);
+          const [deviceResponse, shiftResponse, incidentResponse] = await Promise.all([
+            apiFetch("/devices"),
+            apiFetch("/shifts"),
+            apiFetch("/incidents"),
+          ]);
           if (cancelled) {
             return;
           }

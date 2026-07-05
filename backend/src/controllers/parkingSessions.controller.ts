@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { z } from "zod";
-import { allocateCarSlot, parkingConfig } from "../config/parking.js";
+import { allocateCarSlot, canEnterParking, parkingConfig } from "../config/parking.js";
 import { Device } from "../models/Device.js";
 import { ParkingSession, ParkingSessionDocument } from "../models/ParkingSession.js";
 import { Vehicle } from "../models/Vehicle.js";
@@ -9,6 +9,7 @@ import { captureDeviceSnapshot } from "../services/device.service.js";
 import { createNotification } from "../services/notification.service.js";
 import { imageHashSimilarity, platesMatch } from "../services/plate.service.js";
 import { calculateParkingFee, getActivePricingConfig } from "../services/pricing.service.js";
+import { safeCreateRecognitionLog } from "../services/recognitionLog.service.js";
 import { createPendingTransactionForSession, objectId } from "../services/transaction.service.js";
 import { serializeParkingSession } from "../utils/serializers.js";
 
@@ -52,8 +53,15 @@ export async function createParkingSession(request: Request, response: Response)
     .parse(request.body);
 
   const activeCount = await ParkingSession.countDocuments({ status: "Đang gửi" });
-  if (activeCount >= parkingConfig.totalCapacity) {
-    response.status(409).json({ message: "Bãi xe đã đủ 30 chỗ." });
+  const isMember = !!(await ownerFromPlate(body.plate)); // Có ownerUserId = thành viên
+  const check = await canEnterParking(isMember, activeCount);
+
+  if (!check.allowed) {
+    response.status(409).json({
+      message: check.reason || "Bãi xe đã đầy.",
+      remaining: parkingConfig.totalCapacity - activeCount,
+      isMemberOnly: check.mode === "dynamic" && !isMember,
+    });
     return;
   }
 
@@ -64,6 +72,8 @@ export async function createParkingSession(request: Request, response: Response)
     slot: allocateCarSlot(activeCount),
     ownerUserId: await ownerFromPlate(body.plate),
     createdBy: objectId(request.user?.id),
+    // Thêm trường để track membership priority (sẽ update model sau)
+    priorityType: isMember ? "member" : "walkin",
   });
 
   response.status(201).json({ session: serializeParkingSession(session) });
@@ -94,6 +104,17 @@ export async function uploadParkingImage(request: Request, response: Response) {
 
   const detection = await detectVehicleImage(image);
   if (!detection.plate) {
+    await safeCreateRecognitionLog({
+      action: action === "exit" ? "exit" : "entry",
+      source: "upload",
+      status: "failed",
+      confidence: detection.confidence,
+      rawText: detection.rawText,
+      imageHash: detection.imageHash,
+      sessionId: String(request.body.sessionId || "") || undefined,
+      message: "Không nhận diện được biển số từ ảnh upload.",
+      createdBy: request.user?.id,
+    });
     response.status(422).json({
       message: "Không nhận diện được biển số. Vui lòng upload ảnh rõ hơn hoặc xác minh thủ công.",
     });
@@ -102,8 +123,26 @@ export async function uploadParkingImage(request: Request, response: Response) {
 
   if (action === "entry") {
     const activeCount = await ParkingSession.countDocuments({ status: "Đang gửi" });
-    if (activeCount >= parkingConfig.totalCapacity) {
-      response.status(409).json({ message: "Bãi xe đã đủ 30 chỗ." });
+    const isMember = !!(await ownerFromPlate(detection.plate));
+    const check = await canEnterParking(isMember, activeCount);
+
+    if (!check.allowed) {
+      await safeCreateRecognitionLog({
+        action: "entry",
+        source: "upload",
+        status: "success",
+        detectedPlate: detection.plate,
+        confidence: detection.confidence,
+        rawText: detection.rawText,
+        imageHash: detection.imageHash,
+        message: check.reason || "OCR thành công nhưng bãi xe không cho phép xe vào.",
+        createdBy: request.user?.id,
+      });
+      response.status(409).json({
+        message: check.reason || "Bãi xe đã đầy.",
+        remaining: parkingConfig.totalCapacity - activeCount,
+        isMemberOnly: check.mode === "dynamic" && !isMember,
+      });
       return;
     }
 
@@ -120,6 +159,25 @@ export async function uploadParkingImage(request: Request, response: Response) {
       aiRawText: detection.rawText,
       ownerUserId: await ownerFromPlate(detection.plate),
       createdBy: objectId(request.user?.id),
+      priorityType: isMember ? "member" : "walkin",
+    });
+
+    await safeCreateRecognitionLog({
+      action: "entry",
+      source: "upload",
+      status: "success",
+      plate: session.plate,
+      detectedPlate: detection.plate,
+      confidence: detection.confidence,
+      rawText: detection.rawText,
+      imageHash: detection.imageHash,
+      imageUrl,
+      vehicleType: session.vehicleType,
+      sessionId: session._id,
+      matched: true,
+      matchStatus: session.matchStatus,
+      message: "Đã nhận diện biển số xe vào từ ảnh upload.",
+      createdBy: request.user?.id,
     });
 
     response.status(201).json({ session: serializeParkingSession(session), detection });
@@ -129,6 +187,17 @@ export async function uploadParkingImage(request: Request, response: Response) {
   if (action === "exit") {
     const session = await ParkingSession.findById(String(request.body.sessionId || ""));
     if (!session) {
+      await safeCreateRecognitionLog({
+        action: "exit",
+        source: "upload",
+        status: "success",
+        detectedPlate: detection.plate,
+        confidence: detection.confidence,
+        rawText: detection.rawText,
+        imageHash: detection.imageHash,
+        message: "OCR thành công nhưng không tìm thấy phiên đỗ xe để checkout.",
+        createdBy: request.user?.id,
+      });
       response.status(404).json({ message: "Không tìm thấy phiên đỗ xe." });
       return;
     }
@@ -156,6 +225,24 @@ export async function uploadParkingImage(request: Request, response: Response) {
     }
 
     await session.save();
+    await safeCreateRecognitionLog({
+      action: "exit",
+      source: "upload",
+      status: matched ? "success" : "mismatch",
+      plate: session.plate,
+      detectedPlate: detection.plate,
+      confidence: detection.confidence,
+      rawText: detection.rawText,
+      imageHash: detection.imageHash,
+      imageUrl,
+      vehicleType: session.vehicleType,
+      sessionId: session._id,
+      matched,
+      matchStatus: session.matchStatus,
+      vehicleMatchScore: vehicleScore,
+      message: matched ? "Biển số xe ra khớp với phiên gửi." : "Biển số xe ra không khớp, cần xác minh thủ công.",
+      createdBy: request.user?.id,
+    });
     response.json({
       session: serializeParkingSession(session),
       detection,
@@ -165,6 +252,17 @@ export async function uploadParkingImage(request: Request, response: Response) {
     return;
   }
 
+  await safeCreateRecognitionLog({
+    action: "manual",
+    source: "upload",
+    status: "success",
+    detectedPlate: detection.plate,
+    confidence: detection.confidence,
+    rawText: detection.rawText,
+    imageHash: detection.imageHash,
+    message: `OCR thành công nhưng action không hợp lệ: ${action || "empty"}.`,
+    createdBy: request.user?.id,
+  });
   response.status(400).json({ message: "Action không hợp lệ." });
 }
 
@@ -185,6 +283,18 @@ export async function requestVerification(request: Request, response: Response) 
   session.verificationNote = body.verificationNote;
   session.verificationStatus = "Chờ duyệt";
   await session.save();
+
+  await safeCreateRecognitionLog({
+    action: "manual",
+    source: "upload",
+    status: "pending-verification",
+    plate: session.plate,
+    detectedPlate: session.exitDetectedPlate,
+    sessionId: session._id,
+    matchStatus: session.matchStatus,
+    message: "Nhân viên yêu cầu xác minh biển số thủ công, chờ admin duyệt.",
+    createdBy: request.user?.id,
+  });
 
   await createNotification({
     title: "Yêu cầu xác minh OCR",
@@ -236,12 +346,39 @@ export async function cameraEntry(request: Request, response: Response) {
 
   const detection = await detectVehicleImage(snapshotAsFile(snapshot));
   if (!detection.plate) {
+    await safeCreateRecognitionLog({
+      action: "camera-entry",
+      source: "camera",
+      status: "failed",
+      confidence: detection.confidence,
+      rawText: detection.rawText,
+      imageHash: detection.imageHash,
+      imageUrl: snapshot.imageUrl,
+      deviceId: device._id,
+      deviceName: device.name,
+      message: "Không nhận diện được biển số từ camera cổng vào.",
+      createdBy: request.user?.id,
+    });
     response.status(422).json({ message: "Không nhận diện được biển số từ camera." });
     return;
   }
 
   const activeCount = await ParkingSession.countDocuments({ status: "Đang gửi" });
   if (activeCount >= parkingConfig.totalCapacity) {
+    await safeCreateRecognitionLog({
+      action: "camera-entry",
+      source: "camera",
+      status: "success",
+      detectedPlate: detection.plate,
+      confidence: detection.confidence,
+      rawText: detection.rawText,
+      imageHash: detection.imageHash,
+      imageUrl: snapshot.imageUrl,
+      deviceId: device._id,
+      deviceName: device.name,
+      message: "OCR thành công nhưng bãi xe đã đủ 30 chỗ.",
+      createdBy: request.user?.id,
+    });
     response.status(409).json({ message: "Bãi xe đã đủ 30 chỗ." });
     return;
   }
@@ -258,6 +395,26 @@ export async function cameraEntry(request: Request, response: Response) {
     aiRawText: detection.rawText,
     ownerUserId: await ownerFromPlate(detection.plate),
     createdBy: objectId(request.user?.id),
+  });
+
+  await safeCreateRecognitionLog({
+    action: "camera-entry",
+    source: "camera",
+    status: "success",
+    plate: session.plate,
+    detectedPlate: detection.plate,
+    confidence: detection.confidence,
+    rawText: detection.rawText,
+    imageHash: detection.imageHash,
+    imageUrl: snapshot.imageUrl,
+    vehicleType: session.vehicleType,
+    sessionId: session._id,
+    deviceId: device._id,
+    deviceName: device.name,
+    matched: true,
+    matchStatus: session.matchStatus,
+    message: "Đã nhận diện biển số xe vào từ camera.",
+    createdBy: request.user?.id,
   });
 
   response.status(201).json({ session: serializeParkingSession(session), detection });
@@ -286,6 +443,21 @@ export async function cameraExit(request: Request, response: Response) {
 
   const detection = await detectVehicleImage(snapshotAsFile(snapshot));
   if (!detection.plate) {
+    await safeCreateRecognitionLog({
+      action: "camera-exit",
+      source: "camera",
+      status: "failed",
+      plate: session.plate,
+      confidence: detection.confidence,
+      rawText: detection.rawText,
+      imageHash: detection.imageHash,
+      imageUrl: snapshot.imageUrl,
+      sessionId: session._id,
+      deviceId: device._id,
+      deviceName: device.name,
+      message: "Không nhận diện được biển số từ camera cổng ra.",
+      createdBy: request.user?.id,
+    });
     response.status(422).json({ message: "Không nhận diện được biển số từ camera." });
     return;
   }
@@ -304,6 +476,26 @@ export async function cameraExit(request: Request, response: Response) {
   }
 
   await session.save();
+  await safeCreateRecognitionLog({
+    action: "camera-exit",
+    source: "camera",
+    status: matched ? "success" : "mismatch",
+    plate: session.plate,
+    detectedPlate: detection.plate,
+    confidence: detection.confidence,
+    rawText: detection.rawText,
+    imageHash: detection.imageHash,
+    imageUrl: snapshot.imageUrl,
+    vehicleType: session.vehicleType,
+    sessionId: session._id,
+    deviceId: device._id,
+    deviceName: device.name,
+    matched,
+    matchStatus: session.matchStatus,
+    vehicleMatchScore: session.vehicleMatchScore,
+    message: matched ? "Camera checkout thành công." : "Camera checkout không khớp, cần admin duyệt.",
+    createdBy: request.user?.id,
+  });
   response.json({
     session: serializeParkingSession(session),
     detection,

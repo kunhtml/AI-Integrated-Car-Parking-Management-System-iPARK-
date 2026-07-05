@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, type FormEvent } from "react";
-import { CreditCard, ExternalLink, Loader2, PlusCircle, QrCode, RefreshCw } from "lucide-react";
+import { CreditCard, ExternalLink, Loader2, PlusCircle, QrCode, RefreshCcw } from "lucide-react";
 
 import { DataTable } from "@/components/ui/data-table";
 import { useParkingApp } from "@/context/parking-app-context";
@@ -128,7 +128,6 @@ export function WalletView() {
   // (status "Đã hoàn thành") nhưng vẫn còn nợ phí.
   const unpaidSession = sessions.find(
     (s) =>
-      s.status !== "Đã hủy" &&
       s.ownerEmail?.toLowerCase() === currentUser?.email?.toLowerCase() &&
       s.paymentStatus !== "fully_paid" &&
       (s.fee || 0) - (s.paidAmount || 0) > 0,
@@ -198,7 +197,8 @@ export function WalletView() {
 
   async function handleTopUp(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const amount = Number(form.get("amount") || 0);
     if (amount < 10000) {
       setTopUpMsg("Số tiền tối thiểu là 10,000 VND.");
@@ -210,7 +210,7 @@ export function WalletView() {
     });
     const data = await response.json();
     setTopUpMsg(data.message || (response.ok ? "Đã tạo yêu cầu nạp tiền." : "Lỗi."));
-    if (response.ok) event.currentTarget.reset();
+    if (response.ok && formElement) formElement.reset();
   }
 
   async function handleConfirmTopUp(id: string) {
@@ -419,7 +419,7 @@ export function WalletView() {
                   </a>
                 )}
                 <button className="small-button" onClick={handleCheckPaymentStatus} disabled={checkingSessionId === unpaidSession.id} type="button">
-                  {checkingSessionId === unpaidSession.id ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                  {checkingSessionId === unpaidSession.id ? <Loader2 size={14} className="animate-spin" /> : <RefreshCcw size={14} />}
                   Kiểm tra
                 </button>
               </div>
@@ -430,7 +430,7 @@ export function WalletView() {
                 <QrCode size={16} /> Tạo mã QR thanh toán
               </button>
               <button className="small-button" onClick={handleCheckPaymentStatus} disabled={checkingSessionId === unpaidSession.id} type="button">
-                {checkingSessionId === unpaidSession.id ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                {checkingSessionId === unpaidSession.id ? <Loader2 size={14} className="animate-spin" /> : <RefreshCcw size={14} />}
                 Kiểm tra thanh toán
               </button>
             </div>
@@ -519,7 +519,7 @@ export function WalletView() {
                     </a>
                   )}
                   <button className="small-button" onClick={checkQrModalPayment} disabled={qrModalLoading} type="button">
-                    {qrModalLoading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                    {qrModalLoading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCcw size={14} />}
                     Kiểm tra thanh toán
                   </button>
                 </div>

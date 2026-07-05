@@ -1,3 +1,5 @@
+import type { RecognitionLogDocument } from "../models/RecognitionLog.js";
+
 function formatTime(value?: Date) {
   if (!value) {
     return undefined;
@@ -34,6 +36,9 @@ export function serializeParkingSession(session: any) {
     verificationNote: session.verificationNote,
     transactionId: session.transactionId?.toString?.(),
     feeBreakdown: session.feeBreakdown,
+    ownerEmail: session.ownerEmail,
+    paidAmount: session.paidAmount ?? 0,
+    checkInDate: session.checkInAt ? new Date(session.checkInAt).toLocaleDateString("vi-VN") : "",
     createdAt: session.createdAt,
   };
 }
@@ -98,7 +103,7 @@ export function serializeMembershipPackage(pkg: any) {
   };
 }
 
-export function serializeTransaction(item: any) {
+export function serializeTransaction(item: any, session?: any) {
   return {
     id: item._id?.toString?.() || item.id || "",
     sessionId: item.sessionId?.toString?.() || item.sessionId || "",
@@ -111,6 +116,15 @@ export function serializeTransaction(item: any) {
     paidAt: item.paidAt,
     note: item.note,
     createdAt: item.createdAt,
+    payosCheckoutUrl: item.payosCheckoutUrl,
+    sessionFee: session?.fee || 0,
+    sessionPaidAmount: session?.paidAmount || 0,
+    sessionPaymentStatus: session?.paymentStatus || "unpaid",
+    plate: session?.plate,
+    ownerName: session?.ownerName,
+    ownerEmail: session?.ownerEmail,
+    slot: session?.slot,
+    session: session ? serializeParkingSession(session) : undefined,
   };
 }
 
@@ -142,5 +156,71 @@ export function serializeZone(
     stats: stats ?? { total: zone.capacity, empty: zone.capacity, occupied: 0 },
     createdAt: zone.createdAt,
     updatedAt: zone.updatedAt,
+  };
+}
+
+export function serializeDevice(device: any) {
+  return {
+    id: device._id?.toString?.() || device.id || "",
+    name: device.name,
+    gate: device.gate,
+    rtspUrl: device.rtspUrl,
+    httpUrl: device.httpUrl,
+    username: device.username,
+    password: device.password,
+    deviceType: device.deviceType || "rtsp",
+    roiNote: device.roiNote,
+    roi: device.roi || null,
+    snapshotPath: device.snapshotPath || "",
+    streamPath: device.streamPath || `/devices/${device._id?.toString?.()}/stream`,
+    status: device.status,
+    lastSnapshotUrl: device.lastSnapshotUrl,
+    lastSnapshotAt: device.lastSnapshotAt,
+    maintenanceSchedule: device.maintenanceSchedule,
+    createdAt: device.createdAt,
+    updatedAt: device.updatedAt,
+  };
+}
+
+export function serializeRecognitionLog(log: RecognitionLogDocument) {
+  return {
+    id: log._id.toString(),
+    action: log.action,
+    source: log.source,
+    status: log.status,
+    plate: log.plate,
+    detectedPlate: log.detectedPlate,
+    confidence: log.confidence,
+    rawText: log.rawText,
+    imageHash: log.imageHash,
+    imageUrl: log.imageUrl,
+    vehicleType: log.vehicleType,
+    sessionId: log.sessionId?.toString() ?? "",
+    deviceId: log.deviceId?.toString() ?? "",
+    deviceName: log.deviceName,
+    matched: log.matched,
+    matchStatus: log.matchStatus,
+    vehicleMatchScore: log.vehicleMatchScore,
+    message: log.message,
+    createdBy: log.createdBy?.toString() ?? "",
+    createdAt: log.createdAt,
+    updatedAt: log.updatedAt,
+  };
+}
+
+export function serializeMaintenanceLog(log: any) {
+  return {
+    id: log._id?.toString?.() || log.id || "",
+    deviceId: log.deviceId?.toString?.() || log.deviceId || "",
+    deviceName: log.deviceName,
+    type: log.type,
+    description: log.description,
+    performedBy: log.performedBy?.toString?.() || log.performedBy || "",
+    performedAt: log.performedAt,
+    cost: log.cost || 0,
+    notes: log.notes,
+    status: log.status,
+    createdAt: log.createdAt,
+    updatedAt: log.updatedAt,
   };
 }

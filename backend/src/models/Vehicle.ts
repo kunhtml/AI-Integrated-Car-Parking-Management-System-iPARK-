@@ -7,6 +7,15 @@ export type VehicleDocument = {
   vehicleType: "Ô tô";
   status: "Đã đăng ký" | "Cần duyệt" | "Blacklist";
   userId?: mongoose.Types.ObjectId;
+  brand?: string;
+  color?: string;
+  ownerPhone?: string;
+  ownerAddress?: string;
+  model?: string;
+  engineNo?: string;
+  chassisNo?: string;
+  year?: number;
+  isCompanyVehicle?: boolean;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -18,6 +27,15 @@ const vehicleSchema = new Schema<VehicleDocument>(
     vehicleType: { type: String, enum: ["Ô tô"], required: true },
     status: { type: String, enum: ["Đã đăng ký", "Cần duyệt", "Blacklist"], default: "Cần duyệt" },
     userId: { type: Schema.Types.ObjectId, ref: "User" },
+    brand: { type: String },
+    color: { type: String },
+    ownerPhone: { type: String },
+    ownerAddress: { type: String },
+    model: { type: String },
+    engineNo: { type: String },
+    chassisNo: { type: String },
+    year: { type: Number },
+    isCompanyVehicle: { type: Boolean, default: false },
   },
   { timestamps: true },
 );

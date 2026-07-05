@@ -24,7 +24,7 @@ async function applyPaidTransactionToSession(
   session: HydratedSession,
 ) {
   session.paidAmount = (session.paidAmount || 0) + transaction.amount;
-  session.paymentStatus = session.paidAmount >= (session.fee || 0) ? "fully_paid" : "partial_paid";
+  session.paymentStatus = session.paidAmount >= (session.fee || 0) ? "paid" : "pending";
 
   // Chỉ nhả slot + chốt giờ ra khi xe đã ra bãi (phiên đã hoàn thành từ trước).
   if (session.status === "Đã hoàn thành") {

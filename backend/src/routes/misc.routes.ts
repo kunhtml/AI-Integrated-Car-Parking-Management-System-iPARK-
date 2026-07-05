@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   createFeedback,
+  createFeedbackPublic,
   createIncident,
   endShift,
   getReportSummary,
@@ -22,6 +23,7 @@ notificationsRoutes.get("/", asyncHandler(listNotifications));
 notificationsRoutes.post("/:id/read", asyncHandler(markNotificationRead));
 
 export const feedbackRoutes = Router();
+feedbackRoutes.post("/public", asyncHandler(createFeedbackPublic));
 feedbackRoutes.use(requireAuth);
 feedbackRoutes.get("/", asyncHandler(listFeedback));
 feedbackRoutes.post("/", asyncHandler(createFeedback));

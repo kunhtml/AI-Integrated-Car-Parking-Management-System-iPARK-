@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { z } from "zod";
 import { Device } from "../models/Device.js";
 import { captureDeviceSnapshot } from "../services/device.service.js";
+import { captureSnapshotFromDevice, startMjpegStream, stopMjpegStream } from "../services/cameraStream.service.js";
 import { serializeDevice } from "../utils/serializers.js";
 
 const deviceSchema = z.object({
@@ -150,6 +151,146 @@ export async function restartDeviceHandler(request: Request, response: Response)
     await device.save();
     response.status(502).json({
       message: `Không khởi động lại được "${device.name}". Thiết bị có thể không phản hồi.`,
+      device: serializeDevice(device),
+    });
+  }
+}
+
+const roiSchema = z.object({
+  x: z.number().min(0),
+  y: z.number().min(0),
+  width: z.number().min(1),
+  height: z.number().min(1),
+  label: z.string().optional(),
+});
+
+export async function connectDeviceHandler(request: Request, response: Response) {
+  const device = await Device.findById(request.params.id);
+  if (!device) {
+    response.status(404).json({ message: "Không tìm thấy thiết bị." });
+    return;
+  }
+
+  try {
+    const snapshot = await captureSnapshotFromDevice({
+      rtspUrl: device.rtspUrl,
+      httpUrl: device.httpUrl,
+      username: device.username,
+      password: device.password,
+      deviceId: device._id.toString(),
+    });
+
+    device.status = "online";
+    device.lastSnapshotUrl = snapshot.imageUrl;
+    device.lastSnapshotAt = new Date();
+    device.snapshotPath = snapshot.imageUrl;
+    await device.save();
+
+    response.json({
+      message: `Đã kết nối camera "${device.name}" thành công.`,
+      device: serializeDevice(device),
+      snapshotUrl: snapshot.imageUrl,
+    });
+  } catch (error) {
+    device.status = "offline";
+    await device.save();
+    response.status(502).json({
+      message: error instanceof Error ? error.message : "Không kết nối được camera.",
+      device: serializeDevice(device),
+    });
+  }
+}
+
+export async function configureRoiHandler(request: Request, response: Response) {
+  const body = roiSchema.parse(request.body);
+  const device = await Device.findById(request.params.id);
+  if (!device) {
+    response.status(404).json({ message: "Không tìm thấy thiết bị." });
+    return;
+  }
+
+  device.roi = {
+    ...body,
+    updatedAt: new Date(),
+  };
+  await device.save();
+
+  response.json({
+    message: "Đã lưu cấu hình ROI.",
+    device: serializeDevice(device),
+  });
+}
+
+export async function streamDeviceHandler(request: Request, response: Response) {
+  const device = await Device.findById(request.params.id);
+  if (!device) {
+    response.status(404).json({ message: "Không tìm thấy thiết bị." });
+    return;
+  }
+
+  if (!device.rtspUrl && !device.httpUrl) {
+    response.status(400).json({ message: "Thiết bị chưa cấu hình URL camera." });
+    return;
+  }
+
+  const streamProcess = startMjpegStream({
+    deviceId: device._id.toString(),
+    rtspUrl: device.rtspUrl,
+    httpUrl: device.httpUrl,
+    username: device.username,
+    password: device.password,
+  });
+
+  response.writeHead(200, {
+    "Content-Type": "multipart/x-mixed-replace; boundary=frame",
+    "Cache-Control": "no-cache",
+    Connection: "close",
+    Pragma: "no-cache",
+  });
+
+  streamProcess.stdout.pipe(response);
+
+  request.on("close", () => {
+    stopMjpegStream(device._id.toString());
+  });
+}
+
+export async function captureDeviceImageHandler(request: Request, response: Response) {
+  const device = await Device.findById(request.params.id);
+  if (!device) {
+    response.status(404).json({ message: "Không tìm thấy thiết bị." });
+    return;
+  }
+
+  if (!device.rtspUrl && !device.httpUrl) {
+    response.status(400).json({ message: "Thiết bị chưa cấu hình URL camera." });
+    return;
+  }
+
+  try {
+    const snapshot = await captureSnapshotFromDevice({
+      rtspUrl: device.rtspUrl,
+      httpUrl: device.httpUrl,
+      username: device.username,
+      password: device.password,
+      deviceId: device._id.toString(),
+    });
+
+    device.status = "online";
+    device.lastSnapshotUrl = snapshot.imageUrl;
+    device.lastSnapshotAt = new Date();
+    await device.save();
+
+    response.json({
+      message: "Đã chụp ảnh xe từ camera.",
+      device: serializeDevice(device),
+      snapshotUrl: snapshot.imageUrl,
+    });
+  } catch (error) {
+    device.status = "offline";
+    await device.save();
+    response.status(502).json({
+      message: error instanceof Error ? error.message : "Không chụp được ảnh camera.",
       device: serializeDevice(device),
     });
   }

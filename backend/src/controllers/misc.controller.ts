@@ -21,6 +21,27 @@ export async function listFeedback(_request: Request, response: Response) {
   response.json({ feedback });
 }
 
+export async function createFeedbackPublic(request: Request, response: Response) {
+  const { name, phone, email, message } = request.body;
+  if (!name || !phone || !email || !message) {
+    response.status(400).json({ message: "Vui lòng nhập đầy đủ thông tin." });
+    return;
+  }
+  const item = {
+    id: String(Date.now()),
+    subject: `[Liên hệ] ${name} - ${phone}`,
+    content: `Họ tên: ${name}\nSố điện thoại: ${phone}\nEmail: ${email}\nNhu cầu: ${message}`,
+    name,
+    phone,
+    email,
+    message,
+    status: "Mới",
+    createdAt: new Date().toISOString(),
+  };
+  feedback.unshift(item);
+  response.status(201).json({ success: true, feedback: item });
+}
+
 export async function createFeedback(request: Request, response: Response) {
   const item = {
     id: String(Date.now()),

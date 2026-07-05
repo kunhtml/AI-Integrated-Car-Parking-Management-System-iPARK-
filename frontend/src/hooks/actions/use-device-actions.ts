@@ -16,7 +16,8 @@ export function createDeviceActions({
 }: DeviceActionsParams) {
   async function saveDevice(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const id = String(form.get("id") || "");
     const payload = {
       id: id || undefined,
@@ -46,7 +47,7 @@ export function createDeviceActions({
         return [data.device, ...items];
       });
       setActionLog("Đã lưu cấu hình camera.");
-      event.currentTarget.reset();
+      if (formElement) formElement.reset();
     } else {
       setActionLog(data.message || "Không lưu được camera.");
     }

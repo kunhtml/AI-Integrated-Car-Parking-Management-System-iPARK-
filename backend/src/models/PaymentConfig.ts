@@ -9,6 +9,9 @@ export type PaymentConfigDocument = {
   transferPrefix: string;
   isActive: boolean;
   updatedBy?: mongoose.Types.ObjectId;
+  payosClientId?: string;
+  payosApiKey?: string;
+  payosEnabled?: boolean;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -22,6 +25,9 @@ const paymentConfigSchema = new Schema<PaymentConfigDocument>(
     transferPrefix: { type: String, default: "IPARK" },
     isActive: { type: Boolean, default: true, index: true },
     updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    payosClientId: { type: String },
+    payosApiKey: { type: String },
+    payosEnabled: { type: Boolean, default: false },
   },
   { timestamps: true },
 );

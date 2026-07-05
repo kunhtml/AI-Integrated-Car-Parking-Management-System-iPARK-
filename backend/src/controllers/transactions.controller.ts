@@ -71,22 +71,22 @@ export async function createSessionTransaction(request: Request, response: Respo
 
   // Không phí → coi như đã thanh toán
   if (session.fee == null || session.fee <= 0) {
-    session.paymentStatus = "fully_paid";
+    session.paymentStatus = "paid";
     session.paidAmount = 0;
     await session.save();
     response.status(201).json({
       transaction: null,
-      sessionPaymentStatus: "fully_paid",
+      sessionPaymentStatus: "paid",
       message: "Phiên không phát sinh phí.",
     });
     return;
   }
 
   // Đã thanh toán đủ
-  if (session.paymentStatus === "fully_paid" || (session.paidAmount || 0) >= session.fee) {
+  if (session.paymentStatus === "paid" || (session.paidAmount || 0) >= session.fee) {
     response.status(201).json({
       transaction: null,
-      sessionPaymentStatus: "fully_paid",
+      sessionPaymentStatus: "paid",
       message: "Phiên đã thanh toán đủ.",
     });
     return;

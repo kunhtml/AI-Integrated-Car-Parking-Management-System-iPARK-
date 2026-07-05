@@ -25,6 +25,7 @@ declare module "lucide-react" {
   export const Cpu: LucideIcon;
   export const CreditCard: LucideIcon;
   export const Edit2: LucideIcon;
+  export const ExternalLink: LucideIcon;
   export const Eye: LucideIcon;
   export const EyeOff: LucideIcon;
   export const FileDown: LucideIcon;
@@ -46,6 +47,7 @@ declare module "lucide-react" {
   export const QrCode: LucideIcon;
   export const ReceiptText: LucideIcon;
   export const RefreshCcw: LucideIcon;
+  export const RefreshCw: LucideIcon;
   export const Save: LucideIcon;
   export const ScanLine: LucideIcon;
   export const Search: LucideIcon;

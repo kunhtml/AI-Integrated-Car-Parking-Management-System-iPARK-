@@ -124,7 +124,8 @@ export function createAuthActions({
 
   async function verifyTwoFactor(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const response = await apiFetch("/auth/2fa/verify", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -135,7 +136,7 @@ export function createAuthActions({
       setCurrentUser(data.user);
       setTwoFactorQr("");
       setActionLog("Đã bật 2FA.");
-      event.currentTarget.reset();
+      if (formElement) formElement.reset();
     } else {
       setActionLog(data.message || "Không xác minh được 2FA.");
     }
@@ -143,7 +144,8 @@ export function createAuthActions({
 
   async function disableTwoFactor(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const response = await apiFetch("/auth/2fa/disable", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -153,7 +155,7 @@ export function createAuthActions({
     if (response.ok) {
       setCurrentUser(data.user);
       setActionLog("Đã tắt 2FA.");
-      event.currentTarget.reset();
+      if (formElement) formElement.reset();
     } else {
       setActionLog(data.message || "Không tắt được 2FA.");
     }

@@ -338,7 +338,7 @@ async function seedDatabase() {
       {
         sessionId: session1._id,
         userId: adminUser._id,
-        method: "vietqr",
+        method: "payos",
         amount: 30000,
         status: "paid",
         content: "IPARK-3012345",

@@ -19,6 +19,7 @@ export type View =
   | "shifts"
   | "incidents"
   | "ai"
+  | "recognitionLogs"
   | "devices"
   | "security"
   | "zones";
@@ -68,9 +69,12 @@ export type ParkingSession = {
   verificationStatus?: "Không cần" | "Chờ duyệt" | "Đã duyệt" | "Từ chối";
   manualPlate?: string;
   verificationNote?: string;
-  paymentStatus?: "unpaid" | "pending" | "paid";
+  paymentStatus?: "unpaid" | "pending" | "paid" | "fully_paid" | "partial_paid";
   transactionId?: string;
   feeBreakdown?: FeeBreakdown;
+  ownerEmail?: string;
+  paidAmount?: number;
+  checkInDate?: string;
 };
 
 export type RegisteredVehicle = {
@@ -122,6 +126,14 @@ export type TransactionItem = {
   qrUrl?: string;
   paidAt?: string;
   createdAt: string;
+  payosCheckoutUrl?: string;
+  sessionFee?: number;
+  sessionPaidAmount?: number;
+  sessionPaymentStatus?: string;
+  plate?: string;
+  ownerName?: string;
+  ownerEmail?: string;
+  slot?: string;
 };
 
 export type NotificationItem = {
@@ -146,10 +158,43 @@ export type DeviceItem = {
   name: string;
   gate: "entry" | "exit";
   rtspUrl: string;
+  httpUrl?: string;
   username?: string;
+  deviceType?: "rtsp" | "http" | "onvif" | "usb";
   roiNote?: string;
+  roi?: {
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    label?: string;
+  } | null;
+  streamPath?: string;
   status: "online" | "offline" | "unknown";
   lastSnapshotUrl?: string;
+};
+
+export type RecognitionLogItem = {
+  id: string;
+  action: "entry" | "exit" | "camera-entry" | "camera-exit" | "manual";
+  source: "upload" | "camera";
+  status: "success" | "failed" | "mismatch" | "pending-verification";
+  plate?: string;
+  detectedPlate?: string;
+  confidence?: number;
+  rawText?: string;
+  imageHash?: string;
+  imageUrl?: string;
+  vehicleType?: string;
+  sessionId?: string;
+  deviceId?: string;
+  deviceName?: string;
+  matched?: boolean;
+  matchStatus?: "Chưa checkout" | "Khớp" | "Không khớp";
+  vehicleMatchScore?: number;
+  message?: string;
+  createdBy?: string;
+  createdAt: string;
 };
 
 export type ShiftItem = {
@@ -185,4 +230,30 @@ export type Zone = {
     empty: number;
     occupied: number;
   };
+};
+
+export type RevenueChartPoint = {
+  date: string;
+  revenue: number;
+  count: number;
+};
+
+export type OccupancyHourPoint = {
+  hour: number;
+  avgOccupancy: number;
+  maxOccupancy: number;
+};
+
+export type TopCustomer = {
+  userId: string;
+  name: string;
+  email?: string;
+  sessionCount: number;
+  totalSpent: number;
+};
+
+export type PeakHourPoint = {
+  dayOfWeek: number;
+  hour: number;
+  count: number;
 };

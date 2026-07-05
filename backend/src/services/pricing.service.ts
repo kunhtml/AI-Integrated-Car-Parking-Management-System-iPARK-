@@ -9,6 +9,8 @@ export type FeeBreakdown = {
   parkingFee: number;
   overdueFine: number;
   totalFee: number;
+  dayRate?: number;
+  nightRate?: number;
 };
 
 export async function getActivePricingConfig() {
@@ -27,6 +29,11 @@ export async function getActivePricingConfig() {
     graceExitMinutes: 10,
     isActive: true,
   });
+}
+
+export async function getActivePricingConfigForZone(zoneId?: any) {
+  // Vì hiện tại hệ thống chỉ có một PricingConfig global hoặc zone, ta trả về active pricing config mặc định
+  return getActivePricingConfig();
 }
 
 export function calculateParkingFee(

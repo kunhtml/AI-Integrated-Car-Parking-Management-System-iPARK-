@@ -17,6 +17,7 @@ export type UserDocument = {
   twoFactorEnabled: boolean;
   twoFactorSecret?: string;
   twoFactorPendingSecret?: string;
+  memberCode?: string;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -40,6 +41,7 @@ const userSchema = new Schema<UserDocument>(
     twoFactorEnabled: { type: Boolean, default: false },
     twoFactorSecret: { type: String },
     twoFactorPendingSecret: { type: String },
+    memberCode: { type: String, unique: true, sparse: true },
   },
   { timestamps: true },
 );

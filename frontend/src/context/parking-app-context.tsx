@@ -19,6 +19,7 @@ import {
   createReportActions,
   useReportSummaryLoader,
 } from "@/hooks/actions/use-report-actions";
+import { createAnalyticsActions } from "@/hooks/actions/use-analytics-actions";
 import { createSessionActions } from "@/hooks/actions/use-session-actions";
 import { createZoneActions } from "@/hooks/actions/use-zone-actions";
 import { useOperationalData } from "@/hooks/use-operational-data";
@@ -39,6 +40,10 @@ import type {
   ShiftItem,
   TransactionItem,
   Zone,
+  OccupancyHourPoint,
+  PeakHourPoint,
+  RevenueChartPoint,
+  TopCustomer,
 } from "@/types";
 import type { FormEvent } from "react";
 
@@ -76,6 +81,10 @@ type ParkingAppContextValue = {
   sessionLoading: boolean;
   membershipActive: boolean;
   membershipExpiresAt: string;
+  revenueChart: RevenueChartPoint[];
+  occupancyData: OccupancyHourPoint[];
+  topCustomers: TopCustomer[];
+  peakHours: PeakHourPoint[];
   stats: {
     active: number;
     available: number;
@@ -83,6 +92,11 @@ type ParkingAppContextValue = {
     completion: number;
   };
   filteredSessions: ParkingSession[];
+  setSessions: (
+    sessions:
+      | ParkingSession[]
+      | ((items: ParkingSession[]) => ParkingSession[]),
+  ) => void;
   formErrors: Record<string, string>;
   setFormErrors: (errors: Record<string, string>) => void;
   setZoneList: (zoneList: Zone[] | ((items: Zone[]) => Zone[])) => void;
@@ -118,6 +132,10 @@ type ParkingAppContextValue = {
     type: "sessions" | "revenue",
     format?: "xlsx" | "pdf",
   ) => Promise<void>;
+  loadRevenueChart: (from: string, to: string, groupBy?: string) => Promise<void>;
+  loadOccupancyHourly: (from: string, to: string) => Promise<void>;
+  loadTopCustomers: (from: string, to: string, limit?: number) => Promise<void>;
+  loadPeakHours: (from: string, to: string) => Promise<void>;
   simulateAction: (message: string) => void;
   createFeedback: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   updateFeedbackStatus: (id: string) => Promise<void>;
@@ -328,6 +346,26 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       setState((s) => ({ ...s, membershipExpiresAt })),
     [],
   );
+  const setRevenueChart = useCallback(
+    (revenueChart: RevenueChartPoint[]) =>
+      setState((s) => ({ ...s, revenueChart })),
+    [],
+  );
+  const setOccupancyData = useCallback(
+    (occupancyData: OccupancyHourPoint[]) =>
+      setState((s) => ({ ...s, occupancyData })),
+    [],
+  );
+  const setTopCustomers = useCallback(
+    (topCustomers: TopCustomer[]) =>
+      setState((s) => ({ ...s, topCustomers })),
+    [],
+  );
+  const setPeakHours = useCallback(
+    (peakHours: PeakHourPoint[]) =>
+      setState((s) => ({ ...s, peakHours })),
+    [],
+  );
 
   useSessionLoader({ setCurrentUser, setActionLog, setSessionLoading });
 
@@ -393,28 +431,30 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
   const paymentActions = useMemo(
     () =>
       createPaymentActions({
+        setSessions,
+        setPricingConfigState,
+        setTransactionList,
+        setActionLog,
         currentUser: state.currentUser,
         setCurrentUser,
-        pricingConfigState: state.pricingConfigState,
-        setPricingConfigState,
         setPaymentConfigState,
-        setTransactionList,
+        pricingConfigState: state.pricingConfigState,
         transactionList: state.transactionList,
         setMembershipActive,
         setMembershipExpiresAt,
-        setActionLog,
       }),
     [
+      setSessions,
+      setPricingConfigState,
+      setTransactionList,
+      setActionLog,
       state.currentUser,
+      setCurrentUser,
+      setPaymentConfigState,
       state.pricingConfigState,
       state.transactionList,
-      setCurrentUser,
-      setPricingConfigState,
-      setPaymentConfigState,
-      setTransactionList,
       setMembershipActive,
       setMembershipExpiresAt,
-      setActionLog,
     ],
   );
 
@@ -436,6 +476,24 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
         setActionLog,
       }),
     [state.reportFrom, state.reportTo, setReportSummary, setActionLog],
+  );
+
+  const analyticsActions = useMemo(
+    () =>
+      createAnalyticsActions({
+        setRevenueChart,
+        setOccupancyData,
+        setTopCustomers,
+        setPeakHours,
+        setActionLog,
+      }),
+    [
+      setRevenueChart,
+      setOccupancyData,
+      setTopCustomers,
+      setPeakHours,
+      setActionLog,
+    ],
   );
 
   const miscActions = useMemo(
@@ -527,8 +585,13 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       sessionLoading: state.sessionLoading,
       membershipActive: state.membershipActive,
       membershipExpiresAt: state.membershipExpiresAt,
+      revenueChart: state.revenueChart,
+      occupancyData: state.occupancyData,
+      topCustomers: state.topCustomers,
+      peakHours: state.peakHours,
       stats,
       filteredSessions,
+      setSessions,
       formErrors,
       setFormErrors,
       setZoneList,
@@ -537,6 +600,7 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       ...paymentActions,
       ...deviceActions,
       ...reportActions,
+      ...analyticsActions,
       ...miscActions,
       ...zoneActions,
     }),
@@ -544,6 +608,7 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       state,
       stats,
       filteredSessions,
+      setSessions,
       formErrors,
       setFormErrors,
       setZoneList,
@@ -552,6 +617,7 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       paymentActions,
       deviceActions,
       reportActions,
+      analyticsActions,
       miscActions,
       zoneActions,
     ],

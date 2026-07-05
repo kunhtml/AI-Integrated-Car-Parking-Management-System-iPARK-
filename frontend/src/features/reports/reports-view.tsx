@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BarChart3, Download, MapPin, ShieldAlert, TrendingUp, Users, Clock, Wallet } from "lucide-react";
+import { BarChart3, MapPin, Clock3, Wallet } from "lucide-react";
 import { useParkingApp } from "@/context/parking-app-context";
 import { apiFetch } from "@/lib/client-api";
 import { currency } from "@/lib/constants";
@@ -121,10 +121,10 @@ export function ReportsView() {
                 Tải báo cáo
               </button>
               <button className="small-button" onClick={() => downloadReport("sessions", "xlsx")} type="button">
-                <Download size={14} /> Excel
+                Excel
               </button>
               <button className="small-button" onClick={() => downloadReport("revenue", "pdf")} type="button">
-                <Download size={14} /> PDF
+                PDF
               </button>
             </div>
             {reportSummary && (
@@ -166,7 +166,7 @@ export function ReportsView() {
             {/* Penalty Report */}
             {activeTab === "penalty" && (
               <div>
-                <div className="panel-heading"><div><p>Phạt</p><h2>Báo cáo quá hạn</h2></div><ShieldAlert size={20} /></div>
+                <div className="panel-heading"><div><p>Phạt</p><h2>Báo cáo quá hạn</h2></div><MapPin size={20} /></div>
                 {penaltyData ? (
                   <>
                     <div className="metric-grid" style={{ marginBottom: 16 }}>

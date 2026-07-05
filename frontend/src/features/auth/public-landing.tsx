@@ -2,31 +2,24 @@
 
 import { useEffect, useState } from "react";
 import {
-  BadgeCheck,
   Camera,
   Car,
   Check,
   CheckCircle2,
-  CircleParking,
-  Clock,
+  Clock3,
   CreditCard,
-  DoorOpen,
-  ExternalLink,
   Loader2,
   LogIn,
+  LogOut,
   Mail,
   MapPin,
   Phone,
-  Plus,
   QrCode,
-  Receipt,
-  RefreshCw,
+  RefreshCcw,
   ScanLine,
   Search,
   ShieldCheck,
-  Sparkles,
   UserRound,
-  Zap,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useParkingApp } from "@/context/parking-app-context";
@@ -78,7 +71,7 @@ const STEPS = [
   { icon: Camera, title: "Camera nhận diện biển số", desc: "AI tự động đọc biển số khi xe tới cổng, barie mở trong ~3 giây." },
   { icon: QrCode, title: "Nhận vé điện tử QR", desc: "Mỗi xe có một mã phiên gửi xe duy nhất, thay cho vé giấy." },
   { icon: CreditCard, title: "Thanh toán PayOS", desc: "Tra cứu phí theo biển số và quét mã QR PayOS để trả, không cần tiền mặt." },
-  { icon: DoorOpen, title: "Ra bãi tự động", desc: "Sau khi thanh toán, hệ thống đóng phiên và mở barie ra." },
+  { icon: LogOut, title: "Ra bãi tự động", desc: "Sau khi thanh toán, hệ thống đóng phiên và mở barie ra." },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────
@@ -145,7 +138,7 @@ function ParkingAvailability() {
             <div><span className="landing-avail-stat-value">{totalCapacity}</span><span className="landing-avail-stat-label">Tổng sức chứa</span></div>
           </div>
           <div className="landing-avail-stat">
-            <div className="landing-avail-stat-icon orange"><Zap size={20} /></div>
+            <div className="landing-avail-stat-icon orange"><ScanLine size={20} /></div>
             <div><span className="landing-avail-stat-value">{fillRate}%</span><span className="landing-avail-stat-label">Tỷ lệ lấp đầy</span></div>
           </div>
         </div>
@@ -194,7 +187,7 @@ export function AuthPanel() {
   const { mode, setMode, handleLogin, handleRegister, handleForgotPassword } = useParkingApp();
   return (
     <div className="landing-auth">
-      <div className="landing-auth-header"><CircleParking size={22} /><span>iPARK</span></div>
+      <div className="landing-auth-header"><Car size={22} /><span>iPARK</span></div>
       <div className="landing-auth-tabs">
         <button className={mode === "login" ? "active" : ""} onClick={() => setMode("login")} type="button">Đăng nhập</button>
         <button className={mode === "register" ? "active" : ""} onClick={() => setMode("register")} type="button">Đăng ký</button>
@@ -229,7 +222,7 @@ export function AuthPanel() {
           <label><span className="landing-auth-label">Công ty (nếu có)</span><input name="company" placeholder="Tên công ty" /></label>
           <label><span className="landing-auth-label">Mật khẩu <span className="required">*</span></span><input name="password" placeholder="Tối thiểu 6 ký tự" required type="password" /></label>
           <label className="checkbox-label"><input name="acceptTerms" type="checkbox" required /><span>Tôi đồng ý với <a href="#">Điều khoản</a> và <a href="#">Chính sách bảo mật</a></span></label>
-          <button className="landing-auth-btn-primary" type="submit"><Plus size={16} />Tạo tài khoản</button>
+          <button className="landing-auth-btn-primary" type="submit"><UserRound size={16} />Tạo tài khoản</button>
           <button className="landing-auth-link" onClick={() => setMode("login")} type="button">Đã có tài khoản? Đăng nhập</button>
         </form>
       )}
@@ -255,7 +248,7 @@ function SiteHeader({ available = 153, onLoginClick }: { available?: number; onL
     <header className="landing-header">
       <div className="landing-header-inner">
         <a href="#" className="landing-logo">
-          <div className="landing-logo-icon"><CircleParking size={22} color="#0a0f1a" /></div>
+          <div className="landing-logo-icon"><Car size={22} color="#0a0f1a" /></div>
           <div className="landing-logo-text"><span className="landing-logo-name">iPARK</span><span className="landing-logo-tagline">Smart Parking</span></div>
         </a>
         <nav className="landing-nav"><a href="#tra-cuu">Tra cứu</a><a href="#chỗ-trống">Chỗ trống</a><a href="#liên-hệ">Liên hệ</a></nav>
@@ -280,7 +273,7 @@ function HeroSection({ liveStats, onLoginClick }: { liveStats: { active: number;
       <div className="landing-hero-bg" />
       <div className="landing-hero-inner">
         <div className="landing-hero-content">
-          <span className="landing-badge"><Sparkles size={14} />Bãi xe không vé · Nhận diện biển số bằng AI</span>
+          <span className="landing-badge"><ScanLine size={14} />Bãi xe không vé · Nhận diện biển số bằng AI</span>
           <h1>Gửi xe thông minh, <span className="highlight">thanh toán qua PayOS</span></h1>
           <p>Dành cho khách vãng lai: không giữ vé giấy, không cài ứng dụng. Xe vào được camera nhận diện tự động — bạn chỉ cần tra cứu biển số và quét mã QR để trả phí khi ra bãi.</p>
           <div className="landing-hero-actions">
@@ -645,19 +638,19 @@ function SessionLookup() {
               <span className="landing-status-badge success">Đã thanh toán</span>
             </div>
             <div style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "8px", padding: "12px", marginBottom: "20px", color: "#22c55e", fontSize: "13px" }}>
-              <BadgeCheck size={16} style={{ display: "inline", verticalAlign: "middle", marginRight: "8px" }} />
+              <CheckCircle2 size={16} style={{ display: "inline", verticalAlign: "middle", marginRight: "8px" }} />
               Xe đã thanh toán gần đây. Không cần thanh toán thêm.
             </div>
             <div className="landing-session-meta">
               {sessionInfo.checkInAt && (
                 <div className="landing-session-meta-item">
-                  <Clock size={14} />
+                  <Clock3 size={14} />
                   <span>Giờ vào: <strong>{new Date(sessionInfo.checkInAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}</strong></span>
                 </div>
               )}
               {sessionInfo.checkOutAt && (
                 <div className="landing-session-meta-item">
-                  <Clock size={14} />
+                  <Clock3 size={14} />
                   <span>Giờ ra: <strong>{new Date(sessionInfo.checkOutAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}</strong></span>
                 </div>
               )}
@@ -670,7 +663,7 @@ function SessionLookup() {
             </div>
             <div style={{ background: "var(--landing-bg)", border: "1px solid var(--landing-border)", borderRadius: "10px", padding: "16px", marginTop: "16px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 600, marginBottom: "12px" }}>
-                <Receipt size={16} color="var(--landing-accent)" /> Biên nhận thanh toán
+                Biên nhận thanh toán
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "13px" }}>
                 <span style={{ color: "var(--landing-fg-muted)" }}>Biển số</span>
@@ -706,7 +699,7 @@ function SessionLookup() {
             </div>
 
             <div className="landing-session-meta">
-              <div className="landing-session-meta-item"><Clock size={14} /><span>Đã gửi: <strong>{formatDuration(durationMs)}</strong></span></div>
+              <div className="landing-session-meta-item"><Clock3 size={14} /><span>Đã gửi: <strong>{formatDuration(durationMs)}</strong></span></div>
               <div className="landing-session-meta-item"><MapPin size={14} /><span>Vị trí: <strong>{sessionInfo.slot}</strong></span></div>
               <div className="landing-session-meta-item">
                 <span>Giờ vào: <strong>{new Date(sessionInfo.checkInAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}</strong></span>
@@ -726,7 +719,7 @@ function SessionLookup() {
             {/* Prepaid notice — only when fully paid */}
             {sessionInfo.paymentStatus === "fully_paid" && !sessionInfo.prepaidCheckoutAt && (
               <div style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "8px", padding: "12px", marginTop: "16px", color: "#22c55e", fontSize: "13px" }}>
-                <BadgeCheck size={16} style={{ display: "inline", verticalAlign: "middle", marginRight: "8px" }} />
+                <CheckCircle2 size={16} style={{ display: "inline", verticalAlign: "middle", marginRight: "8px" }} />
                 Xe đã thanh toán đủ. Ra bãi bất kỳ lúc nào!
               </div>
             )}
@@ -736,7 +729,7 @@ function SessionLookup() {
               <div style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px solid var(--landing-border)" }}>
                 {extendDone ? (
                   <div style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "8px", padding: "12px", color: "#22c55e", fontSize: "13px" }}>
-                    <BadgeCheck size={16} style={{ display: "inline", verticalAlign: "middle", marginRight: "8px" }} />
+                    <CheckCircle2 size={16} style={{ display: "inline", verticalAlign: "middle", marginRight: "8px" }} />
                     Gia hạn thành công! {extendResult?.expectedCheckOutAt && `Giờ ra mới: ${new Date(extendResult.expectedCheckOutAt).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}`}
                   </div>
                 ) : extendPayos ? (
@@ -754,11 +747,11 @@ function SessionLookup() {
                     <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
                       {extendPayos.checkoutUrl && (
                         <button className="landing-qr-btn" style={{ background: "var(--landing-secondary)" }} onClick={() => window.open(extendPayos.checkoutUrl, "_blank")} type="button">
-                          <ExternalLink size={16} />Mở PayOS
+                          Mở PayOS
                         </button>
                       )}
                       <button className="landing-qr-btn" style={{ background: "var(--landing-accent)" }} onClick={handleCheckExtendPayment} disabled={loading} type="button">
-                        <RefreshCw size={16} className={loading ? "animate-spin" : ""} />Kiểm tra thanh toán
+                        <RefreshCcw size={16} className={loading ? "animate-spin" : ""} />Kiểm tra thanh toán
                       </button>
                     </div>
                   </div>
@@ -795,13 +788,13 @@ function SessionLookup() {
                     <div style={{ display: "flex", gap: "8px" }}>
                       <button className="landing-btn-secondary" onClick={() => setShowExtend(false)} type="button" style={{ flex: 1 }}>Hủy</button>
                       <button className="landing-btn-primary" onClick={handleExtend} disabled={loading || extendAfter22h === null} type="button" style={{ flex: 2 }}>
-                        {loading ? <Loader2 size={16} className="animate-spin" /> : <Clock size={16} />}Gia hạn &amp; thanh toán
+                        {loading ? <Loader2 size={16} className="animate-spin" /> : <Clock3 size={16} />}Gia hạn &amp; thanh toán
                       </button>
                     </div>
                   </div>
                 ) : (
                   <button className="landing-btn-secondary" onClick={() => setShowExtend(true)} type="button" style={{ width: "100%" }}>
-                    <Clock size={16} />Gia hạn thêm giờ gửi xe
+                    <Clock3 size={16} />Gia hạn thêm giờ gửi xe
                   </button>
                 )}
               </div>
@@ -810,7 +803,7 @@ function SessionLookup() {
             {/* Partial paid notice */}
             {sessionInfo.paymentStatus === "partial_paid" && (
               <div style={{ background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.3)", borderRadius: "8px", padding: "12px", marginTop: "16px", color: "#fbbf24", fontSize: "13px" }}>
-                <BadgeCheck size={16} style={{ display: "inline", verticalAlign: "middle", marginRight: "8px" }} />
+                <CheckCircle2 size={16} style={{ display: "inline", verticalAlign: "middle", marginRight: "8px" }} />
                 Đã thanh toán {formatVND(sessionInfo.paidAmount ?? 0)}. Vui lòng thanh toán phần còn lại để ra bãi.
               </div>
             )}
@@ -853,7 +846,7 @@ function SessionLookup() {
                 {exitAfter22h !== null && !feeResult && (
                   <button className="landing-btn-primary" onClick={handleCalculateFee} disabled={loading}
                     style={{ width: "100%", padding: "12px" }} type="button">
-                    {loading ? <Loader2 size={16} className="animate-spin" /> : <Receipt size={16} />}Xem phí phải trả
+                    {loading ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}Xem phí phải trả
                   </button>
                 )}
 
@@ -939,12 +932,12 @@ function SessionLookup() {
               {payosData.checkoutUrl && (
                 <button className="landing-qr-btn" style={{ marginTop: "12px", background: "var(--landing-secondary)" }}
                   onClick={() => window.open(payosData.checkoutUrl, "_blank")} type="button">
-                  <ExternalLink size={16} />Mở trang thanh toán PayOS
+                  Mở trang thanh toán PayOS
                 </button>
               )}
               <button className="landing-qr-btn" style={{ marginTop: "10px", background: "var(--landing-accent)" }}
                 onClick={handleCheckPayOS} disabled={loading} type="button">
-                <RefreshCw size={16} className={loading ? "animate-spin" : ""} />Kiểm tra thanh toán
+                <RefreshCcw size={16} className={loading ? "animate-spin" : ""} />Kiểm tra thanh toán
               </button>
             </div>
             <button onClick={() => setStep("session")} style={{ marginTop: "12px", background: "none", border: "none", color: "var(--landing-fg-muted)", cursor: "pointer", fontSize: "13px", display: "block", width: "100%", textAlign: "center" }} type="button">
@@ -956,12 +949,12 @@ function SessionLookup() {
         {/* ── Paid ── */}
         {step === "paid" && (
           <div className="landing-success">
-            <div className="landing-success-icon"><BadgeCheck size={36} /></div>
+            <div className="landing-success-icon"><CheckCircle2 size={36} /></div>
             <h3>Thanh toán thành công!</h3>
             <p>Phiên gửi xe đã được thanh toán. Bạn có thể ra bãi bất kỳ lúc nào.</p>
             <div style={{ background: "var(--landing-bg)", border: "1px solid var(--landing-border)", borderRadius: "12px", padding: "16px", width: "100%", maxWidth: "320px", textAlign: "left", marginTop: "16px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 600, marginBottom: "12px" }}>
-                <Receipt size={16} color="var(--landing-accent)" /> Biên nhận
+                Biên nhận
               </div>
               {sessionInfo && (
                 <>
@@ -1050,7 +1043,7 @@ function LandingFooter() {
   return (
     <footer className="landing-footer">
       <div className="landing-footer-inner">
-        <div className="landing-footer-left"><CircleParking size={18} /><span>© 2026 iPARK — Bãi đỗ xe thông minh tích hợp AI.</span></div>
+        <div className="landing-footer-left"><Car size={18} /><span>© 2026 iPARK — Bãi đỗ xe thông minh tích hợp AI.</span></div>
         <span>Hỗ trợ: 1900 1234 · Gặp bảo vệ tại quầy nếu cần trợ giúp.</span>
       </div>
     </footer>

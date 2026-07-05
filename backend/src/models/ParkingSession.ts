@@ -32,6 +32,14 @@ export type ParkingSessionDocument = {
   verifiedAt?: Date;
   transactionId?: mongoose.Types.ObjectId;
   createdBy?: mongoose.Types.ObjectId;
+  priorityType?: "member" | "walkin";
+  slotId?: mongoose.Types.ObjectId;
+  expectedCheckOutAt?: Date;
+  prepaidCheckoutAt?: Date;
+  ownerEmail?: string;
+  paidAmount?: number;
+  paymentMethod?: "payos" | "wallet" | "cash";
+  entryGate?: string;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -81,6 +89,14 @@ const parkingSessionSchema = new Schema<ParkingSessionDocument>(
     ownerUserId: { type: Schema.Types.ObjectId, ref: "User", index: true },
     transactionId: { type: Schema.Types.ObjectId, ref: "Transaction" },
     createdBy: { type: Schema.Types.ObjectId, ref: "User" },
+    priorityType: { type: String, enum: ["member", "walkin"], default: "walkin" }, // Dùng cho Dynamic/Reserved logic
+    slotId: { type: Schema.Types.ObjectId, ref: "ParkingSlot" },
+    expectedCheckOutAt: { type: Date },
+    prepaidCheckoutAt: { type: Date },
+    ownerEmail: { type: String },
+    paidAmount: { type: Number, default: 0 },
+    paymentMethod: { type: String, enum: ["payos", "wallet", "cash"] },
+    entryGate: { type: String },
   },
   { timestamps: true },
 );

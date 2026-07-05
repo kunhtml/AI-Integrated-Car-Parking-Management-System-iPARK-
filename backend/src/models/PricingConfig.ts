@@ -12,6 +12,8 @@ export type PricingConfigDocument = {
   effectiveFrom: Date;
   isActive: boolean;
   updatedBy?: mongoose.Types.ObjectId;
+  dayRate?: number;
+  nightRate?: number;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -28,6 +30,8 @@ const pricingConfigSchema = new Schema<PricingConfigDocument>(
     effectiveFrom: { type: Date, default: () => new Date() },
     isActive: { type: Boolean, default: true },
     updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    dayRate: { type: Number, default: 5000 },
+    nightRate: { type: Number, default: 10000 },
   },
   { timestamps: true },
 );

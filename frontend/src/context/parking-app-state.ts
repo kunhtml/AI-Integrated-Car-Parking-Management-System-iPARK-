@@ -21,6 +21,10 @@ import type {
   ShiftItem,
   TransactionItem,
   Zone,
+  OccupancyHourPoint,
+  PeakHourPoint,
+  RevenueChartPoint,
+  TopCustomer,
 } from "@/types";
 
 export type ParkingAppState = {
@@ -50,6 +54,10 @@ export type ParkingAppState = {
   sessionLoading: boolean;
   membershipActive: boolean;
   membershipExpiresAt: string;
+  revenueChart: RevenueChartPoint[];
+  occupancyData: OccupancyHourPoint[];
+  topCustomers: TopCustomer[];
+  peakHours: PeakHourPoint[];
 };
 
 export function createInitialState(): ParkingAppState {
@@ -80,5 +88,9 @@ export function createInitialState(): ParkingAppState {
     sessionLoading: false,
     membershipActive: false,
     membershipExpiresAt: "",
+    revenueChart: [],
+    occupancyData: [],
+    topCustomers: [],
+    peakHours: [],
   };
 }
