@@ -4,8 +4,17 @@ export type VehicleDocument = {
   _id: mongoose.Types.ObjectId;
   plate: string;
   ownerName: string;
+  ownerPhone?: string;
+  ownerAddress?: string;
+  brand?: string;
+  model?: string;
+  color?: string;
+  engineNo?: string;
+  chassisNo?: string;
+  year?: number;
   vehicleType: "Ô tô";
   status: "Đã đăng ký" | "Cần duyệt" | "Blacklist";
+  isCompanyVehicle?: boolean;
   userId?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -13,11 +22,20 @@ export type VehicleDocument = {
 
 const vehicleSchema = new Schema<VehicleDocument>(
   {
-    plate: { type: String, required: true, trim: true, uppercase: true, unique: true },
+    plate: { type: String, required: true, trim: true, uppercase: true, unique: true, index: true },
     ownerName: { type: String, required: true, trim: true },
-    vehicleType: { type: String, enum: ["Ô tô"], required: true },
-    status: { type: String, enum: ["Đã đăng ký", "Cần duyệt", "Blacklist"], default: "Cần duyệt" },
-    userId: { type: Schema.Types.ObjectId, ref: "User" },
+    ownerPhone: { type: String, trim: true },
+    ownerAddress: { type: String, trim: true },
+    brand: { type: String, trim: true },
+    model: { type: String, trim: true },
+    color: { type: String, trim: true },
+    engineNo: { type: String, trim: true },
+    chassisNo: { type: String, trim: true },
+    year: { type: Number },
+    vehicleType: { type: String, enum: ["Ô tô"], required: true, default: "Ô tô" },
+    status: { type: String, enum: ["Đã đăng ký", "Cần duyệt", "Blacklist"], default: "Cần duyệt", index: true },
+    isCompanyVehicle: { type: Boolean, default: false },
+    userId: { type: Schema.Types.ObjectId, ref: "User", index: true },
   },
   { timestamps: true },
 );

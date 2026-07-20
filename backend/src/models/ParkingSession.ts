@@ -6,12 +6,21 @@ export type ParkingSessionDocument = {
   plate: string;
   ownerName: string;
   vehicleType: "Ô tô";
+  rfidUid?: string;
   checkInAt: Date;
   checkOutAt?: Date;
   slot: string;
   status: "Đang gửi" | "Đã hoàn thành";
-  paymentStatus: "unpaid" | "pending" | "paid";
+  paymentStatus: "unpaid" | "pending" | "paid" | "partial_paid" | "fully_paid";
+  paymentMethod?: "cash" | "payos" | "vietqr" | "wallet" | "subscription";
   fee: number;
+  paidAmount?: number;
+  isMember: boolean;
+  subscriptionId?: mongoose.Types.ObjectId;
+  memberCode?: string;
+  subscriptionPlanName?: string;
+  paymentLookupCode?: string;
+  qrCode?: string;
   feeBreakdown?: FeeBreakdown;
   ownerUserId?: mongoose.Types.ObjectId;
   entryImageUrl?: string;
@@ -38,15 +47,32 @@ export type ParkingSessionDocument = {
 
 const parkingSessionSchema = new Schema<ParkingSessionDocument>(
   {
-    plate: { type: String, required: true, trim: true, uppercase: true },
+    plate: { type: String, required: true, trim: true, uppercase: true, index: true },
     ownerName: { type: String, required: true, trim: true },
     vehicleType: { type: String, enum: ["Ô tô"], required: true },
+    rfidUid: { type: String, trim: true, uppercase: true, index: true },
     checkInAt: { type: Date, default: Date.now },
     checkOutAt: { type: Date },
     slot: { type: String, required: true },
     status: { type: String, enum: ["Đang gửi", "Đã hoàn thành"], default: "Đang gửi" },
-    paymentStatus: { type: String, enum: ["unpaid", "pending", "paid"], default: "unpaid" },
+    paymentStatus: {
+      type: String,
+      enum: ["unpaid", "pending", "paid", "partial_paid", "fully_paid"],
+      default: "unpaid",
+      index: true,
+    },
+    paymentMethod: {
+      type: String,
+      enum: ["cash", "payos", "vietqr", "wallet", "subscription"],
+    },
     fee: { type: Number, default: 0 },
+    paidAmount: { type: Number, default: 0 },
+    isMember: { type: Boolean, default: false, index: true },
+    subscriptionId: { type: Schema.Types.ObjectId, ref: "Subscription", index: true },
+    memberCode: { type: String, trim: true },
+    subscriptionPlanName: { type: String, trim: true },
+    paymentLookupCode: { type: String, trim: true, uppercase: true, index: true },
+    qrCode: { type: String },
     feeBreakdown: {
       totalMinutes: { type: Number },
       freeMinutes: { type: Number },
@@ -67,7 +93,11 @@ const parkingSessionSchema = new Schema<ParkingSessionDocument>(
     entryImageHash: { type: String },
     exitImageHash: { type: String },
     vehicleMatchScore: { type: Number },
-    matchStatus: { type: String, enum: ["Chưa checkout", "Khớp", "Không khớp"], default: "Chưa checkout" },
+    matchStatus: {
+      type: String,
+      enum: ["Chưa checkout", "Khớp", "Không khớp"],
+      default: "Chưa checkout",
+    },
     verificationStatus: {
       type: String,
       enum: ["Không cần", "Chờ duyệt", "Đã duyệt", "Từ chối"],

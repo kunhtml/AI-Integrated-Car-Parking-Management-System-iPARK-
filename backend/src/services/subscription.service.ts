@@ -489,6 +489,7 @@ export async function findOrCreateVehicle(
  * Fallback: nếu sub vẫn dùng `registeredPlates` cũ (chưa migrate), vẫn match được.
  */
 export async function findActiveSubscriptionByPlate(plate: string): Promise<{
+  subscriptionId: string;
   userId: string;
   memberCode: string | null;
   planName: string;
@@ -514,6 +515,7 @@ export async function findActiveSubscriptionByPlate(plate: string): Promise<{
 
   const user = await User.findById(sub.userId).select("memberCode");
   return {
+    subscriptionId: sub._id.toString(),
     userId: sub.userId.toString(),
     memberCode: user?.memberCode ?? null,
     planName: sub.planName,

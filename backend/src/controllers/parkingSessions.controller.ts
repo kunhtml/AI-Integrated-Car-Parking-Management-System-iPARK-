@@ -9,12 +9,67 @@ import { captureDeviceSnapshot } from "../services/device.service.js";
 import { createNotification } from "../services/notification.service.js";
 import { imageHashSimilarity, platesMatch } from "../services/plate.service.js";
 import { calculateParkingFee, getActivePricingConfig } from "../services/pricing.service.js";
+import {
+  checkSubscriptionDiscountForPlate,
+  findActiveSubscriptionByPlate,
+} from "../services/subscription.service.js";
 import { createPendingTransactionForSession, objectId } from "../services/transaction.service.js";
 import { serializeParkingSession } from "../utils/serializers.js";
 
+const ACTIVE_STATUS = "Đang gửi";
+const COMPLETED_STATUS = "Đã hoàn thành";
+const CAR_TYPE = "Ô tô";
+
+function normalizePlate(value = "") {
+  return value.trim().toUpperCase().replace(/[\s-]+/g, "");
+}
+
+function normalizeRfid(value?: string) {
+  return value?.trim().toUpperCase() || undefined;
+}
+
+function buildPaymentLookupCode(value: string) {
+  return `IPARK-${value.slice(-6)}-${Date.now().toString().slice(-6)}`;
+}
+
+function buildGuestQrPayload(lookupCode: string) {
+  return JSON.stringify({
+    provider: "payos",
+    lookupCode,
+    type: "guest-parking-session",
+  });
+}
+
+async function ownerFromPlate(plate: string) {
+  const vehicle = await Vehicle.findOne({ plate: normalizePlate(plate) });
+  return {
+    ownerUserId: vehicle?.userId,
+    ownerName: vehicle?.ownerName,
+  };
+}
+
+async function ensureCapacity() {
+  const activeCount = await ParkingSession.countDocuments({ status: ACTIVE_STATUS });
+  if (activeCount >= parkingConfig.totalCapacity) {
+    const err = new Error("Bãi xe đã đủ 30 chỗ.") as Error & { status: number };
+    err.status = 409;
+    throw err;
+  }
+  return activeCount;
+}
+
 async function finalizeCheckout(session: ParkingSessionDocument) {
-  session.status = "Đã hoàn thành";
+  session.status = COMPLETED_STATUS;
   session.checkOutAt = new Date();
+
+  if (session.isMember || session.paymentMethod === "subscription") {
+    session.fee = 0;
+    session.paidAmount = 0;
+    session.paymentStatus = "fully_paid";
+    session.paymentMethod = "subscription";
+    return session;
+  }
+
   const pricing = await getActivePricingConfig();
   const feeBreakdown = calculateParkingFee(session.checkInAt, session.checkOutAt, pricing);
   session.fee = feeBreakdown.totalFee;
@@ -31,9 +86,80 @@ function snapshotAsFile(snapshot: { buffer: Buffer; mimetype: string }): Express
   } as Express.Multer.File;
 }
 
-async function ownerFromPlate(plate: string) {
-  const vehicle = await Vehicle.findOne({ plate: plate.toUpperCase() });
-  return vehicle?.userId;
+async function createEntrySession(params: {
+  plate?: string;
+  owner?: string;
+  rfidUid?: string;
+  entryImageUrl?: string;
+  entryDetectedPlate?: string;
+  entryConfidence?: number;
+  entryImageHash?: string;
+  aiRawText?: string;
+  createdBy?: string;
+}) {
+  const plate = normalizePlate(params.plate);
+  const rfidUid = normalizeRfid(params.rfidUid);
+  if (!plate && !rfidUid) {
+    const err = new Error("Thiếu biển số hoặc RFID UID.") as Error & { status: number };
+    err.status = 400;
+    throw err;
+  }
+
+  const duplicate = await ParkingSession.findOne({
+    status: ACTIVE_STATUS,
+    $or: [
+      ...(plate ? [{ plate }] : []),
+      ...(rfidUid ? [{ rfidUid }] : []),
+    ],
+  });
+  if (duplicate) {
+    const err = new Error("Xe/thẻ này đang có phiên đỗ xe hoạt động.") as Error & { status: number };
+    err.status = 409;
+    throw err;
+  }
+
+  const activeCount = await ensureCapacity();
+  const ownerInfo = plate ? await ownerFromPlate(plate) : {};
+  const member = plate ? await findActiveSubscriptionByPlate(plate) : null;
+  const discount = member
+    ? await checkSubscriptionDiscountForPlate(member.userId, plate)
+    : { discount: 0 };
+  const isMember = Boolean(member && discount.discount === 100);
+  const displayPlate = plate || `RFID-${rfidUid}`;
+  const paymentLookupCode = isMember ? undefined : buildPaymentLookupCode(displayPlate);
+
+  const session = await ParkingSession.create({
+    plate: displayPlate,
+    rfidUid,
+    ownerName: params.owner?.trim() || ownerInfo.ownerName || (isMember ? "Thành viên iPARK" : "Khách vãng lai"),
+    vehicleType: CAR_TYPE,
+    slot: allocateCarSlot(activeCount),
+    ownerUserId: objectId(member?.userId) || ownerInfo.ownerUserId,
+    isMember,
+    subscriptionId: objectId(member?.subscriptionId),
+    memberCode: member?.memberCode || undefined,
+    subscriptionPlanName: member?.planName,
+    paymentStatus: isMember ? "fully_paid" : "unpaid",
+    paymentMethod: isMember ? "subscription" : undefined,
+    fee: 0,
+    paidAmount: 0,
+    paymentLookupCode,
+    qrCode: paymentLookupCode ? buildGuestQrPayload(paymentLookupCode) : undefined,
+    entryImageUrl: params.entryImageUrl,
+    entryDetectedPlate: params.entryDetectedPlate || plate,
+    entryConfidence: params.entryConfidence,
+    entryImageHash: params.entryImageHash,
+    aiRawText: params.aiRawText,
+    createdBy: objectId(params.createdBy),
+  });
+
+  return {
+    session,
+    member,
+    message: isMember
+      ? "Đã tạo phiên thành viên. Gói active được áp dụng, phí = 0."
+      : "Đã tạo phiên khách vãng lai. Phiên đang chờ thanh toán khi xe ra.",
+  };
 }
 
 export async function listParkingSessions(request: Request, response: Response) {
@@ -45,28 +171,29 @@ export async function listParkingSessions(request: Request, response: Response) 
 export async function createParkingSession(request: Request, response: Response) {
   const body = z
     .object({
-      plate: z.string().min(5),
-      owner: z.string().min(2),
-      vehicleType: z.literal("Ô tô").default("Ô tô"),
+      plate: z.string().optional(),
+      rfidUid: z.string().optional(),
+      owner: z.string().optional(),
+      vehicleType: z.string().optional(),
+    })
+    .refine((value) => Boolean(value.plate?.trim() || value.rfidUid?.trim()), {
+      message: "Cần nhập biển số hoặc RFID UID.",
+      path: ["plate"],
     })
     .parse(request.body);
 
-  const activeCount = await ParkingSession.countDocuments({ status: "Đang gửi" });
-  if (activeCount >= parkingConfig.totalCapacity) {
-    response.status(409).json({ message: "Bãi xe đã đủ 30 chỗ." });
-    return;
-  }
-
-  const session = await ParkingSession.create({
+  const result = await createEntrySession({
     plate: body.plate,
-    ownerName: body.owner,
-    vehicleType: "Ô tô",
-    slot: allocateCarSlot(activeCount),
-    ownerUserId: await ownerFromPlate(body.plate),
-    createdBy: objectId(request.user?.id),
+    rfidUid: body.rfidUid,
+    owner: body.owner,
+    createdBy: request.user?.id,
   });
 
-  response.status(201).json({ session: serializeParkingSession(session) });
+  response.status(201).json({
+    session: serializeParkingSession(result.session),
+    member: result.member,
+    message: result.message,
+  });
 }
 
 export async function completeParkingSession(request: Request, response: Response) {
@@ -101,28 +228,25 @@ export async function uploadParkingImage(request: Request, response: Response) {
   }
 
   if (action === "entry") {
-    const activeCount = await ParkingSession.countDocuments({ status: "Đang gửi" });
-    if (activeCount >= parkingConfig.totalCapacity) {
-      response.status(409).json({ message: "Bãi xe đã đủ 30 chỗ." });
-      return;
-    }
-
     const imageUrl = await saveUploadedImage(image, "entry");
-    const session = await ParkingSession.create({
+    const result = await createEntrySession({
       plate: detection.plate,
-      ownerName: String(request.body.owner || "Khách vãng lai"),
-      vehicleType: "Ô tô",
-      slot: allocateCarSlot(activeCount),
+      owner: String(request.body.owner || ""),
+      rfidUid: String(request.body.rfidUid || ""),
       entryImageUrl: imageUrl,
       entryDetectedPlate: detection.plate,
       entryConfidence: detection.confidence,
       entryImageHash: detection.imageHash,
       aiRawText: detection.rawText,
-      ownerUserId: await ownerFromPlate(detection.plate),
-      createdBy: objectId(request.user?.id),
+      createdBy: request.user?.id,
     });
 
-    response.status(201).json({ session: serializeParkingSession(session), detection });
+    response.status(201).json({
+      session: serializeParkingSession(result.session),
+      detection,
+      member: result.member,
+      message: result.message,
+    });
     return;
   }
 
@@ -240,27 +364,23 @@ export async function cameraEntry(request: Request, response: Response) {
     return;
   }
 
-  const activeCount = await ParkingSession.countDocuments({ status: "Đang gửi" });
-  if (activeCount >= parkingConfig.totalCapacity) {
-    response.status(409).json({ message: "Bãi xe đã đủ 30 chỗ." });
-    return;
-  }
-
-  const session = await ParkingSession.create({
+  const result = await createEntrySession({
     plate: detection.plate,
-    ownerName: body.owner || "Khách vãng lai",
-    vehicleType: "Ô tô",
-    slot: allocateCarSlot(activeCount),
+    owner: body.owner,
     entryImageUrl: snapshot.imageUrl,
     entryDetectedPlate: detection.plate,
     entryConfidence: detection.confidence,
     entryImageHash: detection.imageHash,
     aiRawText: detection.rawText,
-    ownerUserId: await ownerFromPlate(detection.plate),
-    createdBy: objectId(request.user?.id),
+    createdBy: request.user?.id,
   });
 
-  response.status(201).json({ session: serializeParkingSession(session), detection });
+  response.status(201).json({
+    session: serializeParkingSession(result.session),
+    detection,
+    member: result.member,
+    message: result.message,
+  });
 }
 
 export async function cameraExit(request: Request, response: Response) {

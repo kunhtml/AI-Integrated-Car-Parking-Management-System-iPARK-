@@ -39,7 +39,11 @@ export async function getDashboardOverview(
     ParkingSession.countDocuments({}),
     ParkingSession.countDocuments({ status: "Đang gửi" }),
     ParkingSession.countDocuments({ status: "Đã hoàn thành" }),
-    ParkingSession.find({ status: "Đã hoàn thành", paymentStatus: "paid", updatedAt: { $gte: startOfDay } })
+    ParkingSession.find({
+      status: "Đã hoàn thành",
+      paymentStatus: { $in: ["paid", "fully_paid"] },
+      updatedAt: { $gte: startOfDay },
+    })
       .select("fee")
       .lean(),
     ParkingSession.find({}).sort({ createdAt: -1 }).limit(8),
@@ -51,7 +55,6 @@ export async function getDashboardOverview(
     0,
   );
 
-  // Hourly counts calculation
   const hourBuckets: Record<string, number> = {
     "06:00": 0,
     "08:00": 0,
@@ -91,7 +94,6 @@ export async function getDashboardOverview(
   });
 }
 
-/** Public endpoint – không yêu cầu đăng nhập, dùng cho trang chủ */
 export async function getPublicOverview(_request: Request, response: Response) {
   if (mongoose.connection.readyState !== 1) {
     response.json({
@@ -114,32 +116,33 @@ export async function getPublicOverview(_request: Request, response: Response) {
   ]);
 
   const slotCountByZone: Record<string, number> = {};
-  for (const s of activeSessions) {
-    const zoneName = s.slot?.split("-")[0];
-    if (zoneName)
+  for (const session of activeSessions) {
+    const zoneName = session.slot?.split("-")[0];
+    if (zoneName) {
       slotCountByZone[zoneName] = (slotCountByZone[zoneName] || 0) + 1;
+    }
   }
 
   const totalCapacity =
-    zones.reduce((sum, z) => sum + (z.capacity || 0), 0) ||
+    zones.reduce((sum, zone) => sum + (zone.capacity || 0), 0) ||
     parkingConfig.totalCapacity;
 
   response.json({
     active: activeCount,
     available: Math.max(totalCapacity - activeCount, 0),
     totalCapacity,
-    zones: zones.map((z) => ({
-      name: z.name,
-      capacity: z.capacity,
-      occupied: slotCountByZone[z.name] || 0,
-      available: Math.max(z.capacity - (slotCountByZone[z.name] || 0), 0),
+    zones: zones.map((zone) => ({
+      name: zone.name,
+      capacity: zone.capacity,
+      occupied: slotCountByZone[zone.name] || 0,
+      available: Math.max(zone.capacity - (slotCountByZone[zone.name] || 0), 0),
     })),
-    sessions: activeSessions.map((s) => ({
-      plate: s.plate,
-      owner: s.ownerName,
-      slot: s.slot,
-      checkIn: s.checkInAt
-        ? new Date(s.checkInAt).toLocaleString("vi-VN", {
+    sessions: activeSessions.map((session) => ({
+      plate: session.plate,
+      owner: session.ownerName,
+      slot: session.slot,
+      checkIn: session.checkInAt
+        ? new Date(session.checkInAt).toLocaleString("vi-VN", {
             day: "2-digit",
             month: "2-digit",
             hour: "2-digit",
