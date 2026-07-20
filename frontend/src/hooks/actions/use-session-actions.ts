@@ -20,21 +20,46 @@ export function createSessionActions({
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const owner = String(form.get("owner") ?? "Khách vãng lai");
+    const plate = String(form.get("plate") ?? "").trim();
+    const rfidUid = String(form.get("rfidUid") ?? "").trim();
     const image = form.get("entryImage");
 
-    if (!(image instanceof File) || !image.name) {
-      setActionLog("Vui lòng upload ảnh xe vào để nhận diện biển số.");
+    if (image instanceof File && image.name) {
+      try {
+        const payload = new FormData();
+        payload.append("action", "entry");
+        payload.append("owner", owner);
+        payload.append("rfidUid", rfidUid);
+        payload.append("vehicleType", "Ô tô");
+        payload.append("image", image);
+
+        const response = await apiFetch("/parking-sessions/upload", { method: "POST", body: payload });
+        const data = await response.json();
+        if (!response.ok) {
+          setActionLog(data.message || "Không tạo được phiên đỗ xe.");
+          return;
+        }
+        setSessions((items) => [data.session, ...items]);
+        setExitSessionId(data.session.id);
+        setActionLog(data.message || `Đã nhận diện biển ${data.detection?.plate || data.session.plate}.`);
+        event.currentTarget.reset();
+      } catch {
+        setActionLog("Không kết nối được API nhận diện ảnh xe vào. Kiểm tra AI service Python.");
+      }
+      return;
+    }
+
+    if (!plate && !rfidUid) {
+      setActionLog("Vui lòng nhập biển số, RFID UID hoặc upload ảnh xe vào.");
       return;
     }
 
     try {
-      const payload = new FormData();
-      payload.append("action", "entry");
-      payload.append("owner", owner);
-      payload.append("vehicleType", "Ô tô");
-      payload.append("image", image);
-
-      const response = await apiFetch("/parking-sessions/upload", { method: "POST", body: payload });
+      const response = await apiFetch("/parking-sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plate, rfidUid, owner, vehicleType: "Ô tô" }),
+      });
       const data = await response.json();
       if (!response.ok) {
         setActionLog(data.message || "Không tạo được phiên đỗ xe.");
@@ -42,10 +67,10 @@ export function createSessionActions({
       }
       setSessions((items) => [data.session, ...items]);
       setExitSessionId(data.session.id);
-      setActionLog(`Đã nhận diện biển ${data.detection.plate} và ghi nhận xe vào MongoDB.`);
+      setActionLog(data.message || `Đã tạo phiên cho ${data.session.plate}.`);
       event.currentTarget.reset();
     } catch {
-      setActionLog("Không kết nối được API nhận diện ảnh xe vào. Kiểm tra AI service Python.");
+      setActionLog("Không kết nối được API tạo phiên đỗ xe.");
     }
   }
 
@@ -73,7 +98,7 @@ export function createSessionActions({
       }
 
       setSessions((items) => items.map((item) => (item.id === sessionId ? data.session : item)));
-      setActionLog(data.message);
+      setActionLog(data.message || "Đã xử lý checkout bằng ảnh.");
       event.currentTarget.reset();
     } catch {
       setActionLog("Không kết nối được API nhận diện ảnh xe ra. Kiểm tra AI service Python.");
@@ -93,7 +118,7 @@ export function createSessionActions({
         return;
       }
       setSessions((items) => items.map((item) => (item.id === id ? data.session : item)));
-      setActionLog(`Đã hoàn thành phiên ${id} và lưu biên lai vào MongoDB.`);
+      setActionLog(`Đã hoàn thành phiên ${id}.`);
     } catch {
       setActionLog("Không kết nối được API hoàn thành phiên.");
     }
@@ -123,7 +148,7 @@ export function createSessionActions({
     const data = await response.json();
     if (response.ok) {
       setSessions((items) => [data.session, ...items]);
-      setActionLog("Camera đã tạo phiên xe vào.");
+      setActionLog(data.message || "Camera đã tạo phiên xe vào.");
     } else {
       setActionLog(data.message || "Camera xe vào lỗi.");
     }

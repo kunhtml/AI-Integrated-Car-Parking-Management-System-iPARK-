@@ -1,4 +1,5 @@
 export type Role = "admin" | "staff" | "customer";
+export type AuthMode = "login" | "register" | "forgot";
 
 export type View =
   | "overview"
@@ -30,7 +31,7 @@ export type DemoUser = {
   email: string;
   password?: string;
   role: Role;
-  status: "Đang hoạt động" | "Đã khóa";
+  status: "Đang hoạt động" | "Đã khóa" | string;
   wallet: number;
   avatarUrl?: string;
   provider?: string;
@@ -52,12 +53,21 @@ export type ParkingSession = {
   id: string;
   plate: string;
   owner: string;
-  vehicleType: "Ô tô";
+  vehicleType: "Ô tô" | string;
+  rfidUid?: string;
   checkIn: string;
   checkOut?: string;
   slot: string;
-  status: "Đang gửi" | "Đã hoàn thành";
+  status: "Đang gửi" | "Đã hoàn thành" | string;
   fee: number;
+  paidAmount?: number;
+  isMember?: boolean;
+  paymentMethod?: "cash" | "payos" | "vietqr" | "wallet" | "subscription";
+  subscriptionId?: string;
+  memberCode?: string;
+  subscriptionPlanName?: string;
+  paymentLookupCode?: string;
+  qrCode?: string;
   entryImageUrl?: string;
   exitImageUrl?: string;
   entryDetectedPlate?: string;
@@ -65,13 +75,13 @@ export type ParkingSession = {
   entryConfidence?: number;
   exitConfidence?: number;
   vehicleMatchScore?: number;
-  matchStatus?: "Khớp" | "Không khớp";
-  verificationStatus?: "Không cần" | "Chờ duyệt" | "Đã duyệt";
+  matchStatus?: "Chưa checkout" | "Khớp" | "Không khớp" | string;
+  verificationStatus?: "Không cần" | "Chờ duyệt" | "Đã duyệt" | "Từ chối" | string;
   manualPlate?: string;
   verificationNote?: string;
   feeBreakdown?: FeeBreakdown;
   transactionId?: string;
-  paymentStatus?: "pending" | "paid" | "failed";
+  paymentStatus?: "unpaid" | "pending" | "paid" | "failed" | "partial_paid" | "fully_paid";
   createdAt?: string;
 };
 
@@ -95,7 +105,7 @@ export type Vehicle = {
   plate: string;
   owner: string;
   type: string;
-  status: "Đang hoạt động" | "Đã khóa";
+  status: "Đang hoạt động" | "Đã khóa" | string;
 };
 
 export type PricingConfig = {
@@ -110,4 +120,114 @@ export type PricingConfig = {
   effectiveFrom: string;
   isActive: boolean;
   updatedAt?: string | null;
+};
+
+export type PaymentConfig = {
+  id: string;
+  bankName: string;
+  bankBin: string;
+  accountNumber: string;
+  accountName: string;
+  transferPrefix: string;
+  isActive: boolean;
+};
+
+export type TransactionItem = {
+  id: string;
+  sessionId: string;
+  userId?: string;
+  method?: string;
+  amount: number;
+  status: "pending" | "paid" | "failed";
+  content?: string;
+  qrUrl?: string;
+  paidAt?: string;
+  note?: string;
+  createdAt?: string;
+};
+
+export type NotificationItem = {
+  id: string;
+  title: string;
+  content: string;
+  targetRole?: Role;
+  isRead?: boolean;
+  createdAt?: string;
+};
+
+export type FeedbackItem = {
+  id: string;
+  subject: string;
+  content: string;
+  status: string;
+  response?: string;
+  createdAt?: string;
+};
+
+export type DeviceItem = {
+  id: string;
+  name: string;
+  gate: "entry" | "exit";
+  status: string;
+  lastSnapshotUrl?: string;
+  lastSnapshotAt?: string;
+};
+
+export type ShiftItem = {
+  id: string;
+  name: string;
+  note?: string;
+  status: string;
+  startedAt?: string;
+  endedAt?: string;
+};
+
+export type IncidentItem = {
+  id: string;
+  type: string;
+  note?: string;
+  plate?: string;
+  status: string;
+  createdAt?: string;
+};
+
+export type RegisteredVehicle = {
+  id: string;
+  plate: string;
+  owner: string;
+  type: string;
+  status: string;
+};
+
+export type ReportSummary = {
+  totalSessions: number;
+  revenue: number;
+  activeSessions: number;
+  averageFee: number;
+};
+
+export type Zone = ParkingZone;
+
+export type RevenueChartPoint = {
+  label: string;
+  revenue: number;
+  sessions?: number;
+};
+
+export type OccupancyHourPoint = {
+  hour: string;
+  occupied: number;
+  available?: number;
+};
+
+export type TopCustomer = {
+  name: string;
+  plate?: string;
+  sessions: number;
+  revenue: number;
+};
+
+export type PeakHourPoint = {
+  hour: string;
+  sessions: number;
 };

@@ -471,7 +471,7 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
   const filteredSessions = useMemo(() => {
     return state.sessions.filter((session) => {
       const value =
-        `${session.plate} ${session.owner} ${session.id}`.toLowerCase();
+        `${session.plate} ${session.owner} ${session.id} ${session.rfidUid || ""} ${session.paymentLookupCode || ""}`.toLowerCase();
       return value.includes(state.searchText.toLowerCase());
     });
   }, [state.sessions, state.searchText]);
