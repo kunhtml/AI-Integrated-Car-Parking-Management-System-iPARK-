@@ -59,6 +59,13 @@ export const navItems: NavItem[] = [
     roles: ["admin"],
   },
   {
+    id: "subscriptions",
+    path: "/dashboard/subscriptions",
+    label: "Quản lý gói dịch vụ",
+    icon: CreditCard,
+    roles: ["admin", "staff", "customer"],
+  },
+  {
     id: "staffAccounts",
     path: "/dashboard/staff",
     label: "Manage Staff Accounts",
@@ -163,6 +170,7 @@ export const adminOnlyPaths: string[] = [
   "/dashboard/pricing",
   "/dashboard/parking-fee-rules",
   "/dashboard/system-process",
+  "/dashboard/subscriptions",
   "/dashboard/users",
   "/dashboard/staff",
   "/dashboard/membership-packages",

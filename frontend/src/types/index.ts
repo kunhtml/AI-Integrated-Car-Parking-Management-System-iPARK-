@@ -7,6 +7,7 @@ export type View =
   | "users"
   | "pricing"
   | "reports"
+  | "subscriptions"
   | "membershipPackages"
   | "parkingFeeRules"
   | "revenueReports"

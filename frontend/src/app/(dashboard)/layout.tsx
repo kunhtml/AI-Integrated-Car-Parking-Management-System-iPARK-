@@ -18,6 +18,7 @@ import { parkingConfig } from "@/lib/parking-config";
 
 const navItems = [
   { href: "/overview", label: "Tổng quan", icon: BarChart },
+  { href: "/subscriptions", label: "Gói dịch vụ", icon: CreditCard },
   { href: "/membership-packages", label: "Gói đăng ký", icon: ParkingCircle },
   { href: "/parking-fee-rules", label: "Cấu hình phí", icon: CreditCard },
   { href: "/zones", label: "Khu vực đỗ xe", icon: ParkingCircle },
