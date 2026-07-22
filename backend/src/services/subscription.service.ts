@@ -499,6 +499,7 @@ export async function findActiveSubscriptionByPlate(plate: string): Promise<{
   if (!normPlate) return null;
 
   const vehicle = await Vehicle.findOne({ plate: normPlate }).select("_id");
+  const now = new Date();
   const orClauses: Record<string, unknown>[] = [];
   if (vehicle) {
     orClauses.push({ registeredVehicleIds: vehicle._id });
@@ -508,7 +509,8 @@ export async function findActiveSubscriptionByPlate(plate: string): Promise<{
 
   const sub = await Subscription.findOne({
     status: { $in: ["active", "cancelled"] },
-    endDate: { $gt: new Date() },
+    startDate: { $lte: now },
+    endDate: { $gte: now },
     $or: orClauses,
   });
   if (!sub) return null;
@@ -546,6 +548,7 @@ export async function checkSubscriptionDiscountForPlate(
   if (!userId) return { discount: 0 };
   const normPlate = normalizePlate(plate);
   if (!normPlate) return { discount: 0 };
+  const now = new Date();
 
   const vehicle = await Vehicle.findOne({ plate: normPlate }).select("_id");
   if (!vehicle) {
@@ -554,7 +557,8 @@ export async function checkSubscriptionDiscountForPlate(
     const subAny = await Subscription.findOne({
       userId: new mongoose.Types.ObjectId(userId.toString()),
       status: { $in: ["active", "cancelled"] },
-      endDate: { $gt: new Date() },
+      startDate: { $lte: now },
+      endDate: { $gte: now },
     });
     if (!subAny) return { discount: 0 };
     return {
@@ -566,7 +570,8 @@ export async function checkSubscriptionDiscountForPlate(
   const sub = await Subscription.findOne({
     userId: new mongoose.Types.ObjectId(userId.toString()),
     status: { $in: ["active", "cancelled"] },
-    endDate: { $gt: new Date() },
+    startDate: { $lte: now },
+    endDate: { $gte: now },
   });
   if (!sub) return { discount: 0 };
 

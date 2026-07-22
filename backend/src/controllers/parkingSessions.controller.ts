@@ -48,6 +48,36 @@ async function ownerFromPlate(plate: string) {
   };
 }
 
+async function applyActiveSubscriptionBenefit(session: ParkingSessionDocument) {
+  const plate = normalizePlate(session.entryDetectedPlate || session.plate);
+  if (!plate || plate.startsWith("RFID")) {
+    return false;
+  }
+
+  const member = await findActiveSubscriptionByPlate(plate);
+  if (!member) {
+    return false;
+  }
+
+  const discount = await checkSubscriptionDiscountForPlate(member.userId, plate);
+  if (discount.discount !== 100) {
+    return false;
+  }
+
+  session.isMember = true;
+  session.ownerUserId = objectId(member.userId) || session.ownerUserId;
+  session.subscriptionId = objectId(member.subscriptionId);
+  session.memberCode = member.memberCode || session.memberCode;
+  session.subscriptionPlanName = member.planName;
+  session.paymentStatus = "fully_paid";
+  session.paymentMethod = "subscription";
+  session.fee = 0;
+  session.paidAmount = 0;
+  session.paymentLookupCode = undefined;
+  session.qrCode = undefined;
+  return true;
+}
+
 async function ensureCapacity() {
   const activeCount = await ParkingSession.countDocuments({ status: ACTIVE_STATUS });
   if (activeCount >= parkingConfig.totalCapacity) {
@@ -62,7 +92,8 @@ async function finalizeCheckout(session: ParkingSessionDocument) {
   session.status = COMPLETED_STATUS;
   session.checkOutAt = new Date();
 
-  if (session.isMember || session.paymentMethod === "subscription") {
+  const hasActiveSubscription = await applyActiveSubscriptionBenefit(session);
+  if (hasActiveSubscription || session.isMember || session.paymentMethod === "subscription") {
     session.fee = 0;
     session.paidAmount = 0;
     session.paymentStatus = "fully_paid";
