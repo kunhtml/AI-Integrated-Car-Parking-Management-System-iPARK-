@@ -139,6 +139,21 @@ export default function PageHomepage() {
             phí và phân quyền vận hành thông minh.
           </p>
 
+          <div className="flex flex-wrap gap-3">
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
+              <ShieldCheck size={16} />
+              Miễn phí {parkingConfig.freeMinutes} phút đầu
+            </div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700">
+              <Cpu size={16} />
+              Camera AI nhận dạng biển số
+            </div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700">
+              <CreditCard size={16} />
+              Thanh toán QR nhanh
+            </div>
+          </div>
+
           {/* Stats Strip */}
           <div className="grid grid-cols-3 gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm max-w-lg">
             <div className="space-y-1">
