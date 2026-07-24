@@ -8,13 +8,13 @@ type PaymentActionsParams = {
   setPricingConfigState: (config: PricingConfig) => void;
   setTransactionList: (transactions: TransactionItem[] | ((items: TransactionItem[]) => TransactionItem[])) => void;
   setActionLog: (log: string) => void;
-  currentUser: DemoUser | null;
-  setCurrentUser: (user: DemoUser | null) => void;
-  setPaymentConfigState: (config: PaymentConfig) => void;
-  pricingConfigState: PricingConfig;
-  transactionList: TransactionItem[];
-  setMembershipActive: (active: boolean) => void;
-  setMembershipExpiresAt: (expiresAt: string) => void;
+  currentUser?: DemoUser | null;
+  setCurrentUser?: (user: DemoUser | null) => void;
+  setPaymentConfigState?: (config: PaymentConfig) => void;
+  pricingConfigState?: PricingConfig;
+  transactionList?: TransactionItem[];
+  setMembershipActive?: (active: boolean) => void;
+  setMembershipExpiresAt?: (expiresAt: string) => void;
 };
 
 export function createPaymentActions({
@@ -161,7 +161,7 @@ export function createPaymentActions({
         return;
       }
 
-      setPaymentConfigState(data.paymentConfig);
+      setPaymentConfigState?.(data.paymentConfig);
       setActionLog("Đã lưu cấu hình VietQR.");
     } catch {
       setActionLog("Không kết nối được API thanh toán.");
@@ -187,7 +187,7 @@ export function createPaymentActions({
       paidAt: new Date().toLocaleString("vi-VN"),
     };
 
-    setCurrentUser({
+    setCurrentUser?.({
       ...currentUser,
       wallet: (currentUser.wallet || 0) + amount,
     });
@@ -198,7 +198,7 @@ export function createPaymentActions({
 
   async function payWithWallet(transactionId: string) {
     if (!currentUser) return;
-    const transaction = transactionList.find((item) => item.id === transactionId);
+    const transaction = transactionList?.find((item) => item.id === transactionId);
     if (!transaction || transaction.status !== "pending") {
       setActionLog("Giao dịch không hợp lệ để thanh toán.");
       return;
@@ -209,7 +209,7 @@ export function createPaymentActions({
       return;
     }
 
-    setCurrentUser({
+    setCurrentUser?.({
       ...currentUser,
       wallet: (currentUser.wallet || 0) - transaction.amount,
     });
@@ -234,7 +234,7 @@ export function createPaymentActions({
     if (!currentUser) return;
     const form = new FormData(event.currentTarget);
     const months = Number(form.get("months") || 1);
-    const amount = pricingConfigState.monthlyRate * months;
+    const amount = (pricingConfigState?.monthlyRate || 1500000) * months;
 
     if ((currentUser.wallet || 0) < amount) {
       setActionLog("Số dư ví không đủ để mua gói. Vui lòng nạp thêm.");
@@ -244,13 +244,13 @@ export function createPaymentActions({
     const expires = new Date();
     expires.setMonth(expires.getMonth() + months);
 
-    setCurrentUser({
+    setCurrentUser?.({
       ...currentUser,
       wallet: (currentUser.wallet || 0) - amount,
     });
 
-    setMembershipActive(false);
-    setMembershipExpiresAt("");
+    setMembershipActive?.(false);
+    setMembershipExpiresAt?.("");
 
     setTransactionList((items) => [
       {
@@ -273,8 +273,8 @@ export function createPaymentActions({
     if (!currentUser) return;
     const expires = new Date();
     expires.setMonth(expires.getMonth() + 1);
-    setMembershipActive(true);
-    setMembershipExpiresAt(expires.toLocaleDateString("vi-VN"));
+    setMembershipActive?.(true);
+    setMembershipExpiresAt?.(expires.toLocaleDateString("vi-VN"));
     setActionLog("Đã kích hoạt gói thành viên.");
   }
 
