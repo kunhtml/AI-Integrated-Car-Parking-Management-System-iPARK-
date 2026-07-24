@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Camera, RefreshCcw, Video, Wrench } from "lucide-react";
+import { Camera, RefreshCcw, Video, Wrench, Scan, Timer } from "lucide-react";
 
 import { DataTable } from "@/components/ui/data-table";
+import { RoiEditor } from "@/features/devices/roi-editor";
 import { useParkingApp } from "@/context/parking-app-context";
 import { apiFetch } from "@/lib/client-api";
 
@@ -25,12 +26,54 @@ export function DevicesView() {
   const [msg, setMsg] = useState("");
   const [editingDevice, setEditingDevice] = useState<any>(null);
   const [roiTarget, setRoiTarget] = useState<any>(null);
-  const [roiValues, setRoiValues] = useState({ x: 0, y: 0, width: 200, height: 120, label: "" });
   const [streamDeviceId, setStreamDeviceId] = useState<string | null>(null);
   const streamRef = useRef<HTMLImageElement | null>(null);
+  const [autoScanMap, setAutoScanMap] = useState<Record<string, boolean>>({});
+  const [autoScanIntervalMap, setAutoScanIntervalMap] = useState<Record<string, number>>({});
 
   const displayDevices = deviceList;
   const isAdmin = currentUser?.role === "admin";
+
+  // Load auto-scan status
+  useEffect(() => {
+    apiFetch("/devices/auto-scan/status")
+      .then((r) => r.json())
+      .then((data) => {
+        const map: Record<string, boolean> = {};
+        const intervalMap: Record<string, number> = {};
+        for (const item of data.autoScanStatus || []) {
+          map[item.deviceId] = item.active;
+          intervalMap[item.deviceId] = item.intervalSeconds || 10;
+        }
+        setAutoScanMap(map);
+        setAutoScanIntervalMap(intervalMap);
+      })
+      .catch(() => {});
+  }, [deviceList]);
+
+  async function toggleAutoScan(deviceId: string, enabled: boolean) {
+    setMsg("Đang cập nhật...");
+    const res = await apiFetch(`/devices/${deviceId}/auto-scan`, {
+      method: "POST",
+      body: JSON.stringify({ enabled }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      setAutoScanMap((prev) => ({ ...prev, [deviceId]: enabled }));
+      setMsg(enabled ? "Đã bật tự động quét." : "Đã tắt tự động quét.");
+    } else {
+      setMsg(data.message || "Lỗi cập nhật.");
+    }
+  }
+
+  async function updateAutoScanInterval(deviceId: string, seconds: number) {
+    const clamped = Math.max(5, Math.min(120, seconds));
+    setAutoScanIntervalMap((prev) => ({ ...prev, [deviceId]: clamped }));
+    await apiFetch(`/devices/${deviceId}/auto-scan/interval`, {
+      method: "PATCH",
+      body: JSON.stringify({ intervalSeconds: clamped }),
+    });
+  }
 
   async function restartDevice(id: string) {
     setMsg("Đang khởi động lại...");
@@ -122,36 +165,6 @@ export function DevicesView() {
     setMsg(data.message || (response.ok ? "Đã chụp ảnh camera." : "Không chụp được ảnh."));
   }
 
-  function openRoiEditor(device: any) {
-    setRoiTarget(device);
-    setRoiValues({
-      x: device.roi?.x ?? 0,
-      y: device.roi?.y ?? 0,
-      width: device.roi?.width ?? 200,
-      height: device.roi?.height ?? 120,
-      label: device.roi?.label || "",
-    });
-  }
-
-  async function saveRoi(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!roiTarget) {
-      return;
-    }
-    const response = await apiFetch(`/devices/${roiTarget.id}/roi`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(roiValues),
-    });
-    const data = await response.json();
-    if (response.ok) {
-      setMsg("Đã lưu cấu hình ROI.");
-      setRoiTarget(null);
-    } else {
-      setMsg(data.message || "Không lưu được ROI.");
-    }
-  }
-
   function openStream(deviceId: string) {
     setStreamDeviceId(deviceId);
   }
@@ -228,7 +241,7 @@ export function DevicesView() {
                 <button className="small-button" key={`${item.id}-stream`} onClick={() => openStream(item.id)} type="button">
                   <Video size={13} /> Xem
                 </button>,
-                <button className="small-button" key={`${item.id}-roi`} onClick={() => openRoiEditor(item)} type="button">
+                <button className="small-button" key={`${item.id}-roi`} onClick={() => setRoiTarget(item)} type="button">
                   {item.roi ? `${item.roi.width}x${item.roi.height}` : "Chưa có"}
                 </button>,
                 <div className="inline-actions" key={item.id}>
@@ -254,6 +267,32 @@ export function DevicesView() {
                       {item.gate === "exit" && (
                         <button className="small-button" onClick={() => cameraExit(item.id)} type="button">Xe ra</button>
                       )}
+                      {item.gate === "entry" && isAdmin && (
+                        <>
+                          <button
+                            className={`small-button ${autoScanMap[item.id] ? "success" : ""}`}
+                            onClick={() => toggleAutoScan(item.id, !autoScanMap[item.id])}
+                            title={autoScanMap[item.id] ? "Tắt tự động quét" : "Bật tự động quét"}
+                            type="button"
+                          >
+                            <Scan size={13} /> {autoScanMap[item.id] ? "Auto ✓" : "Auto"}
+                          </button>
+                          {autoScanMap[item.id] && (
+                            <span className="muted-text" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12 }}>
+                              <Timer size={11} />
+                              <input
+                                type="number"
+                                min={5}
+                                max={120}
+                                value={autoScanIntervalMap[item.id] || 10}
+                                onChange={(e) => updateAutoScanInterval(item.id, parseInt(e.target.value) || 10)}
+                                style={{ width: 44, padding: "2px 4px", fontSize: 11, borderRadius: 4, border: "1px solid #333", background: "#111", color: "#fff" }}
+                              />
+                              giây
+                            </span>
+                          )}
+                        </>
+                      )}
                     </>
                   )}
                 </div>,
@@ -277,18 +316,17 @@ export function DevicesView() {
             )}
 
             {roiTarget && (
-              <form className="stack-form" onSubmit={saveRoi} style={{ marginTop: 16 }}>
-                <div className="panel-heading"><div><p>Cấu hình</p><h2>ROI cho {roiTarget.name}</h2></div><Camera size={20} /></div>
-                <div className="filter-row">
-                  <label className="muted-cell" style={{ minWidth: 40 }}>X<input type="number" name="x" value={roiValues.x} onChange={(e) => setRoiValues((s) => ({ ...s, x: Number(e.target.value) }))} required style={{ width: 80, marginLeft: 8 }} /></label>
-                  <label className="muted-cell" style={{ minWidth: 40 }}>Y<input type="number" name="y" value={roiValues.y} onChange={(e) => setRoiValues((s) => ({ ...s, y: Number(e.target.value) }))} required style={{ width: 80, marginLeft: 8 }} /></label>
-                  <label className="muted-cell" style={{ minWidth: 60 }}>Width<input type="number" name="width" value={roiValues.width} onChange={(e) => setRoiValues((s) => ({ ...s, width: Number(e.target.value) }))} required style={{ width: 100, marginLeft: 8 }} /></label>
-                  <label className="muted-cell" style={{ minWidth: 70 }}>Height<input type="number" name="height" value={roiValues.height} onChange={(e) => setRoiValues((s) => ({ ...s, height: Number(e.target.value) }))} required style={{ width: 100, marginLeft: 8 }} /></label>
-                  <input name="label" placeholder="Ghi chú ROI" value={roiValues.label} onChange={(e) => setRoiValues((s) => ({ ...s, label: e.target.value }))} style={{ flex: 1 }} />
-                  <button className="small-button" type="submit"><Wrench size={14} /> Lưu ROI</button>
-                  <button className="small-button" type="button" onClick={() => setRoiTarget(null)}>Hủy</button>
-                </div>
-              </form>
+              <RoiEditor
+                deviceId={roiTarget.id}
+                deviceName={roiTarget.name}
+                snapshotUrl={roiTarget.lastSnapshotUrl}
+                initialRoi={roiTarget.roi}
+                onSaved={() => {
+                  setMsg("Đã lưu cấu hình ROI.");
+                  setRoiTarget(null);
+                }}
+                onClose={() => setRoiTarget(null)}
+              />
             )}
           </>
         )}

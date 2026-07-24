@@ -31,6 +31,8 @@ export type DeviceDocument = {
   };
   offlineThresholdMinutes?: number;
   healthCheckEnabled?: boolean;
+  autoScanEnabled?: boolean;
+  autoScanIntervalSeconds?: number;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -66,6 +68,8 @@ const deviceSchema = new Schema<DeviceDocument>(
     },
     offlineThresholdMinutes: { type: Number, default: 30 },
     healthCheckEnabled: { type: Boolean, default: true },
+    autoScanEnabled: { type: Boolean, default: false },
+    autoScanIntervalSeconds: { type: Number, default: 10, min: 5, max: 120 },
   },
   { timestamps: true },
 );

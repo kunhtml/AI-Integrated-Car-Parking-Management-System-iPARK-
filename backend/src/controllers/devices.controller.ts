@@ -2,7 +2,16 @@ import { Request, Response } from "express";
 import { z } from "zod";
 import { Device } from "../models/Device.js";
 import { captureDeviceSnapshot } from "../services/device.service.js";
-import { captureSnapshotFromDevice, startMjpegStream, stopMjpegStream } from "../services/cameraStream.service.js";
+import {
+  captureSnapshotFromDevice,
+  startMjpegStream,
+  stopMjpegStream,
+} from "../services/cameraStream.service.js";
+import {
+  toggleAutoScan,
+  updateAutoScanInterval,
+  getAutoScanStatus,
+} from "../services/auto-scan.service.js";
 import { serializeDevice } from "../utils/serializers.js";
 
 const deviceSchema = z.object({
@@ -30,13 +39,46 @@ export async function createDevice(request: Request, response: Response) {
 
 export async function updateDevice(request: Request, response: Response) {
   const body = deviceSchema.partial().parse(request.body);
-  const device = await Device.findByIdAndUpdate(request.params.id, body, { returnDocument: "after" });
+  const device = await Device.findByIdAndUpdate(request.params.id, body, {
+    returnDocument: "after",
+  });
   if (!device) {
     response.status(404).json({ message: "Không tìm thấy thiết bị." });
     return;
   }
 
   response.json({ device: serializeDevice(device) });
+}
+
+export async function deleteDevice(request: Request, response: Response) {
+  const device = await Device.findByIdAndDelete(request.params.id);
+  if (!device) {
+    response.status(404).json({ message: "Không tìm thấy thiết bị." });
+    return;
+  }
+
+  response.json({
+    message: `Đã xóa thiết bị "${device.name}".`,
+    id: device._id.toString(),
+  });
+}
+
+export async function getRoiConfigHandler(
+  request: Request,
+  response: Response,
+) {
+  const device = await Device.findById(request.params.id);
+  if (!device) {
+    response.status(404).json({ message: "Không tìm thấy thiết bị." });
+    return;
+  }
+
+  response.json({
+    deviceId: device._id.toString(),
+    deviceName: device.name,
+    roi: device.roi || null,
+    lastSnapshotUrl: device.lastSnapshotUrl || "",
+  });
 }
 
 export async function snapshotDevice(request: Request, response: Response) {
@@ -53,12 +95,16 @@ export async function snapshotDevice(request: Request, response: Response) {
     device.lastSnapshotAt = new Date();
     await device.save();
 
-    response.json({ device: serializeDevice(device), snapshotUrl: snapshot.imageUrl });
+    response.json({
+      device: serializeDevice(device),
+      snapshotUrl: snapshot.imageUrl,
+    });
   } catch (error) {
     device.status = "offline";
     await device.save();
     response.status(502).json({
-      message: error instanceof Error ? error.message : "Không chụp được camera.",
+      message:
+        error instanceof Error ? error.message : "Không chụp được camera.",
       device: serializeDevice(device),
     });
   }
@@ -74,12 +120,18 @@ import {
 } from "../services/deviceMaintenance.service.js";
 import { serializeMaintenanceLog } from "../utils/serializers.js";
 
-export async function listDeviceMaintenanceHandler(request: Request, response: Response) {
+export async function listDeviceMaintenanceHandler(
+  request: Request,
+  response: Response,
+) {
   const logs = await listMaintenanceLogs(String(request.params.id));
   response.json({ logs: logs.map(serializeMaintenanceLog) });
 }
 
-export async function createDeviceMaintenanceHandler(request: Request, response: Response) {
+export async function createDeviceMaintenanceHandler(
+  request: Request,
+  response: Response,
+) {
   const body = z
     .object({
       type: z.enum(["scheduled", "repair", "inspection", "replacement"]),
@@ -87,7 +139,9 @@ export async function createDeviceMaintenanceHandler(request: Request, response:
       performedAt: z.string().optional(),
       cost: z.number().min(0).default(0),
       notes: z.string().optional(),
-      status: z.enum(["planned", "in_progress", "completed"]).default("completed"),
+      status: z
+        .enum(["planned", "in_progress", "completed"])
+        .default("completed"),
     })
     .parse(request.body);
 
@@ -105,7 +159,10 @@ export async function createDeviceMaintenanceHandler(request: Request, response:
   response.status(201).json({ log: serializeMaintenanceLog(log) });
 }
 
-export async function deviceHealthHandler(_request: Request, response: Response) {
+export async function deviceHealthHandler(
+  _request: Request,
+  response: Response,
+) {
   const upcoming = await getUpcomingMaintenance();
   const devices = await Device.find({ status: "offline" });
   response.json({
@@ -114,20 +171,37 @@ export async function deviceHealthHandler(_request: Request, response: Response)
   });
 }
 
-export async function healthCheckHandler(_request: Request, response: Response) {
+export async function healthCheckHandler(
+  _request: Request,
+  response: Response,
+) {
   const offlineCount = await checkOfflineDevices();
-  response.json({ offlineCount, message: `${offlineCount} camera đã được đánh dấu offline.` });
+  response.json({
+    offlineCount,
+    message: `${offlineCount} camera đã được đánh dấu offline.`,
+  });
 }
 
-export async function updateScheduleHandler(request: Request, response: Response) {
-  const body = z.object({ intervalDays: z.number().int().min(1) }).parse(request.body);
+export async function updateScheduleHandler(
+  request: Request,
+  response: Response,
+) {
+  const body = z
+    .object({ intervalDays: z.number().int().min(1) })
+    .parse(request.body);
   await updateMaintenanceSchedule(String(request.params.id), body.intervalDays);
   const device = await Device.findById(request.params.id);
-  response.json({ device: device ? serializeDevice(device) : null, message: "Đã cập nhật lịch bảo trì." });
+  response.json({
+    device: device ? serializeDevice(device) : null,
+    message: "Đã cập nhật lịch bảo trì.",
+  });
 }
 
 // DV-06: Remote device restart
-export async function restartDeviceHandler(request: Request, response: Response) {
+export async function restartDeviceHandler(
+  request: Request,
+  response: Response,
+) {
   const device = await Device.findById(request.params.id);
   if (!device) {
     response.status(404).json({ message: "Không tìm thấy thiết bị." });
@@ -164,7 +238,10 @@ const roiSchema = z.object({
   label: z.string().optional(),
 });
 
-export async function connectDeviceHandler(request: Request, response: Response) {
+export async function connectDeviceHandler(
+  request: Request,
+  response: Response,
+) {
   const device = await Device.findById(request.params.id);
   if (!device) {
     response.status(404).json({ message: "Không tìm thấy thiết bị." });
@@ -195,13 +272,17 @@ export async function connectDeviceHandler(request: Request, response: Response)
     device.status = "offline";
     await device.save();
     response.status(502).json({
-      message: error instanceof Error ? error.message : "Không kết nối được camera.",
+      message:
+        error instanceof Error ? error.message : "Không kết nối được camera.",
       device: serializeDevice(device),
     });
   }
 }
 
-export async function configureRoiHandler(request: Request, response: Response) {
+export async function configureRoiHandler(
+  request: Request,
+  response: Response,
+) {
   const body = roiSchema.parse(request.body);
   const device = await Device.findById(request.params.id);
   if (!device) {
@@ -221,7 +302,10 @@ export async function configureRoiHandler(request: Request, response: Response) 
   });
 }
 
-export async function streamDeviceHandler(request: Request, response: Response) {
+export async function streamDeviceHandler(
+  request: Request,
+  response: Response,
+) {
   const device = await Device.findById(request.params.id);
   if (!device) {
     response.status(404).json({ message: "Không tìm thấy thiết bị." });
@@ -229,7 +313,9 @@ export async function streamDeviceHandler(request: Request, response: Response) 
   }
 
   if (!device.rtspUrl && !device.httpUrl) {
-    response.status(400).json({ message: "Thiết bị chưa cấu hình URL camera." });
+    response
+      .status(400)
+      .json({ message: "Thiết bị chưa cấu hình URL camera." });
     return;
   }
 
@@ -255,7 +341,10 @@ export async function streamDeviceHandler(request: Request, response: Response) 
   });
 }
 
-export async function captureDeviceImageHandler(request: Request, response: Response) {
+export async function captureDeviceImageHandler(
+  request: Request,
+  response: Response,
+) {
   const device = await Device.findById(request.params.id);
   if (!device) {
     response.status(404).json({ message: "Không tìm thấy thiết bị." });
@@ -263,7 +352,9 @@ export async function captureDeviceImageHandler(request: Request, response: Resp
   }
 
   if (!device.rtspUrl && !device.httpUrl) {
-    response.status(400).json({ message: "Thiết bị chưa cấu hình URL camera." });
+    response
+      .status(400)
+      .json({ message: "Thiết bị chưa cấu hình URL camera." });
     return;
   }
 
@@ -290,8 +381,61 @@ export async function captureDeviceImageHandler(request: Request, response: Resp
     device.status = "offline";
     await device.save();
     response.status(502).json({
-      message: error instanceof Error ? error.message : "Không chụp được ảnh camera.",
+      message:
+        error instanceof Error ? error.message : "Không chụp được ảnh camera.",
       device: serializeDevice(device),
     });
   }
+}
+
+export async function toggleAutoScanHandler(
+  request: Request,
+  response: Response,
+) {
+  const body = z.object({ enabled: z.boolean() }).parse(request.body);
+  try {
+    const result = await toggleAutoScan(request.params.id, body.enabled);
+    response.json({
+      message: body.enabled ? "Đã bật auto-scan." : "Đã tắt auto-scan.",
+      device: serializeDevice(result.device),
+      autoScanEnabled: result.autoScanEnabled,
+    });
+  } catch (error) {
+    response
+      .status(400)
+      .json({
+        message:
+          error instanceof Error ? error.message : "Lỗi toggle auto-scan.",
+      });
+  }
+}
+
+export async function updateAutoScanIntervalHandler(
+  request: Request,
+  response: Response,
+) {
+  const body = z
+    .object({ intervalSeconds: z.number().min(5).max(120) })
+    .parse(request.body);
+  try {
+    await updateAutoScanInterval(request.params.id, body.intervalSeconds);
+    response.json({
+      message: `Đã cập nhật interval auto-scan thành ${body.intervalSeconds}s.`,
+    });
+  } catch (error) {
+    response
+      .status(400)
+      .json({
+        message:
+          error instanceof Error ? error.message : "Lỗi cập nhật interval.",
+      });
+  }
+}
+
+export async function getAutoScanStatusHandler(
+  _request: Request,
+  response: Response,
+) {
+  const status = getAutoScanStatus();
+  response.json({ autoScanStatus: status });
 }

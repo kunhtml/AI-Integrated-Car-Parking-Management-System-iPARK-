@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { CheckCircle2, LucideIcon, RefreshCcw, Clock3, Check } from "lucide-react";
+import { CheckCircle2, Clock, LucideIcon, Moon, RefreshCcw, Star, Tag } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
 interface PricingData {
@@ -33,7 +33,7 @@ interface PackageTier {
 const TIERS: PackageTier[] = [
   {
     id: "luot",
-    icon: Clock3,
+    icon: Clock,
     name: "Gói Lượt",
     description: "Phù hợp cho khách vãng lai gửi xe ngắn hạn hoặc trong ngày.",
     priceKey: "hourlyRate",
@@ -50,7 +50,7 @@ const TIERS: PackageTier[] = [
   },
   {
     id: "thang",
-    icon: CheckCircle2,
+    icon: Star,
     name: "Gói Tháng",
     badge: "Phổ biến nhất",
     badgeColor: "bg-blue-600 text-white",
@@ -89,9 +89,11 @@ const TIERS: PackageTier[] = [
 ];
 
 const DETAIL_ROWS = [
-  { icon: Clock3, label: "Giá theo giờ", key: "hourlyRate", suffix: "/ giờ" },
+  { icon: Tag, label: "Miễn phí ban đầu", key: "freeMinutes", suffix: " phút" },
+  { icon: Clock, label: "Giá theo giờ", key: "hourlyRate", suffix: "/ giờ" },
+  { icon: Moon, label: "Qua đêm", key: "overnightRate", suffix: "/ đêm" },
   { icon: RefreshCcw, label: "Tối đa 1 ngày", key: "dailyMaxRate", suffix: "/ ngày" },
-  { icon: CheckCircle2, label: "Gói tháng", key: "monthlyRate", suffix: "/ tháng" },
+  { icon: Star, label: "Gói tháng", key: "monthlyRate", suffix: "/ tháng" },
 ];
 
 const formatPrice = (value: number) =>
@@ -143,7 +145,7 @@ export default function PricingSection() {
         {/* Heading */}
         <div className="text-center max-w-2xl mx-auto mb-4">
           <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 border border-blue-100 px-3 py-1 text-xs font-semibold text-blue-600 mb-4">
-            <Check size={12} />
+            <Tag size={12} />
             Bảng giá chính thức
           </div>
           <h2 className="text-3xl font-black text-slate-900 mb-3">

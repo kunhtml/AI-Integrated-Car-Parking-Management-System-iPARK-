@@ -40,6 +40,13 @@ export function serializeParkingSession(session: any) {
     paidAmount: session.paidAmount ?? 0,
     checkInDate: session.checkInAt ? new Date(session.checkInAt).toLocaleDateString("vi-VN") : "",
     createdAt: session.createdAt,
+    rfidCardId: session.rfidCardId || null,
+    rfidAssignedAt: session.rfidAssignedAt || null,
+    rfidReturnedAt: session.rfidReturnedAt || null,
+    rfidGate: session.rfidGate || null,
+    cancelReason: session.cancelReason || null,
+    cancelledBy: session.cancelledBy?.toString?.() || null,
+    cancelledAt: session.cancelledAt || null,
   };
 }
 
@@ -80,6 +87,17 @@ export function serializeVehicle(vehicle: any) {
     owner: vehicle.ownerName,
     type: vehicle.vehicleType,
     status: vehicle.status,
+    brand: vehicle.brand || "",
+    color: vehicle.color || "",
+    model: vehicle.model || "",
+    engineNo: vehicle.engineNo || "",
+    chassisNo: vehicle.chassisNo || "",
+    year: vehicle.year || null,
+    ownerPhone: vehicle.ownerPhone || "",
+    ownerAddress: vehicle.ownerAddress || "",
+    userId: vehicle.userId?.toString?.() || null,
+    createdAt: vehicle.createdAt,
+    updatedAt: vehicle.updatedAt,
   };
 }
 
@@ -194,9 +212,44 @@ export function serializeDevice(device: any) {
     status: device.status,
     lastSnapshotUrl: device.lastSnapshotUrl,
     lastSnapshotAt: device.lastSnapshotAt,
+    autoScanEnabled: device.autoScanEnabled || false,
+    autoScanIntervalSeconds: device.autoScanIntervalSeconds || 10,
     maintenanceSchedule: device.maintenanceSchedule,
     createdAt: device.createdAt,
     updatedAt: device.updatedAt,
+  };
+}
+
+export function serializeRfidCard(card: any) {
+  return {
+    id: card._id?.toString?.() || card.id || "",
+    cardId: card.cardId,
+    status: card.status,
+    issuedAt: card.issuedAt,
+    lastUsedAt: card.lastUsedAt,
+    lostAt: card.lostAt,
+    blockedAt: card.blockedAt,
+    blockedReason: card.blockedReason,
+    notes: card.notes,
+    createdBy: card.createdBy?.toString?.() || card.createdBy || "",
+    createdAt: card.createdAt,
+    updatedAt: card.updatedAt,
+  };
+}
+
+export function serializeRfidScanLog(log: any) {
+  return {
+    id: log._id?.toString?.() || log.id || "",
+    cardId: log.cardId,
+    action: log.action,
+    sessionId: log.sessionId?.toString?.() || log.sessionId || "",
+    deviceId: log.deviceId?.toString?.() || log.deviceId || "",
+    performedBy: log.performedBy?.toString?.() || log.performedBy || "",
+    status: log.status,
+    failureReason: log.failureReason,
+    plateDetected: log.plateDetected,
+    metadata: log.metadata,
+    createdAt: log.createdAt,
   };
 }
 
@@ -213,6 +266,7 @@ export function serializeRecognitionLog(log: RecognitionLogDocument) {
     imageHash: log.imageHash,
     imageUrl: log.imageUrl,
     vehicleType: log.vehicleType,
+    detectionMethod: log.detectionMethod,
     sessionId: log.sessionId?.toString() ?? "",
     deviceId: log.deviceId?.toString() ?? "",
     deviceName: log.deviceName,

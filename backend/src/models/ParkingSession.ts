@@ -9,7 +9,7 @@ export type ParkingSessionDocument = {
   checkInAt: Date;
   checkOutAt?: Date;
   slot: string;
-  status: "Đang gửi" | "Đã hoàn thành";
+  status: "Đang gửi" | "Đã hoàn thành" | "Đã hủy";
   paymentStatus: "unpaid" | "pending" | "paid";
   fee: number;
   feeBreakdown?: FeeBreakdown;
@@ -40,6 +40,13 @@ export type ParkingSessionDocument = {
   paidAmount?: number;
   paymentMethod?: "payos" | "wallet" | "cash";
   entryGate?: string;
+  rfidCardId?: string;
+  rfidAssignedAt?: Date;
+  rfidReturnedAt?: Date;
+  rfidGate?: "entry" | "exit";
+  cancelReason?: string;
+  cancelledBy?: mongoose.Types.ObjectId;
+  cancelledAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -48,11 +55,11 @@ const parkingSessionSchema = new Schema<ParkingSessionDocument>(
   {
     plate: { type: String, required: true, trim: true, uppercase: true },
     ownerName: { type: String, required: true, trim: true },
-    vehicleType: { type: String, enum: ["Ô tô"], required: true },
+    vehicleType: { type: String, enum: ["Ô tô"], default: "Ô tô", required: true },
     checkInAt: { type: Date, default: Date.now },
     checkOutAt: { type: Date },
     slot: { type: String, required: true },
-    status: { type: String, enum: ["Đang gửi", "Đã hoàn thành"], default: "Đang gửi" },
+    status: { type: String, enum: ["Đang gửi", "Đã hoàn thành", "Đã hủy"], default: "Đang gửi" },
     paymentStatus: { type: String, enum: ["unpaid", "pending", "paid"], default: "unpaid" },
     fee: { type: Number, default: 0 },
     feeBreakdown: {
@@ -89,7 +96,7 @@ const parkingSessionSchema = new Schema<ParkingSessionDocument>(
     ownerUserId: { type: Schema.Types.ObjectId, ref: "User", index: true },
     transactionId: { type: Schema.Types.ObjectId, ref: "Transaction" },
     createdBy: { type: Schema.Types.ObjectId, ref: "User" },
-    priorityType: { type: String, enum: ["member", "walkin"], default: "walkin" }, // Dùng cho Dynamic/Reserved logic
+    priorityType: { type: String, enum: ["member", "walkin"], default: "walkin" },
     slotId: { type: Schema.Types.ObjectId, ref: "ParkingSlot" },
     expectedCheckOutAt: { type: Date },
     prepaidCheckoutAt: { type: Date },
@@ -97,6 +104,13 @@ const parkingSessionSchema = new Schema<ParkingSessionDocument>(
     paidAmount: { type: Number, default: 0 },
     paymentMethod: { type: String, enum: ["payos", "wallet", "cash"] },
     entryGate: { type: String },
+    rfidCardId: { type: String, trim: true, uppercase: true, index: true },
+    rfidAssignedAt: { type: Date },
+    rfidReturnedAt: { type: Date },
+    rfidGate: { type: String, enum: ["entry", "exit"] },
+    cancelReason: { type: String, trim: true },
+    cancelledBy: { type: Schema.Types.ObjectId, ref: "User" },
+    cancelledAt: { type: Date },
   },
   { timestamps: true },
 );

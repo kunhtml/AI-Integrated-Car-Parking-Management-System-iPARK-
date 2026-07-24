@@ -20,6 +20,14 @@ import { transactionsRoutes } from "./transactions.routes.js";
 import { usersRoutes } from "./users.routes.js";
 import { vehiclesRoutes } from "./vehicles.routes.js";
 import { zonesRoutes } from "./zones.routes.js";
+import { rfidRoutes } from "./rfid.routes.js";
+import { backupRoutes } from "./backup.routes.js";
+import { auditLogRoutes } from "./auditLog.routes.js";
+import { assistedRegistrationRoutes } from "./assistedRegistration.routes.js";
+import { privacyRoutes } from "./privacy.routes.js";
+import { rfidReportRoutes } from "./rfidReport.routes.js";
+import { alertsRoutes } from "./alerts.routes.js";
+import { invoiceRoutes } from "./invoice.routes.js";
 
 export const apiRoutes = Router();
 
@@ -45,3 +53,11 @@ apiRoutes.use("/notifications", notificationsRoutes);
 apiRoutes.use("/shifts", shiftsRoutes);
 apiRoutes.use("/incidents", incidentsRoutes);
 apiRoutes.use("/zones", zonesRoutes);
+apiRoutes.use("/rfid-cards", rfidRoutes);
+apiRoutes.use("/backups", backupRoutes);
+apiRoutes.use("/audit-logs", auditLogRoutes);
+apiRoutes.use("/alerts", alertsRoutes);
+apiRoutes.use("/privacy", privacyRoutes);
+apiRoutes.use("/rfid-reports", rfidReportRoutes);
+apiRoutes.use("/invoices", invoiceRoutes);
+apiRoutes.use("/assisted-registration", assistedRegistrationRoutes);

@@ -3,9 +3,12 @@ import {
   approveCheckout,
   cameraEntry,
   cameraExit,
+  cancelParkingSession,
+  checkDuplicateSession,
   completeParkingSession,
   createParkingSession,
   listParkingSessions,
+  rejectVerification,
   requestVerification,
   uploadParkingImage,
 } from "../controllers/parkingSessions.controller.js";
@@ -33,3 +36,9 @@ parkingSessionsRoutes.post(
   asyncHandler(requestVerification),
 );
 parkingSessionsRoutes.post("/:id/approve-checkout", requireRole("admin"), asyncHandler(approveCheckout));
+// UC14: Reject verification
+parkingSessionsRoutes.post("/:id/reject", requireRole("admin"), asyncHandler(rejectVerification));
+// UC38: Cancel session
+parkingSessionsRoutes.post("/:id/cancel", requireRole("admin", "staff"), asyncHandler(cancelParkingSession));
+// UC42: Check duplicate
+parkingSessionsRoutes.get("/check-duplicate", asyncHandler(checkDuplicateSession));

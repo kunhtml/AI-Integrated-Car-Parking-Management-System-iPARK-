@@ -10,6 +10,7 @@ import { Zone } from "./models/Zone.js";
 import { ParkingSession } from "./models/ParkingSession.js";
 import { Transaction } from "./models/Transaction.js";
 import { Vehicle } from "./models/Vehicle.js";
+import { RfidCard } from "./models/RfidCard.js";
 
 dotenv.config();
 
@@ -368,6 +369,62 @@ async function seedDatabase() {
     ]);
     console.log("Transactions seeded successfully.");
 
+    // 10. Seed RFID Cards
+    console.log("Seeding RFID Cards...");
+    await RfidCard.deleteMany({});
+    await RfidCard.create([
+      {
+        cardId: "RFID-001",
+        status: "available",
+        notes: "Thẻ dự phòng cổng vào",
+        createdBy: adminUser._id,
+      },
+      {
+        cardId: "RFID-002",
+        status: "available",
+        notes: "Thẻ dự phòng cổng ra",
+        createdBy: adminUser._id,
+      },
+      {
+        cardId: "RFID-003",
+        status: "in-use",
+        lastUsedAt: new Date(now.getTime() - 45 * 60 * 1000),
+        notes: "Thẻ đang sử dụng",
+        createdBy: adminUser._id,
+      },
+      {
+        cardId: "RFID-004",
+        status: "lost",
+        lostAt: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000),
+        notes: "Thẻ bị mất từ 2 ngày trước",
+        createdBy: adminUser._id,
+      },
+      {
+        cardId: "RFID-005",
+        status: "blocked",
+        blockedAt: new Date(now.getTime() - 24 * 60 * 60 * 1000),
+        blockedReason: "Phát hiện sử dụng bất thường",
+        notes: "Thẻ bị khóa do vi phạm",
+        createdBy: adminUser._id,
+      },
+      {
+        cardId: "RFID-006",
+        status: "available",
+        createdBy: staff1._id,
+      },
+      {
+        cardId: "RFID-007",
+        status: "available",
+        createdBy: staff1._id,
+      },
+      {
+        cardId: "RFID-008",
+        status: "available",
+        createdBy: adminUser._id,
+      },
+    ]);
+    console.log("RFID Cards seeded successfully.");
+
     // Summary
     console.log("\n========================================");
     console.log("  iPARK - Database Seed Summary");
@@ -381,6 +438,7 @@ async function seedDatabase() {
     console.log(`  Active      : 3 xe đang gửi`);
     console.log(`  Completed   : 3 phiên đã hoàn thành`);
     console.log(`  Revenue     : 160.000 VNĐ`);
+    console.log(`  RFID Cards  : 8 thẻ (4 available, 1 in-use, 1 lost, 1 blocked)`);
     console.log("========================================\n");
   } catch (error) {
     console.error("Error seeding database:", error);

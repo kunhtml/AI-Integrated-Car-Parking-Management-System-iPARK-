@@ -47,7 +47,7 @@ export function WalletView() {
     setSessions,
     transactionList,
     confirmTransaction,
-  } = useParkingApp();
+  } = useParkingApp() as any;
 
   const [topUpMsg, setTopUpMsg] = useState("");
   const [payosData, setPayosData] = useState<{ qrCode: string; checkoutUrl: string; orderCode: string } | null>(null);
@@ -126,8 +126,7 @@ export function WalletView() {
 
   // Lấy phiên chưa thanh toán của user hiện tại — kể cả phiên đã checkout
   // (status "Đã hoàn thành") nhưng vẫn còn nợ phí.
-  const unpaidSession = sessions.find(
-    (s) =>
+  const unpaidSession = sessions.find((s: any) =>
       s.ownerEmail?.toLowerCase() === currentUser?.email?.toLowerCase() &&
       s.paymentStatus !== "fully_paid" &&
       (s.fee || 0) - (s.paidAmount || 0) > 0,
@@ -221,7 +220,7 @@ export function WalletView() {
     setTopUpMsg(data.message || (response.ok ? "Đã xác nhận nạp tiền." : "Không xác nhận được."));
   }
 
-  const rows = transactionList.map((item) => {
+  const rows = transactionList.map((item: any) => {
     const isTopUp = item.content?.startsWith("TOPUP") ?? false;
     const hasPayOSLink = !!item.payosCheckoutUrl;
     // Giao dịch phiên gửi xe chưa thanh toán xong → cho phép quét QR

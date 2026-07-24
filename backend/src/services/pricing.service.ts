@@ -1,4 +1,5 @@
 import { PricingConfig, PricingConfigDocument } from "../models/PricingConfig.js";
+import { Zone } from "../models/Zone.js";
 
 export type FeeBreakdown = {
   totalMinutes: number;
@@ -31,8 +32,20 @@ export async function getActivePricingConfig() {
   });
 }
 
+// UC29: Per-zone pricing support
 export async function getActivePricingConfigForZone(zoneId?: any) {
-  // Vì hiện tại hệ thống chỉ có một PricingConfig global hoặc zone, ta trả về active pricing config mặc định
+  if (!zoneId) {
+    return getActivePricingConfig();
+  }
+
+  // Check if zone has custom pricing
+  const zone = await Zone.findById(zoneId);
+  if (zone) {
+    // For now, use global config. Zone-specific pricing can be added
+    // by adding a pricingConfigId field to Zone model
+    return getActivePricingConfig();
+  }
+
   return getActivePricingConfig();
 }
 
@@ -45,7 +58,20 @@ export function calculateParkingFee(
   const billableMinutes = Math.max(0, totalMinutes - pricing.freeMinutes);
   const billableHours = billableMinutes > 0 ? Math.ceil(billableMinutes / 60) : 0;
   const parkingFee = billableHours * pricing.hourlyRate;
-  const totalFee = Math.min(parkingFee, pricing.dailyMaxRate || parkingFee);
+
+  // UC59: Calculate overdue fine
+  let overdueFine = 0;
+  if (pricing.overdueFineRate && pricing.graceExitMinutes) {
+    // Check if session exceeds expected checkout (if set)
+    // For now, calculate based on max daily duration exceeded
+    const maxDailyMinutes = 24 * 60; // 24 hours
+    if (totalMinutes > maxDailyMinutes + pricing.graceExitMinutes) {
+      const overdueDays = Math.ceil((totalMinutes - maxDailyMinutes - pricing.graceExitMinutes) / (24 * 60));
+      overdueFine = overdueDays * pricing.overdueFineRate;
+    }
+  }
+
+  const totalFee = Math.min(parkingFee, pricing.dailyMaxRate || parkingFee) + overdueFine;
 
   return {
     totalMinutes,
@@ -54,7 +80,7 @@ export function calculateParkingFee(
     billableHours,
     hourlyRate: pricing.hourlyRate,
     parkingFee,
-    overdueFine: 0,
+    overdueFine,
     totalFee,
   };
 }

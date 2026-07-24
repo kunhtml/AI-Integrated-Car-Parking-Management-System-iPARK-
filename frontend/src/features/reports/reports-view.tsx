@@ -38,7 +38,7 @@ export function ReportsView() {
     loadOccupancyHourly,
     loadTopCustomers,
     loadPeakHours,
-  } = useParkingApp();
+  } = useParkingApp() as any;
 
   const [activeTab, setActiveTab] = useState<"summary" | "revenue" | "occupancy" | "customers" | "peak" | "penalty" | "wallet" | "zones">("summary");
   const [chartFrom, setChartFrom] = useState(monthAgoStr());

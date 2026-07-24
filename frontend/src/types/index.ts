@@ -22,7 +22,16 @@ export type View =
   | "recognitionLogs"
   | "devices"
   | "security"
-  | "zones";
+  | "zones"
+  | "rfidCards"
+  | "rfidOperations"
+  | "auditLogs"
+  | "backups"
+  | "invoices"
+  | "privacy"
+  | "rfidReports"
+  | "alerts"
+  | "assistedRegistration";
 
 export type DemoUser = {
   id: number | string;
@@ -75,6 +84,8 @@ export type ParkingSession = {
   ownerEmail?: string;
   paidAmount?: number;
   checkInDate?: string;
+  cancelReason?: string;
+  cancelledAt?: string;
 };
 
 export type RegisteredVehicle = {
@@ -142,6 +153,8 @@ export type NotificationItem = {
   content: string;
   read: boolean;
   createdAt: string;
+  type?: string;
+  targetRole?: string;
 };
 
 export type FeedbackItem = {
@@ -213,6 +226,10 @@ export type IncidentItem = {
   plate?: string;
   status: "Mới" | "Đang xử lý" | "Đã xử lý";
   createdAt: string;
+  reportedBy?: string;
+  resolvedBy?: string;
+  resolvedAt?: string;
+  resolution?: string;
 };
 
 export type AuthMode = "login" | "register" | "forgot";
@@ -256,4 +273,85 @@ export type PeakHourPoint = {
   dayOfWeek: number;
   hour: number;
   count: number;
+};
+
+// ─── RFID Types ───
+
+export type RfidCardStatus = "available" | "in-use" | "lost" | "blocked";
+
+export type RfidCard = {
+  id: string;
+  cardId: string;
+  status: RfidCardStatus;
+  issuedAt?: string;
+  lastUsedAt?: string;
+  lostAt?: string;
+  blockedAt?: string;
+  blockedReason?: string;
+  notes?: string;
+  createdBy?: string;
+  createdAt?: string;
+};
+
+export type RfidScanAction = "entry" | "exit" | "assign" | "return" | "block" | "unblock" | "report-lost";
+
+export type RfidScanStatus = "success" | "failed" | "blocked" | "mismatch";
+
+export type RfidScanLog = {
+  id: string;
+  cardId: string;
+  action: RfidScanAction;
+  sessionId?: string;
+  sessionPlate?: string;
+  sessionSlot?: string;
+  deviceId?: string;
+  performedBy?: string;
+  status: RfidScanStatus;
+  failureReason?: string;
+  plateDetected?: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+};
+
+export type AuditLogItem = {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId?: string;
+  performedBy?: { _id: string; name: string; email: string };
+  changes?: { old?: Record<string, unknown>; new?: Record<string, unknown> };
+  ipAddress?: string;
+  createdAt: string;
+};
+
+export type BackupItem = {
+  filename: string;
+  path: string;
+  size: number;
+  createdAt: string;
+};
+
+export type InvoiceItem = {
+  id: string;
+  invoiceNumber: string;
+  sessionId?: string;
+  transactionId?: string;
+  customerName: string;
+  customerEmail?: string;
+  items: Array<{ description: string; quantity: number; unitPrice: number; amount: number }>;
+  subtotal: number;
+  tax: number;
+  total: number;
+  status: "Draft" | "Issued" | "Paid" | "Cancelled";
+  issuedAt?: string;
+  paidAt?: string;
+  createdAt: string;
+};
+
+export type CapacityStatus = {
+  activeCount: number;
+  totalCapacity: number;
+  available: number;
+  occupancyPercent: number;
+  alertLevel: "normal" | "warning" | "critical";
 };

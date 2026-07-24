@@ -9,6 +9,7 @@ import {
   listIncidents,
   listNotifications,
   listShifts,
+  markAllNotificationsRead,
   markNotificationRead,
   resolveIncident,
   startShift,
@@ -21,6 +22,7 @@ export const notificationsRoutes = Router();
 notificationsRoutes.use(requireAuth);
 notificationsRoutes.get("/", asyncHandler(listNotifications));
 notificationsRoutes.post("/:id/read", asyncHandler(markNotificationRead));
+notificationsRoutes.post("/read-all", asyncHandler(markAllNotificationsRead));
 
 export const feedbackRoutes = Router();
 feedbackRoutes.post("/public", asyncHandler(createFeedbackPublic));

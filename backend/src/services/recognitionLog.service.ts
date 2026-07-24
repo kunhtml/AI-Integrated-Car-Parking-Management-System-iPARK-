@@ -1,4 +1,5 @@
-import mongoose, { FilterQuery } from "mongoose";
+import mongoose from "mongoose";
+type FilterQuery<T> = Record<string, any>;
 import {
   RecognitionAction,
   RecognitionLog,
@@ -22,6 +23,7 @@ export type CreateRecognitionLogInput = {
   imageHash?: string;
   imageUrl?: string;
   vehicleType?: string;
+  detectionMethod?: string; // plate-model | vehicle-contour | full-image-ocr | filename-fallback | manual
   sessionId?: string | mongoose.Types.ObjectId;
   deviceId?: string | mongoose.Types.ObjectId;
   deviceName?: string;
@@ -53,25 +55,40 @@ function toObjectId(value?: string | mongoose.Types.ObjectId) {
   if (value instanceof mongoose.Types.ObjectId) {
     return value;
   }
-  return mongoose.isValidObjectId(value) ? new mongoose.Types.ObjectId(value) : undefined;
+  return mongoose.isValidObjectId(value)
+    ? new mongoose.Types.ObjectId(value)
+    : undefined;
 }
 
 export async function createRecognitionLog(input: CreateRecognitionLogInput) {
-  return RecognitionLog.create({
+  const log = await RecognitionLog.create({
     ...input,
     plate: input.plate?.toUpperCase(),
     detectedPlate: input.detectedPlate?.toUpperCase(),
+    detectionMethod: input.detectionMethod,
     sessionId: toObjectId(input.sessionId),
     deviceId: toObjectId(input.deviceId),
     createdBy: toObjectId(input.createdBy),
   });
+
+  try {
+    const { publishRealtime } = await import("./realtime.service.js");
+    const { serializeRecognitionLog } = await import("../utils/serializers.js");
+    publishRealtime("recognition-log", serializeRecognitionLog(log));
+  } catch (error) {
+    console.error("[recognition-log] Không publish realtime event:", error);
+  }
+
+  return log;
 }
 
 /**
  * Ghi log audit nhưng KHÔNG BAO GIỜ ném lỗi ra ngoài:
  * việc ghi log nhận diện không được phép làm hỏng luồng check-in/check-out chính.
  */
-export async function safeCreateRecognitionLog(input: CreateRecognitionLogInput) {
+export async function safeCreateRecognitionLog(
+  input: CreateRecognitionLogInput,
+) {
   try {
     return await createRecognitionLog(input);
   } catch (error) {
@@ -114,6 +131,7 @@ export async function listRecognitionLogs(
 
   return {
     logs: page,
-    nextCursor: hasMore && page.length ? page[page.length - 1]._id.toString() : null,
+    nextCursor:
+      hasMore && page.length ? page[page.length - 1]._id.toString() : null,
   };
 }

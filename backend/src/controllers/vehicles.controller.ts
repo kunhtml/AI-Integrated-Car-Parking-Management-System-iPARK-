@@ -33,11 +33,33 @@ export async function updateVehicle(request: Request, response: Response) {
   const body = z
     .object({
       id: z.string().min(1),
-      status: z.enum(["Đã đăng ký", "Cần duyệt", "Blacklist"]),
+      status: z.enum(["Đã đăng ký", "Cần duyệt", "Blacklist"]).optional(),
+      // UC48: Allow updating vehicle details
+      brand: z.string().optional(),
+      color: z.string().optional(),
+      model: z.string().optional(),
+      engineNo: z.string().optional(),
+      chassisNo: z.string().optional(),
+      year: z.number().optional(),
+      ownerPhone: z.string().optional(),
+      ownerAddress: z.string().optional(),
+      vehicleType: z.literal("Ô tô").optional(),
     })
     .parse(request.body);
 
-  const vehicle = await Vehicle.findByIdAndUpdate(body.id, { status: body.status }, { new: true });
+  const updateData: Record<string, unknown> = {};
+  if (body.status) updateData.status = body.status;
+  if (body.brand !== undefined) updateData.brand = body.brand;
+  if (body.color !== undefined) updateData.color = body.color;
+  if (body.model !== undefined) updateData.model = body.model;
+  if (body.engineNo !== undefined) updateData.engineNo = body.engineNo;
+  if (body.chassisNo !== undefined) updateData.chassisNo = body.chassisNo;
+  if (body.year !== undefined) updateData.year = body.year;
+  if (body.ownerPhone !== undefined) updateData.ownerPhone = body.ownerPhone;
+  if (body.ownerAddress !== undefined) updateData.ownerAddress = body.ownerAddress;
+  if (body.vehicleType !== undefined) updateData.vehicleType = body.vehicleType;
+
+  const vehicle = await Vehicle.findByIdAndUpdate(body.id, updateData, { new: true });
   if (!vehicle) {
     response.status(404).json({ message: "Không tìm thấy phương tiện." });
     return;

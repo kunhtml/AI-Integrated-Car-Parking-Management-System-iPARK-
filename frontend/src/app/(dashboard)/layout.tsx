@@ -24,6 +24,7 @@ const navItems = [
   { href: "/users", label: "Người dùng", icon: UsersRound },
   { href: "/staff", label: "Nhân viên", icon: UsersRound },
   { href: "/devices", label: "Camera & thiết bị", icon: ShieldCheck },
+  { href: "/rfid-cards", label: "Thẻ RFID", icon: CreditCard },
   { href: "/revenue-reports", label: "Báo cáo", icon: ReceiptText },
   { href: "/change-password", label: "Bảo mật", icon: KeyRound },
 ];

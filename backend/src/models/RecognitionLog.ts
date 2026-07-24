@@ -33,6 +33,7 @@ export type RecognitionLogDocument = {
   imageHash?: string;
   imageUrl?: string;
   vehicleType?: string;
+  detectionMethod?: string; // plate-model | vehicle-contour | full-image-ocr | filename-fallback | manual
   sessionId?: mongoose.Types.ObjectId;
   deviceId?: mongoose.Types.ObjectId;
   deviceName?: string;
@@ -57,6 +58,7 @@ const recognitionLogSchema = new Schema<RecognitionLogDocument>(
     imageHash: { type: String },
     imageUrl: { type: String },
     vehicleType: { type: String },
+    detectionMethod: { type: String, index: true },
     sessionId: { type: Schema.Types.ObjectId, ref: "ParkingSession", index: true },
     deviceId: { type: Schema.Types.ObjectId, ref: "Device", index: true },
     deviceName: { type: String },

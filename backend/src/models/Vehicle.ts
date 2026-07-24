@@ -24,7 +24,7 @@ const vehicleSchema = new Schema<VehicleDocument>(
   {
     plate: { type: String, required: true, trim: true, uppercase: true, unique: true },
     ownerName: { type: String, required: true, trim: true },
-    vehicleType: { type: String, enum: ["Ô tô"], required: true },
+    vehicleType: { type: String, enum: ["Ô tô"], default: "Ô tô", required: true },
     status: { type: String, enum: ["Đã đăng ký", "Cần duyệt", "Blacklist"], default: "Cần duyệt" },
     userId: { type: Schema.Types.ObjectId, ref: "User" },
     brand: { type: String },

@@ -9,7 +9,10 @@ declare module "lucide-react" {
   export type LucideIcon = FC<LucideProps>;
 
   export const AlertCircle: LucideIcon;
+  export const AlertTriangle: LucideIcon;
+  export const ArrowDownToLine: LucideIcon;
   export const ArrowLeft: LucideIcon;
+  export const ArrowUpFromLine: LucideIcon;
   export const Ban: LucideIcon;
   export const BarChart: LucideIcon;
   export const BarChart3: LucideIcon;
@@ -21,15 +24,34 @@ declare module "lucide-react" {
   export const Check: LucideIcon;
   export const CheckCircle: LucideIcon;
   export const CheckCircle2: LucideIcon;
+  export const Square: LucideIcon;
+  export const CheckSquare: LucideIcon;
+  export const Filter: LucideIcon;
+  export const Layers: LucideIcon;
+  export const SlidersHorizontal: LucideIcon;
+  export const Crosshair: LucideIcon;
+  export const ChevronRight: LucideIcon;
+  export const ChevronLeft: LucideIcon;
   export const CircleAlert: LucideIcon;
+  export const Clock: LucideIcon;
   export const Clock3: LucideIcon;
+  export const ClipboardList: LucideIcon;
+  export const ClipboardPlus: LucideIcon;
   export const Cpu: LucideIcon;
   export const CreditCard: LucideIcon;
+  export const Database: LucideIcon;
+  export const UploadCloud: LucideIcon;
+  export const Sparkles: LucideIcon;
+  export const RotateCcw: LucideIcon;
+  export const HardDrive: LucideIcon;
+  export const Download: LucideIcon;
   export const Edit2: LucideIcon;
   export const ExternalLink: LucideIcon;
   export const Eye: LucideIcon;
   export const EyeOff: LucideIcon;
   export const FileDown: LucideIcon;
+  export const FileText: LucideIcon;
+  export const History: LucideIcon;
   export const KeyRound: LucideIcon;
   export const LayoutDashboard: LucideIcon;
   export const Loader2: LucideIcon;
@@ -37,26 +59,35 @@ declare module "lucide-react" {
   export const LogIn: LucideIcon;
   export const LogOut: LucideIcon;
   export const Mail: LucideIcon;
+  export const Moon: LucideIcon;
+  export const Star: LucideIcon;
+  export const Tag: LucideIcon;
   export const MapPin: LucideIcon;
   export const Menu: LucideIcon;
   export const Package: LucideIcon;
   export const ParkingCircle: LucideIcon;
   export const Pencil: LucideIcon;
   export const Phone: LucideIcon;
-<<<<<<< HEAD
-  export const Plus: LucideIcon;
-=======
   export const Play: LucideIcon;
->>>>>>> 49bfd09c69d8e4d4c7df76f95d064c30a0512d62
+  export const Plus: LucideIcon;
   export const PlusCircle: LucideIcon;
   export const QrCode: LucideIcon;
   export const ReceiptText: LucideIcon;
   export const RefreshCcw: LucideIcon;
   export const RefreshCw: LucideIcon;
   export const Save: LucideIcon;
+  export const Move: LucideIcon;
   export const ScanLine: LucideIcon;
+  export const Sliders: LucideIcon;
+  export const ChevronUp: LucideIcon;
+  export const ChevronDown: LucideIcon;
+  export const Timer: LucideIcon;
+  export const Scan: LucideIcon;
   export const Search: LucideIcon;
   export const Settings: LucideIcon;
+  export const Shield: LucideIcon;
+  export const ShieldAlert: LucideIcon;
+  export const ShieldBan: LucideIcon;
   export const ShieldCheck: LucideIcon;
   export const Smartphone: LucideIcon;
   export const Trash2: LucideIcon;
@@ -65,8 +96,12 @@ declare module "lucide-react" {
   export const UserRound: LucideIcon;
   export const UsersRound: LucideIcon;
   export const Video: LucideIcon;
+  export const VideoOff: LucideIcon;
+  export const Radio: LucideIcon;
   export const Wallet: LucideIcon;
   export const Wrench: LucideIcon;
   export const X: LucideIcon;
   export const XCircle: LucideIcon;
+
+  export type Icon = LucideIcon;
 }
