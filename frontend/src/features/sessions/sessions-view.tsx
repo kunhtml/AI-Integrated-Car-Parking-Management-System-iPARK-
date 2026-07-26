@@ -45,6 +45,9 @@ export function SessionsView() {
     completeSession,
     approveCheckout,
     createPaymentForSession,
+    cameraEntry,
+    cameraExit,
+    deviceList,
   } = useParkingApp();
 
   if (!currentUser) {
@@ -56,6 +59,8 @@ export function SessionsView() {
       isActiveSession(session) &&
       (session.owner === currentUser.name || session.owner === currentUser.email),
   );
+  const entryCameras = deviceList.filter((device) => device.gate === "entry" && device.status !== "offline");
+  const exitCameras = deviceList.filter((device) => device.gate === "exit" && device.status !== "offline");
 
   return (
     <section className="content-grid">
@@ -142,6 +147,17 @@ export function SessionsView() {
               Tạo phiên
             </button>
           </form>
+
+          {entryCameras.length > 0 && (
+            <div className="action-row">
+              {entryCameras.map((device) => (
+                <button className="small-button" key={device.id} onClick={() => cameraEntry(device.id)} type="button">
+                  <Camera size={14} />
+                  Snapshot {device.name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -203,6 +219,17 @@ export function SessionsView() {
               Xác minh thủ công nếu ảnh lỗi
             </button>
           </form>
+
+          {exitCameras.length > 0 && (
+            <div className="action-row">
+              {exitCameras.map((device) => (
+                <button className="small-button" key={device.id} onClick={() => cameraExit(device.id)} type="button">
+                  <Camera size={14} />
+                  Snapshot {device.name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </section>
@@ -254,6 +281,7 @@ function SessionTable({
                   {session.isMember ? "Thành viên" : "Khách vãng lai"}
                 </span>
                 {session.subscriptionPlanName && <span className="muted-cell">{session.subscriptionPlanName}</span>}
+                {session.barrierTriggered && <span className="muted-cell">Da mo barrier</span>}
               </td>
               <td>
                 <span className={isActiveSession(session) ? "badge warning" : "badge success"}>
@@ -267,7 +295,14 @@ function SessionTable({
               </td>
               <td>
                 {session.paymentLookupCode ? (
-                  <span className="badge">{session.paymentLookupCode}</span>
+                  <>
+                    <span className="badge">{session.paymentLookupCode}</span>
+                    {session.qrExpiry && (
+                      <span className="muted-cell">
+                        Exp {new Date(session.qrExpiry).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    )}
+                  </>
                 ) : (
                   <span className="muted-cell">Không cần</span>
                 )}

@@ -69,6 +69,10 @@ export type ParkingSession = {
   subscriptionPlanName?: string;
   paymentLookupCode?: string;
   qrCode?: string;
+  qrExpiry?: string;
+  barrierTriggered?: boolean;
+  barrierTriggeredAt?: string;
+  barrierAction?: "open_entry" | "open_exit";
   entryImageUrl?: string;
   exitImageUrl?: string;
   entryDetectedPlate?: string;

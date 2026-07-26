@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import crypto from "node:crypto";
 import { z } from "zod";
 import { allocateCarSlot, parkingConfig } from "../config/parking.js";
 import { Device } from "../models/Device.js";
@@ -28,16 +29,21 @@ function normalizeRfid(value?: string) {
   return value?.trim().toUpperCase() || undefined;
 }
 
-function buildPaymentLookupCode(value: string) {
-  return `IPARK-${value.slice(-6)}-${Date.now().toString().slice(-6)}`;
-}
-
-function buildGuestQrPayload(lookupCode: string) {
-  return JSON.stringify({
-    provider: "payos",
-    lookupCode,
-    type: "guest-parking-session",
-  });
+function buildGuestTicket(displayPlate: string, slot: string) {
+  const token = `TICKET-${crypto.randomBytes(8).toString("hex").toUpperCase()}`;
+  const qrExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  return {
+    paymentLookupCode: token,
+    qrExpiry,
+    qrCode: JSON.stringify({
+      provider: "payos",
+      token,
+      plate: displayPlate,
+      slot,
+      expiresAt: qrExpiry.toISOString(),
+      type: "guest-parking-session",
+    }),
+  };
 }
 
 async function ownerFromPlate(plate: string) {
@@ -117,6 +123,14 @@ function snapshotAsFile(snapshot: { buffer: Buffer; mimetype: string }): Express
   } as Express.Multer.File;
 }
 
+async function triggerMemberBarrier(session: ParkingSessionDocument) {
+  if (!session.isMember) return false;
+  session.barrierTriggered = true;
+  session.barrierTriggeredAt = new Date();
+  session.barrierAction = "open_entry";
+  return true;
+}
+
 async function createEntrySession(params: {
   plate?: string;
   owner?: string;
@@ -157,14 +171,15 @@ async function createEntrySession(params: {
     : { discount: 0 };
   const isMember = Boolean(member && discount.discount === 100);
   const displayPlate = plate || `RFID-${rfidUid}`;
-  const paymentLookupCode = isMember ? undefined : buildPaymentLookupCode(displayPlate);
+  const slot = allocateCarSlot(activeCount);
+  const guestTicket = isMember ? undefined : buildGuestTicket(displayPlate, slot);
 
   const session = await ParkingSession.create({
     plate: displayPlate,
     rfidUid,
     ownerName: params.owner?.trim() || ownerInfo.ownerName || (isMember ? "Thành viên iPARK" : "Khách vãng lai"),
     vehicleType: CAR_TYPE,
-    slot: allocateCarSlot(activeCount),
+    slot,
     ownerUserId: objectId(member?.userId) || ownerInfo.ownerUserId,
     isMember,
     subscriptionId: objectId(member?.subscriptionId),
@@ -174,8 +189,9 @@ async function createEntrySession(params: {
     paymentMethod: isMember ? "subscription" : undefined,
     fee: 0,
     paidAmount: 0,
-    paymentLookupCode,
-    qrCode: paymentLookupCode ? buildGuestQrPayload(paymentLookupCode) : undefined,
+    paymentLookupCode: guestTicket?.paymentLookupCode,
+    qrCode: guestTicket?.qrCode,
+    qrExpiry: guestTicket?.qrExpiry,
     entryImageUrl: params.entryImageUrl,
     entryDetectedPlate: params.entryDetectedPlate || plate,
     entryConfidence: params.entryConfidence,
@@ -183,6 +199,11 @@ async function createEntrySession(params: {
     aiRawText: params.aiRawText,
     createdBy: objectId(params.createdBy),
   });
+
+  await triggerMemberBarrier(session);
+  if (session.isModified()) {
+    await session.save();
+  }
 
   return {
     session,

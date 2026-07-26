@@ -21,6 +21,10 @@ export type ParkingSessionDocument = {
   subscriptionPlanName?: string;
   paymentLookupCode?: string;
   qrCode?: string;
+  qrExpiry?: Date;
+  barrierTriggered?: boolean;
+  barrierTriggeredAt?: Date;
+  barrierAction?: "open_entry" | "open_exit";
   feeBreakdown?: FeeBreakdown;
   ownerUserId?: mongoose.Types.ObjectId;
   entryImageUrl?: string;
@@ -73,6 +77,10 @@ const parkingSessionSchema = new Schema<ParkingSessionDocument>(
     subscriptionPlanName: { type: String, trim: true },
     paymentLookupCode: { type: String, trim: true, uppercase: true, index: true },
     qrCode: { type: String },
+    qrExpiry: { type: Date },
+    barrierTriggered: { type: Boolean, default: false },
+    barrierTriggeredAt: { type: Date },
+    barrierAction: { type: String, enum: ["open_entry", "open_exit"] },
     feeBreakdown: {
       totalMinutes: { type: Number },
       freeMinutes: { type: Number },

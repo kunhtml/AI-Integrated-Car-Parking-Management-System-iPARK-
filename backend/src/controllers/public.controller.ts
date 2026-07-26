@@ -88,14 +88,25 @@ export async function publicSearch(request: Request, response: Response) {
  * Trả về thông tin đầy đủ: thông tin xe, phiên đang gửi, expiry time
  */
 export async function lookupSession(request: Request, response: Response) {
-  const plate = String(request.query.plate || "").trim().toUpperCase();
+  const lookupCode = String(request.query.code || request.query.ticket || "").trim().toUpperCase();
+  let plate = String(request.query.plate || "").trim().toUpperCase();
 
-  if (!plate || plate.length < 5) {
+  if ((!plate || plate.length < 5) && !lookupCode) {
     response.status(400).json({ message: "Vui lòng nhập biển số xe (ít nhất 5 ký tự)." });
     return;
   }
 
   // 1. Kiểm tra xe đã đăng ký trong hệ thống
+  const activeSessionByCode = lookupCode
+    ? await ParkingSession.findOne({ paymentLookupCode: lookupCode, status: "Äang gá»­i" })
+        .sort({ checkInAt: -1 })
+        .populate("slotId")
+    : null;
+
+  if (activeSessionByCode && (!plate || plate.length < 5)) {
+    plate = activeSessionByCode.plate;
+  }
+
   const vehicle = await Vehicle.findOne({ plate }).select("plate ownerName vehicleType status brand color ownerEmail");
 
   // 2a. Kiểm tra phiên đỗ đang hoạt động
