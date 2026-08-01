@@ -175,3 +175,21 @@ export function serializeZone(
     updatedAt: zone.updatedAt,
   };
 }
+
+export function serializeDevice(device: any) {
+  return {
+    id: device._id?.toString?.() || device.id || "",
+    name: device.name,
+    gate: device.gate,
+    rtspUrl: device.rtspUrl || "",
+    username: device.username || "",
+    password: device.password || "",
+    roiNote: device.roiNote || "Biển số trước",
+    status: device.status || "offline",
+    barrierStatus: device.barrierStatus || "closed",
+    lastSnapshotUrl: device.lastSnapshotUrl || "",
+    lastSnapshotAt: device.lastSnapshotAt,
+    createdAt: device.createdAt,
+    updatedAt: device.updatedAt,
+  };
+}

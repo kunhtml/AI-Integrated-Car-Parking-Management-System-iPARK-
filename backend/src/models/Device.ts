@@ -9,6 +9,7 @@ export type DeviceDocument = {
   password?: string;
   roiNote?: string;
   status: "online" | "offline";
+  barrierStatus: "open" | "closed";
   lastSnapshotUrl?: string;
   lastSnapshotAt?: Date;
   createdAt: Date;
@@ -24,6 +25,7 @@ const deviceSchema = new Schema<DeviceDocument>(
     password: { type: String, default: "" },
     roiNote: { type: String, default: "Biển số trước" },
     status: { type: String, enum: ["online", "offline"], default: "offline" },
+    barrierStatus: { type: String, enum: ["open", "closed"], default: "closed" },
     lastSnapshotUrl: { type: String, default: "" },
     lastSnapshotAt: { type: Date },
   },

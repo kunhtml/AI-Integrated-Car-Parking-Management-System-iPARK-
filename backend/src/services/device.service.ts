@@ -12,3 +12,15 @@ export async function captureDeviceSnapshot(device: DeviceDocument) {
     imageUrl: device.lastSnapshotUrl || `/uploads/devices/${device._id.toString()}.svg`,
   };
 }
+
+export async function openBarrier(device: DeviceDocument) {
+  device.barrierStatus = "open";
+  await device.save();
+  return device;
+}
+
+export async function closeBarrier(device: DeviceDocument) {
+  device.barrierStatus = "closed";
+  await device.save();
+  return device;
+}

@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { z } from "zod";
 import { Device } from "../models/Device.js";
-import { captureDeviceSnapshot } from "../services/device.service.js";
+import { captureDeviceSnapshot, openBarrier, closeBarrier } from "../services/device.service.js";
 import { serializeDevice } from "../utils/serializers.js";
 
 const deviceSchema = z.object({
@@ -153,4 +153,43 @@ export async function restartDeviceHandler(request: Request, response: Response)
       device: serializeDevice(device),
     });
   }
+}
+
+export async function openDeviceBarrier(request: Request, response: Response) {
+  const device = await Device.findById(request.params.id);
+  if (!device) {
+    response.status(404).json({ message: "Không tìm thấy thiết bị." });
+    return;
+  }
+  await openBarrier(device);
+  response.json({
+    device: serializeDevice(device),
+    message: `Đã gửi tín hiệu mở barrier của "${device.name}".`
+  });
+}
+
+export async function closeDeviceBarrier(request: Request, response: Response) {
+  const device = await Device.findById(request.params.id);
+  if (!device) {
+    response.status(404).json({ message: "Không tìm thấy thiết bị." });
+    return;
+  }
+  await closeBarrier(device);
+  response.json({
+    device: serializeDevice(device),
+    message: `Đã gửi tín hiệu đóng barrier của "${device.name}".`
+  });
+}
+
+export async function occupySlot(request: Request, response: Response) {
+  const device = await Device.findById(request.params.id);
+  if (!device) {
+    response.status(404).json({ message: "Không tìm thấy thiết bị." });
+    return;
+  }
+  await closeBarrier(device);
+  response.json({
+    device: serializeDevice(device),
+    message: `Xe đã di chuyển qua cổng. Barrier "${device.name}" đã được tự động đóng (vị trí đỗ Đang sử dụng).`
+  });
 }

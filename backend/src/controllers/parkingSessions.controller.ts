@@ -141,6 +141,7 @@ async function createEntrySession(params: {
   entryImageHash?: string;
   aiRawText?: string;
   createdBy?: string;
+  deviceId?: string;
 }) {
   const plate = normalizePlate(params.plate);
   const rfidUid = normalizeRfid(params.rfidUid);
@@ -203,6 +204,16 @@ async function createEntrySession(params: {
   await triggerMemberBarrier(session);
   if (session.isModified()) {
     await session.save();
+  }
+
+  // Open barrier for the corresponding entry device
+  const entryDevice = params.deviceId
+    ? await Device.findById(params.deviceId)
+    : await Device.findOne({ gate: "entry" });
+
+  if (entryDevice) {
+    entryDevice.barrierStatus = "open";
+    await entryDevice.save();
   }
 
   return {
@@ -425,6 +436,7 @@ export async function cameraEntry(request: Request, response: Response) {
     entryImageHash: detection.imageHash,
     aiRawText: detection.rawText,
     createdBy: request.user?.id,
+    deviceId: body.deviceId,
   });
 
   response.status(201).json({
