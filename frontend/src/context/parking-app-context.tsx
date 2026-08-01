@@ -109,6 +109,9 @@ type ParkingAppContextValue = {
   saveDevice: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   snapshotDevice: (id: string) => Promise<void>;
   deleteDevice: (id: string) => Promise<void>;
+  openBarrier: (id: string) => Promise<void>;
+  closeBarrier: (id: string) => Promise<void>;
+  occupySlot: (id: string) => Promise<void>;
   loadReportSummary: (from: string, to: string) => Promise<void>;
   downloadReport: (
     type: "sessions" | "revenue",

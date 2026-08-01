@@ -18,7 +18,7 @@ type MaintenanceLog = {
 };
 
 export function DevicesView() {
-  const { currentUser, deviceList, saveDevice, snapshotDevice, cameraEntry, cameraExit } = useParkingApp();
+  const { currentUser, deviceList, saveDevice, snapshotDevice, cameraEntry, cameraExit, openBarrier, closeBarrier, occupySlot } = useParkingApp();
   const [activeTab, setActiveTab] = useState<"devices" | "maintenance">("devices");
   const [logs, setLogs] = useState<MaintenanceLog[]>([]);
   const [logsLoaded, setLogsLoaded] = useState(false);
@@ -143,12 +143,15 @@ export function DevicesView() {
             )}
 
             <DataTable
-              headers={["Thiết bị", "Cổng", "Trạng thái", "Ảnh", "ROI", "Thao tác"]}
+              headers={["Thiết bị", "Cổng", "Trạng thái", "Trạng thái Barrier", "Ảnh", "ROI", "Thao tác"]}
               rows={displayDevices.map((item) => [
                 item.name,
                 item.gate === "entry" ? "Vào" : "Ra",
                 <span className={item.status === "online" ? "badge success" : item.status === "offline" ? "badge warning" : "badge"} key={`${item.id}-st`}>
                   {item.status}
+                </span>,
+                <span className={item.barrierStatus === "open" ? "badge success" : "badge warning"} key={`${item.id}-barrier`}>
+                  {item.barrierStatus === "open" ? "Mở" : "Đóng"}
                 </span>,
                 item.lastSnapshotUrl ? (
                   <a href={item.lastSnapshotUrl} key={`${item.id}-shot`} rel="noreferrer" target="_blank">Xem</a>
@@ -170,6 +173,25 @@ export function DevicesView() {
                       )}
                       {item.gate === "exit" && (
                         <button className="small-button" onClick={() => cameraExit(item.id)} type="button">Xe ra</button>
+                      )}
+                      {item.gate === "entry" && (
+                        <button
+                          className="small-button"
+                          onClick={() => item.barrierStatus === "open" ? closeBarrier(item.id) : openBarrier(item.id)}
+                          type="button"
+                        >
+                          {item.barrierStatus === "open" ? "Đóng Barrier" : "Mở Barrier"}
+                        </button>
+                      )}
+                      {item.gate === "entry" && item.barrierStatus === "open" && (
+                        <button
+                          className="small-button"
+                          onClick={() => occupySlot(item.id)}
+                          type="button"
+                          style={{ backgroundColor: "#10b981", color: "#fff" }}
+                        >
+                          Xe qua
+                        </button>
                       )}
                     </>
                   )}

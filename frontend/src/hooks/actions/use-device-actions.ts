@@ -86,9 +86,63 @@ export function createDeviceActions({
     }
   }
 
+  async function openBarrier(id: string) {
+    const response = await apiFetch(`/devices/${id}/open`, {
+      method: "POST",
+    });
+    const data = await response.json();
+    if (response.ok) {
+      setDeviceList((items) =>
+        items.map((item) =>
+          item.id === id ? { ...item, barrierStatus: "open" } : item,
+        ),
+      );
+      setActionLog(data.message || "Đã mở barrier cổng vào.");
+    } else {
+      setActionLog(data.message || "Lỗi mở barrier.");
+    }
+  }
+
+  async function closeBarrier(id: string) {
+    const response = await apiFetch(`/devices/${id}/close`, {
+      method: "POST",
+    });
+    const data = await response.json();
+    if (response.ok) {
+      setDeviceList((items) =>
+        items.map((item) =>
+          item.id === id ? { ...item, barrierStatus: "closed" } : item,
+        ),
+      );
+      setActionLog(data.message || "Đã đóng barrier.");
+    } else {
+      setActionLog(data.message || "Lỗi đóng barrier.");
+    }
+  }
+
+  async function occupySlot(id: string) {
+    const response = await apiFetch(`/devices/${id}/occupy-slot`, {
+      method: "POST",
+    });
+    const data = await response.json();
+    if (response.ok) {
+      setDeviceList((items) =>
+        items.map((item) =>
+          item.id === id ? { ...item, barrierStatus: "closed" } : item,
+        ),
+      );
+      setActionLog(data.message || "Xe đã qua cổng và đỗ vào vị trí.");
+    } else {
+      setActionLog(data.message || "Lỗi cập nhật occupy-slot.");
+    }
+  }
+
   return {
     saveDevice,
     snapshotDevice,
     deleteDevice,
+    openBarrier,
+    closeBarrier,
+    occupySlot,
   };
 }

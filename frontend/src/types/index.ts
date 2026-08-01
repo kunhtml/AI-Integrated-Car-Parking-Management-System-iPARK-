@@ -174,6 +174,7 @@ export type DeviceItem = {
   name: string;
   gate: "entry" | "exit";
   status: string;
+  barrierStatus?: "open" | "closed";
   lastSnapshotUrl?: string;
   lastSnapshotAt?: string;
 };
