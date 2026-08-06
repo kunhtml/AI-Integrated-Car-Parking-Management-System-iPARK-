@@ -175,7 +175,7 @@ async function createEntrySession(params: {
   await checkDuplicatePlate(plate, rfidUid);
 
   const activeCount = await ensureCapacity();
-  const ownerInfo = plate ? await ownerFromPlate(plate) : {};
+  const ownerInfo = (plate ? await ownerFromPlate(plate) : {}) as any;
   const member = plate ? await findActiveSubscriptionByPlate(plate) : null;
   const discount = member
     ? await checkSubscriptionDiscountForPlate(member.userId, plate)
@@ -216,12 +216,14 @@ async function createEntrySession(params: {
     await session.save();
   }
 
-  // Open barrier for the corresponding entry device automatically if the vehicle is a registered member
+  // Open barrier for the corresponding entry device automatically if it's a member or an RFID card is assigned
   const entryDevice = params.deviceId
     ? await Device.findById(params.deviceId)
     : await Device.findOne({ gate: "entry" });
 
-  if (isMember && entryDevice) {
+  const shouldOpenBarrier = isMember || Boolean(rfidUid);
+
+  if (shouldOpenBarrier && entryDevice) {
     entryDevice.barrierStatus = "open";
     await entryDevice.save();
   }

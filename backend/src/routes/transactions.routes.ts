@@ -17,7 +17,7 @@ transactionsRoutes.post("/session/:sessionId", asyncHandler(createSessionTransac
 // Check PayOS payment by order code
 transactionsRoutes.get("/check-payos/:orderCode", asyncHandler(async (req, res) => {
   const { checkPayOSPaymentStatus } = await import("../services/payos.service.js");
-  const status = await checkPayOSPaymentStatus(req.params.orderCode);
+  const status = await checkPayOSPaymentStatus(req.params.orderCode as string);
   res.json(status);
 }));
 

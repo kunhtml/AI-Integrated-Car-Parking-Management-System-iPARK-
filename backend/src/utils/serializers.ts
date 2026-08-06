@@ -193,3 +193,18 @@ export function serializeDevice(device: any) {
     updatedAt: device.updatedAt,
   };
 }
+
+export function serializeMaintenanceLog(item: any) {
+  return {
+    id: item._id?.toString?.() || item.id || "",
+    deviceId: item.deviceId?.toString?.() || item.deviceId || "",
+    deviceName: item.deviceName || (item.deviceId && typeof item.deviceId === "object" ? item.deviceId.name : "") || "Thiết bị",
+    type: item.type,
+    description: item.description,
+    performedAt: item.performedAt || item.createdAt,
+    cost: item.cost || 0,
+    status: item.status,
+    notes: item.notes,
+    createdAt: item.createdAt,
+  };
+}

@@ -10,6 +10,7 @@ export type UserDocument = {
   role: UserRole;
   status: "Đang hoạt động" | "Đã khóa";
   wallet: number;
+  memberCode?: string;
   phone?: string;
   firstName?: string;
   lastName?: string;
@@ -43,6 +44,7 @@ const userSchema = new Schema<UserDocument>(
     role: { type: String, enum: ["admin", "staff", "customer"], default: "customer" },
     status: { type: String, enum: ["Đang hoạt động", "Đã khóa"], default: "Đang hoạt động" },
     wallet: { type: Number, default: 0 },
+    memberCode: { type: String, trim: true },
     phone: { type: String },
     firstName: { type: String },
     lastName: { type: String },

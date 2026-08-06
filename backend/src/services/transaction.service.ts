@@ -57,7 +57,7 @@ export async function createPendingTransactionForSession(session: ParkingSession
   const transaction = await Transaction.create({
     sessionId: session._id,
     userId: session.ownerUserId,
-    method: "vietqr",
+    method: "payos",
     amount: session.fee,
     status: "pending",
     content,

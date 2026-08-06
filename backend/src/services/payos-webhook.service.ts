@@ -29,10 +29,6 @@ async function applyPaidTransactionToSession(
   // Chỉ nhả slot + chốt giờ ra khi xe đã ra bãi (phiên đã hoàn thành từ trước).
   if (session.status === "Đã hoàn thành") {
     if (!session.checkOutAt) session.checkOutAt = new Date();
-    const { freeSlot } = await import("../services/parkingSlot.service.js");
-    if (session.slotId) {
-      await freeSlot(session.slotId);
-    }
   }
 
   await session.save();

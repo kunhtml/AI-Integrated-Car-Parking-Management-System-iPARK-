@@ -22,7 +22,6 @@ export async function createDevice(request: Request, response: Response) {
   const body = deviceSchema.parse(request.body);
   const device = await Device.create({
     ...body,
-    createdBy: request.user?.id,
   });
   response.status(201).json({ device: serializeDevice(device) });
 }

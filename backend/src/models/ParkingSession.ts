@@ -20,6 +20,9 @@ export type ParkingSessionDocument = {
   memberCode?: string;
   subscriptionPlanName?: string;
   paymentLookupCode?: string;
+  expectedCheckOutAt?: Date;
+  prepaidCheckoutAt?: Date;
+  ownerEmail?: string;
   qrCode?: string;
   qrExpiry?: Date;
   barrierTriggered?: boolean;
@@ -76,6 +79,9 @@ const parkingSessionSchema = new Schema<ParkingSessionDocument>(
     memberCode: { type: String, trim: true },
     subscriptionPlanName: { type: String, trim: true },
     paymentLookupCode: { type: String, trim: true, uppercase: true, index: true },
+    expectedCheckOutAt: { type: Date },
+    prepaidCheckoutAt: { type: Date },
+    ownerEmail: { type: String, trim: true },
     qrCode: { type: String },
     qrExpiry: { type: Date },
     barrierTriggered: { type: Boolean, default: false },

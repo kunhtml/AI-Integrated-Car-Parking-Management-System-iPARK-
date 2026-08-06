@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import type { DeviceDocument } from "../models/Device.js";
 
 export async function captureDeviceSnapshot(device: DeviceDocument) {
@@ -13,13 +14,13 @@ export async function captureDeviceSnapshot(device: DeviceDocument) {
   };
 }
 
-export async function openBarrier(device: DeviceDocument) {
+export async function openBarrier(device: mongoose.Document & DeviceDocument) {
   device.barrierStatus = "open";
   await device.save();
   return device;
 }
 
-export async function closeBarrier(device: DeviceDocument) {
+export async function closeBarrier(device: mongoose.Document & DeviceDocument) {
   device.barrierStatus = "closed";
   await device.save();
   return device;

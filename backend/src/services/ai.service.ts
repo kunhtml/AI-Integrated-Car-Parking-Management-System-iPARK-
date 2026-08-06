@@ -35,7 +35,7 @@ export async function detectVehicleImage(image: Express.Multer.File): Promise<Ve
 
   try {
     const form = new FormData();
-    const blob = new Blob([image.buffer], { type: image.mimetype || "image/jpeg" });
+    const blob = new Blob([image.buffer as any], { type: image.mimetype || "image/jpeg" });
     form.append("file", blob, image.originalname || "vehicle.jpg");
 
     const response = await fetch(`${aiUrl.replace(/\/$/, "")}/detect`, {

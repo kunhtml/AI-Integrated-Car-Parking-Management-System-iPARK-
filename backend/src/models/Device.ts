@@ -12,6 +12,13 @@ export type DeviceDocument = {
   barrierStatus: "open" | "closed";
   lastSnapshotUrl?: string;
   lastSnapshotAt?: Date;
+  healthCheckEnabled?: boolean;
+  offlineThresholdMinutes?: number;
+  maintenanceSchedule?: {
+    lastMaintenanceAt?: Date;
+    nextMaintenanceAt?: Date;
+    intervalDays?: number;
+  };
   createdAt: Date;
   updatedAt: Date;
 };
@@ -28,6 +35,13 @@ const deviceSchema = new Schema<DeviceDocument>(
     barrierStatus: { type: String, enum: ["open", "closed"], default: "closed" },
     lastSnapshotUrl: { type: String, default: "" },
     lastSnapshotAt: { type: Date },
+    healthCheckEnabled: { type: Boolean, default: true },
+    offlineThresholdMinutes: { type: Number, default: 30 },
+    maintenanceSchedule: {
+      lastMaintenanceAt: { type: Date },
+      nextMaintenanceAt: { type: Date },
+      intervalDays: { type: Number, default: 30 },
+    },
   },
   { timestamps: true },
 );

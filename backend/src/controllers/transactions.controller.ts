@@ -24,7 +24,7 @@ export async function listTransactions(request: Request, response: Response) {
 
   response.json({
     transactions: transactions.map((t) =>
-      serializeTransaction(t, sessionMap.get(t.sessionId?.toString() ?? "")),
+      serializeTransaction(t),
     ),
   });
 }
@@ -43,7 +43,7 @@ export async function createSessionTransaction(request: Request, response: Respo
   }
 
   const { PaymentConfig } = await import("../models/PaymentConfig.js");
-  const config = await PaymentConfig.findOne({ isActive: true });
+  const config = await PaymentConfig.findOne({ isActive: true }) as any;
 
   const payosClientId = config?.payosClientId || process.env.PAYTOS_CLIENT_ID;
   const payosApiKey = config?.payosApiKey || process.env.PAYTOS_API_KEY;

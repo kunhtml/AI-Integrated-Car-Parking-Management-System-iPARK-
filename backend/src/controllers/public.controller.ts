@@ -1,11 +1,9 @@
 import { Request, Response } from "express";
-import { ParkingSlot } from "../models/ParkingSlot.js";
 import { ParkingSession } from "../models/ParkingSession.js";
 import { Vehicle } from "../models/Vehicle.js";
 import { User } from "../models/User.js";
 import { Zone } from "../models/Zone.js";
-import { getActivePricingConfigForZone } from "../services/pricing.service.js";
-import { calculateParkingFee } from "../services/pricing.service.js";
+import { getActivePricingConfig, calculateParkingFee } from "../services/pricing.service.js";
 
 /**
  * HM-04/HM-05: Public parking availability — no auth required.
@@ -13,32 +11,24 @@ import { calculateParkingFee } from "../services/pricing.service.js";
  */
 export async function publicAvailability(_request: Request, response: Response) {
   const zones = await Zone.find({ isActive: true }).sort({ displayOrder: 1 });
+  const activeSessions = await ParkingSession.find({ status: "Đang gửi" }).select("slot").lean();
 
-  const stats = await ParkingSlot.aggregate<{
-    _id: { zoneId: string; status: string };
-    count: number;
-  }>([
-    { $group: { _id: { zoneId: { $toString: "$zoneId" }, status: "$status" }, count: { $sum: 1 } } },
-  ]);
-
-  const statsMap = new Map<string, { total: number; empty: number; occupied: number }>();
-  for (const row of stats) {
-    const key = row._id.zoneId;
-    if (!statsMap.has(key)) statsMap.set(key, { total: 0, empty: 0, occupied: 0 });
-    const entry = statsMap.get(key)!;
-    entry.total += row.count;
-    if (row._id.status === "empty") entry.empty = row.count;
-    if (row._id.status === "occupied") entry.occupied = row.count;
+  const slotCountByZone: Record<string, number> = {};
+  for (const session of activeSessions) {
+    const zoneName = session.slot?.split("-")[0];
+    if (zoneName) {
+      slotCountByZone[zoneName] = (slotCountByZone[zoneName] || 0) + 1;
+    }
   }
 
   const result = zones.map((zone) => {
-    const s = statsMap.get(zone._id.toString()) || { total: 0, empty: 0, occupied: 0 };
+    const occupied = slotCountByZone[zone.name] || 0;
     return {
       zone: zone.name,
       description: zone.description,
-      total: s.total,
-      available: s.empty,
-      occupied: s.occupied,
+      total: zone.capacity,
+      available: Math.max(zone.capacity - occupied, 0),
+      occupied,
       allowedVehicleTypes: zone.allowedVehicleTypes,
     };
   });
@@ -72,13 +62,24 @@ export async function publicSearch(request: Request, response: Response) {
     ],
   });
 
-  const slotCounts = await Promise.all(
-    zones.map(async (zone) => {
-      const empty = await ParkingSlot.countDocuments({ zoneId: zone._id, status: "empty" });
-      const total = await ParkingSlot.countDocuments({ zoneId: zone._id });
-      return { zone: zone.name, description: zone.description, available: empty, total };
-    }),
-  );
+  const activeSessions = await ParkingSession.find({ status: "Đang gửi" }).select("slot").lean();
+  const slotCountByZone: Record<string, number> = {};
+  for (const session of activeSessions) {
+    const zoneName = session.slot?.split("-")[0];
+    if (zoneName) {
+      slotCountByZone[zoneName] = (slotCountByZone[zoneName] || 0) + 1;
+    }
+  }
+
+  const slotCounts = zones.map((zone) => {
+    const occupied = slotCountByZone[zone.name] || 0;
+    return {
+      zone: zone.name,
+      description: zone.description,
+      available: Math.max(zone.capacity - occupied, 0),
+      total: zone.capacity,
+    };
+  });
 
   response.json({ results: slotCounts });
 }
@@ -100,7 +101,6 @@ export async function lookupSession(request: Request, response: Response) {
   const activeSessionByCode = lookupCode
     ? await ParkingSession.findOne({ paymentLookupCode: lookupCode, status: "Đang gửi" })
         .sort({ checkInAt: -1 })
-        .populate("slotId")
     : null;
 
   if (activeSessionByCode && (!plate || plate.length < 5)) {
@@ -111,8 +111,7 @@ export async function lookupSession(request: Request, response: Response) {
 
   // 2a. Kiểm tra phiên đỗ đang hoạt động
   const activeSession = await ParkingSession.findOne({ plate, status: "Đang gửi" })
-    .sort({ checkInAt: -1 })
-    .populate("slotId");
+    .sort({ checkInAt: -1 });
 
   // 2b. Nếu không có phiên đang gửi, kiểm tra phiên đã hoàn thành gần đây (< 24h)
   let completedSession = null;
@@ -123,8 +122,7 @@ export async function lookupSession(request: Request, response: Response) {
       status: "Đã hoàn thành",
       checkOutAt: { $gte: last24h },
     })
-      .sort({ checkOutAt: -1 })
-      .populate("slotId");
+      .sort({ checkOutAt: -1 });
   }
 
   if (!activeSession && !completedSession) {
@@ -160,7 +158,6 @@ export async function lookupSession(request: Request, response: Response) {
 
   // Nếu có phiên đã hoàn thành gần đây → hiển thị thông tin đã thanh toán
   if (completedSession) {
-    const slotDoc = completedSession.slotId as any;
     response.json({
       found: true,
       plate,
@@ -178,7 +175,7 @@ export async function lookupSession(request: Request, response: Response) {
         ownerName: completedSession.ownerName,
         ownerEmail: completedSession.ownerEmail || null,
         slot: completedSession.slot,
-        zone: slotDoc?.zoneId ? (await Zone.findById(slotDoc.zoneId))?.name : null,
+        zone: completedSession.slot ? completedSession.slot.split("-")[0] : null,
         checkInAt: completedSession.checkInAt.toISOString(),
         checkInDate: completedSession.checkInAt.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" }),
         checkOutAt: completedSession.checkOutAt?.toISOString(),
@@ -207,8 +204,7 @@ export async function lookupSession(request: Request, response: Response) {
   const duration = hours > 0 ? `${hours} giờ ${mins} phút` : `${mins} phút`;
 
   // Lấy thông tin pricing để tính phí
-  const slotDoc = session.slotId as any;
-  const pricing = await getActivePricingConfigForZone(slotDoc?.zoneId);
+  const pricing = await getActivePricingConfig();
   const feeBreakdown = calculateParkingFee(activeSessionCheckInLocal, new Date(), pricing);
   const currentFee = feeBreakdown.totalFee;
 
@@ -241,7 +237,7 @@ export async function lookupSession(request: Request, response: Response) {
       ownerName: session.ownerName,
       ownerEmail: session.ownerEmail || userEmail || null,
       slot: session.slot,
-      zone: slotDoc?.zoneId ? (await Zone.findById(slotDoc.zoneId))?.name : null,
+      zone: session.slot ? session.slot.split("-")[0] : null,
       checkInAt: session.checkInAt.toISOString(),
       checkInDate: session.checkInAt.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" }),
       parkingMinutes,
@@ -255,7 +251,7 @@ export async function lookupSession(request: Request, response: Response) {
         : undefined,
       expectedCheckOutAt: session.expectedCheckOutAt?.toISOString(),
       isPrepaid,
-      entryGate: session.entryGate || null,
+      entryGate: (session as any).entryGate || null,
     },
     user: {
       email: userEmail || null,
@@ -277,8 +273,7 @@ export async function calculateExitFee(request: Request, response: Response) {
   }
 
   const session = await ParkingSession.findOne({ plate: plate.toUpperCase(), status: "Đang gửi" })
-    .sort({ checkInAt: -1 })
-    .populate("slotId");
+    .sort({ checkInAt: -1 });
 
   if (!session) {
     response.status(404).json({ message: `Không tìm thấy phiên gửi xe đang hoạt động cho biển số ${plate}.` });
@@ -300,8 +295,7 @@ export async function calculateExitFee(request: Request, response: Response) {
   }
 
   // Tính phí
-  const slotDoc = session.slotId as any;
-  const pricing = await getActivePricingConfigForZone(slotDoc?.zoneId);
+  const pricing = await getActivePricingConfig();
   const feeBreakdown = calculateParkingFee(sessionCheckInLocal, exitTime, pricing);
 
   // Nếu đã thanh toán trước, chỉ tính phí cho thời gian gia hạn
@@ -347,18 +341,16 @@ export async function calculateFeeQuick(request: Request, response: Response) {
   }
 
   const session = await ParkingSession.findOne({ plate: plate.toUpperCase(), status: "Đang gửi" })
-    .sort({ checkInAt: -1 })
-    .populate("slotId");
+    .sort({ checkInAt: -1 });
 
   if (!session) {
     response.status(404).json({ message: `Không tìm thấy phiên gửi xe đang hoạt động cho biển số ${plate}.` });
     return;
   }
 
-  const slotDoc = session.slotId as any;
-  const pricing = await getActivePricingConfigForZone(slotDoc?.zoneId);
-  const dayRate = pricing?.dayRate || 5000;
-  const nightRate = pricing?.nightRate || 10000;
+  const pricing = await getActivePricingConfig();
+  const dayRate = pricing?.hourlyRate || 5000;
+  const nightRate = pricing?.overnightRate || 10000;
 
   // Tính giờ ra: nếu chọn sau 22h thì 22:00, không thì 21:00
   const exitHour = exitAfter22h ? 22 : 21;
@@ -425,8 +417,7 @@ export async function preCheckout(request: Request, response: Response) {
   }
 
   const session = await ParkingSession.findOne({ plate: plate.toUpperCase(), status: "Đang gửi" })
-    .sort({ checkInAt: -1 })
-    .populate("slotId");
+    .sort({ checkInAt: -1 });
 
   if (!session) {
     response.status(404).json({ message: "Không tìm thấy phiên gửi xe đang hoạt động." });
@@ -440,8 +431,7 @@ export async function preCheckout(request: Request, response: Response) {
   const exitTime = expectedExitTime ? new Date(expectedExitTime) : new Date();
 
   // Tính phí
-  const slotDoc = session.slotId as any;
-  const pricing = await getActivePricingConfigForZone(slotDoc?.zoneId);
+  const pricing = await getActivePricingConfig();
   const feeBreakdown = calculateParkingFee(confirmCheckInLocal, exitTime, pricing);
 
   // Lưu phí dự kiến; KHÔNG đổi trạng thái khi chưa thật sự trả tiền.
@@ -512,8 +502,7 @@ export async function extendSession(request: Request, response: Response) {
   }
 
   const session = await ParkingSession.findOne({ plate: plate.toUpperCase(), status: "Đang gửi" })
-    .sort({ checkInAt: -1 })
-    .populate("slotId");
+    .sort({ checkInAt: -1 });
 
   if (!session) {
     response.status(404).json({ message: "Không tìm thấy phiên gửi xe đang hoạt động." });
@@ -542,14 +531,13 @@ export async function extendSession(request: Request, response: Response) {
 
   // Phí gia hạn = phí(checkIn→giờ ra mới) − phí đã tính trước đó (session.fee).
   // calculateParkingFee tự áp giá ngày (06h-22h) / đêm (22h-06h) và cộng thêm ngày.
-  const slotDoc = session.slotId as any;
-  const pricing = await getActivePricingConfigForZone(slotDoc?.zoneId);
+  const pricing = await getActivePricingConfig();
   const feeNew = calculateParkingFee(checkInLocal, newExit, pricing);
   const extensionFee = Math.max(0, feeNew.totalFee - (session.fee || 0));
 
   // Nếu PayOS bật, tạo link thanh toán thật cho khoản phí gia hạn
   const { PaymentConfig } = await import("../models/PaymentConfig.js");
-  const cfg = await PaymentConfig.findOne({ isActive: true });
+  const cfg = await PaymentConfig.findOne({ isActive: true }) as any;
   const payosClientId = cfg?.payosClientId || process.env.PAYTOS_CLIENT_ID;
   const payosApiKey = cfg?.payosApiKey || process.env.PAYTOS_API_KEY;
   const payosEnabled = (cfg?.payosEnabled || process.env.PAYTOS_USE === "true") && payosClientId && payosApiKey;
@@ -699,9 +687,7 @@ export async function checkSessionPaymentStatus(request: Request, response: Resp
     if (session.paymentStatus !== "fully_paid" && (session.fee || 0) - (session.paidAmount || 0) > 0) {
       try {
         const { reconcileSessionPayment } = await import("../services/payos-webhook.service.js");
-        if (await reconcileSessionPayment(session)) {
-          await session.populate("slotId");
-        }
+        await reconcileSessionPayment(session);
       } catch (err) {
         console.warn("[checkSessionPaymentStatus] reconcile failed:", err);
       }
