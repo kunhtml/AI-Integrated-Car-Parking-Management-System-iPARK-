@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarDays, LayoutDashboard, ParkingCircle, Shield } from "lucide-react";
+import { CalendarDays, Car, LayoutDashboard, ParkingCircle, Shield } from "lucide-react";
 
 export default function DashboardLayout({
   children,
@@ -35,6 +35,13 @@ export default function DashboardLayout({
           >
             <CalendarDays className="h-4 w-4" />
             Manage Work Shifts
+          </Link>
+          <Link
+            href="/dashboard/vehicles"
+            className="flex items-center gap-3 rounded-2xl border border-cyan-400/30 bg-cyan-500/15 px-4 py-3 text-sm font-semibold text-white transition hover:bg-cyan-500/20"
+          >
+            <Car className="h-4 w-4" />
+            Verify Vehicles & RFID
           </Link>
           <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-sm text-slate-300">
             <div className="mb-2 flex items-center gap-2 font-semibold text-slate-100">
