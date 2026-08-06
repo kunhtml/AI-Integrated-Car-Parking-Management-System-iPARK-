@@ -131,6 +131,27 @@ async function triggerMemberBarrier(session: ParkingSessionDocument) {
   return true;
 }
 
+async function checkDuplicatePlate(plate?: string, rfidUid?: string) {
+  const normPlate = plate ? normalizePlate(plate) : undefined;
+  const normRfid = rfidUid ? normalizeRfid(rfidUid) : undefined;
+  if (!normPlate && !normRfid) {
+    return;
+  }
+  const duplicate = await ParkingSession.findOne({
+    status: ACTIVE_STATUS,
+    $or: [
+      ...(normPlate ? [{ plate: normPlate }] : []),
+      ...(normRfid ? [{ rfidUid: normRfid }] : []),
+    ],
+  });
+  if (duplicate) {
+    const displayVal = normPlate || (normRfid ? `RFID-${normRfid}` : "");
+    const err = new Error(`Biển số ${displayVal} đang có phiên đỗ xe chưa checkout. Không thể tạo phiên mới.`) as Error & { status: number };
+    err.status = 409;
+    throw err;
+  }
+}
+
 async function createEntrySession(params: {
   plate?: string;
   owner?: string;
@@ -151,18 +172,7 @@ async function createEntrySession(params: {
     throw err;
   }
 
-  const duplicate = await ParkingSession.findOne({
-    status: ACTIVE_STATUS,
-    $or: [
-      ...(plate ? [{ plate }] : []),
-      ...(rfidUid ? [{ rfidUid }] : []),
-    ],
-  });
-  if (duplicate) {
-    const err = new Error("Xe/thẻ này đang có phiên đỗ xe hoạt động.") as Error & { status: number };
-    err.status = 409;
-    throw err;
-  }
+  await checkDuplicatePlate(plate, rfidUid);
 
   const activeCount = await ensureCapacity();
   const ownerInfo = plate ? await ownerFromPlate(plate) : {};
@@ -206,12 +216,12 @@ async function createEntrySession(params: {
     await session.save();
   }
 
-  // Open barrier for the corresponding entry device
+  // Open barrier for the corresponding entry device automatically if the vehicle is a registered member
   const entryDevice = params.deviceId
     ? await Device.findById(params.deviceId)
     : await Device.findOne({ gate: "entry" });
 
-  if (entryDevice) {
+  if (isMember && entryDevice) {
     entryDevice.barrierStatus = "open";
     await entryDevice.save();
   }

@@ -281,7 +281,7 @@ function SessionTable({
                   {session.isMember ? "Thành viên" : "Khách vãng lai"}
                 </span>
                 {session.subscriptionPlanName && <span className="muted-cell">{session.subscriptionPlanName}</span>}
-                {session.barrierTriggered && <span className="muted-cell">Da mo barrier</span>}
+                {session.barrierTriggered && <span className="muted-cell text-emerald-600 font-semibold">✓ Tự động mở Barrier</span>}
               </td>
               <td>
                 <span className={isActiveSession(session) ? "badge warning" : "badge success"}>

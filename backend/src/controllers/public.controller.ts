@@ -98,7 +98,7 @@ export async function lookupSession(request: Request, response: Response) {
 
   // 1. Kiểm tra xe đã đăng ký trong hệ thống
   const activeSessionByCode = lookupCode
-    ? await ParkingSession.findOne({ paymentLookupCode: lookupCode, status: "Äang gá»­i" })
+    ? await ParkingSession.findOne({ paymentLookupCode: lookupCode, status: "Đang gửi" })
         .sort({ checkInAt: -1 })
         .populate("slotId")
     : null;

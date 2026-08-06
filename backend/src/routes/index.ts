@@ -21,6 +21,8 @@ import { usersRoutes } from "./users.routes.js";
 import { vehiclesRoutes } from "./vehicles.routes.js";
 import { zonesRoutes } from "./zones.routes.js";
 
+import { publicRoutes } from "./public.routes.js";
+
 export const apiRoutes = Router();
 
 apiRoutes.get("/health", (_request, response) =>
@@ -45,3 +47,4 @@ apiRoutes.use("/notifications", notificationsRoutes);
 apiRoutes.use("/shifts", shiftsRoutes);
 apiRoutes.use("/incidents", incidentsRoutes);
 apiRoutes.use("/zones", zonesRoutes);
+apiRoutes.use("/public", publicRoutes);
