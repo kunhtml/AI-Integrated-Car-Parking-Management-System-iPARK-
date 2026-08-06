@@ -32,10 +32,10 @@ export function ShiftsView() {
         headers={["Ca", "Bắt đầu", "Kết thúc", "Trạng thái", "Thao tác"]}
         rows={displayShifts.map((item) => [
           item.name,
-          new Date(item.startAt).toString() === "Invalid Date"
-            ? item.startAt
-            : new Date(item.startAt).toLocaleString("vi-VN"),
-          item.endAt ? new Date(item.endAt).toLocaleString("vi-VN") : "Chưa kết thúc",
+          new Date(item.startedAt || "").toString() === "Invalid Date"
+            ? item.startedAt
+            : new Date(item.startedAt || "").toLocaleString("vi-VN"),
+          item.endedAt ? new Date(item.endedAt).toLocaleString("vi-VN") : "Chưa kết thúc",
           item.status,
           item.status === "Đang làm" && shiftList.length ? (
             <button className="small-button" key={item.id} onClick={() => endShift(item.id)} type="button">

@@ -1,33 +1,33 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  BadgeCheck,
-  Camera,
-  Car,
-  Check,
-  CheckCircle2,
-  CircleParking,
-  Clock,
-  CreditCard,
-  DoorOpen,
-  ExternalLink,
-  Loader2,
-  LogIn,
-  Mail,
-  MapPin,
-  Phone,
-  Plus,
-  QrCode,
-  Receipt,
-  RefreshCw,
-  ScanLine,
-  Search,
-  ShieldCheck,
-  Sparkles,
-  UserRound,
-  Zap,
-} from "lucide-react";
+import * as Lucide from "lucide-react";
+
+const BadgeCheck = (Lucide as any).BadgeCheck || (Lucide as any).CheckCircle2;
+const Camera = (Lucide as any).Camera;
+const Car = (Lucide as any).Car;
+const Check = (Lucide as any).Check;
+const CheckCircle2 = (Lucide as any).CheckCircle2;
+const CircleParking = (Lucide as any).CircleParking || (Lucide as any).Circle;
+const Clock = (Lucide as any).Clock || (Lucide as any).Clock3;
+const CreditCard = (Lucide as any).CreditCard;
+const DoorOpen = (Lucide as any).DoorOpen || (Lucide as any).Play;
+const ExternalLink = (Lucide as any).ExternalLink || (Lucide as any).Link;
+const Loader2 = (Lucide as any).Loader2;
+const LogIn = (Lucide as any).LogIn;
+const Mail = (Lucide as any).Mail;
+const MapPin = (Lucide as any).MapPin;
+const Phone = (Lucide as any).Phone;
+const Plus = (Lucide as any).Plus;
+const QrCode = (Lucide as any).QrCode || (Lucide as any).Scan;
+const Receipt = (Lucide as any).Receipt || (Lucide as any).FileText;
+const RefreshCw = (Lucide as any).RefreshCw;
+const ScanLine = (Lucide as any).ScanLine || (Lucide as any).Scan;
+const Search = (Lucide as any).Search;
+const ShieldCheck = (Lucide as any).ShieldCheck;
+const Sparkles = (Lucide as any).Sparkles || (Lucide as any).Zap;
+const UserRound = (Lucide as any).UserRound || (Lucide as any).User;
+const Zap = (Lucide as any).Zap;
 import { QRCodeSVG } from "qrcode.react";
 import { useParkingApp } from "@/context/parking-app-context";
 import { apiBaseUrl } from "@/lib/constants";

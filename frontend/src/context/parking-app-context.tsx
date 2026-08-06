@@ -129,6 +129,7 @@ type ParkingAppContextValue = {
   createIncident: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   resolveIncident: (id: string) => Promise<void>;
   approveVehicle: (vehicle: RegisteredVehicle) => Promise<void>;
+  setSessions?: (sessions: ParkingSession[] | ((items: ParkingSession[]) => ParkingSession[])) => void;
 };
 
 const ParkingAppContext = createContext<ParkingAppContextValue | null>(null);
@@ -519,6 +520,7 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       filteredSessions,
       formErrors,
       setFormErrors,
+      setSessions,
       ...authActions,
       ...sessionActions,
       ...paymentActions,
@@ -531,9 +533,9 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       state,
       stats,
       filteredSessions,
-      formErrors,
       setFormErrors,
       setZoneList,
+      setSessions,
       authActions,
       sessionActions,
       paymentActions,

@@ -1,7 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Camera, ClipboardList, Power, RefreshCcw, Wrench } from "lucide-react";
+import * as Lucide from "lucide-react";
+
+const Camera = (Lucide as any).Camera;
+const ClipboardList = (Lucide as any).ClipboardList || (Lucide as any).FileText;
+const Power = (Lucide as any).Power || (Lucide as any).Play;
+const RefreshCcw = (Lucide as any).RefreshCcw;
+const Wrench = (Lucide as any).Wrench;
 
 import { DataTable } from "@/components/ui/data-table";
 import { useParkingApp } from "@/context/parking-app-context";
@@ -23,6 +29,7 @@ export function DevicesView() {
   const [logs, setLogs] = useState<MaintenanceLog[]>([]);
   const [logsLoaded, setLogsLoaded] = useState(false);
   const [msg, setMsg] = useState("");
+  const [editingDevice, setEditingDevice] = useState<any>(null);
 
   const displayDevices = deviceList;
   const isAdmin = currentUser?.role === "admin";

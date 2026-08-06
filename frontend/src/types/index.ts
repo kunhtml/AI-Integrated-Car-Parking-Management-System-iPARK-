@@ -61,6 +61,8 @@ export type ParkingSession = {
   slot: string;
   status: "Đang gửi" | "Đã hoàn thành" | string;
   fee: number;
+  ownerEmail?: string;
+  checkInDate?: string;
   paidAmount?: number;
   isMember?: boolean;
   paymentMethod?: "cash" | "payos" | "vietqr" | "wallet" | "subscription";
@@ -149,6 +151,14 @@ export type TransactionItem = {
   paidAt?: string;
   note?: string;
   createdAt?: string;
+  payosCheckoutUrl?: string;
+  sessionFee?: number;
+  sessionPaidAmount?: number;
+  sessionPaymentStatus?: string;
+  plate?: string;
+  ownerName?: string;
+  ownerEmail?: string;
+  slot?: string;
 };
 
 export type NotificationItem = {
@@ -157,6 +167,7 @@ export type NotificationItem = {
   content: string;
   targetRole?: Role;
   isRead?: boolean;
+  read?: boolean;
   createdAt?: string;
 };
 
@@ -177,6 +188,7 @@ export type DeviceItem = {
   barrierStatus?: "open" | "closed";
   lastSnapshotUrl?: string;
   lastSnapshotAt?: string;
+  roiNote?: string;
 };
 
 export type ShiftItem = {
@@ -210,6 +222,11 @@ export type ReportSummary = {
   revenue: number;
   activeSessions: number;
   averageFee: number;
+  entryCount?: number;
+  exitCount?: number;
+  activeCount?: number;
+  freeSessionCount?: number;
+  paidSessionCount?: number;
 };
 
 export type Zone = ParkingZone;

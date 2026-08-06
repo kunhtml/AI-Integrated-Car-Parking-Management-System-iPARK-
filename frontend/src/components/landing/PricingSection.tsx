@@ -1,8 +1,16 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { CheckCircle2, Clock, LucideIcon, Moon, RefreshCcw, Star, Tag } from "lucide-react";
+import * as Lucide from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+
+const CheckCircle2 = (Lucide as any).CheckCircle2;
+const Clock = (Lucide as any).Clock || (Lucide as any).Clock3;
+const Moon = (Lucide as any).Moon;
+const RefreshCcw = (Lucide as any).RefreshCcw;
+const Star = (Lucide as any).Star;
+const Tag = (Lucide as any).Tag;
 
 interface PricingData {
   hourlyRate: number;
@@ -19,7 +27,7 @@ interface PackageTier {
   icon: LucideIcon;
   name: string;
   badge?: string;
-  badgeColor: string;
+  badgeColor?: string;
   description: string;
   priceKey: keyof PricingData | "dailyMax";
   priceSuffix: string;

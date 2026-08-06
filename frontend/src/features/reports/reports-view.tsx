@@ -1,7 +1,8 @@
 "use client";
+// Trigger VS Code TS Server refresh
 
 import { useState } from "react";
-import { BarChart3, Download, MapPin, ShieldAlert, TrendingUp, Users, Clock, Wallet } from "lucide-react";
+import * as Lucide from "lucide-react";
 import { useParkingApp } from "@/context/parking-app-context";
 import { apiFetch } from "@/lib/client-api";
 import { currency } from "@/lib/constants";
@@ -9,6 +10,15 @@ import { RevenueChart } from "./revenue-chart";
 import { OccupancyChart } from "./occupancy-chart";
 import { TopCustomersTable } from "./top-customers-table";
 import { PeakHoursHeatmap } from "./peak-hours-heatmap";
+
+const BarChart3 = (Lucide as any).BarChart3 || (Lucide as any).BarChart;
+const Download = (Lucide as any).Download;
+const MapPin = (Lucide as any).MapPin;
+const ShieldAlert = (Lucide as any).ShieldAlert || (Lucide as any).AlertTriangle;
+const TrendingUp = (Lucide as any).TrendingUp;
+const Users = (Lucide as any).Users || (Lucide as any).User;
+const Clock = (Lucide as any).Clock || (Lucide as any).Clock3;
+const Wallet = (Lucide as any).Wallet;
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -30,15 +40,48 @@ export function ReportsView() {
     setReportTo,
     loadReportSummary,
     downloadReport,
-    revenueChart,
-    occupancyData,
-    topCustomers,
-    peakHours,
-    loadRevenueChart,
-    loadOccupancyHourly,
-    loadTopCustomers,
-    loadPeakHours,
   } = useParkingApp();
+
+  const [revenueChart, setRevenueChart] = useState<any[]>([]);
+  const [occupancyData, setOccupancyData] = useState<any[]>([]);
+  const [topCustomers, setTopCustomers] = useState<any[]>([]);
+  const [peakHours, setPeakHours] = useState<any[]>([]);
+
+  async function loadRevenueChart(from: string, to: string, groupBy: string = "day") {
+    const params = new URLSearchParams({ from, to, groupBy });
+    const response = await apiFetch(`/reports/revenue-chart?${params}`);
+    if (response.ok) {
+      const json = await response.json();
+      setRevenueChart(json.data || json);
+    }
+  }
+
+  async function loadOccupancyHourly(from: string, to: string) {
+    const params = new URLSearchParams({ from, to });
+    const response = await apiFetch(`/reports/occupancy-hourly?${params}`);
+    if (response.ok) {
+      const json = await response.json();
+      setOccupancyData(json.data || json);
+    }
+  }
+
+  async function loadTopCustomers(from: string, to: string, limit: number = 10) {
+    const params = new URLSearchParams({ from, to, limit: String(limit) });
+    const response = await apiFetch(`/reports/top-customers?${params}`);
+    if (response.ok) {
+      const json = await response.json();
+      setTopCustomers(json.data || json);
+    }
+  }
+
+  async function loadPeakHours(from: string, to: string) {
+    const params = new URLSearchParams({ from, to });
+    const response = await apiFetch(`/reports/peak-hours?${params}`);
+    if (response.ok) {
+      const json = await response.json();
+      setPeakHours(json.data || json);
+    }
+  }
 
   const [activeTab, setActiveTab] = useState<"summary" | "revenue" | "occupancy" | "customers" | "peak" | "penalty" | "wallet" | "zones">("summary");
   const [chartFrom, setChartFrom] = useState(monthAgoStr());

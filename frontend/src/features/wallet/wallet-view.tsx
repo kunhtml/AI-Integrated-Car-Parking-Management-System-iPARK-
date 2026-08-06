@@ -1,7 +1,14 @@
 "use client";
 
 import { useState, useEffect, type FormEvent } from "react";
-import { CreditCard, ExternalLink, Loader2, PlusCircle, QrCode, RefreshCw } from "lucide-react";
+import * as Lucide from "lucide-react";
+
+const CreditCard = (Lucide as any).CreditCard;
+const Loader2 = (Lucide as any).Loader2;
+const PlusCircle = (Lucide as any).PlusCircle;
+const QrCode = (Lucide as any).QrCode;
+const RefreshCw = (Lucide as any).RefreshCw;
+const ExternalLink = (Lucide as any).ExternalLink || (Lucide as any).Link;
 
 import { DataTable } from "@/components/ui/data-table";
 import { useParkingApp } from "@/context/parking-app-context";
@@ -235,7 +242,7 @@ export function WalletView() {
     return [
       // Thời gian
       <span key={`${item.id}-t`} className="muted-cell" style={{ fontSize: "0.8rem" }}>
-        {new Date(item.createdAt).toLocaleString("vi-VN", {
+        {new Date(item.createdAt || "").toLocaleString("vi-VN", {
           day: "2-digit",
           month: "2-digit",
           year: "numeric",

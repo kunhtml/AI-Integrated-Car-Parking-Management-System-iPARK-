@@ -85,10 +85,10 @@ export const initialSessions: ParkingSession[] = [
 ];
 
 export const initialVehicles: RegisteredVehicle[] = [
-  { plate: "30H-678.90", owner: "Nguyễn Minh Anh", type: "Ô tô", status: "Đã đăng ký" },
-  { plate: "30E-345.67", owner: "Trần Hoàng Nam", type: "Ô tô", status: "Đã đăng ký" },
-  { plate: "30F-222.11", owner: "Lê Thu Hà", type: "Ô tô", status: "Cần duyệt" },
-  { plate: "30K-999.99", owner: "Khách vi phạm", type: "Ô tô", status: "Blacklist" },
+  { id: "v1", plate: "30H-678.90", owner: "Nguyễn Minh Anh", type: "Ô tô", status: "Đã đăng ký" },
+  { id: "v2", plate: "30E-345.67", owner: "Trần Hoàng Nam", type: "Ô tô", status: "Đã đăng ký" },
+  { id: "v3", plate: "30F-222.11", owner: "Lê Thu Hà", type: "Ô tô", status: "Cần duyệt" },
+  { id: "v4", plate: "30K-999.99", owner: "Khách vi phạm", type: "Ô tô", status: "Blacklist" },
 ];
 
 export const transactions = [
@@ -128,6 +128,9 @@ export const initialPricingConfig: PricingConfig = {
   overnightRate: 80000,
   monthlyRate: 1200000,
   overdueFineRate: 20000,
+  dailyMaxRate: 150000,
+  graceExitMinutes: 15,
+  effectiveFrom: "2026-08-01T00:00:00.000Z",
   isActive: true,
 };
 
@@ -138,6 +141,7 @@ export const initialPaymentConfig: PaymentConfig = {
   accountNumber: "0000000000",
   accountName: "IPARK",
   transferPrefix: "IPARK",
+  isActive: true,
 };
 
 export function fallbackDevices(): DeviceItem[] {

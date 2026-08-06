@@ -101,18 +101,12 @@ export function createPaymentActions({
         const res = await apiFetch(`/public/session/${sessionId}/payment-status`);
         if (res.ok) {
           const status = await res.json();
-          if (status.paymentStatus === "fully_paid" || status.paymentStatus === "partial_paid") {
+          if (status.paymentStatus === "fully_paid" || status.paymentStatus === "partial_paid" || status?.transaction?.status === "paid") {
             clearInterval(intervalId);
             await reloadSessions();
             setActionLog(`Thanh toán thành công cho phiên ${sessionId.slice(-6)}.`);
             return;
           }
-        }
-        if (status?.transaction?.status === "paid") {
-          clearInterval(intervalId);
-          await reloadSessions();
-          setActionLog(`Thanh toán thành công cho phiên ${sessionId.slice(-6)}.`);
-          return;
         }
       } catch {
         // ignore errors during polling

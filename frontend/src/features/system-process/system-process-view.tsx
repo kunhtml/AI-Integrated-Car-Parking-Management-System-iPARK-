@@ -1,21 +1,14 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import {
-  AlertTriangle,
-  BadgeCheck,
-  Calculator,
-  CheckCircle2,
-  Clock,
-  Cpu,
-  CreditCard,
-  FileText,
-  Play,
-  RotateCcw,
-  ShieldAlert,
-  Sliders,
-  Sparkles,
-} from "lucide-react";
+import * as Lucide from "lucide-react";
+
+const CheckCircle2 = (Lucide as any).CheckCircle2;
+const Cpu = (Lucide as any).Cpu;
+const CreditCard = (Lucide as any).CreditCard;
+const Play = (Lucide as any).Play;
+const Sparkle = (Lucide as any).Sparkle || (Lucide as any).Sparkles || (Lucide as any).Zap;
+const Shield = (Lucide as any).Shield || (Lucide as any).ShieldAlert;
 import { apiFetch } from "@/lib/api";
 
 type ProcessResult = {
@@ -119,7 +112,7 @@ export function SystemProcessView() {
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-center gap-3 mb-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-50 text-purple-600">
-              <BadgeCheck size={20} />
+              <CheckCircle2 size={20} />
             </div>
             <h2 className="text-sm font-bold text-slate-900">1. Auto Validate Package</h2>
           </div>
@@ -131,7 +124,7 @@ export function SystemProcessView() {
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-center gap-3 mb-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-              <Calculator size={20} />
+              <CreditCard size={20} />
             </div>
             <h2 className="text-sm font-bold text-slate-900">2. Auto Calculate Fee</h2>
           </div>
@@ -143,7 +136,7 @@ export function SystemProcessView() {
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-center gap-3 mb-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
-              <ShieldAlert size={20} />
+              <Shield size={20} />
             </div>
             <h2 className="text-sm font-bold text-slate-900">3. Auto Apply Fine Rules</h2>
           </div>
@@ -156,7 +149,7 @@ export function SystemProcessView() {
       {/* Interactive Simulation Form */}
       <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-base font-bold text-slate-900 mb-4 flex items-center gap-2">
-          <Sparkles className="text-blue-600" size={18} />
+          <Sparkle className="text-blue-600" size={18} />
           Mô phỏng Quy Trình Tự Động Real-time
         </h2>
 
@@ -321,7 +314,7 @@ export function SystemProcessView() {
           <div className="lg:col-span-3 rounded-xl border border-slate-200 bg-slate-900 p-6 text-white shadow-sm">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
               <span className="text-xs font-bold uppercase text-slate-400 flex items-center gap-2">
-                <FileText size={16} /> Audit Log Nhật Ký Xử Lý Tự Động
+                <Cpu size={16} /> Audit Log Nhật Ký Xử Lý Tự Động
               </span>
               <span className="text-lg font-bold text-emerald-400">
                 Tổng thanh toán: {result.totalFee.toLocaleString("vi-VN")} đ
