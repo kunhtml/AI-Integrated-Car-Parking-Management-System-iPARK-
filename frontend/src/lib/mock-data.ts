@@ -20,21 +20,23 @@ export const demoUsers: DemoUser[] = [
   },
   {
     id: 2,
-    name: "Nhân viên cổng 1",
+    name: "Nhân viên cổng vào",
     email: "nv.1@ipark.vn",
     password: "123456",
     role: "staff",
     status: "Đang hoạt động",
     wallet: 0,
+    gate: "entry",
   },
   {
     id: 3,
-    name: "Nhân viên cổng 2",
+    name: "Nhân viên cổng ra",
     email: "nv.2@ipark.vn",
     password: "123456",
     role: "staff",
     status: "Đang hoạt động",
     wallet: 0,
+    gate: "exit",
   },
 ];
 

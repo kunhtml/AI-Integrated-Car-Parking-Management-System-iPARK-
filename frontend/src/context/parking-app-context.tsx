@@ -51,6 +51,11 @@ type ParkingAppContextValue = {
   setCurrentUser: (user: DemoUser | null) => void;
   sessions: ParkingSession[];
   registeredVehicles: RegisteredVehicle[];
+  setRegisteredVehicles: (
+    vehicles:
+      | RegisteredVehicle[]
+      | ((items: RegisteredVehicle[]) => RegisteredVehicle[]),
+  ) => void;
   userList: DemoUser[];
   searchText: string;
   setSearchText: (text: string) => void;
@@ -447,6 +452,7 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
     [setZoneList, setActionLog, setFormErrors],
   );
 
+
   const stats = useMemo(() => {
     const active = state.sessions.filter(
       (item) => item.status === "Đang gửi",
@@ -479,6 +485,7 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       setCurrentUser,
       sessions: state.sessions,
       registeredVehicles: state.registeredVehicles,
+      setRegisteredVehicles,
       userList: state.userList,
       searchText: state.searchText,
       setSearchText,
@@ -526,6 +533,7 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       formErrors,
       setFormErrors,
       setZoneList,
+      setRegisteredVehicles,
       authActions,
       sessionActions,
       paymentActions,

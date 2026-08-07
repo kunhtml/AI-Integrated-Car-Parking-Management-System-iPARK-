@@ -33,6 +33,8 @@ export type View =
   | "alerts"
   | "assistedRegistration";
 
+export type StaffGate = "entry" | "exit";
+
 export type DemoUser = {
   id: number | string;
   name: string;
@@ -44,6 +46,7 @@ export type DemoUser = {
   avatarUrl?: string;
   provider?: string;
   twoFactorEnabled?: boolean;
+  gate?: StaffGate;
 };
 
 export type FeeBreakdown = {
