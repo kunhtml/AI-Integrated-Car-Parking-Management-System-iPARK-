@@ -145,6 +145,14 @@ export async function createPayOSPayment(params: {
   });
 
   if (result.success && result.data) {
+    // Diagnostic: log prefix + length của qrCode để debug chuẩn QR (URL vs EMVCo)
+    const qr = result.data.qrCode ?? "";
+    console.log(
+      `[PayOS] created link orderCode=${orderCode} amount=${params.amount} qrPrefix=${qr.slice(0, 80)} qrLen=${qr.length}`,
+    );
+    console.log(
+      `[PayOS] account bin=${result.data.bin} accountNumber=${result.data.accountNumber} accountName=${result.data.accountName} checkoutUrl=${result.data.checkoutUrl}`,
+    );
     return {
       success: true,
       orderCode,

@@ -1,40 +1,68 @@
 "use client";
 
-export function PeakHoursHeatmap({ data }: { data: any[] }) {
-  if (!data || data.length === 0) {
-    return <p className="muted-cell">Không có dữ liệu giờ cao điểm.</p>;
+import { Flame } from "lucide-react";
+import type { PeakHourPoint } from "@/types";
+
+const DAY_LABELS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+
+function getIntensity(count: number, max: number): string {
+  if (max === 0) return "hsl(210, 10%, 95%)";
+  const ratio = count / max;
+  if (ratio > 0.75) return "hsl(0, 70%, 50%)";
+  if (ratio > 0.5) return "hsl(30, 80%, 55%)";
+  if (ratio > 0.25) return "hsl(45, 80%, 65%)";
+  if (ratio > 0) return "hsl(120, 40%, 80%)";
+  return "hsl(210, 10%, 95%)";
+}
+
+export function PeakHoursHeatmap({ data }: { data: PeakHourPoint[] }) {
+  if (!data.length) {
+    return <p className="muted-cell">Nhấn "Tải dữ liệu" để xem heatmap giờ cao điểm.</p>;
   }
 
-  // Find max count to scale colors
-  const maxCount = Math.max(...data.map((d: any) => d.count), 1);
+  const max = Math.max(...data.map((d) => d.count), 1);
 
-  // Group by day of week (0-6) and hour (0-23) if detailed, or just render list
+  // Build 7x24 grid (dayOfWeek 1-7 from MongoDB $dayOfWeek: 1=Sunday)
+  const grid: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0));
+  for (const point of data) {
+    const dayIndex = point.dayOfWeek - 1; // 0=Sunday
+    grid[dayIndex][point.hour] = point.count;
+  }
+
   return (
-    <div className="panel-body" style={{ marginTop: 16 }}>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-        {data.map((item: any, idx: number) => {
-          const intensity = Math.min(0.1 + (item.count / maxCount) * 0.9, 1);
-          return (
-            <div
-              key={idx}
-              style={{
-                padding: "8px 12px",
-                borderRadius: 4,
-                backgroundColor: `rgba(239, 68, 68, ${intensity})`,
-                color: intensity > 0.5 ? "#fff" : "#000",
-                fontSize: "0.85rem",
-                fontWeight: 600,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                minWidth: 60,
-              }}
-            >
-              <span>{item.hour}h</span>
-              <span style={{ fontSize: "0.75rem", opacity: 0.9 }}>{item.count} xe</span>
-            </div>
-          );
-        })}
+    <div>
+      <div className="panel-heading">
+        <div><p>Giờ cao điểm</p><h2>Heatmap (ngày × giờ)</h2></div>
+        <Flame size={20} />
+      </div>
+      <div className="heatmap-container">
+        <div className="heatmap-header">
+          <div className="heatmap-label" />
+          {Array.from({ length: 24 }, (_, h) => (
+            <div className="heatmap-hour-label" key={h}>{h}</div>
+          ))}
+        </div>
+        {grid.map((row, dayIndex) => (
+          <div className="heatmap-row" key={dayIndex}>
+            <div className="heatmap-label">{DAY_LABELS[dayIndex]}</div>
+            {row.map((count, hour) => (
+              <div
+                className="heatmap-cell"
+                key={hour}
+                style={{ background: getIntensity(count, max) }}
+                title={`${DAY_LABELS[dayIndex]} ${hour}h: ${count} xe`}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+      <div className="heatmap-legend">
+        <span>Ít</span>
+        <div style={{ background: "hsl(120, 40%, 80%)", width: 20, height: 14, borderRadius: 2 }} />
+        <div style={{ background: "hsl(45, 80%, 65%)", width: 20, height: 14, borderRadius: 2 }} />
+        <div style={{ background: "hsl(30, 80%, 55%)", width: 20, height: 14, borderRadius: 2 }} />
+        <div style={{ background: "hsl(0, 70%, 50%)", width: 20, height: 14, borderRadius: 2 }} />
+        <span>Nhiều</span>
       </div>
     </div>
   );

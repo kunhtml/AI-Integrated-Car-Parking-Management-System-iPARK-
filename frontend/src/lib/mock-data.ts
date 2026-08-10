@@ -16,7 +16,6 @@ export const demoUsers: DemoUser[] = [
     password: "admin",
     role: "admin",
     status: "Đang hoạt động",
-    wallet: 0,
   },
   {
     id: 2,
@@ -25,8 +24,6 @@ export const demoUsers: DemoUser[] = [
     password: "123456",
     role: "staff",
     status: "Đang hoạt động",
-    wallet: 0,
-    gate: "entry",
   },
   {
     id: 3,
@@ -35,8 +32,6 @@ export const demoUsers: DemoUser[] = [
     password: "123456",
     role: "staff",
     status: "Đang hoạt động",
-    wallet: 0,
-    gate: "exit",
   },
 ];
 
@@ -87,15 +82,47 @@ export const initialSessions: ParkingSession[] = [
 ];
 
 export const initialVehicles: RegisteredVehicle[] = [
-  { plate: "30H-678.90", owner: "Nguyễn Minh Anh", type: "Ô tô", status: "Đã đăng ký" },
-  { plate: "30E-345.67", owner: "Trần Hoàng Nam", type: "Ô tô", status: "Đã đăng ký" },
-  { plate: "30F-222.11", owner: "Lê Thu Hà", type: "Ô tô", status: "Cần duyệt" },
-  { plate: "30K-999.99", owner: "Khách vi phạm", type: "Ô tô", status: "Blacklist" },
+  {
+    id: "mock-veh-001",
+    plate: "30H-678.90",
+    owner: "Nguyễn Minh Anh",
+    type: "Ô tô",
+    status: "Đã đăng ký",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: "mock-veh-002",
+    plate: "30E-345.67",
+    owner: "Trần Hoàng Nam",
+    type: "Ô tô",
+    status: "Đã đăng ký",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: "mock-veh-003",
+    plate: "30F-222.11",
+    owner: "Lê Thu Hà",
+    type: "Ô tô",
+    status: "Cần duyệt",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: "mock-veh-004",
+    plate: "30K-999.99",
+    owner: "Khách vi phạm",
+    type: "Ô tô",
+    status: "Blacklist",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
 ];
 
 export const transactions = [
   { id: "GD-1201", method: "Ví nội bộ", amount: 18000, status: "Thành công", time: "10:22" },
-  { id: "GD-1200", method: "VietQR chờ cấu hình", amount: 100000, status: "Chờ xác nhận", time: "09:40" },
+  { id: "GD-1200", method: "PayOS chờ xác nhận", amount: 100000, status: "Chờ xác nhận", time: "09:40" },
   { id: "GD-1199", method: "Nạp ví", amount: 250000, status: "Thành công", time: "Hôm qua" },
 ];
 
@@ -125,21 +152,15 @@ export const shiftRows = [
 
 export const initialPricingConfig: PricingConfig = {
   id: "default",
-  freeMinutes: 20,
-  hourlyRate: 10000,
-  overnightRate: 80000,
-  monthlyRate: 1200000,
-  overdueFineRate: 20000,
+  dayRate: 5000,
+  nightRate: 10000,
+  dayStartHour: 6,
+  nightStartHour: 22,
   isActive: true,
 };
 
 export const initialPaymentConfig: PaymentConfig = {
   id: "default",
-  bankName: "Ngân hàng test",
-  bankBin: "970436",
-  accountNumber: "0000000000",
-  accountName: "IPARK",
-  transferPrefix: "IPARK",
 };
 
 export function fallbackDevices(): DeviceItem[] {

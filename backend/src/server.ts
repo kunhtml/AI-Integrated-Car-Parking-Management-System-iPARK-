@@ -1,31 +1,30 @@
 import { app } from "./app.js";
 import { connectDb } from "./config/db.js";
 import { env } from "./config/env.js";
-import { initAutoScan, stopAllAutoScan } from "./services/auto-scan.service.js";
-import { startDetectWorker, stopDetectWorker } from "./queues/detect.queue.js";
+import { initScheduler } from "./services/scheduler.service.js";
+import {
+  migrateLegacySubscriptionPlates,
+} from "./services/subscription.service.js";
 
 await connectDb();
 
-// Khởi động auto-scan cho các camera entry đã bật
-await initAutoScan();
+// One-shot migration: chuyển Subscription.registeredPlates (string[]) cũ
+// sang registeredVehicleIds (ObjectId[]). Chạy lúc khởi động server.
+try {
+  const result = await migrateLegacySubscriptionPlates();
+  if (result.scanned > 0) {
+    console.log(
+      `[Migration] Subscriptions: scanned=${result.scanned} updated=${result.updated} vehiclesCreated=${result.vehiclesCreated}`,
+    );
+  }
+} catch (err) {
+  console.error("[Migration] migrateLegacySubscriptionPlates failed:", err);
+}
 
-// Khởi động worker xử lý nhận diện bất đồng bộ (ONVIF motion, camera events)
-// Worker đảm bảo mọi detection đều ghi nhận detectionMethod (plate-model ưu tiên)
-startDetectWorker();
+// Backfill tự động chuyển sang script riêng: scripts/migrate_per_vehicle_subscription.js
+// (đã chạy 1 lần khi chuyển schema). Giữ legacy no-op ở đây cho tương thích.
 
-const server = app.listen(env.port, () => {
+app.listen(env.port, () => {
   console.log(`iPARK backend listening on http://localhost:${env.port}`);
-});
-
-// Graceful shutdown
-process.on("SIGTERM", async () => {
-  stopAllAutoScan();
-  await stopDetectWorker();
-  server.close(() => process.exit(0));
-});
-
-process.on("SIGINT", async () => {
-  stopAllAutoScan();
-  await stopDetectWorker();
-  server.close(() => process.exit(0));
+  initScheduler();
 });

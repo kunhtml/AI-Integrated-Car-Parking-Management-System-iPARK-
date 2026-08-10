@@ -1,30 +1,33 @@
-import {
-  demoUsers,
-  initialPaymentConfig,
-  initialPricingConfig,
-  initialSessions,
-  initialVehicles,
-} from "@/lib/mock-data";
+import { initialPricingConfig } from "@/lib/mock-data";
 import { todayInputValue } from "@/lib/constants";
 import type {
   AuthMode,
+  CapacityChangeLog,
+  CapacityConfig,
+  CapacityUsage,
+  CapacityZoneSummary,
   DemoUser,
   DeviceItem,
-  FeedbackItem,
+  DeviceMaintenanceLog,
   IncidentItem,
   NotificationItem,
+  OccupancyHourPoint,
   ParkingSession,
-  PaymentConfig,
+  ParkingSlot,
+  PeakHourPoint,
   PricingConfig,
   RegisteredVehicle,
   ReportSummary,
-  ShiftItem,
-  TransactionItem,
-  Zone,
-  OccupancyHourPoint,
-  PeakHourPoint,
   RevenueChartPoint,
+  ShiftItem,
+  ShiftScheduleItem,
+  Subscription,
+  SubscriptionPlan,
   TopCustomer,
+  TransactionItem,
+  VehicleRequest,
+  Zone,
+  ZoneSlotsResponse,
 } from "@/types";
 
 export type ParkingAppState = {
@@ -39,12 +42,11 @@ export type ParkingAppState = {
   actionLog: string;
   exitSessionId: string;
   pricingConfigState: PricingConfig;
-  paymentConfigState: PaymentConfig;
   transactionList: TransactionItem[];
   notificationList: NotificationItem[];
-  feedbackList: FeedbackItem[];
   deviceList: DeviceItem[];
   shiftList: ShiftItem[];
+  shiftScheduleList: ShiftScheduleItem[];
   incidentList: IncidentItem[];
   zoneList: Zone[];
   twoFactorQr: string;
@@ -52,45 +54,62 @@ export type ParkingAppState = {
   reportTo: string;
   reportSummary: ReportSummary | null;
   sessionLoading: boolean;
-  membershipActive: boolean;
-  membershipExpiresAt: string;
+  zoneList: Zone[];
+  slotList: ParkingSlot[];
+  planList: SubscriptionPlan[];
+  subscriptionList: Subscription[];
+  maintenanceLogList: DeviceMaintenanceLog[];
   revenueChart: RevenueChartPoint[];
   occupancyData: OccupancyHourPoint[];
   topCustomers: TopCustomer[];
   peakHours: PeakHourPoint[];
+  vehicleRequests: VehicleRequest[];
+  capacityConfig: CapacityConfig | null;
+  capacityZones: CapacityZoneSummary[];
+  capacityUsage: CapacityUsage | null;
+  capacityHistory: CapacityChangeLog[];
+  zoneSlots: Record<string, ZoneSlotsResponse>;
 };
 
 export function createInitialState(): ParkingAppState {
   return {
     mode: "login",
-    currentUser: demoUsers[0] ?? null,
-    sessions: initialSessions,
-    registeredVehicles: initialVehicles,
-    userList: demoUsers,
+    currentUser: null,
+    sessions: [],
+    registeredVehicles: [],
+    userList: [],
     searchText: "",
     authError: "",
     mobileNavOpen: false,
-    actionLog: "Sẵn sàng vận hành.",
+    actionLog: "",
     exitSessionId: "",
     pricingConfigState: initialPricingConfig,
-    paymentConfigState: initialPaymentConfig,
     transactionList: [],
     notificationList: [],
-    feedbackList: [],
     deviceList: [],
     shiftList: [],
+    shiftScheduleList: [],
     incidentList: [],
     zoneList: [],
     twoFactorQr: "",
     reportFrom: todayInputValue(),
     reportTo: todayInputValue(),
     reportSummary: null,
-    sessionLoading: false,
-    membershipActive: false,
-    membershipExpiresAt: "",
+    sessionLoading: true,
+    zoneList: [],
+    slotList: [],
+    planList: [],
+    subscriptionList: [],
+    maintenanceLogList: [],
     revenueChart: [],
     occupancyData: [],
     topCustomers: [],
     peakHours: [],
+    vehicleRequests: [],
+    capacityConfig: null,
+    capacityZones: [],
+    capacityUsage: null,
+    capacityHistory: [],
+    zoneSlots: {},
   };
 }

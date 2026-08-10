@@ -2,45 +2,39 @@ import mongoose, { Model, Schema } from "mongoose";
 
 export type RfidCardDocument = {
   _id: mongoose.Types.ObjectId;
-  cardId: string;
-  status: "available" | "in-use" | "lost" | "blocked";
-  issuedAt: Date;
-  lastUsedAt?: Date;
-  lostAt?: Date;
-  blockedAt?: Date;
-  blockedReason?: string;
+  uid: string;
+  ownerName: string;
+  plate: string;
+  userType: "resident" | "guest";
+  status: "active" | "inactive";
   notes?: string;
-  createdBy?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 };
 
 const rfidCardSchema = new Schema<RfidCardDocument>(
   {
-    cardId: {
+    uid: { type: String, required: true, unique: true, trim: true, index: true },
+    ownerName: { type: String, required: true, trim: true, default: "Guest" },
+    plate: { type: String, trim: true, uppercase: true, default: "" },
+    userType: {
       type: String,
-      required: true,
-      unique: true,
-      trim: true,
-      uppercase: true,
+      enum: ["resident", "guest"],
+      default: "guest",
+      index: true,
     },
     status: {
       type: String,
-      enum: ["available", "in-use", "lost", "blocked"],
-      default: "available",
+      enum: ["active", "inactive"],
+      default: "active",
       index: true,
     },
-    issuedAt: { type: Date, default: Date.now },
-    lastUsedAt: { type: Date },
-    lostAt: { type: Date },
-    blockedAt: { type: Date },
-    blockedReason: { type: String, trim: true },
     notes: { type: String, trim: true },
-    createdBy: { type: Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true },
 );
 
+rfidCardSchema.index({ plate: 1 });
+
 export const RfidCard: Model<RfidCardDocument> =
-  mongoose.models.RfidCard ||
-  mongoose.model<RfidCardDocument>("RfidCard", rfidCardSchema);
+  mongoose.models.RfidCard || mongoose.model<RfidCardDocument>("RfidCard", rfidCardSchema);

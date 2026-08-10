@@ -2,76 +2,42 @@
 
 import { useEffect, useState } from "react";
 import {
+  BadgeCheck,
   Camera,
   Car,
   Check,
   CheckCircle2,
-  Clock3,
+  CircleParking,
+  Clock,
   CreditCard,
+  DoorOpen,
+  ExternalLink,
   Loader2,
   LogIn,
-  LogOut,
   Mail,
   MapPin,
   Phone,
+  Plus,
   QrCode,
-  RefreshCcw,
+  Receipt,
+  RefreshCw,
   ScanLine,
   Search,
   ShieldCheck,
+  Sparkles,
   UserRound,
+  Zap,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useParkingApp } from "@/context/parking-app-context";
 import { apiBaseUrl } from "@/lib/constants";
 import { parkingConfig } from "@/lib/parking-config";
 
-// ─── Types ────────────────────────────────────────────────────────
-type ZoneAvailability = {
-  zone: string;
-  description?: string;
-  total: number;
-  available: number;
-  occupied: number;
-  allowedVehicleTypes: string[];
-};
-
-// ─── Passes ────────────────────────────────────────────────────────
-const PASSES = [
-  {
-    id: "luot",
-    name: "Gửi theo lượt",
-    price: "15.000đ",
-    unit: "/2 giờ đầu",
-    note: "+8.000đ mỗi giờ tiếp theo",
-    highlight: false,
-    features: ["Không cần đăng ký", "Thanh toán PayOS", "Ra bãi tự động"],
-  },
-  {
-    id: "ngay",
-    name: "Vé ngày",
-    price: "80.000đ",
-    unit: "/ngày",
-    note: "Trần phí tối đa trong ngày",
-    highlight: true,
-    features: ["Ra vào trong ngày", "Tiết kiệm cho gửi lâu", "Thanh toán PayOS"],
-  },
-  {
-    id: "thang",
-    name: "Gói tháng",
-    price: "990.000đ",
-    unit: "/tháng",
-    note: "Dành cho thành viên VIP",
-    highlight: false,
-    features: ["Ra vào không giới hạn", "Ưu tiên chỗ trống", "Cần tài khoản"],
-  },
-];
-
 const STEPS = [
   { icon: Camera, title: "Camera nhận diện biển số", desc: "AI tự động đọc biển số khi xe tới cổng, barie mở trong ~3 giây." },
   { icon: QrCode, title: "Nhận vé điện tử QR", desc: "Mỗi xe có một mã phiên gửi xe duy nhất, thay cho vé giấy." },
   { icon: CreditCard, title: "Thanh toán PayOS", desc: "Tra cứu phí theo biển số và quét mã QR PayOS để trả, không cần tiền mặt." },
-  { icon: LogOut, title: "Ra bãi tự động", desc: "Sau khi thanh toán, hệ thống đóng phiên và mở barie ra." },
+  { icon: DoorOpen, title: "Ra bãi tự động", desc: "Sau khi thanh toán, hệ thống đóng phiên và mở barie ra." },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────
@@ -95,89 +61,269 @@ function getDefaultDate() {
 }
 
 // ─── Parking Availability ────────────────────────────────────────
-function ParkingAvailability() {
-  const [zones, setZones] = useState<ZoneAvailability[]>([]);
-  const [totalAvailable, setTotalAvailable] = useState(0);
-  const [totalCapacity, setTotalCapacity] = useState(0);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<{ zone: string; description?: string; available: number; total: number }[]>([]);
-  const [loaded, setLoaded] = useState(false);
+type ZoneData = {
+  zone: string;
+  description?: string;
+  total: number;
+  available: number;
+  occupied: number;
+  allowedVehicleTypes: string[];
+};
 
+type AvailabilityAPI = {
+  capacity: number;
+  available: number;
+  occupied: number;
+  zones: ZoneData[];
+};
+
+type ActiveZone = {
+  zone: string;
+  description?: string;
+  total: number;
+  available: number;
+  occupied: number;
+  allowedVehicleTypes: string[];
+  fillRate: number;
+  isFull: boolean;
+};
+
+function ParkingAvailability() {
+  const [zones, setZones] = useState<ActiveZone[]>([]);
+  const [stats, setStats] = useState({ capacity: 0, available: 0, occupied: 0 });
+  const [search, setSearch] = useState("");
+  const [activeZone, setActiveZone] = useState<string>("Tất cả");
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  async function load(silent = false) {
+    if (!silent) setIsLoading(true);
+    else setIsRefreshing(true);
+    try {
+      const r = await fetch(`${apiBaseUrl}/public/availability`);
+      if (r.ok) {
+        const d: AvailabilityAPI = await r.json();
+        const mapped: ActiveZone[] = (d.zones || []).map((z: ZoneData) => ({
+          ...z,
+          fillRate: z.total > 0 ? Math.round(((z.total - z.available) / z.total) * 100) : 0,
+          isFull: z.available === 0,
+        }));
+        setZones(mapped);
+        setStats({ capacity: d.capacity, available: d.available, occupied: d.occupied });
+        setLastUpdated(new Date());
+      }
+    } catch { /* silent */ }
+    setIsLoading(false);
+    setIsRefreshing(false);
+  }
+
+  useEffect(() => { load(); }, []);
   useEffect(() => {
-    async function load() {
-      try {
-        const r = await fetch(`${apiBaseUrl}/public/availability`);
-        if (r.ok) { const d = await r.json(); setZones(d.zones); setTotalAvailable(d.available); setTotalCapacity(d.capacity); setLoaded(true); }
-      } catch { /* silent */ }
-    }
-    load();
-    const i = setInterval(load, 30000);
+    const i = setInterval(() => load(true), 30000);
     return () => clearInterval(i);
   }, []);
 
-  async function handleSearch() {
-    if (!searchQuery.trim()) return;
-    try {
-      const r = await fetch(`${apiBaseUrl}/public/search?q=${encodeURIComponent(searchQuery)}`);
-      if (r.ok) { const d = await r.json(); setSearchResults(d.results); }
-    } catch { /* silent */ }
-  }
+  const filtered = zones.filter((z) => {
+    const matchesSearch = search.trim() === "" ||
+      z.zone.toLowerCase().includes(search.toLowerCase()) ||
+      (z.description || "").toLowerCase().includes(search.toLowerCase());
+    const matchesZone = activeZone === "Tất cả" || z.zone === activeZone;
+    return matchesSearch && matchesZone;
+  });
 
-  const fillRate = totalCapacity > 0 ? Math.round(((totalCapacity - totalAvailable) / totalCapacity) * 100) : 0;
+  const totalAvailable = stats.capacity > 0 ? stats.available : zones.reduce((s, z) => s + z.available, 0);
+  const totalOccupied = zones.reduce((s, z) => s + z.occupied, 0);
+  const totalCapacity = zones.reduce((s, z) => s + z.total, 0);
+  const overallFill = totalCapacity > 0 ? Math.round(((totalCapacity - totalAvailable) / totalCapacity) * 100) : 0;
 
   return (
-    <div className="landing-avail">
-      {loaded && (
-        <div className="landing-avail-stats">
-          <div className="landing-avail-stat">
-            <div className="landing-avail-stat-icon green"><Car size={20} /></div>
-            <div><span className="landing-avail-stat-value">{totalAvailable}</span><span className="landing-avail-stat-label">Chỗ trống</span></div>
-          </div>
-          <div className="landing-avail-stat">
-            <div className="landing-avail-stat-icon blue"><CheckCircle2 size={20} /></div>
-            <div><span className="landing-avail-stat-value">{totalCapacity}</span><span className="landing-avail-stat-label">Tổng sức chứa</span></div>
-          </div>
-          <div className="landing-avail-stat">
-            <div className="landing-avail-stat-icon orange"><ScanLine size={20} /></div>
-            <div><span className="landing-avail-stat-value">{fillRate}%</span><span className="landing-avail-stat-label">Tỷ lệ lấp đầy</span></div>
+    <div className="pkav">
+      {/* ── Stats Row ── */}
+      <div className="pkav-stats">
+        <div className="pkav-stat">
+          <div className="pkav-stat-icon green"><Car size={18} /></div>
+          <div>
+            <span className="pkav-stat-value">{totalAvailable}</span>
+            <span className="pkav-stat-label">Chỗ trống</span>
           </div>
         </div>
-      )}
-      <div className="landing-avail-search">
-        <Search size={18} className="landing-avail-search-icon" />
-        <input onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-          placeholder="Tìm khu vực đỗ xe, loại xe..." value={searchQuery} />
-        <button onClick={handleSearch} type="button">Tìm kiếm</button>
+        <div className="pkav-stat">
+          <div className="pkav-stat-icon blue"><CircleParking size={18} /></div>
+          <div>
+            <span className="pkav-stat-value">{totalOccupied}</span>
+            <span className="pkav-stat-label">Đang đỗ</span>
+          </div>
+        </div>
+        <div className="pkav-stat">
+          <div className="pkav-stat-icon orange"><Zap size={18} /></div>
+          <div>
+            <span className="pkav-stat-value">{overallFill}%</span>
+            <span className="pkav-stat-label">Tỷ lệ lấp đầy</span>
+          </div>
+        </div>
+        <div className="pkav-stat">
+          <div className="pkav-stat-icon purple"><MapPin size={18} /></div>
+          <div>
+            <span className="pkav-stat-value">{totalCapacity}</span>
+            <span className="pkav-stat-label">Tổng sức chứa</span>
+          </div>
+        </div>
       </div>
-      {searchResults.length > 0 && (
-        <div className="landing-avail-zones">
-          {searchResults.map((r) => (
-            <div className="landing-avail-zone" key={r.zone}>
-              <div className="landing-avail-zone-header"><h4>Khu {r.zone}</h4><span className="badge success">{r.available} trống</span></div>
-              {r.description && <p className="landing-avail-zone-desc">{r.description}</p>}
-              <div className="landing-avail-zone-bar"><div style={{ width: `${r.total > 0 ? ((r.total - r.available) / r.total) * 100 : 0}%` }} /></div>
-            </div>
+
+      {/* ── Controls Row ── */}
+      <div className="pkav-controls">
+        <div className="pkav-search">
+          <Search size={16} className="pkav-search-icon" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Tìm khu vực đỗ xe…"
+          />
+          {search && (
+            <button className="pkav-search-clear" onClick={() => setSearch("")} type="button">
+              ✕
+            </button>
+          )}
+        </div>
+        <div className="pkav-filters">
+          <button
+            className={`pkav-filter-btn ${activeZone === "Tất cả" ? "active" : ""}`}
+            onClick={() => setActiveZone("Tất cả")}
+            type="button"
+          >
+            Tất cả
+          </button>
+          {zones.map((z) => (
+            <button
+              key={z.zone}
+              className={`pkav-filter-btn ${activeZone === z.zone ? "active" : ""}`}
+              onClick={() => setActiveZone(z.zone)}
+              type="button"
+            >
+              Khu {z.zone}
+            </button>
           ))}
         </div>
-      )}
-      {loaded && (
-        <div className="landing-avail-zones">
-          {zones.map((zone) => (
-            <div className="landing-avail-zone" key={zone.zone}>
-              <div className="landing-avail-zone-header">
-                <h4>Khu {zone.zone}</h4>
-                <span className={`badge ${zone.available > 0 ? "success" : "warning"}`}>{zone.available > 0 ? `${zone.available} trống` : "Đầy"}</span>
-              </div>
-              <p className="landing-avail-zone-desc">{zone.description || "Khu đỗ xe"}</p>
-              <div className="landing-avail-zone-meta"><span>{zone.allowedVehicleTypes.join(", ")}</span><span>{zone.occupied}/{zone.total} đang đỗ</span></div>
-              <div className="landing-avail-zone-bar">
-                <div style={{ width: `${zone.total > 0 ? ((zone.total - zone.available) / zone.total) * 100 : 0}%`, background: zone.available > 0 ? "var(--landing-success)" : "var(--landing-danger)" }} />
-              </div>
-            </div>
-          ))}
+        <button
+          className={`pkav-refresh-btn ${isRefreshing ? "refreshing" : ""}`}
+          onClick={() => load(true)}
+          disabled={isRefreshing}
+          type="button"
+          title="Làm mới"
+        >
+          <RefreshCw size={15} />
+        </button>
+      </div>
+
+      {/* ── Live indicator ── */}
+      {lastUpdated && (
+        <div className="pkav-live">
+          <span className="pkav-live-dot" />
+          <span>
+            Cập nhật lúc {lastUpdated.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+            {" · "}Tự động làm mới mỗi 30 giây
+          </span>
         </div>
       )}
-      {!loaded && <p style={{ textAlign: "center", padding: 40, color: "var(--landing-fg-muted)" }}>Đang tải thông tin bãi xe...</p>}
+
+      {/* ── Loading ── */}
+      {isLoading && (
+        <div className="pkav-loading">
+          <Loader2 size={28} className="animate-spin" />
+          <span>Đang tải thông tin bãi đỗ…</span>
+        </div>
+      )}
+
+      {/* ── Zone Cards ── */}
+      {!isLoading && (
+        <>
+          {filtered.length > 0 ? (
+            <div className="pkav-grid">
+              {filtered.map((zone) => (
+                <div className={`pkav-card ${zone.isFull ? "pkav-card--full" : ""}`} key={zone.zone}>
+                  {/* Card Header */}
+                  <div className="pkav-card-header">
+                    <div className="pkav-card-title">
+                      <div>
+                        <h4>Khu {zone.zone}</h4>
+                        {zone.description && <p className="pkav-card-desc">{zone.description}</p>}
+                      </div>
+                    </div>
+                    <div className={`pkav-card-badge ${zone.isFull ? "badge--full" : "badge--available"}`}>
+                      {zone.isFull ? "Đầy" : `${zone.available} trống`}
+                    </div>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="pkav-card-progress">
+                    <div
+                      className="pkav-card-progress-fill"
+                      style={{
+                        width: `${zone.fillRate}%`,
+                        background: zone.isFull
+                          ? "var(--landing-danger)"
+                          : zone.fillRate > 80
+                            ? "var(--landing-warning)"
+                            : "var(--landing-success)",
+                      }}
+                    />
+                  </div>
+
+                  {/* Card Meta */}
+                  <div className="pkav-card-meta">
+                    <span className="pkav-card-meta-left">
+                      <span className="pkav-card-meta-value">{zone.occupied}</span>
+                      <span className="pkav-card-meta-sep"> / </span>
+                      <span className="pkav-card-meta-value">{zone.total}</span>
+                      <span className="pkav-card-meta-label"> xe đang đỗ</span>
+                    </span>
+                    <span className="pkav-card-meta-right">
+                      <span className="pkav-card-meta-value">{zone.fillRate}%</span>
+                      <span className="pkav-card-meta-label"> lấp đầy</span>
+                    </span>
+                  </div>
+
+                  {/* Quick CTA */}
+                  {!zone.isFull && (
+                    <div className="pkav-card-cta">
+                      <span>Còn {zone.available} chỗ</span>
+                    </div>
+                  )}
+                  {zone.isFull && (
+                    <div className="pkav-card-cta pkav-card-cta--full">
+                      <span>Bãi đã đầy — vui lòng chọn khu khác</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="pkav-empty">
+              <CircleParking size={40} />
+              <h4>Không tìm thấy khu vực phù hợp</h4>
+              <p>Thử thay đổi từ khóa tìm kiếm hoặc bỏ bộ lọc.</p>
+              <button onClick={() => { setSearch(""); setActiveZone("Tất cả"); }} type="button">
+                Xóa bộ lọc
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── Summary footer ── */}
+      {!isLoading && zones.length > 0 && (
+        <div className="pkav-summary">
+          <span>
+            Hiển thị <strong>{filtered.length}</strong> / <strong>{zones.length}</strong> khu vực
+            {search && ` · Tìm thấy "${search}"`}
+          </span>
+          <span>
+            {zones.filter((z) => z.isFull).length} khu đầy ·{" "}
+            {zones.filter((z) => !z.isFull).length} khu còn chỗ
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -187,7 +333,7 @@ export function AuthPanel() {
   const { mode, setMode, handleLogin, handleRegister, handleForgotPassword } = useParkingApp();
   return (
     <div className="landing-auth">
-      <div className="landing-auth-header"><Car size={22} /><span>iPARK</span></div>
+      <div className="landing-auth-header"><CircleParking size={22} /><span>iPARK</span></div>
       <div className="landing-auth-tabs">
         <button className={mode === "login" ? "active" : ""} onClick={() => setMode("login")} type="button">Đăng nhập</button>
         <button className={mode === "register" ? "active" : ""} onClick={() => setMode("register")} type="button">Đăng ký</button>
@@ -222,7 +368,7 @@ export function AuthPanel() {
           <label><span className="landing-auth-label">Công ty (nếu có)</span><input name="company" placeholder="Tên công ty" /></label>
           <label><span className="landing-auth-label">Mật khẩu <span className="required">*</span></span><input name="password" placeholder="Tối thiểu 6 ký tự" required type="password" /></label>
           <label className="checkbox-label"><input name="acceptTerms" type="checkbox" required /><span>Tôi đồng ý với <a href="#">Điều khoản</a> và <a href="#">Chính sách bảo mật</a></span></label>
-          <button className="landing-auth-btn-primary" type="submit"><UserRound size={16} />Tạo tài khoản</button>
+          <button className="landing-auth-btn-primary" type="submit"><Plus size={16} />Tạo tài khoản</button>
           <button className="landing-auth-link" onClick={() => setMode("login")} type="button">Đã có tài khoản? Đăng nhập</button>
         </form>
       )}
@@ -248,10 +394,10 @@ function SiteHeader({ available = 153, onLoginClick }: { available?: number; onL
     <header className="landing-header">
       <div className="landing-header-inner">
         <a href="#" className="landing-logo">
-          <div className="landing-logo-icon"><Car size={22} color="#0a0f1a" /></div>
+          <div className="landing-logo-icon"><CircleParking size={22} color="#0a0f1a" /></div>
           <div className="landing-logo-text"><span className="landing-logo-name">iPARK</span><span className="landing-logo-tagline">Smart Parking</span></div>
         </a>
-        <nav className="landing-nav"><a href="#tra-cuu">Tra cứu</a><a href="#chỗ-trống">Chỗ trống</a><a href="#liên-hệ">Liên hệ</a></nav>
+        <nav className="landing-nav"><a href="#chỗ-trống">Chỗ trống</a><a href="#liên-hệ">Liên hệ</a></nav>
         <div className="landing-header-actions">
           <div className="landing-slots-badge">
             <span className="landing-slots-dot" /><Car size={14} color="var(--landing-accent)" />
@@ -273,11 +419,10 @@ function HeroSection({ liveStats, onLoginClick }: { liveStats: { active: number;
       <div className="landing-hero-bg" />
       <div className="landing-hero-inner">
         <div className="landing-hero-content">
-          <span className="landing-badge"><ScanLine size={14} />Bãi xe không vé · Nhận diện biển số bằng AI</span>
+          <span className="landing-badge"><Sparkles size={14} />Bãi xe không vé · Nhận diện biển số bằng AI</span>
           <h1>Gửi xe thông minh, <span className="highlight">thanh toán qua PayOS</span></h1>
           <p>Dành cho khách vãng lai: không giữ vé giấy, không cài ứng dụng. Xe vào được camera nhận diện tự động — bạn chỉ cần tra cứu biển số và quét mã QR để trả phí khi ra bãi.</p>
           <div className="landing-hero-actions">
-            <a href="#tra-cuu" className="landing-btn-primary"><Search size={18} />Tra cứu &amp; thanh toán</a>
             <a href="#quy-trinh" className="landing-btn-secondary">Xem cách hoạt động</a>
           </div>
           <div className="landing-hero-meta">
@@ -327,6 +472,27 @@ function HowItWorks() {
 // ─── Session Lookup ────────────────────────────────────────────────
 type LookupStep = "search" | "session" | "payos_waiting" | "paid" | "not_found" | "completed";
 
+type DailyBreakdown = {
+  dayIndex: number;
+  date: string;
+  rateType: string;
+  fee: number;
+  checkOutHour: number;
+};
+
+type FeeBreakdown = {
+  totalMinutes: number;
+  totalFee: number;
+  dailyBreakdown: DailyBreakdown[];
+};
+
+type PenaltyInfo = {
+  amount: number;
+  reason: string | null;
+  evidenceImageUrl?: string | null;
+  violationType: string;
+};
+
 type SessionInfo = {
   id: string;
   plate: string;
@@ -337,7 +503,12 @@ type SessionInfo = {
   checkInAt: string;
   checkInDate?: string;
   checkOutAt?: string;
+  parkingMinutes?: number;
+  duration?: string;
   currentFee: number;
+  feeBreakdown?: FeeBreakdown;
+  penalties?: PenaltyInfo[];
+  penaltyTotal?: number;
   paidAmount?: number;
   expectedCheckOutAt?: string;
   paymentStatus: string;
@@ -349,26 +520,6 @@ type SessionInfo = {
 function isSameDay(d1: Date, d2: Date) {
   return d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
 }
-
-type FeeQuickResult = {
-  plate: string;
-  sessionId: string;
-  checkInAt: string;
-  exitTime: string;
-  exitHour: number;
-  feeBreakdown: {
-    totalMinutes: number;
-    totalFee: number;
-    dailyBreakdown: { dayIndex: number; date: string; rateType: string; fee: number; checkOutHour: number }[];
-  };
-  dayRate: number;
-  nightRate: number;
-  totalFee: number;
-  additionalFee: number;
-  paymentStatus: string;
-  paidAmount: number;
-  isPrepaid: boolean;
-};
 
 type PayOSData = {
   qrCode: string;
@@ -395,11 +546,7 @@ function SessionLookup() {
   const [error, setError] = useState("");
 
   const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null);
-  const [feeResult, setFeeResult] = useState<FeeQuickResult | null>(null);
   const [payosData, setPayosData] = useState<PayOSData | null>(null);
-
-  const [selectedDate, setSelectedDate] = useState(getDefaultDate());
-  const [exitAfter22h, setExitAfter22h] = useState<boolean | null>(null);
 
   // Gia hạn thêm ngày cho xe đã trả đủ, còn trong bãi
   const [showExtend, setShowExtend] = useState(false);
@@ -465,19 +612,8 @@ function SessionLookup() {
       const d = await r.json();
       if (d.found && d.session) {
         setSessionInfo(d.session);
-        setFeeResult(null); setExitAfter22h(null);
         // Phiên đã hoàn thành gần đây → hiển thị màn hình đã thanh toán
-        if (d.session.isCompleted) {
-          setStep("completed");
-        } else {
-          const ci = new Date(d.session.checkInAt);
-          const defaultExit = new Date(ci);
-          defaultExit.setDate(defaultExit.getDate() + 1);
-          setSelectedDate(
-            `${defaultExit.getFullYear()}-${String(defaultExit.getMonth() + 1).padStart(2, "0")}-${String(defaultExit.getDate()).padStart(2, "0")}`,
-          );
-          setStep("session");
-        }
+        setStep(d.session.isCompleted ? "completed" : "session");
       } else {
         setError(d.message || "Không tìm thấy phiên gửi xe."); setStep("not_found");
       }
@@ -485,31 +621,24 @@ function SessionLookup() {
     finally { setLoading(false); }
   }
 
-  async function handleCalculateFee() {
-    if (!sessionInfo || exitAfter22h === null) return;
+  async function handleProceedToPayment() {
+    if (!sessionInfo) return;
     setLoading(true); setError("");
     try {
-      const r = await fetch(`${apiBaseUrl}/public/calculate-fee-quick`, {
+      // Chốt phí theo thời điểm hiện tại (check-in → bây giờ) ngay trước khi thanh toán.
+      const feeRes = await fetch(`${apiBaseUrl}/public/calculate-fee`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plate: sessionInfo.plate, exitDate: selectedDate, exitAfter22h }),
+        body: JSON.stringify({ plate: sessionInfo.plate }),
       });
-      const d = await r.json();
-      if (d.sessionId) {
-        setFeeResult(d);
-        setSessionInfo({ ...sessionInfo, paymentStatus: d.paymentStatus, isPrepaid: d.isPrepaid });
-      } else { setError(d.message || "Không thể tính phí."); }
-    } catch { setError("Lỗi kết nối."); }
-    finally { setLoading(false); }
-  }
+      const feeData = await feeRes.json();
+      if (!feeRes.ok || !feeData.sessionId) {
+        setError(feeData.message || "Không thể tính phí.");
+        return;
+      }
 
-  async function handleProceedToPayment() {
-    if (!sessionInfo || !feeResult) return;
-    setLoading(true);
-    try {
-      const exitTime = new Date(feeResult.exitTime).toISOString();
       const r = await fetch(`${apiBaseUrl}/transactions/session/${sessionInfo.id}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ expectedExitTime: exitTime }),
+        body: JSON.stringify({}),
       });
       const d = await r.json();
       if (d.sessionPaymentStatus === "fully_paid") { setStep("paid"); }
@@ -537,8 +666,7 @@ function SessionLookup() {
 
   function reset() {
     setStep("search"); setPlate(""); setError("");
-    setSessionInfo(null); setFeeResult(null); setPayosData(null);
-    setSelectedDate(getDefaultDate()); setExitAfter22h(null);
+    setSessionInfo(null); setPayosData(null);
     setShowExtend(false); setExtendPayos(null); setExtendResult(null); setExtendDone(false);
     setExtendDate(getDefaultDate()); setExtendAfter22h(null);
   }
@@ -588,20 +716,16 @@ function SessionLookup() {
   }
 
   const durationMs = sessionInfo ? now - new Date(sessionInfo.checkInAt).getTime() : 0;
-  const amountToPay = feeResult
-    ? feeResult.paymentStatus === "fully_paid"
-      ? feeResult.additionalFee
-      : feeResult.paymentStatus === "partial_paid"
-        ? Math.max(0, feeResult.totalFee - feeResult.paidAmount)
-        : feeResult.totalFee
+  const amountToPay = sessionInfo
+    ? Math.max(0, (sessionInfo.currentFee || 0) - (sessionInfo.paidAmount || 0))
     : 0;
 
   return (
     <section id="tra-cuu" className="landing-lookup">
       <div className="landing-section-header">
         <p className="landing-section-eyebrow">Khi ra bãi</p>
-        <h2>Tra cứu &amp; thanh toán trước</h2>
-        <p>Chọn ngày và giờ ra dự kiến — hệ thống tự tính phí theo quy định bãi xe.</p>
+        <h2>Tra cứu &amp; thanh toán</h2>
+        <p>Nhập biển số — hệ thống tự tính phí theo thời gian gửi thực tế và quy định bãi xe.</p>
       </div>
 
       <div className="landing-lookup-card">
@@ -638,19 +762,19 @@ function SessionLookup() {
               <span className="landing-status-badge success">Đã thanh toán</span>
             </div>
             <div style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "8px", padding: "12px", marginBottom: "20px", color: "#22c55e", fontSize: "13px" }}>
-              <CheckCircle2 size={16} style={{ display: "inline", verticalAlign: "middle", marginRight: "8px" }} />
+              <BadgeCheck size={16} style={{ display: "inline", verticalAlign: "middle", marginRight: "8px" }} />
               Xe đã thanh toán gần đây. Không cần thanh toán thêm.
             </div>
             <div className="landing-session-meta">
               {sessionInfo.checkInAt && (
                 <div className="landing-session-meta-item">
-                  <Clock3 size={14} />
+                  <Clock size={14} />
                   <span>Giờ vào: <strong>{new Date(sessionInfo.checkInAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}</strong></span>
                 </div>
               )}
               {sessionInfo.checkOutAt && (
                 <div className="landing-session-meta-item">
-                  <Clock3 size={14} />
+                  <Clock size={14} />
                   <span>Giờ ra: <strong>{new Date(sessionInfo.checkOutAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}</strong></span>
                 </div>
               )}
@@ -663,7 +787,7 @@ function SessionLookup() {
             </div>
             <div style={{ background: "var(--landing-bg)", border: "1px solid var(--landing-border)", borderRadius: "10px", padding: "16px", marginTop: "16px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 600, marginBottom: "12px" }}>
-                Biên nhận thanh toán
+                <Receipt size={16} color="var(--landing-accent)" /> Biên nhận thanh toán
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "13px" }}>
                 <span style={{ color: "var(--landing-fg-muted)" }}>Biển số</span>
@@ -699,7 +823,7 @@ function SessionLookup() {
             </div>
 
             <div className="landing-session-meta">
-              <div className="landing-session-meta-item"><Clock3 size={14} /><span>Đã gửi: <strong>{formatDuration(durationMs)}</strong></span></div>
+              <div className="landing-session-meta-item"><Clock size={14} /><span>Đã gửi: <strong>{formatDuration(durationMs)}</strong></span></div>
               <div className="landing-session-meta-item"><MapPin size={14} /><span>Vị trí: <strong>{sessionInfo.slot}</strong></span></div>
               <div className="landing-session-meta-item">
                 <span>Giờ vào: <strong>{new Date(sessionInfo.checkInAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}</strong></span>
@@ -719,7 +843,7 @@ function SessionLookup() {
             {/* Prepaid notice — only when fully paid */}
             {sessionInfo.paymentStatus === "fully_paid" && !sessionInfo.prepaidCheckoutAt && (
               <div style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "8px", padding: "12px", marginTop: "16px", color: "#22c55e", fontSize: "13px" }}>
-                <CheckCircle2 size={16} style={{ display: "inline", verticalAlign: "middle", marginRight: "8px" }} />
+                <BadgeCheck size={16} style={{ display: "inline", verticalAlign: "middle", marginRight: "8px" }} />
                 Xe đã thanh toán đủ. Ra bãi bất kỳ lúc nào!
               </div>
             )}
@@ -729,7 +853,7 @@ function SessionLookup() {
               <div style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px solid var(--landing-border)" }}>
                 {extendDone ? (
                   <div style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "8px", padding: "12px", color: "#22c55e", fontSize: "13px" }}>
-                    <CheckCircle2 size={16} style={{ display: "inline", verticalAlign: "middle", marginRight: "8px" }} />
+                    <BadgeCheck size={16} style={{ display: "inline", verticalAlign: "middle", marginRight: "8px" }} />
                     Gia hạn thành công! {extendResult?.expectedCheckOutAt && `Giờ ra mới: ${new Date(extendResult.expectedCheckOutAt).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}`}
                   </div>
                 ) : extendPayos ? (
@@ -747,11 +871,11 @@ function SessionLookup() {
                     <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
                       {extendPayos.checkoutUrl && (
                         <button className="landing-qr-btn" style={{ background: "var(--landing-secondary)" }} onClick={() => window.open(extendPayos.checkoutUrl, "_blank")} type="button">
-                          Mở PayOS
+                          <ExternalLink size={16} />Mở PayOS
                         </button>
                       )}
                       <button className="landing-qr-btn" style={{ background: "var(--landing-accent)" }} onClick={handleCheckExtendPayment} disabled={loading} type="button">
-                        <RefreshCcw size={16} className={loading ? "animate-spin" : ""} />Kiểm tra thanh toán
+                        <RefreshCw size={16} className={loading ? "animate-spin" : ""} />Kiểm tra thanh toán
                       </button>
                     </div>
                   </div>
@@ -788,13 +912,13 @@ function SessionLookup() {
                     <div style={{ display: "flex", gap: "8px" }}>
                       <button className="landing-btn-secondary" onClick={() => setShowExtend(false)} type="button" style={{ flex: 1 }}>Hủy</button>
                       <button className="landing-btn-primary" onClick={handleExtend} disabled={loading || extendAfter22h === null} type="button" style={{ flex: 2 }}>
-                        {loading ? <Loader2 size={16} className="animate-spin" /> : <Clock3 size={16} />}Gia hạn &amp; thanh toán
+                        {loading ? <Loader2 size={16} className="animate-spin" /> : <Clock size={16} />}Gia hạn &amp; thanh toán
                       </button>
                     </div>
                   </div>
                 ) : (
                   <button className="landing-btn-secondary" onClick={() => setShowExtend(true)} type="button" style={{ width: "100%" }}>
-                    <Clock3 size={16} />Gia hạn thêm giờ gửi xe
+                    <Clock size={16} />Gia hạn thêm giờ gửi xe
                   </button>
                 )}
               </div>
@@ -803,94 +927,73 @@ function SessionLookup() {
             {/* Partial paid notice */}
             {sessionInfo.paymentStatus === "partial_paid" && (
               <div style={{ background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.3)", borderRadius: "8px", padding: "12px", marginTop: "16px", color: "#fbbf24", fontSize: "13px" }}>
-                <CheckCircle2 size={16} style={{ display: "inline", verticalAlign: "middle", marginRight: "8px" }} />
+                <BadgeCheck size={16} style={{ display: "inline", verticalAlign: "middle", marginRight: "8px" }} />
                 Đã thanh toán {formatVND(sessionInfo.paidAmount ?? 0)}. Vui lòng thanh toán phần còn lại để ra bãi.
               </div>
             )}
 
-            {/* Day/Night selector — only if not fully paid */}
+            {/* Fee summary — only if not fully paid. Phí tính từ giờ vào đến hiện tại. */}
             {sessionInfo.paymentStatus !== "fully_paid" && (
               <div style={{ marginTop: "24px", paddingTop: "20px", borderTop: "1px solid var(--landing-border)" }}>
-                <h4 style={{ marginBottom: "12px", fontSize: "14px" }}>Chọn thời gian ra dự kiến</h4>
+                <h4 style={{ marginBottom: "12px", fontSize: "14px" }}>Phí gửi xe tạm tính</h4>
 
-                {/* Date picker */}
-                <div style={{ marginBottom: "16px" }}>
-                  <label style={{ fontSize: "12px", color: "var(--landing-fg-muted)", display: "block", marginBottom: "4px" }}>Ngày dự kiến lấy xe</label>
-                  <input type="date" value={selectedDate}
-                    min={(() => {
-                      const d = sessionInfo.checkInAt ? new Date(sessionInfo.checkInAt) : new Date();
-                      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-                    })()}
-                    onChange={(e) => { setSelectedDate(e.target.value); setFeeResult(null); setExitAfter22h(null); }}
-                    style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--landing-border)", borderRadius: "6px", background: "var(--landing-bg)", color: "var(--landing-fg)", fontSize: "14px" }} />
-                </div>
-
-                {/* Day / Night toggle */}
-                <div style={{ marginBottom: "16px" }}>
-                  <label style={{ fontSize: "12px", color: "var(--landing-fg-muted)", display: "block", marginBottom: "8px" }}>Bạn dự kiến lấy xe</label>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-                    <button type="button" onClick={() => { setExitAfter22h(false); setFeeResult(null); }}
-                      style={{ padding: "12px 8px", border: `1.5px solid ${exitAfter22h === false ? "var(--landing-primary)" : "var(--landing-border)"}`, borderRadius: "8px", background: exitAfter22h === false ? "rgba(59,130,246,0.1)" : "transparent", color: exitAfter22h === false ? "#3b82f6" : "var(--landing-fg)", fontWeight: exitAfter22h === false ? 600 : 400, cursor: "pointer", fontSize: "13px" }}>
-                      <div style={{ fontSize: "16px", fontWeight: 700, marginBottom: "2px" }}>☀ Trước 22h</div>
-                      <div style={{ opacity: 0.7 }}>Phí: {formatVND(feeResult?.dayRate ?? 5000)}/ngày</div>
-                    </button>
-                    <button type="button" onClick={() => { setExitAfter22h(true); setFeeResult(null); }}
-                      style={{ padding: "12px 8px", border: `1.5px solid ${exitAfter22h === true ? "var(--landing-primary)" : "var(--landing-border)"}`, borderRadius: "8px", background: exitAfter22h === true ? "rgba(59,130,246,0.1)" : "transparent", color: exitAfter22h === true ? "#3b82f6" : "var(--landing-fg)", fontWeight: exitAfter22h === true ? 600 : 400, cursor: "pointer", fontSize: "13px" }}>
-                      <div style={{ fontSize: "16px", fontWeight: 700, marginBottom: "2px" }}>🌙 Sau 22h</div>
-                      <div style={{ opacity: 0.7 }}>Phí: {formatVND(feeResult?.nightRate ?? 10000)}/ngày</div>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Calculate button */}
-                {exitAfter22h !== null && !feeResult && (
-                  <button className="landing-btn-primary" onClick={handleCalculateFee} disabled={loading}
-                    style={{ width: "100%", padding: "12px" }} type="button">
-                    {loading ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}Xem phí phải trả
-                  </button>
-                )}
-
-                {/* Fee result */}
-                {feeResult && (
-                  <div style={{ background: "var(--landing-bg)", border: "1px solid var(--landing-border)", borderRadius: "10px", padding: "16px", marginTop: "12px" }}>
-                    {/* Daily breakdown rows */}
-                    {feeResult.feeBreakdown?.dailyBreakdown?.map((day) => (
-                      <div key={day.dayIndex} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: day.dayIndex < (feeResult.feeBreakdown?.dailyBreakdown?.length ?? 0) - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
-                        <div>
-                          <span style={{ fontSize: "13px" }}>{day.date}{day.dayIndex > 0 && ` (+${day.dayIndex} ngày)`}</span>
-                          <span style={{ marginLeft: "6px", fontSize: "11px", padding: "1px 6px", borderRadius: "4px", background: day.rateType === "night" ? "rgba(251,191,36,0.15)" : "rgba(59,130,246,0.15)", color: day.rateType === "night" ? "#fbbf24" : "#60a5fa" }}>
-                            {day.rateType === "night" ? "sau 22h" : "trước 22h"}
-                          </span>
-                        </div>
-                        <span style={{ fontWeight: 600 }}>{formatVND(day.fee)}</span>
+                <div style={{ background: "var(--landing-bg)", border: "1px solid var(--landing-border)", borderRadius: "10px", padding: "16px" }}>
+                  {/* Daily breakdown rows */}
+                  {sessionInfo.feeBreakdown?.dailyBreakdown?.map((day) => (
+                    <div key={day.dayIndex} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: day.dayIndex < (sessionInfo.feeBreakdown?.dailyBreakdown?.length ?? 0) - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
+                      <div>
+                        <span style={{ fontSize: "13px" }}>{day.date}{day.dayIndex > 0 && ` (+${day.dayIndex} ngày)`}</span>
+                        <span style={{ marginLeft: "6px", fontSize: "11px", padding: "1px 6px", borderRadius: "4px", background: day.rateType === "night" ? "rgba(251,191,36,0.15)" : "rgba(59,130,246,0.15)", color: day.rateType === "night" ? "#fbbf24" : "#60a5fa" }}>
+                          {day.rateType === "night" ? "ban đêm" : "ban ngày"}
+                        </span>
                       </div>
-                    ))}
-
-                    <hr className="landing-fee-divider" style={{ margin: "12px 0" }} />
-
-                    {feeResult.isPrepaid && feeResult.paidAmount > 0 && (
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "var(--landing-fg-muted)", marginBottom: "8px" }}>
-                        <span>Đã thanh toán</span><span>-{formatVND(feeResult.paidAmount)}</span>
-                      </div>
-                    )}
-
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                      <span style={{ fontWeight: 600, fontSize: "14px" }}>{amountToPay === 0 ? "Đã thanh toán đủ" : feeResult.paymentStatus === "partial_paid" ? "Phải thanh toán" : "Cần thanh toán thêm"}</span>
-                      <span style={{ fontWeight: 700, fontSize: "18px", color: "var(--landing-primary)" }}>{formatVND(amountToPay)}</span>
+                      <span style={{ fontWeight: 600 }}>{formatVND(day.fee)}</span>
                     </div>
+                  ))}
 
-                    <button type="button" onClick={() => setFeeResult(null)}
-                      style={{ width: "100%", padding: "10px", marginBottom: "10px", background: "transparent", border: "1px solid var(--landing-border)", borderRadius: "6px", color: "var(--landing-fg-muted)", cursor: "pointer", fontSize: "13px" }}>
-                      Thay đổi tùy chọn
-                    </button>
+                  {/* Vi phạm & tiền phạt — đỗ lấn vạch */}
+                  {sessionInfo.penalties && sessionInfo.penalties.length > 0 && (
+                    <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px dashed rgba(239,68,68,0.4)" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#ef4444", fontSize: "13px", fontWeight: 600, marginBottom: "8px" }}>
+                        <ShieldCheck size={14} /> Vi phạm &amp; tiền phạt
+                      </div>
+                      {sessionInfo.penalties.map((pen, i) => (
+                        <div key={i} style={{ marginBottom: "10px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "13px" }}>
+                            <span>{pen.reason || "Đỗ lấn vạch"}</span>
+                            <span style={{ fontWeight: 600, color: "#ef4444" }}>{formatVND(pen.amount)}</span>
+                          </div>
+                          {pen.evidenceImageUrl && (
+                            <a href={`${apiBaseUrl.replace(/\/api$/, "")}${pen.evidenceImageUrl}`} target="_blank" rel="noreferrer"
+                              style={{ display: "inline-block", marginTop: "6px" }}>
+                              <img src={`${apiBaseUrl.replace(/\/api$/, "")}${pen.evidenceImageUrl}`} alt="Bằng chứng vi phạm"
+                                style={{ maxWidth: "100%", maxHeight: "160px", borderRadius: "8px", border: "1px solid var(--landing-border)" }} />
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
-                    <button className="landing-btn-primary" onClick={handleProceedToPayment} disabled={loading}
-                      style={{ width: "100%", padding: "14px" }} type="button">
-                      {loading ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
-                      {amountToPay === 0 ? "Xác nhận đã thanh toán" : `Thanh toán ${formatVND(amountToPay)}`}
-                    </button>
+                  <hr className="landing-fee-divider" style={{ margin: "12px 0" }} />
+
+                  {sessionInfo.paymentStatus === "partial_paid" && (sessionInfo.paidAmount ?? 0) > 0 && (
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "var(--landing-fg-muted)", marginBottom: "8px" }}>
+                      <span>Đã thanh toán</span><span>-{formatVND(sessionInfo.paidAmount ?? 0)}</span>
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                    <span style={{ fontWeight: 600, fontSize: "14px" }}>{amountToPay === 0 ? "Đã thanh toán đủ" : sessionInfo.paymentStatus === "partial_paid" ? "Còn phải thanh toán" : "Cần thanh toán"}</span>
+                    <span style={{ fontWeight: 700, fontSize: "18px", color: "var(--landing-primary)" }}>{formatVND(amountToPay)}</span>
                   </div>
-                )}
+
+                  <button className="landing-btn-primary" onClick={handleProceedToPayment} disabled={loading}
+                    style={{ width: "100%", padding: "14px" }} type="button">
+                    {loading ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
+                    {amountToPay === 0 ? "Xác nhận đã thanh toán" : `Thanh toán ${formatVND(amountToPay)}`}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -932,12 +1035,12 @@ function SessionLookup() {
               {payosData.checkoutUrl && (
                 <button className="landing-qr-btn" style={{ marginTop: "12px", background: "var(--landing-secondary)" }}
                   onClick={() => window.open(payosData.checkoutUrl, "_blank")} type="button">
-                  Mở trang thanh toán PayOS
+                  <ExternalLink size={16} />Mở trang thanh toán PayOS
                 </button>
               )}
               <button className="landing-qr-btn" style={{ marginTop: "10px", background: "var(--landing-accent)" }}
                 onClick={handleCheckPayOS} disabled={loading} type="button">
-                <RefreshCcw size={16} className={loading ? "animate-spin" : ""} />Kiểm tra thanh toán
+                <RefreshCw size={16} className={loading ? "animate-spin" : ""} />Kiểm tra thanh toán
               </button>
             </div>
             <button onClick={() => setStep("session")} style={{ marginTop: "12px", background: "none", border: "none", color: "var(--landing-fg-muted)", cursor: "pointer", fontSize: "13px", display: "block", width: "100%", textAlign: "center" }} type="button">
@@ -949,12 +1052,12 @@ function SessionLookup() {
         {/* ── Paid ── */}
         {step === "paid" && (
           <div className="landing-success">
-            <div className="landing-success-icon"><CheckCircle2 size={36} /></div>
+            <div className="landing-success-icon"><BadgeCheck size={36} /></div>
             <h3>Thanh toán thành công!</h3>
             <p>Phiên gửi xe đã được thanh toán. Bạn có thể ra bãi bất kỳ lúc nào.</p>
             <div style={{ background: "var(--landing-bg)", border: "1px solid var(--landing-border)", borderRadius: "12px", padding: "16px", width: "100%", maxWidth: "320px", textAlign: "left", marginTop: "16px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 600, marginBottom: "12px" }}>
-                Biên nhận
+                <Receipt size={16} color="var(--landing-accent)" /> Biên nhận
               </div>
               {sessionInfo && (
                 <>
@@ -984,7 +1087,64 @@ function SessionLookup() {
 }
 
 // ─── Pricing Section ───────────────────────────────────────────────
+type PricingConfig = {
+  dayRate: number;
+  nightRate: number;
+  dayStartHour: number;
+  nightStartHour: number;
+  gracePeriod: number;
+  maxMinutes: number;
+};
+
+type PlanData = {
+  _id: string;
+  name: string;
+  description?: string;
+  duration: string;
+  durationDays: number;
+  price: number;
+  maxVehicles: number;
+  isActive: boolean;
+};
+
 function PricingSection() {
+  const [pricing, setPricing] = useState<PricingConfig | null>(null);
+  const [plans, setPlans] = useState<PlanData[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    Promise.all([
+      fetch(`${apiBaseUrl}/public/pricing`).then((r) => r.json()).catch(() => null),
+      fetch(`${apiBaseUrl}/public/subscription-plans`).then((r) => r.json()).catch(() => null),
+    ]).then(([pricingData, plansData]) => {
+      if (pricingData?.dayRate) setPricing(pricingData);
+      if (plansData?.plans?.length) setPlans(plansData.plans);
+      setLoaded(true);
+    });
+  }, []);
+
+  if (!loaded) {
+    return (
+      <section id="bang-gia" className="landing-pricing">
+        <div className="landing-section-header">
+          <p className="landing-section-eyebrow">Bảng giá</p>
+          <h2>Bảng giá &amp; gói gửi xe</h2>
+          <p>Khách vãng lai trả theo lượt — minh bạch, không phí ẩn.</p>
+        </div>
+        <div className="pkpricing-loading"><Loader2 size={24} className="animate-spin" /><span>Đang tải bảng giá…</span></div>
+      </section>
+    );
+  }
+
+  const dayRate = pricing?.dayRate ?? 5000;
+  const nightRate = pricing?.nightRate ?? 10000;
+  const nightStartHour = pricing?.nightStartHour ?? 22;
+  const dayStartHour = pricing?.dayStartHour ?? 6;
+
+  const dayName = "Gửi theo lượt";
+  const dayId = "guest";
+  const dayFeatures = ["Không cần đăng ký", "Thanh toán PayOS", "Ra bãi tự động", "Camera AI nhận diện"];
+
   return (
     <section id="bang-gia" className="landing-pricing">
       <div className="landing-section-header">
@@ -992,17 +1152,79 @@ function PricingSection() {
         <h2>Bảng giá &amp; gói gửi xe</h2>
         <p>Khách vãng lai trả theo lượt — minh bạch, không phí ẩn.</p>
       </div>
-      <div className="landing-pricing-grid">
-        {PASSES.map((p) => (
-          <div className={`landing-price-card ${p.highlight ? "featured" : ""}`} key={p.id}>
-            {p.highlight && <span className="landing-price-badge">Tiết kiệm nhất</span>}
-            <div className="landing-price-name">{p.name}</div>
-            <div className="landing-price-value"><span className="landing-price-amount">{p.price}</span><span className="landing-price-unit">{p.unit}</span></div>
-            <p className="landing-price-note">{p.note}</p>
-            <ul className="landing-price-features">{p.features.map((f) => (<li key={f}><Check size={14} />{f}</li>))}</ul>
+
+      {/* ── Guest rate cards ── */}
+      {pricing && (
+        <div className="pkpricing-guest-grid">
+          <div className="pkpricing-guest-card">
+            <div className="pkpricing-guest-card-icon">☀</div>
+            <div className="pkpricing-guest-card-label">Gửi ban ngày</div>
+            <div className="pkpricing-guest-card-rate">{formatVND(dayRate)}</div>
+            <div className="pkpricing-guest-card-unit">/ ngày</div>
+            <div className="pkpricing-guest-card-detail">
+              Ra xe trước {nightStartHour}h — áp dụng từ {dayStartHour}h
+            </div>
           </div>
-        ))}
-      </div>
+
+          <div className="pkpricing-guest-card pkpricing-guest-card--night">
+            <div className="pkpricing-guest-card-icon">🌙</div>
+            <div className="pkpricing-guest-card-label">Gửi ban đêm</div>
+            <div className="pkpricing-guest-card-rate">{formatVND(nightRate)}</div>
+            <div className="pkpricing-guest-card-unit">/ ngày</div>
+            <div className="pkpricing-guest-card-detail">
+              Ra xe từ {nightStartHour}h trở đi
+            </div>
+          </div>
+
+          {pricing.gracePeriod > 0 && (
+            <div className="pkpricing-guest-card pkpricing-guest-card--grace">
+              <div className="pkpricing-guest-card-icon">🕐</div>
+              <div className="pkpricing-guest-card-label">Miễn phí</div>
+              <div className="pkpricing-guest-card-rate">{pricing.gracePeriod}</div>
+              <div className="pkpricing-guest-card-unit">phút đầu</div>
+              <div className="pkpricing-guest-card-detail">
+                Thời gian miễn phí khi vào bãi
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Section: Gói thành viên ── */}
+      {plans.length > 0 && (
+        <div className="pkpricing-plans-section">
+          <div className="pkpricing-plans-header">
+            <h3>Gói thành viên</h3>
+            <p>Đăng ký gói để gửi xe không giới hạn trong suốt thời gian hiệu lực.</p>
+          </div>
+          <div className="pkpricing-plans-grid">
+            {plans.map((plan, idx) => {
+              const isHighlight = plan.duration === "monthly";
+              const durationLabel =
+                plan.duration === "monthly" ? "Tháng" :
+                plan.duration === "quarterly" ? "Quý" :
+                "Năm";
+              return (
+                <div className={`pkpricing-plan-card ${isHighlight ? "featured" : ""}`} key={plan._id ?? `plan-${idx}`}>
+                  {isHighlight && <span className="pkpricing-plan-badge">Phổ biến nhất</span>}
+                  <div className="pkpricing-plan-name">{plan.name || `Gói ${durationLabel}`}</div>
+                  <div className="pkpricing-plan-price">
+                    <span className="pkpricing-plan-amount">{formatVND(plan.price)}</span>
+                    <span className="pkpricing-plan-unit">/{plan.durationDays >= 365 ? "năm" : plan.durationDays >= 90 ? "quý" : "tháng"}</span>
+                  </div>
+                  {plan.description && <p className="pkpricing-plan-desc">{plan.description}</p>}
+                  <ul className="pkpricing-plan-features">
+                    <li><Check size={13} />{plan.durationDays} ngày sử dụng</li>
+                    <li><Check size={13} />{plan.maxVehicles === -1 ? "Không giới hạn xe" : `Tối đa ${plan.maxVehicles} biển số`}</li>
+                    <li><Check size={13} />Ra vào không giới hạn</li>
+                    <li><Check size={13} />Camera AI tự động</li>
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -1013,8 +1235,8 @@ function AvailabilitySection() {
     <section id="chỗ-trống" className="landing-availability">
       <div className="landing-section-header">
         <p className="landing-section-eyebrow">Chỗ trống realtime</p>
-        <h2>Tìm chỗ đỗ ngay</h2>
-        <p>Cập nhật tự động mỗi 30 giây</p>
+        <h2>Tình trạng bãi đỗ xe</h2>
+        <p>Cập nhật tự động mỗi 30 giây — tìm chỗ đỗ gần nhất</p>
       </div>
       <ParkingAvailability />
     </section>
@@ -1043,7 +1265,7 @@ function LandingFooter() {
   return (
     <footer className="landing-footer">
       <div className="landing-footer-inner">
-        <div className="landing-footer-left"><Car size={18} /><span>© 2026 iPARK — Bãi đỗ xe thông minh tích hợp AI.</span></div>
+        <div className="landing-footer-left"><CircleParking size={18} /><span>© 2026 iPARK — Bãi đỗ xe thông minh tích hợp AI.</span></div>
         <span>Hỗ trợ: 1900 1234 · Gặp bảo vệ tại quầy nếu cần trợ giúp.</span>
       </div>
     </footer>
@@ -1074,7 +1296,6 @@ export function PublicLanding() {
       <HeroSection liveStats={liveStats} onLoginClick={() => setShowAuth(true)} />
       <main className="landing-main">
         <HowItWorks />
-        <SessionLookup />
         <PricingSection />
         <AvailabilitySection />
         <ContactSection />

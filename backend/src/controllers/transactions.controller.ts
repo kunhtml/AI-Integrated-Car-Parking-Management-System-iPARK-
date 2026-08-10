@@ -10,23 +10,57 @@ import { createPayOSPayment } from "../services/payos.service.js";
 import { serializeTransaction } from "../utils/serializers.js";
 
 export async function listTransactions(request: Request, response: Response) {
-  const criteria = request.user?.role === "customer" ? { userId: request.user.id } : {};
-  const transactions = await Transaction.find(criteria).sort({ createdAt: -1 }).limit(200);
+  let transactions;
 
-  const sessionIds = transactions
+  if (request.user?.role === "customer") {
+    // Find all sessions owned by this user first.
+    // Some legacy sessions may be missing ownerUserId but still have ownerEmail,
+    // so we match by both criteria to be safe.
+    const user = await User.findById(request.user.id).select("email");
+    const emailMatch = user?.email ? { ownerEmail: user.email.toLowerCase() } : null;
+    const userIdMatch = { ownerUserId: request.user.id };
+
+    const sessionFilter = emailMatch
+      ? { $or: [userIdMatch, emailMatch] }
+      : userIdMatch;
+    const userSessions = await ParkingSession.find(sessionFilter, { _id: 1 });
+    const sessionIds = userSessions.map((s) => s._id);
+
+    // Return transactions that either:
+    // 1. have userId === current user (e.g. TOPUP, direct cash, subscription payments)
+    // 2. are linked to a session owned by this user
+    transactions = await Transaction.find({
+      $or: [
+        { userId: request.user.id },
+        { sessionId: { $in: sessionIds } },
+      ],
+    })
+      .sort({ createdAt: -1 })
+      .limit(200);
+  } else {
+    // Admin/staff: return all
+    transactions = await Transaction.find({})
+      .sort({ createdAt: -1 })
+      .limit(200);
+  }
+
+  const txSessionIds = transactions
     .filter((t) => t.sessionId)
     .map((t) => t.sessionId as mongoose.Types.ObjectId);
   const sessions =
-    sessionIds.length > 0
-      ? await ParkingSession.find({ _id: { $in: sessionIds } })
+    txSessionIds.length > 0
+      ? await ParkingSession.find({ _id: { $in: txSessionIds } })
       : [];
   const sessionMap = new Map(sessions.map((s) => [s._id.toString(), s]));
 
-  response.json({
-    transactions: transactions.map((t) =>
-      serializeTransaction(t, sessionMap.get(t.sessionId?.toString() ?? "")),
-    ),
-  });
+  const serialized = transactions.map((t) =>
+    serializeTransaction(t, sessionMap.get(t.sessionId?.toString() ?? "")),
+  );
+
+  response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  response.setHeader("Pragma", "no-cache");
+  response.setHeader("Expires", "0");
+  response.json({ transactions: serialized });
 }
 
 export async function createSessionTransaction(request: Request, response: Response) {
@@ -49,12 +83,6 @@ export async function createSessionTransaction(request: Request, response: Respo
   const payosApiKey = config?.payosApiKey || process.env.PAYTOS_API_KEY;
   const payosEnabled = (config?.payosEnabled || process.env.PAYTOS_USE === "true") && payosClientId && payosApiKey;
 
-  console.log("[Transactions] PayOS check:", {
-    payosEnabled,
-    clientId: payosClientId ? "set" : "missing",
-    apiKey: payosApiKey ? "set" : "missing",
-  });
-
   // Lưu prepaid info nếu có
   if (session.status === "Đang gửi") {
     const { expectedExitTime, ownerEmail } = request.body as { expectedExitTime?: string; ownerEmail?: string };
@@ -71,22 +99,22 @@ export async function createSessionTransaction(request: Request, response: Respo
 
   // Không phí → coi như đã thanh toán
   if (session.fee == null || session.fee <= 0) {
-    session.paymentStatus = "paid";
+    session.paymentStatus = "fully_paid";
     session.paidAmount = 0;
     await session.save();
     response.status(201).json({
       transaction: null,
-      sessionPaymentStatus: "paid",
+      sessionPaymentStatus: "fully_paid",
       message: "Phiên không phát sinh phí.",
     });
     return;
   }
 
   // Đã thanh toán đủ
-  if (session.paymentStatus === "paid" || (session.paidAmount || 0) >= session.fee) {
+  if (session.paymentStatus === "fully_paid" || (session.paidAmount || 0) >= session.fee) {
     response.status(201).json({
       transaction: null,
-      sessionPaymentStatus: "paid",
+      sessionPaymentStatus: "fully_paid",
       message: "Phiên đã thanh toán đủ.",
     });
     return;
@@ -106,16 +134,14 @@ export async function createSessionTransaction(request: Request, response: Respo
     });
 
     if (payosResult.success) {
-      console.log("[Transactions] PayOS payment link created:", { orderCode: payosResult.orderCode });
       // Lưu giao dịch pending để webhook / reconcile đối chiếu theo payosOrderCode
       await Transaction.create({
         sessionId: session._id,
         userId: session.ownerUserId,
         method: "payos",
-        gateway: "payos",
         amount,
         status: "pending",
-        content: `IPARK-${String(session._id)}`,
+        note: `IPARK-${String(session._id)}`,
         payosOrderCode: String(payosResult.orderCode),
       });
       response.status(201).json({
@@ -154,74 +180,49 @@ export async function confirmTransaction(request: Request, response: Response) {
 
   transaction.status = "paid";
   transaction.paidAt = new Date();
-  transaction.confirmedBy = objectId(request.user?.id);
   transaction.note = body.note;
   await transaction.save();
 
   if (transaction.sessionId) {
     await ParkingSession.findByIdAndUpdate(transaction.sessionId, {
-      paymentStatus: "paid",
+      paymentStatus: "fully_paid",
       transactionId: transaction._id,
     });
   }
 
   await createNotification({
     title: "Thanh toán đã xác nhận",
-    content: `Giao dịch ${transaction.content} đã được xác nhận.`,
+    content: `Giao dịch ${transaction._id} đã được xác nhận.`,
     targetRole: "admin",
   });
 
   response.json({ transaction: serializeTransaction(transaction) });
 }
 
-// --- CU-05: Wallet Top-up ---
-
-export async function topUpWallet(request: Request, response: Response) {
-  const body = z.object({ amount: z.number().int().min(10000) }).parse(request.body);
-  const user = await User.findById(request.user?.id);
-  if (!user) {
-    response.status(401).json({ message: "Chưa đăng nhập." });
-    return;
-  }
-
-  const transaction = await Transaction.create({
-    userId: user._id,
-    method: "payos",
-    amount: body.amount,
-    status: "pending",
-    content: `TOPUP-${user._id.toString().slice(-6)}-${Date.now()}`,
-  });
-
-  response.status(201).json({
-    transaction: serializeTransaction(transaction),
-    message: `Đã tạo yêu cầu nạp ${body.amount.toLocaleString("vi-VN")} VND. Chờ admin xác nhận.`,
-  });
-}
-
-export async function confirmTopUp(request: Request, response: Response) {
+export async function cancelTransaction(request: Request, response: Response) {
   const transaction = await Transaction.findById(request.params.id);
-  if (!transaction || !transaction.content?.startsWith("TOPUP")) {
-    response.status(404).json({ message: "Không tìm thấy giao dịch nạp tiền." });
-    return;
-  }
-  if (transaction.status === "paid") {
-    response.status(400).json({ message: "Giao dịch đã được xác nhận trước đó." });
+  if (!transaction) {
+    response.status(404).json({ message: "Không tìm thấy giao dịch." });
     return;
   }
 
-  transaction.status = "paid";
-  transaction.paidAt = new Date();
-  transaction.confirmedBy = objectId(request.user?.id);
+  // Chỉ cho phép hủy giao dịch đang ở trạng thái pending
+  if (transaction.status !== "pending") {
+    response.status(400).json({ message: "Chỉ có thể hủy giao dịch đang chờ thanh toán." });
+    return;
+  }
+
+  // Cập nhật trạng thái giao dịch thành cancelled
+  transaction.status = "cancelled";
   await transaction.save();
 
-  if (transaction.userId) {
-    await User.findByIdAndUpdate(transaction.userId, {
-      $inc: { wallet: transaction.amount },
+  // Reset payment status của session về unpaid (nếu có)
+  if (transaction.sessionId) {
+    await ParkingSession.findByIdAndUpdate(transaction.sessionId, {
+      paymentStatus: "unpaid",
+      $unset: { transactionId: "" },
     });
   }
 
-  response.json({
-    transaction: serializeTransaction(transaction),
-    message: `Đã nạp ${transaction.amount.toLocaleString("vi-VN")} VND vào ví.`,
-  });
+  response.json({ message: "Đã hủy giao dịch." });
 }

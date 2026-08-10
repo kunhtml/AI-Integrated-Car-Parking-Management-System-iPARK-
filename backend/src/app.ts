@@ -10,27 +10,21 @@ import { apiRoutes } from "./routes/index.js";
 
 export const app = express();
 
-// Giới hạn tần suất yêu cầu (Rate Limit) cho toàn bộ API để tránh tấn công DoS
-const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 phút
-  max: env.nodeEnv === "development" ? 10000 : 300, // Tối đa 300 yêu cầu từ mỗi IP
-  message: { message: "Quá nhiều yêu cầu từ IP của bạn, vui lòng thử lại sau 15 phút." },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-// Giới hạn tần suất đặc biệt cho các hành động xác thực nhạy cảm
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 phút
-  max: env.nodeEnv === "development" ? 1000 : 30, // Tối đa 30 yêu cầu đăng nhập/đăng ký/quên mật khẩu
-  message: { message: "Yêu cầu quá thường xuyên. Vui lòng thử lại sau 15 phút." },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "http://localhost:3002",
+];
 
 app.use(
   cors({
-    origin: env.frontendUrl,
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS: Origin ${origin} not allowed`));
+      }
+    },
     credentials: true,
   }),
 );

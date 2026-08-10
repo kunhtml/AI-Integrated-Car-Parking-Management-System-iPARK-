@@ -1,31 +1,22 @@
-export function normalizePlate(plate: string) {
-  return plate.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+export function normalizePlate(value: string) {
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
-export function platesMatch(left?: string, right?: string) {
-  if (!left || !right) {
-    return false;
-  }
-
-  return normalizePlate(left) === normalizePlate(right);
+export function platesMatch(a: string, b: string) {
+  const left = normalizePlate(a);
+  const right = normalizePlate(b);
+  return Boolean(left && right && left === right);
 }
 
-export function imageHashSimilarity(left?: string, right?: string) {
-  if (!left || !right) {
+export function imageHashSimilarity(a?: string, b?: string) {
+  if (!a || !b || a.length !== b.length) {
     return 0;
   }
 
-  if (left === right) {
-    return 1;
+  let same = 0;
+  for (let index = 0; index < a.length; index += 1) {
+    if (a[index] === b[index]) same += 1;
   }
 
-  const minLength = Math.min(left.length, right.length);
-  let matches = 0;
-  for (let index = 0; index < minLength; index += 1) {
-    if (left[index] === right[index]) {
-      matches += 1;
-    }
-  }
-
-  return matches / Math.max(left.length, right.length);
+  return Math.round((same / a.length) * 100);
 }

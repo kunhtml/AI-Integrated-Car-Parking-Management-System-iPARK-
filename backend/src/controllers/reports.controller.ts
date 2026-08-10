@@ -210,7 +210,6 @@ import {
   getEntryByZone,
   getExitByZone,
   getPenaltyReport,
-  getWalletReport,
 } from "../services/analytics.service.js";
 
 export async function entryByZoneHandler(request: Request, response: Response) {
@@ -228,11 +227,5 @@ export async function exitByZoneHandler(request: Request, response: Response) {
 export async function penaltyReportHandler(request: Request, response: Response) {
   const { from, to } = getDateRange(request);
   const data = await getPenaltyReport(from, to);
-  response.json({ data });
-}
-
-export async function walletReportHandler(request: Request, response: Response) {
-  const { from, to } = getDateRange(request);
-  const data = await getWalletReport(from, to);
   response.json({ data });
 }

@@ -1,13 +1,26 @@
-import mongoose, { Schema } from "mongoose";
+import mongoose, { Model, Schema } from "mongoose";
 
-const otpSchema = new Schema({
-  email: String,
-  otpHash: String,
-  purpose: String,
-  usedAt: Date,
-  expiresAt: Date,
-  attempts: { type: Number, default: 0 },
-  verified: { type: Boolean, default: false },
-}, { timestamps: true });
+export type OtpTokenDocument = {
+  _id: mongoose.Types.ObjectId;
+  email: string;
+  otpHash: string;
+  purpose: "reset-password";
+  expiresAt: Date;
+  usedAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+};
 
-export const OtpToken = mongoose.models.OtpToken || mongoose.model("OtpToken", otpSchema);
+const otpTokenSchema = new Schema<OtpTokenDocument>(
+  {
+    email: { type: String, required: true, lowercase: true, trim: true, index: true },
+    otpHash: { type: String, required: true },
+    purpose: { type: String, enum: ["reset-password"], default: "reset-password" },
+    expiresAt: { type: Date, required: true, expires: 0 },
+    usedAt: { type: Date },
+  },
+  { timestamps: true },
+);
+
+export const OtpToken: Model<OtpTokenDocument> =
+  mongoose.models.OtpToken || mongoose.model<OtpTokenDocument>("OtpToken", otpTokenSchema);

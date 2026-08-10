@@ -1,38 +1,32 @@
 import mongoose, { Model, Schema } from "mongoose";
 
+export type MaintenanceSchedule = {
+  intervalDays: number;
+  lastMaintenanceAt?: Date;
+  nextMaintenanceAt?: Date;
+};
+
+export type LaneDivider = {
+  start: [number, number];
+  end: [number, number];
+};
+
 export type DeviceDocument = {
   _id: mongoose.Types.ObjectId;
   name: string;
   gate: "entry" | "exit";
-  rtspUrl?: string;
-  httpUrl?: string;
+  rtspUrl: string;
   username?: string;
   password?: string;
-  deviceType?: "rtsp" | "http" | "onvif" | "usb";
   roiNote?: string;
-  roi?: {
-    x?: number;
-    y?: number;
-    width?: number;
-    height?: number;
-    label?: string;
-    updatedAt?: Date;
-  };
-  snapshotPath?: string;
-  streamPath?: string;
-  status: "online" | "offline";
+  status: "online" | "offline" | "unknown";
   lastSnapshotUrl?: string;
   lastSnapshotAt?: Date;
+  maintenanceSchedule?: MaintenanceSchedule;
+  laneDividers?: LaneDivider[];
+  healthCheckEnabled: boolean;
+  offlineThresholdMinutes: number;
   createdBy?: mongoose.Types.ObjectId;
-  maintenanceSchedule?: {
-    intervalDays?: number;
-    lastMaintenanceAt?: Date;
-    nextMaintenanceAt?: Date;
-  };
-  offlineThresholdMinutes?: number;
-  healthCheckEnabled?: boolean;
-  autoScanEnabled?: boolean;
-  autoScanIntervalSeconds?: number;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -40,40 +34,42 @@ export type DeviceDocument = {
 const deviceSchema = new Schema<DeviceDocument>(
   {
     name: { type: String, required: true, trim: true },
-    gate: { type: String, enum: ["entry", "exit"], required: true },
-    rtspUrl: { type: String, default: "" },
-    httpUrl: { type: String, default: "" },
-    username: { type: String, default: "" },
-    password: { type: String, default: "" },
-    deviceType: { type: String, enum: ["rtsp", "http", "onvif", "usb"], default: "rtsp" },
-    roiNote: { type: String, default: "Biển số trước" },
-    roi: {
-      x: { type: Number, min: 0 },
-      y: { type: Number, min: 0 },
-      width: { type: Number, min: 1 },
-      height: { type: Number, min: 1 },
-      label: { type: String, trim: true },
-      updatedAt: { type: Date },
-    },
-    snapshotPath: { type: String, default: "" },
-    streamPath: { type: String, default: "" },
-    status: { type: String, enum: ["online", "offline"], default: "offline" },
-    lastSnapshotUrl: { type: String, default: "" },
+    gate: { type: String, enum: ["entry", "exit"], required: true, index: true },
+    rtspUrl: { type: String, required: true, trim: true },
+    username: { type: String },
+    password: { type: String },
+    roiNote: { type: String },
+    status: { type: String, enum: ["online", "offline", "unknown"], default: "unknown" },
+    lastSnapshotUrl: { type: String },
     lastSnapshotAt: { type: Date },
-    createdBy: { type: Schema.Types.ObjectId, ref: "User" },
     maintenanceSchedule: {
-      intervalDays: { type: Number, default: 30 },
-      lastMaintenanceAt: { type: Date },
-      nextMaintenanceAt: { type: Date },
+      type: new Schema(
+        {
+          intervalDays: { type: Number, default: 30 },
+          lastMaintenanceAt: { type: Date },
+          nextMaintenanceAt: { type: Date },
+        },
+        { _id: false },
+      ),
     },
-    offlineThresholdMinutes: { type: Number, default: 30 },
+    laneDividers: {
+      type: [
+        new Schema(
+          {
+            start: { type: [Number], required: true },
+            end: { type: [Number], required: true },
+          },
+          { _id: false },
+        ),
+      ],
+      default: undefined,
+    },
     healthCheckEnabled: { type: Boolean, default: true },
-    autoScanEnabled: { type: Boolean, default: false },
-    autoScanIntervalSeconds: { type: Number, default: 10, min: 5, max: 120 },
+    offlineThresholdMinutes: { type: Number, default: 30 },
+    createdBy: { type: Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true },
 );
 
 export const Device: Model<DeviceDocument> =
-  mongoose.models.Device ||
-  mongoose.model<DeviceDocument>("Device", deviceSchema);
+  mongoose.models.Device || mongoose.model<DeviceDocument>("Device", deviceSchema);

@@ -9,7 +9,6 @@ import {
   penaltyReportHandler,
   revenueChartHandler,
   topCustomersHandler,
-  walletReportHandler,
 } from "../controllers/reports.controller.js";
 import { requireAuth, requireRole } from "../middlewares/auth.middleware.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -27,4 +26,3 @@ reportsRoutes.get("/peak-hours", asyncHandler(peakHoursHandler));
 reportsRoutes.get("/entry-by-zone", asyncHandler(entryByZoneHandler));
 reportsRoutes.get("/exit-by-zone", asyncHandler(exitByZoneHandler));
 reportsRoutes.get("/penalty", asyncHandler(penaltyReportHandler));
-reportsRoutes.get("/wallet", asyncHandler(walletReportHandler));

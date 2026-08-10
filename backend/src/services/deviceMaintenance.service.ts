@@ -87,7 +87,7 @@ export async function checkOfflineDevices(): Promise<number> {
   let offlineCount = 0;
 
   for (const device of devices) {
-    const threshold = device.offlineThresholdMinutes || 30;
+    const threshold = device.offlineThresholdMinutes ?? 30;
     const cutoff = new Date(now.getTime() - threshold * 60 * 1000);
 
     if (!device.lastSnapshotAt || device.lastSnapshotAt < cutoff) {

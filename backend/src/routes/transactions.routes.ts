@@ -1,6 +1,6 @@
 import { Router } from "express";
 import {
-  confirmTopUp,
+  cancelTransaction,
   confirmTransaction,
   createSessionTransaction,
   listTransactions,
@@ -23,6 +23,5 @@ transactionsRoutes.get("/check-payos/:orderCode", asyncHandler(async (req, res) 
 
 transactionsRoutes.use(requireAuth);
 transactionsRoutes.get("/", asyncHandler(listTransactions));
-transactionsRoutes.post("/top-up", asyncHandler(topUpWallet));
 transactionsRoutes.post("/:id/confirm", requireRole("admin"), asyncHandler(confirmTransaction));
-transactionsRoutes.post("/:id/confirm-topup", requireRole("admin"), asyncHandler(confirmTopUp));
+transactionsRoutes.post("/:id/cancel", asyncHandler(cancelTransaction));

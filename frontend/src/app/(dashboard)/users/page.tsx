@@ -5,7 +5,7 @@ import { UsersView } from "@/features/users/users-view";
 
 export default function UsersPage() {
   return (
-    <RoleGuard allowedRoles={["admin"]}>
+    <RoleGuard allowedRoles={["admin", "staff"]}>
       <UsersView />
     </RoleGuard>
   );

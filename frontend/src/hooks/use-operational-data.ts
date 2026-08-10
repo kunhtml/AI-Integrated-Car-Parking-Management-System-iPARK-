@@ -4,14 +4,16 @@ import { apiFetch } from "@/lib/client-api";
 import type {
   DemoUser,
   DeviceItem,
-  FeedbackItem,
   IncidentItem,
   NotificationItem,
   ParkingSession,
-  PaymentConfig,
+  ParkingSlot,
   PricingConfig,
   RegisteredVehicle,
   ShiftItem,
+  ShiftScheduleItem,
+  Subscription,
+  SubscriptionPlan,
   TransactionItem,
   Zone,
 } from "@/types";
@@ -28,9 +30,8 @@ type OperationalDataParams = {
       | RegisteredVehicle[]
       | ((items: RegisteredVehicle[]) => RegisteredVehicle[]),
   ) => void;
-  setUserList: (users: DemoUser[]) => void;
+  setUserList: (users: DemoUser[] | ((items: DemoUser[]) => DemoUser[])) => void;
   setPricingConfigState: (config: PricingConfig) => void;
-  setPaymentConfigState: (config: PaymentConfig) => void;
   setTransactionList: (
     transactions:
       | TransactionItem[]
@@ -41,19 +42,14 @@ type OperationalDataParams = {
       | NotificationItem[]
       | ((items: NotificationItem[]) => NotificationItem[]),
   ) => void;
-  setFeedbackList: (
-    feedback: FeedbackItem[] | ((items: FeedbackItem[]) => FeedbackItem[]),
-  ) => void;
-  setDeviceList: (
-    devices: DeviceItem[] | ((items: DeviceItem[]) => DeviceItem[]),
-  ) => void;
-  setShiftList: (
-    shifts: ShiftItem[] | ((items: ShiftItem[]) => ShiftItem[]),
-  ) => void;
-  setIncidentList: (
-    incidents: IncidentItem[] | ((items: IncidentItem[]) => IncidentItem[]),
-  ) => void;
+  setDeviceList: (devices: DeviceItem[] | ((items: DeviceItem[]) => DeviceItem[])) => void;
+  setShiftList: (shifts: ShiftItem[] | ((items: ShiftItem[]) => ShiftItem[])) => void;
+  setShiftScheduleList: (schedules: ShiftScheduleItem[] | ((items: ShiftScheduleItem[]) => ShiftScheduleItem[])) => void;
+  setIncidentList: (incidents: IncidentItem[] | ((items: IncidentItem[]) => IncidentItem[])) => void;
   setZoneList: (zones: Zone[] | ((items: Zone[]) => Zone[])) => void;
+  setSlotList: (slots: ParkingSlot[] | ((items: ParkingSlot[]) => ParkingSlot[])) => void;
+  setPlanList: (items: SubscriptionPlan[] | ((prev: SubscriptionPlan[]) => SubscriptionPlan[])) => void;
+  setSubscriptionList: (items: Subscription[] | ((prev: Subscription[]) => Subscription[])) => void;
   setActionLog: (log: string) => void;
 };
 
@@ -63,14 +59,16 @@ export function useOperationalData({
   setRegisteredVehicles,
   setUserList,
   setPricingConfigState,
-  setPaymentConfigState,
   setTransactionList,
   setNotificationList,
-  setFeedbackList,
   setDeviceList,
   setShiftList,
+  setShiftScheduleList,
   setIncidentList,
   setZoneList,
+  setSlotList,
+  setPlanList,
+  setSubscriptionList,
   setActionLog,
 }: OperationalDataParams) {
   const loadedForUserRef = useRef<string | null>(null);
@@ -107,7 +105,7 @@ export function useOperationalData({
           const data = await vehicleResponse.json();
           setRegisteredVehicles(data.vehicles);
         }
-        if (activeUser.role === "admin") {
+        if (activeUser.role === "admin" || activeUser.role === "staff") {
           const userResponse = await apiFetch("/users");
           if (!cancelled && userResponse.ok) {
             const data = await userResponse.json();
@@ -119,23 +117,12 @@ export function useOperationalData({
           const data = await pricingResponse.json();
           setPricingConfigState(data.pricingConfig);
         }
-        const [
-          paymentResponse,
-          transactionResponse,
-          notificationResponse,
-          feedbackResponse,
-        ] = await Promise.all([
-          apiFetch("/payment-config"),
+        const [transactionResponse, notificationResponse] = await Promise.all([
           apiFetch("/transactions"),
           apiFetch("/notifications"),
-          apiFetch("/feedback"),
         ]);
         if (cancelled) {
           return;
-        }
-        if (paymentResponse.ok) {
-          const data = await paymentResponse.json();
-          setPaymentConfigState(data.paymentConfig);
         }
         if (transactionResponse.ok) {
           const data = await transactionResponse.json();
@@ -145,40 +132,62 @@ export function useOperationalData({
           const data = await notificationResponse.json();
           setNotificationList(data.notifications);
         }
-        if (feedbackResponse.ok) {
-          const data = await feedbackResponse.json();
-          setFeedbackList(data.feedback);
-        }
         if (activeUser.role !== "customer") {
-          const [deviceResponse, shiftResponse, incidentResponse] = await Promise.all([
-            apiFetch("/devices"),
+          // Admin calls /shift-schedules (all schedules), Staff calls /shift-schedules/my (own schedule)
+          const scheduleEndpoint = activeUser.role === "admin" ? "/shift-schedules" : "/shift-schedules/my";
+          const [shiftResponse, shiftScheduleResponse, incidentResponse] = await Promise.all([
             apiFetch("/shifts"),
+            apiFetch(scheduleEndpoint),
             apiFetch("/incidents"),
           ]);
           if (cancelled) {
             return;
           }
-          if (deviceResponse.ok) {
-            const data = await deviceResponse.json();
-            setDeviceList(data.devices);
-          }
           if (shiftResponse.ok) {
             const data = await shiftResponse.json();
             setShiftList(data.shifts);
+          }
+          if (shiftScheduleResponse.ok) {
+            const data = await shiftScheduleResponse.json();
+            setShiftScheduleList(data.schedules);
           }
           if (incidentResponse.ok) {
             const data = await incidentResponse.json();
             setIncidentList(data.incidents);
           }
-          const zoneResponse = await apiFetch("/zones");
-          if (!cancelled && zoneResponse.ok) {
+          // Load zones and slots for admin/staff
+          const [zoneResponse, slotResponse] = await Promise.all([
+            apiFetch("/zones"),
+            apiFetch("/parking-slots"),
+          ]);
+          if (cancelled) return;
+          if (zoneResponse.ok) {
             const data = await zoneResponse.json();
             setZoneList(data.zones);
           }
+          if (slotResponse.ok) {
+            const data = await slotResponse.json();
+            setSlotList(data.slots);
+          }
         }
-      } catch {
+        // Load subscriptions for all roles
+        const [plansRes, subsRes] = await Promise.all([
+          apiFetch("/subscriptions/plans"),
+          apiFetch(activeUser.role === "customer" ? "/subscriptions/my" : "/subscriptions"),
+        ]);
+        if (cancelled) return;
+        if (plansRes.ok) {
+          const data = await plansRes.json();
+          setPlanList(data.plans);
+        }
+        if (subsRes.ok) {
+          const data = await subsRes.json();
+          setSubscriptionList(data.subscriptions);
+        }
+      } catch (error) {
         if (!cancelled) {
-          setActionLog("Không tải được dữ liệu vận hành từ MongoDB local.");
+          console.error("[use-operational-data] Load error:", error);
+          setActionLog("Lỗi tải dữ liệu. Kiểm tra console để biết thêm chi tiết.");
         }
       }
     }
@@ -195,14 +204,16 @@ export function useOperationalData({
     setRegisteredVehicles,
     setUserList,
     setPricingConfigState,
-    setPaymentConfigState,
     setTransactionList,
     setNotificationList,
-    setFeedbackList,
     setDeviceList,
     setShiftList,
+    setShiftScheduleList,
     setIncidentList,
     setZoneList,
+    setSlotList,
+    setPlanList,
+    setSubscriptionList,
     setActionLog,
   ]);
 }

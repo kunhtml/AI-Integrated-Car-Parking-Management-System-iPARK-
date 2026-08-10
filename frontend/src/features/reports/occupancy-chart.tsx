@@ -1,39 +1,28 @@
 "use client";
 
-export function OccupancyChart({ data }: { data: any }) {
-  if (!data || data.length === 0) {
-    return <p className="muted-cell">Không có dữ liệu lấp đầy.</p>;
+import { Clock } from "lucide-react";
+import type { OccupancyHourPoint } from "@/types";
+
+export function OccupancyChart({ data }: { data: OccupancyHourPoint[] }) {
+  if (!data.length) {
+    return <p className="muted-cell">Nhấn "Tải dữ liệu" để xem biểu đồ lấp đầy.</p>;
   }
 
-  const maxOccupancy = Math.max(...data.map((d: any) => d.occupancy), 1);
+  const maxOccupancy = Math.max(...data.map((d) => d.maxOccupancy), 1);
 
   return (
-    <div className="panel-body" style={{ marginTop: 16 }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {data.map((item: any, idx: number) => {
-          const val = item.occupancy || 0;
-          const pct = (val / maxOccupancy) * 100;
-          return (
-            <div key={idx} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{ width: 100, fontSize: "0.85rem", fontWeight: 500 }}>
-                {item.hour !== undefined ? `${item.hour}h` : item.label}
-              </span>
-              <div style={{ flex: 1, backgroundColor: "#f3f4f6", height: 20, borderRadius: 4, overflow: "hidden" }}>
-                <div
-                  style={{
-                    backgroundColor: "#10b981",
-                    height: "100%",
-                    width: `${pct}%`,
-                    transition: "width 0.3s ease",
-                  }}
-                />
-              </div>
-              <span style={{ width: 120, fontSize: "0.85rem", textAlign: "right", fontWeight: 600 }}>
-                {val} lượt
-              </span>
-            </div>
-          );
-        })}
+    <div>
+      <div className="panel-heading">
+        <div><p>Lấp đầy</p><h2>Tỷ lệ lấp đầy theo giờ (0-23h)</h2></div>
+        <Clock size={20} />
+      </div>
+      <div className="chart-bars">
+        {data.map((point) => (
+          <div className="bar-item" key={point.hour}>
+            <div style={{ height: `${(point.avgOccupancy / maxOccupancy) * 100}%` }} title={`Avg: ${point.avgOccupancy}`} />
+            <span>{String(point.hour).padStart(2, "0")}</span>
+          </div>
+        ))}
       </div>
     </div>
   );

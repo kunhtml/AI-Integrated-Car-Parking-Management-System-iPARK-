@@ -1,19 +1,18 @@
 import mongoose, { Model, Schema } from "mongoose";
 
-export type ShiftStatus = "Dang mo" | "Da dong";
-
 export type ShiftDocument = {
   _id: mongoose.Types.ObjectId;
   name: string;
-  startedBy?: mongoose.Types.ObjectId;
+  staffId: mongoose.Types.ObjectId;
   startAt: Date;
   endAt?: Date;
-  endedBy?: mongoose.Types.ObjectId;
-  status: ShiftStatus;
+  status: "Đang làm" | "Đã kết thúc";
   note?: string;
-  cashCollected: number;
-  cashExpected: number;
-  transactionCount: number;
+  totalSessions?: number;
+  totalRevenue?: number;
+  totalIncidents?: number;
+  deviceId?: mongoose.Types.ObjectId;
+  location?: string;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -21,26 +20,22 @@ export type ShiftDocument = {
 const shiftSchema = new Schema<ShiftDocument>(
   {
     name: { type: String, required: true, trim: true },
-    startedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    staffId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
     startAt: { type: Date, default: Date.now },
     endAt: { type: Date },
-    endedBy: { type: Schema.Types.ObjectId, ref: "User" },
-    status: {
-      type: String,
-      enum: ["Dang mo", "Da dong"],
-      default: "Dang mo",
-      index: true,
-    },
-    note: { type: String, trim: true },
-    cashCollected: { type: Number, default: 0 },
-    cashExpected: { type: Number, default: 0 },
-    transactionCount: { type: Number, default: 0 },
+    status: { type: String, enum: ["Đang làm", "Đã kết thúc"], default: "Đang làm" },
+    note: { type: String },
+    totalSessions: { type: Number, default: 0 },
+    totalRevenue: { type: Number, default: 0 },
+    totalIncidents: { type: Number, default: 0 },
+    deviceId: { type: Schema.Types.ObjectId, ref: "Device" },
+    location: { type: String },
   },
   { timestamps: true },
 );
 
-shiftSchema.index({ createdAt: -1 });
+shiftSchema.index({ status: 1 });
+shiftSchema.index({ startAt: -1 });
 
 export const Shift: Model<ShiftDocument> =
-  mongoose.models.Shift ||
-  mongoose.model<ShiftDocument>("Shift", shiftSchema);
+  mongoose.models.Shift || mongoose.model<ShiftDocument>("Shift", shiftSchema);

@@ -1,37 +1,43 @@
 "use client";
 
-export function RevenueChart({ data }: { data: any }) {
-  if (!data || !data.labels || data.labels.length === 0) {
-    return <p className="muted-cell">Không có dữ liệu doanh thu.</p>;
+import { TrendingUp } from "lucide-react";
+import { currency } from "@/lib/constants";
+import type { RevenueChartPoint } from "@/types";
+
+export function RevenueChart({ data }: { data: RevenueChartPoint[] }) {
+  if (!data.length) {
+    return <p className="muted-cell">Nhấn "Tải dữ liệu" để xem biểu đồ doanh thu.</p>;
   }
 
-  const maxVal = Math.max(...data.values, 1);
+  const maxRevenue = Math.max(...data.map((d) => d.revenue), 1);
 
   return (
-    <div className="panel-body" style={{ marginTop: 16 }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {data.labels.map((label: string, idx: number) => {
-          const val = data.values[idx] || 0;
-          const pct = (val / maxVal) * 100;
-          return (
-            <div key={label} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{ width: 100, fontSize: "0.85rem", fontWeight: 500 }}>{label}</span>
-              <div style={{ flex: 1, backgroundColor: "#f3f4f6", height: 20, borderRadius: 4, overflow: "hidden" }}>
-                <div
-                  style={{
-                    backgroundColor: "#3b82f6",
-                    height: "100%",
-                    width: `${pct}%`,
-                    transition: "width 0.3s ease",
-                  }}
-                />
-              </div>
-              <span style={{ width: 120, fontSize: "0.85rem", textAlign: "right", fontWeight: 600 }}>
-                {new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(val)}
-              </span>
-            </div>
-          );
-        })}
+    <div>
+      <div className="panel-heading">
+        <div><p>Biểu đồ</p><h2>Doanh thu theo thời gian</h2></div>
+        <TrendingUp size={20} />
+      </div>
+      <div className="chart-bars">
+        {data.map((point) => (
+          <div className="bar-item" key={point.date}>
+            <div style={{ height: `${(point.revenue / maxRevenue) * 100}%` }} title={currency.format(point.revenue)} />
+            <span>{point.date.slice(5)}</span>
+          </div>
+        ))}
+      </div>
+      <div className="table-wrap" style={{ marginTop: 16 }}>
+        <table>
+          <thead><tr><th>Ngày</th><th>Doanh thu</th><th>Số GD</th></tr></thead>
+          <tbody>
+            {data.map((point) => (
+              <tr key={point.date}>
+                <td>{point.date}</td>
+                <td><strong>{currency.format(point.revenue)}</strong></td>
+                <td>{point.count}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );

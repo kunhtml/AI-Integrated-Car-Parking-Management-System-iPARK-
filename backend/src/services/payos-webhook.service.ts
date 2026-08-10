@@ -24,7 +24,7 @@ async function applyPaidTransactionToSession(
   session: HydratedSession,
 ) {
   session.paidAmount = (session.paidAmount || 0) + transaction.amount;
-  session.paymentStatus = session.paidAmount >= (session.fee || 0) ? "paid" : "pending";
+  session.paymentStatus = session.paidAmount >= (session.fee || 0) ? "fully_paid" : "partial_paid";
 
   // Chỉ nhả slot + chốt giờ ra khi xe đã ra bãi (phiên đã hoàn thành từ trước).
   if (session.status === "Đã hoàn thành") {
@@ -36,6 +36,13 @@ async function applyPaidTransactionToSession(
   }
 
   await session.save();
+
+  // Đánh dấu các vé phạt đang chờ của phiên này đã nộp (đã gộp vào phí khi checkout)
+  const { Penalty } = await import("../models/Penalty.js");
+  await Penalty.updateMany(
+    { sessionId: session._id, status: "pending" },
+    { status: "paid", resolvedAt: new Date() },
+  );
 
   sendPaymentConfirmationEmail(transaction, session);
   console.log(`[PayOS] Session ${session._id} payment recorded (status=${session.status}).`);
@@ -62,7 +69,6 @@ export async function reconcileSessionPayment(
 
     transaction.status = "paid";
     transaction.paidAt = new Date();
-    transaction.gateway = "payos";
     await transaction.save();
 
     await applyPaidTransactionToSession(transaction, session);
@@ -151,8 +157,7 @@ export async function handlePayOSWebhook(request: Request, response: Response) {
           amount,
           status: "paid",
           paidAt: new Date(),
-          bankTransactionId: webhookData.data.reference || String(orderCode),
-          gateway: "payos",
+          note: webhookData.data.reference || String(orderCode),
         });
         console.log("[PayOS Webhook] Created Transaction from webhook:", transaction._id);
       } catch (err: any) {
@@ -168,8 +173,7 @@ export async function handlePayOSWebhook(request: Request, response: Response) {
     // Update to paid (handles both newly created and existing pending)
     transaction.status = "paid";
     transaction.paidAt = new Date();
-    transaction.bankTransactionId = webhookData.data.reference || String(orderCode);
-    transaction.gateway = "payos";
+    transaction.note = webhookData.data.reference || String(orderCode);
     if (session && !transaction.sessionId) transaction.sessionId = session._id;
     await transaction.save();
 
@@ -179,6 +183,18 @@ export async function handlePayOSWebhook(request: Request, response: Response) {
       await applyPaidSubscriptionTransaction(transaction);
       console.log(`[PayOS Webhook] Subscription ${transaction.subscriptionId} payment applied.`);
       response.json({ message: "Subscription payment applied" });
+      return;
+    }
+
+    // Giao dịch thanh toán vé phạt → đánh dấu vé đã nộp
+    if (transaction.penaltyId) {
+      const { Penalty } = await import("../models/Penalty.js");
+      await Penalty.findByIdAndUpdate(transaction.penaltyId, {
+        status: "paid",
+        resolvedAt: new Date(),
+      });
+      console.log(`[PayOS Webhook] Penalty ${transaction.penaltyId} marked paid.`);
+      response.json({ message: "Penalty payment applied" });
       return;
     }
 
@@ -213,7 +229,7 @@ async function sendPaymentConfirmationEmail(transaction: any, session: any) {
     if (!email) {
       const { Vehicle } = await import("../models/Vehicle.js");
       const vehicle = await Vehicle.findOne({ plate: session?.plate });
-      email = (vehicle as any)?.ownerEmail || null;
+      email = vehicle?.ownerEmail ?? null;
     }
 
     if (!email) {

@@ -1,12 +1,4 @@
-"use client";
-
-import { usePathname } from "next/navigation";
-import { Menu, PanelLeft, Search, Bell, ShieldAlert, Sparkles, Zap } from "lucide-react";
-import { useSidebar } from "./sidebar-provider";
-import { cn } from "@/lib/utils";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { useParkingApp } from "@/context/parking-app-context";
-import { useState } from "react";
+import { LogOut, Menu } from "lucide-react";
 
 function useBreadcrumbs() {
   const pathname = usePathname();

@@ -1,677 +1,548 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
-import {
-  AlertCircle,
-  Check,
-  Loader2,
-  MapPin,
-  Pencil,
-  Trash2,
-  X,
-} from "lucide-react";
-
-import { createZoneActions } from "@/hooks/actions/use-zone-actions";
+import { useState } from "react";
+import { MapPin, Pencil, Trash2, Plus, X, Search, Car, Bike, Zap, LayoutGrid, List } from "lucide-react";
 import { useParkingApp } from "@/context/parking-app-context";
 import type { Zone } from "@/types";
 
-// ---------- shared types ----------
-type FieldErrors = {
-  name?: string;
-  capacity?: string;
-  displayOrder?: string;
+const VEHICLE_COLORS: Record<string, string> = {
+  "Ô tô": "#3b82f6",
+  "Xe máy": "#f59e0b",
+  "Xe điện": "#10b981",
 };
 
-type DeleteConfirm = {
-  id: string;
-  name: string;
-};
+function ZoneCard({
+  zone,
+  isAdmin,
+  onEdit,
+  onDelete,
+}: {
+  zone: Zone;
+  isAdmin: boolean;
+  onEdit: (zone: Zone) => void;
+  onDelete: (id: string) => void;
+}) {
+  const stats = zone.stats;
+  const occupancyPercent = stats ? Math.round(((stats.occupied + stats.reserved) / stats.total) * 100) : 0;
 
-type EditDraft = {
-  name: string;
-  description: string;
-  capacity: number;
-  displayOrder: number;
-  fieldErrors: FieldErrors;
-};
+  const getOccupancyColor = () => {
+    if (occupancyPercent >= 90) return "#ef4444";
+    if (occupancyPercent >= 70) return "#f59e0b";
+    return "#10b981";
+  };
 
-// ---------- StatsBar ----------
-function StatsBar({ zone }: { zone: Zone }) {
-  if (!zone.stats) return null;
-  const { empty, occupied, total } = zone.stats;
   return (
-    <div className="slot-stats-bar">
-      <span className="badge success">{empty} trống</span>
-      <span className="badge warning">{occupied} đang đỗ</span>
-      <span className="muted-cell">/ {total} tổng</span>
+    <div className="zones-card">
+      <div className="zones-card-header">
+        <div className="zones-card-icon" style={{ background: `linear-gradient(135deg, ${getOccupancyColor()}20, ${getOccupancyColor()}10)` }}>
+          <MapPin size={20} style={{ color: getOccupancyColor() }} />
+        </div>
+        {isAdmin && (
+          <div className="zones-card-actions">
+            <button className="zones-action-btn zones-action-btn--edit" onClick={() => onEdit(zone)} title="Sửa">
+              <span className="zones-action-icon"><Pencil size={14} /></span>
+              <span className="zones-action-text">Sửa</span>
+            </button>
+            <button className="zones-action-btn zones-action-btn--delete" onClick={() => onDelete(zone.id)} title="Xóa">
+              <span className="zones-action-icon"><Trash2 size={14} /></span>
+              <span className="zones-action-text">Xóa</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="zones-card-title">
+        <h3>{zone.name}</h3>
+        {zone.description && <p className="zones-card-desc">{zone.description}</p>}
+      </div>
+
+      <div className="zones-card-types">
+        {zone.allowedVehicleTypes.map((type) => (
+          <span key={type} className="zones-type-badge" style={{ borderColor: VEHICLE_COLORS[type] + "40", color: VEHICLE_COLORS[type] }}>
+            {type === "Ô tô" && <Car size={14} />}
+            {type === "Xe máy" && <Bike size={14} />}
+            {type === "Xe điện" && <Zap size={14} />}
+            {type}
+          </span>
+        ))}
+      </div>
+
+      {stats && (
+        <>
+          <div className="zones-card-progress">
+            <div className="zones-progress-bar">
+              <div
+                className="zones-progress-fill"
+                style={{
+                  width: `${occupancyPercent}%`,
+                  background: getOccupancyColor(),
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="zones-card-stats">
+            <div className="zones-stat">
+              <span className="zones-stat-value" style={{ color: "#10b981" }}>{stats.empty}</span>
+              <span className="zones-stat-label">Trống</span>
+            </div>
+            <div className="zones-stat">
+              <span className="zones-stat-value" style={{ color: "#f59e0b" }}>{stats.occupied}</span>
+              <span className="zones-stat-label">Đang đỗ</span>
+            </div>
+            <div className="zones-stat">
+              <span className="zones-stat-value">{stats.total}</span>
+              <span className="zones-stat-label">Tổng</span>
+            </div>
+          </div>
+        </>
+      )}
+
+      <div className="zones-card-footer">
+        <span className="zones-order-badge">#{zone.displayOrder}</span>
+        <span className="zones-capacity-badge">{zone.capacity} chỗ</span>
+      </div>
     </div>
   );
 }
 
-// ---------- validation helpers ----------
-function validateName(value: string): string | undefined {
-  const v = value.trim();
-  if (!v) return "Tên khu vực là bắt buộc.";
-  if (v.length > 50) return "Tên không được quá 50 ký tự.";
-  if (/\s{2,}/.test(v)) return "Không chứa nhiều khoảng trắng liên tiếp.";
-  return undefined;
-}
+function AddZoneModal({
+  onClose,
+  onSubmit,
+}: {
+  onClose: () => void;
+  onSubmit: (data: { name: string; description: string; capacity: number; displayOrder: number; allowedVehicleTypes: string[] }) => void;
+}) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [capacity, setCapacity] = useState(10);
+  const [displayOrder, setDisplayOrder] = useState(0);
+  const [selectedTypes, setSelectedTypes] = useState<string[]>(["Ô tô"]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-function validateCapacity(value: number): string | undefined {
-  if (!Number.isInteger(value)) return "Phải là số nguyên.";
-  if (value < 1) return "Sức chứa phải lớn hơn 0.";
-  return undefined;
-}
+  const vehicleTypes = ["Ô tô", "Xe máy", "Xe điện"];
 
-function validateDisplayOrder(value: number): string | undefined {
-  if (!Number.isInteger(value)) return "Phải là số nguyên.";
-  if (value < 0) return "Không được là số âm.";
-  return undefined;
-}
-
-// ---------- main component ----------
-export function ZonesView() {
-  const { currentUser, zoneList, setZoneList, setFormErrors } = useParkingApp();
-
-  // actions use context setFormErrors for server errors, setActionLog for toast
-  const { createZone, updateZone, deleteZone } = useMemo(
-    () =>
-      createZoneActions({
-        setZoneList,
-        setActionLog: () => {},
-        onServerError: setFormErrors,
-      }),
-    [setZoneList, setFormErrors],
-  );
-
-  // ----- create form -----
-  const [formErrors, setLocalErrors] = useState<FieldErrors>({});
-  const [formPending, setFormPending] = useState(false);
-  const formRef = useRef<HTMLFormElement>(null);
-
-  // merge context errors (server) with local (blur) — context wins for server errors
-  const allErrors: FieldErrors = formErrors;
-
-  function handleCreateBlur(field: keyof FieldErrors, value: string | number) {
-    const err =
-      field === "name"
-        ? validateName(String(value))
-        : field === "capacity"
-          ? validateCapacity(Number(value))
-          : validateDisplayOrder(Number(value));
-    setLocalErrors((prev) => ({ ...prev, [field]: err }));
+  function toggleType(type: string) {
+    setSelectedTypes((prev) =>
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
+    );
   }
 
-  async function handleCreateSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const form = new FormData(e.currentTarget);
+    if (!name.trim()) return;
+    if (selectedTypes.length === 0) return;
 
-    const name = String(form.get("name") || "").trim();
-    const capacity = Number(form.get("capacity") || 0);
-    const displayOrder = Number(form.get("displayOrder") || 0);
-
-    const errors: FieldErrors = {
-      name: validateName(name),
-      capacity: validateCapacity(capacity),
-      displayOrder: validateDisplayOrder(displayOrder),
-    };
-    setLocalErrors(errors);
-    if (errors.name || errors.capacity || errors.displayOrder) return;
-
-    setFormPending(true);
+    setIsSubmitting(true);
     try {
-      await createZone(e as unknown as React.FormEvent<HTMLFormElement>);
+      await onSubmit({ name: name.trim(), description: description.trim(), capacity, displayOrder, allowedVehicleTypes: selectedTypes });
+      onClose();
     } finally {
-      setFormPending(false);
-      setLocalErrors({});
-      setFormErrors({});
-      e.currentTarget.reset();
-      const capInput =
-        e.currentTarget.querySelector<HTMLInputElement>('[name="capacity"]');
-      if (capInput) capInput.value = "10";
-      const orderInput = e.currentTarget.querySelector<HTMLInputElement>(
-        '[name="displayOrder"]',
-      );
-      if (orderInput) orderInput.value = "0";
+      setIsSubmitting(false);
     }
   }
-
-  // ----- inline edit -----
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [drafts, setDrafts] = useState<Record<string, EditDraft>>({});
-  const [savingId, setSavingId] = useState<string | null>(null);
-
-  function startEdit(zone: Zone) {
-    setEditingId(zone.id);
-    setDrafts((prev) => ({
-      ...prev,
-      [zone.id]: {
-        name: zone.name,
-        description: zone.description ?? "",
-        capacity: zone.capacity,
-        displayOrder: zone.displayOrder,
-        fieldErrors: {},
-      },
-    }));
-  }
-
-  function cancelEdit() {
-    if (!editingId) return;
-    setEditingId(null);
-    setDrafts((prev) => {
-      const next = { ...prev };
-      delete next[editingId];
-      return next;
-    });
-  }
-
-  function handleDraftChange<K extends keyof EditDraft>(
-    id: string,
-    field: K,
-    value: EditDraft[K],
-  ) {
-    setDrafts((prev) => ({
-      ...prev,
-      [id]: {
-        ...prev[id],
-        [field]: value,
-        // clear inline error when user types
-        fieldErrors: { ...prev[id]?.fieldErrors, [field]: undefined },
-      },
-    }));
-  }
-
-  function handleDraftBlur(
-    id: string,
-    field: keyof FieldErrors,
-    value: string | number,
-  ) {
-    const draft = drafts[id];
-    if (!draft) return;
-    const err =
-      field === "name"
-        ? validateName(String(value))
-        : field === "capacity"
-          ? validateCapacity(Number(value))
-          : validateDisplayOrder(Number(value));
-    setDrafts((prev) => ({
-      ...prev,
-      [id]: {
-        ...draft,
-        fieldErrors: { ...prev[id]?.fieldErrors, [field]: err },
-      },
-    }));
-  }
-
-  async function saveEdit(id: string) {
-    const draft = drafts[id];
-    if (!draft) return;
-
-    const errors = validateDraft(draft);
-    if (errors.name || errors.capacity || errors.displayOrder) {
-      setDrafts((prev) => ({
-        ...prev,
-        [id]: { ...draft, fieldErrors: errors },
-      }));
-      return;
-    }
-
-    setSavingId(id);
-    try {
-      await updateZone(id, {
-        name: draft.name.trim(),
-        description: draft.description.trim() || undefined,
-        capacity: draft.capacity,
-        displayOrder: draft.displayOrder,
-      });
-      setEditingId(null);
-      setDrafts((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-    } finally {
-      setSavingId(null);
-    }
-  }
-
-  function validateDraft(draft: EditDraft): FieldErrors {
-    return {
-      name: validateName(draft.name),
-      capacity: validateCapacity(draft.capacity),
-      displayOrder: validateDisplayOrder(draft.displayOrder),
-    };
-  }
-
-  // ----- delete -----
-  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirm | null>(
-    null,
-  );
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-
-  async function confirmDelete() {
-    if (!deleteConfirm) return;
-    setDeletingId(deleteConfirm.id);
-    try {
-      await deleteZone(deleteConfirm.id);
-    } finally {
-      setDeletingId(null);
-      setDeleteConfirm(null);
-    }
-  }
-
-  // ----- render -----
-  if (!currentUser) return null;
 
   return (
-    <section className="content-grid">
-      {/* CREATE FORM */}
-      {currentUser.role === "admin" && (
-        <div className="panel">
-          <div className="panel-heading">
-            <div>
-              <p>Quản lý</p>
-              <h2>Thêm khu vực mới</h2>
+    <div className="zones-modal-overlay" onClick={onClose}>
+      <div className="zones-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="zones-modal-header">
+          <div className="zones-modal-title">
+            <div className="zones-modal-icon">
+              <Plus size={18} />
             </div>
-            <MapPin size={22} />
+            <div>
+              <h3>Thêm khu vực mới</h3>
+              <p>Tạo khu vực đỗ xe mới</p>
+            </div>
+          </div>
+          <button className="zones-modal-close" onClick={onClose}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <form className="zones-modal-form" onSubmit={handleSubmit}>
+          <div className="zones-form-group">
+            <label>Tên khu vực *</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="VD: A, B, VIP, Tầng B1..."
+              required
+            />
           </div>
 
-          <form
-            className="stack-form"
-            noValidate
-            onSubmit={handleCreateSubmit}
-            ref={formRef}
-          >
-            {/* Name */}
-            <label>
-              Tên khu vực
-              <input
-                maxLength={50}
-                name="name"
-                onBlur={(e) => handleCreateBlur("name", e.target.value)}
-                placeholder="A, B, VIP, Tầng B1..."
-                required
-                type="text"
-              />
-              {allErrors.name && (
-                <span className="field-error">
-                  <AlertCircle size={13} />
-                  {allErrors.name}
-                </span>
-              )}
-            </label>
+          <div className="zones-form-group">
+            <label>Mô tả</label>
+            <input
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="VD: Khu đỗ thông thường, khu VIP..."
+            />
+          </div>
 
-            {/* Description */}
-            <label>
-              Mô tả
+          <div className="zones-form-row">
+            <div className="zones-form-group">
+              <label>Sức chứa *</label>
               <input
-                maxLength={255}
-                name="description"
-                placeholder="Khu đỗ thông thường, có mái che..."
-                type="text"
-              />
-            </label>
-
-            {/* Capacity */}
-            <label>
-              Sức chứa (số chỗ tối đa)
-              <input
+                type="number"
+                value={capacity}
+                onChange={(e) => setCapacity(Math.max(1, parseInt(e.target.value) || 1))}
                 min={1}
-                name="capacity"
-                onBlur={(e) =>
-                  handleCreateBlur("capacity", Number(e.target.value))
-                }
                 required
-                step={1}
-                type="number"
               />
-              {allErrors.capacity && (
-                <span className="field-error">
-                  <AlertCircle size={13} />
-                  {allErrors.capacity}
-                </span>
-              )}
-            </label>
-
-            {/* Display Order */}
-            <label>
-              Thứ tự hiển thị
+            </div>
+            <div className="zones-form-group">
+              <label>Thứ tự hiển thị</label>
               <input
-                min={0}
-                name="displayOrder"
-                onBlur={(e) =>
-                  handleCreateBlur("displayOrder", Number(e.target.value))
-                }
-                step={1}
                 type="number"
+                value={displayOrder}
+                onChange={(e) => setDisplayOrder(parseInt(e.target.value) || 0)}
               />
-              {allErrors.displayOrder && (
-                <span className="field-error">
-                  <AlertCircle size={13} />
-                  {allErrors.displayOrder}
-                </span>
-              )}
-            </label>
-
-            <button
-              className="full-button"
-              disabled={formPending}
-              type="submit"
-            >
-              {formPending ? (
-                <Loader2 className="spin" size={18} />
-              ) : (
-                <MapPin size={18} />
-              )}
-              {formPending ? "Đang tạo…" : "Tạo khu vực"}
-            </button>
-          </form>
-        </div>
-      )}
-
-      {/* ZONE LIST */}
-      <div className="panel wide">
-        <div className="panel-heading">
-          <div>
-            <p>Khu vực</p>
-            <h2>Danh sách khu vực đỗ xe</h2>
+            </div>
           </div>
-          <span className="muted-cell">{zoneList.length} khu vực</span>
+
+          <div className="zones-form-group">
+            <label>Loại xe được phép *</label>
+            <div className="zones-type-selector">
+              {vehicleTypes.map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  className={`zones-type-btn ${selectedTypes.includes(type) ? "active" : ""}`}
+                  style={selectedTypes.includes(type) ? { borderColor: VEHICLE_COLORS[type], background: VEHICLE_COLORS[type] + "15", color: VEHICLE_COLORS[type] } : {}}
+                  onClick={() => toggleType(type)}
+                >
+                  {type === "Ô tô" && <Car size={14} />}
+                  {type === "Xe máy" && <Bike size={14} />}
+                  {type === "Xe điện" && <Zap size={14} />}
+                  {type}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="zones-modal-actions">
+            <button type="button" className="zones-btn-secondary" onClick={onClose}>
+              Hủy
+            </button>
+            <button type="submit" className="zones-btn-primary" disabled={isSubmitting || !name.trim() || selectedTypes.length === 0}>
+              {isSubmitting ? "Đang tạo..." : "Tạo khu vực"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function EditZoneModal({
+  zone,
+  onClose,
+  onSubmit,
+}: {
+  zone: Zone;
+  onClose: () => void;
+  onSubmit: (data: { name: string; description: string; capacity: number; displayOrder: number; allowedVehicleTypes: string[] }) => void;
+}) {
+  const [name, setName] = useState(zone.name);
+  const [description, setDescription] = useState(zone.description || "");
+  const [capacity, setCapacity] = useState(zone.capacity);
+  const [displayOrder, setDisplayOrder] = useState(zone.displayOrder);
+  const [selectedTypes, setSelectedTypes] = useState<string[]>(zone.allowedVehicleTypes);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const vehicleTypes = ["Ô tô", "Xe máy", "Xe điện"];
+
+  function toggleType(type: string) {
+    setSelectedTypes((prev) =>
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
+    );
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    if (selectedTypes.length === 0) return;
+
+    setIsSubmitting(true);
+    try {
+      await onSubmit({ name: name.trim(), description: description.trim(), capacity, displayOrder, allowedVehicleTypes: selectedTypes });
+      onClose();
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="zones-modal-overlay" onClick={onClose}>
+      <div className="zones-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="zones-modal-header">
+          <div className="zones-modal-title">
+            <div className="zones-modal-icon">
+              <Pencil size={18} />
+            </div>
+            <div>
+              <h3>Chỉnh sửa khu vực</h3>
+              <p>Cập nhật thông tin khu vực</p>
+            </div>
+          </div>
+          <button className="zones-modal-close" onClick={onClose}>
+            <X size={18} />
+          </button>
         </div>
 
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Tên</th>
-                <th>Mô tả</th>
-                <th>Sức chứa</th>
-                <th>Loại xe</th>
-                <th>Trạng thái slot</th>
-                <th>Thứ tự</th>
-                {currentUser.role === "admin" && <th></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {zoneList.map((zone) => {
-                const draft = drafts[zone.id];
-                const isEditing = editingId === zone.id;
-                const isSaving = savingId === zone.id;
-                const isDeleting = deletingId === zone.id;
-                const isConfirming = deleteConfirm?.id === zone.id;
+        <form className="zones-modal-form" onSubmit={handleSubmit}>
+          <div className="zones-form-group">
+            <label>Tên khu vực *</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="VD: A, B, VIP, Tầng B1..."
+              required
+            />
+          </div>
 
-                return (
-                  <tr key={zone.id} className={isEditing ? "row-editing" : ""}>
-                    {/* Name */}
-                    <td>
-                      {isEditing ? (
-                        <>
-                          <input
-                            className="inline-input"
-                            maxLength={50}
-                            onBlur={(e) =>
-                              handleDraftBlur(zone.id, "name", e.target.value)
-                            }
-                            onChange={(e) =>
-                              handleDraftChange(zone.id, "name", e.target.value)
-                            }
-                            value={draft?.name ?? zone.name}
-                          />
-                          {draft?.fieldErrors.name && (
-                            <div className="inline-error">
-                              <AlertCircle size={12} />
-                              {draft.fieldErrors.name}
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <strong>{zone.name}</strong>
-                      )}
-                    </td>
+          <div className="zones-form-group">
+            <label>Mô tả</label>
+            <input
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="VD: Khu đỗ thông thường, khu VIP..."
+            />
+          </div>
 
-                    {/* Description */}
-                    <td>
-                      {isEditing ? (
-                        <input
-                          className="inline-input"
-                          onChange={(e) =>
-                            handleDraftChange(
-                              zone.id,
-                              "description",
-                              e.target.value,
-                            )
-                          }
-                          value={draft?.description ?? zone.description ?? ""}
-                        />
-                      ) : (
-                        zone.description || (
-                          <span className="muted-cell">—</span>
-                        )
-                      )}
-                    </td>
+          <div className="zones-form-row">
+            <div className="zones-form-group">
+              <label>Sức chứa *</label>
+              <input
+                type="number"
+                value={capacity}
+                onChange={(e) => setCapacity(Math.max(1, parseInt(e.target.value) || 1))}
+                min={1}
+                required
+              />
+            </div>
+            <div className="zones-form-group">
+              <label>Thứ tự hiển thị</label>
+              <input
+                type="number"
+                value={displayOrder}
+                onChange={(e) => setDisplayOrder(parseInt(e.target.value) || 0)}
+              />
+            </div>
+          </div>
 
-                    {/* Capacity */}
-                    <td>
-                      {isEditing ? (
-                        <>
-                          <input
-                            className="inline-input"
-                            min={1}
-                            onBlur={(e) =>
-                              handleDraftBlur(
-                                zone.id,
-                                "capacity",
-                                Number(e.target.value),
-                              )
-                            }
-                            onChange={(e) =>
-                              handleDraftChange(
-                                zone.id,
-                                "capacity",
-                                Number(e.target.value),
-                              )
-                            }
-                            step={1}
-                            style={{ width: 64 }}
-                            type="number"
-                            value={draft?.capacity ?? zone.capacity}
-                          />
-                          {draft?.fieldErrors.capacity && (
-                            <div className="inline-error">
-                              <AlertCircle size={12} />
-                              {draft.fieldErrors.capacity}
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        zone.capacity
-                      )}
-                    </td>
+          <div className="zones-form-group">
+            <label>Loại xe được phép *</label>
+            <div className="zones-type-selector">
+              {vehicleTypes.map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  className={`zones-type-btn ${selectedTypes.includes(type) ? "active" : ""}`}
+                  style={selectedTypes.includes(type) ? { borderColor: VEHICLE_COLORS[type], background: VEHICLE_COLORS[type] + "15", color: VEHICLE_COLORS[type] } : {}}
+                  onClick={() => toggleType(type)}
+                >
+                  {type === "Ô tô" && <Car size={14} />}
+                  {type === "Xe máy" && <Bike size={14} />}
+                  {type === "Xe điện" && <Zap size={14} />}
+                  {type}
+                </button>
+              ))}
+            </div>
+          </div>
 
-                    {/* Vehicle Types */}
-                    <td>{zone.allowedVehicleTypes.join(", ")}</td>
+          <div className="zones-modal-actions">
+            <button type="button" className="zones-btn-secondary" onClick={onClose}>
+              Hủy
+            </button>
+            <button type="submit" className="zones-btn-primary" disabled={isSubmitting || !name.trim() || selectedTypes.length === 0}>
+              {isSubmitting ? "Đang lưu..." : "Lưu thay đổi"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
-                    {/* Stats */}
-                    <td>
-                      <StatsBar zone={zone} />
-                    </td>
+export function ZonesView() {
+  const { currentUser, zoneList, createZone, updateZone, deleteZone } = useParkingApp();
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingZone, setEditingZone] = useState<Zone | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
-                    {/* Display Order */}
-                    <td>
-                      {isEditing ? (
-                        <>
-                          <input
-                            className="inline-input"
-                            min={0}
-                            onBlur={(e) =>
-                              handleDraftBlur(
-                                zone.id,
-                                "displayOrder",
-                                Number(e.target.value),
-                              )
-                            }
-                            onChange={(e) =>
-                              handleDraftChange(
-                                zone.id,
-                                "displayOrder",
-                                Number(e.target.value),
-                              )
-                            }
-                            step={1}
-                            style={{ width: 64 }}
-                            type="number"
-                            value={draft?.displayOrder ?? zone.displayOrder}
-                          />
-                          {draft?.fieldErrors.displayOrder && (
-                            <div className="inline-error">
-                              <AlertCircle size={12} />
-                              {draft.fieldErrors.displayOrder}
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        zone.displayOrder
-                      )}
-                    </td>
+  const isAdmin = currentUser?.role === "admin";
 
-                    {/* Actions */}
-                    {currentUser.role === "admin" && (
-                      <td>
-                        {isEditing ? (
-                          <div className="inline-actions">
-                            <button
-                              className="small-button success"
-                              disabled={isSaving}
-                              onClick={() => saveEdit(zone.id)}
-                              title="Lưu"
-                              type="button"
-                            >
-                              {isSaving ? (
-                                <Loader2 className="spin" size={14} />
-                              ) : (
-                                <Check size={14} />
-                              )}
-                            </button>
-                            <button
-                              className="small-button danger"
-                              disabled={isSaving}
-                              onClick={cancelEdit}
-                              title="Hủy"
-                              type="button"
-                            >
-                              <X size={14} />
-                            </button>
-                          </div>
-                        ) : isConfirming ? (
-                          <div className="inline-actions">
-                            <button
-                              className="small-button success"
-                              disabled={isDeleting}
-                              onClick={confirmDelete}
-                              title="Xác nhận xóa"
-                              type="button"
-                            >
-                              {isDeleting ? (
-                                <Loader2 className="spin" size={14} />
-                              ) : (
-                                <Check size={14} />
-                              )}
-                            </button>
-                            <button
-                              className="small-button danger"
-                              disabled={isDeleting}
-                              onClick={() => setDeleteConfirm(null)}
-                              title="Hủy"
-                              type="button"
-                            >
-                              <X size={14} />
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="inline-actions">
-                            <button
-                              className="small-button"
-                              onClick={() => startEdit(zone)}
-                              title="Sửa"
-                              type="button"
-                            >
-                              <Pencil size={14} />
-                            </button>
-                            <button
-                              className="small-button danger"
-                              onClick={() =>
-                                setDeleteConfirm({
-                                  id: zone.id,
-                                  name: zone.name,
-                                })
-                              }
-                              title="Xóa"
-                              type="button"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
+  if (!currentUser) return null;
 
-              {zoneList.length === 0 && (
-                <tr>
-                  <td className="muted-cell" colSpan={7}>
-                    Chưa có khu vực nào. Tạo mới hoặc chạy seed.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+  const filteredZones = zoneList.filter((zone) =>
+    zone.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    zone.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const totalSlots = zoneList.reduce((sum, z) => sum + (z.stats?.total || 0), 0);
+  const totalEmpty = zoneList.reduce((sum, z) => sum + (z.stats?.empty || 0), 0);
+  const totalOccupied = zoneList.reduce((sum, z) => sum + (z.stats?.occupied || 0), 0);
+
+  async function handleCreateZone(data: { name: string; description: string; capacity: number; displayOrder: number; allowedVehicleTypes: string[] }) {
+    await createZone({ ...data } as any);
+  }
+
+  async function handleUpdateZone(data: { name: string; description: string; capacity: number; displayOrder: number; allowedVehicleTypes: string[] }) {
+    if (!editingZone) return;
+    await updateZone(editingZone.id, data);
+    setEditingZone(null);
+  }
+
+  function handleDeleteZone(id: string) {
+    if (confirm("Bạn có chắc muốn xóa khu vực này?")) {
+      deleteZone(id);
+    }
+  }
+
+  return (
+    <section className="zones-page">
+      {/* Header */}
+      <div className="zones-header">
+        <div className="zones-header-content">
+          <div className="zones-header-info">
+            <div className="zones-header-icon">
+              <MapPin size={22} />
+            </div>
+            <div>
+              <h1>Quản lý khu vực</h1>
+              <p>{zoneList.length} khu vực đỗ xe</p>
+            </div>
+          </div>
+          {isAdmin && (
+            <button className="zones-btn-primary" onClick={() => setShowAddModal(true)}>
+              <Plus size={18} />
+              Thêm khu vực
+            </button>
+          )}
         </div>
       </div>
 
-      {/* DELETE CONFIRM MODAL */}
-      {deleteConfirm && (
-        <div
-          className="modal-overlay"
-          onClick={() => !deletingId && setDeleteConfirm(null)}
-        >
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <AlertCircle className="text-danger" size={24} />
-              <h3>Xác nhận xóa khu vực</h3>
-            </div>
-            <p className="modal-body">
-              Bạn có chắc chắn muốn vô hiệu hóa khu vực{" "}
-              <strong>&quot;{deleteConfirm.name}&quot;</strong> không?
-              <br />
-              Hành động này không thể hoàn tác.
-            </p>
-            <div className="modal-footer">
-              <button
-                className="secondary-button"
-                disabled={!!deletingId}
-                onClick={() => setDeleteConfirm(null)}
-                type="button"
-              >
-                Hủy
-              </button>
-              <button
-                className="danger-button"
-                disabled={!!deletingId}
-                onClick={confirmDelete}
-                type="button"
-              >
-                {deletingId ? (
-                  <Loader2 className="spin" size={16} />
-                ) : (
-                  <Trash2 size={16} />
-                )}
-                {deletingId ? "Đang xóa…" : "Xóa"}
-              </button>
-            </div>
+      {/* Stats Bar */}
+      <div className="zones-stats-bar">
+        <div className="zones-stat-card">
+          <div className="zones-stat-icon" style={{ background: "#3b82f615" }}>
+            <LayoutGrid size={18} style={{ color: "#3b82f6" }} />
+          </div>
+          <div className="zones-stat-info">
+            <span className="zones-stat-value">{zoneList.length}</span>
+            <span className="zones-stat-label">Khu vực</span>
           </div>
         </div>
+        <div className="zones-stat-card">
+          <div className="zones-stat-icon" style={{ background: "#10b98115" }}>
+            <MapPin size={18} style={{ color: "#10b981" }} />
+          </div>
+          <div className="zones-stat-info">
+            <span className="zones-stat-value">{totalSlots}</span>
+            <span className="zones-stat-label">Tổng chỗ</span>
+          </div>
+        </div>
+        <div className="zones-stat-card">
+          <div className="zones-stat-icon" style={{ background: "#22c55e15" }}>
+            <Car size={18} style={{ color: "#22c55e" }} />
+          </div>
+          <div className="zones-stat-info">
+            <span className="zones-stat-value" style={{ color: "#22c55e" }}>{totalEmpty}</span>
+            <span className="zones-stat-label">Còn trống</span>
+          </div>
+        </div>
+        <div className="zones-stat-card">
+          <div className="zones-stat-icon" style={{ background: "#f59e0b15" }}>
+            <Car size={18} style={{ color: "#f59e0b" }} />
+          </div>
+          <div className="zones-stat-info">
+            <span className="zones-stat-value" style={{ color: "#f59e0b" }}>{totalOccupied}</span>
+            <span className="zones-stat-label">Đang đỗ</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Toolbar */}
+      <div className="zones-toolbar">
+        <div className="zones-search">
+          <Search size={16} />
+          <input
+            type="text"
+            placeholder="Tìm kiếm khu vực..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        <div className="zones-view-toggle">
+          <button
+            className={`zones-view-btn ${viewMode === "grid" ? "active" : ""}`}
+            onClick={() => setViewMode("grid")}
+            title="Lưới"
+          >
+            <span className="zones-view-icon"><LayoutGrid size={16} /></span>
+            <span className="zones-view-text">Lưới</span>
+          </button>
+          <button
+            className={`zones-view-btn ${viewMode === "list" ? "active" : ""}`}
+            onClick={() => setViewMode("list")}
+            title="Danh sách"
+          >
+            <span className="zones-view-icon"><List size={16} /></span>
+            <span className="zones-view-text">Danh sách</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Content */}
+      {filteredZones.length === 0 ? (
+        <div className="zones-empty">
+          <div className="zones-empty-icon">
+            <MapPin size={48} />
+          </div>
+          <h3>Chưa có khu vực nào</h3>
+          <p>{searchQuery ? "Không tìm thấy khu vực phù hợp" : "Bắt đầu bằng cách thêm khu vực đỗ xe đầu tiên"}</p>
+          {isAdmin && !searchQuery && (
+            <button className="zones-btn-primary" onClick={() => setShowAddModal(true)}>
+              <Plus size={18} />
+              Thêm khu vực đầu tiên
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className={`zones-grid ${viewMode === "list" ? "zones-grid--list" : ""}`}>
+          {filteredZones.map((zone) => (
+            <ZoneCard
+              key={zone.id}
+              zone={zone}
+              isAdmin={isAdmin}
+              onEdit={setEditingZone}
+              onDelete={handleDeleteZone}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Modals */}
+      {showAddModal && (
+        <AddZoneModal
+          onClose={() => setShowAddModal(false)}
+          onSubmit={handleCreateZone}
+        />
+      )}
+
+      {editingZone && (
+        <EditZoneModal
+          zone={editingZone}
+          onClose={() => setEditingZone(null)}
+          onSubmit={handleUpdateZone}
+        />
       )}
     </section>
   );

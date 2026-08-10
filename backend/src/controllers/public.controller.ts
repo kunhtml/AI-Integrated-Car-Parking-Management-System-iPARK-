@@ -4,8 +4,11 @@ import { ParkingSession } from "../models/ParkingSession.js";
 import { Vehicle } from "../models/Vehicle.js";
 import { User } from "../models/User.js";
 import { Zone } from "../models/Zone.js";
-import { getActivePricingConfigForZone } from "../services/pricing.service.js";
+import { getActivePricingConfig, getActivePricingConfigForZone } from "../services/pricing.service.js";
 import { calculateParkingFee } from "../services/pricing.service.js";
+import { listPlans } from "../services/subscription.service.js";
+import { serializeSubscriptionPlan } from "../utils/serializers.js";
+import { getPendingPenaltiesForSession } from "./penalties.controller.js";
 
 /**
  * HM-04/HM-05: Public parking availability — no auth required.
@@ -199,10 +202,13 @@ export async function lookupSession(request: Request, response: Response) {
   const slotDoc = session.slotId as any;
   const pricing = await getActivePricingConfigForZone(slotDoc?.zoneId);
   const feeBreakdown = calculateParkingFee(activeSessionCheckInLocal, new Date(), pricing);
-  const currentFee = feeBreakdown.totalFee;
+
+  // Tiền phạt đang chờ (đỗ lấn vạch) — cộng vào phí hiển thị, trả gộp khi checkout
+  const penalty = await getPendingPenaltiesForSession(session._id.toString());
+  const currentFee = feeBreakdown.totalFee + penalty.total;
 
   // Kiểm tra xem đã thanh toán trước chưa
-  const isPrepaid = session.paymentStatus === "paid";
+  const isPrepaid = session.paymentStatus === "fully_paid" || session.paymentStatus === "partial_paid";
 
   // Lấy thông tin user nếu có
   let userEmail: string | null = null;
@@ -237,6 +243,8 @@ export async function lookupSession(request: Request, response: Response) {
       duration,
       currentFee,
       feeBreakdown,
+      penalties: penalty.items,
+      penaltyTotal: penalty.total,
       paymentStatus: session.paymentStatus,
       paidAmount: session.paidAmount || 0,
       prepaidCheckoutAt: session.prepaidCheckoutAt
@@ -293,21 +301,30 @@ export async function calculateExitFee(request: Request, response: Response) {
   const pricing = await getActivePricingConfigForZone(slotDoc?.zoneId);
   const feeBreakdown = calculateParkingFee(sessionCheckInLocal, exitTime, pricing);
 
-  // Nếu đã thanh toán trước, chỉ tính phí cho thời gian gia hạn
-  let additionalFee = feeBreakdown.totalFee;
-  let totalFee = feeBreakdown.totalFee;
+  // Cộng tiền phạt (vé đỗ lấn vạch đang chờ) — khách trả gộp với phí gửi
+  const penalty = await getPendingPenaltiesForSession(session._id.toString());
+  const feeWithPenalty = feeBreakdown.totalFee + penalty.total;
 
-  if (session.paymentStatus === "paid") {
-    // Đã thanh toán đủ - tính phí bổ sung nếu gia hạn
+  // Nếu đã thanh toán trước, chỉ tính phí cho thời gian gia hạn
+  let additionalFee = feeWithPenalty;
+  let totalFee = feeWithPenalty;
+
+  if (session.paymentStatus === "fully_paid") {
+    // Đã thanh toán đủ - tính phí bổ sung nếu gia hạn (cộng thêm phạt nếu có)
     const paidAt = session.updatedAt;
     const currentFee = calculateParkingFee(sessionCheckInLocal, paidAt, pricing);
-    additionalFee = Math.max(0, feeBreakdown.totalFee - currentFee.totalFee);
+    additionalFee = Math.max(0, feeBreakdown.totalFee - currentFee.totalFee) + penalty.total;
     totalFee = additionalFee;
   }
 
-  // Lưu phí dự kiến vào phiên để bước tạo giao dịch/PayOS dùng đúng số tiền
-  if (session.paymentStatus !== "paid") {
-    session.fee = feeBreakdown.totalFee;
+  // Lưu phí dự kiến vào phiên để bước tạo giao dịch/PayOS dùng đúng số tiền.
+  // Nếu có phạt mà phiên đã "fully_paid", hạ trạng thái để thu thêm phần phạt.
+  if (session.paymentStatus !== "fully_paid") {
+    session.fee = feeWithPenalty;
+    await session.save();
+  } else if (penalty.total > 0) {
+    session.fee = feeBreakdown.totalFee + penalty.total;
+    session.paymentStatus = (session.paidAmount || 0) >= session.fee ? "fully_paid" : "partial_paid";
     await session.save();
   }
 
@@ -319,7 +336,9 @@ export async function calculateExitFee(request: Request, response: Response) {
     duration: feeBreakdown,
     additionalFee,
     totalFee,
-    isPrepaid: session.paymentStatus === "paid",
+    penalties: penalty.items,
+    penaltyTotal: penalty.total,
+    isPrepaid: session.paymentStatus === "fully_paid" || session.paymentStatus === "partial_paid",
   });
 }
 
@@ -348,9 +367,10 @@ export async function calculateFeeQuick(request: Request, response: Response) {
   const pricing = await getActivePricingConfigForZone(slotDoc?.zoneId);
   const dayRate = pricing?.dayRate || 5000;
   const nightRate = pricing?.nightRate || 10000;
+  const nightStartHour = pricing?.nightStartHour ?? 22;
 
-  // Tính giờ ra: nếu chọn sau 22h thì 22:00, không thì 21:00
-  const exitHour = exitAfter22h ? 22 : 21;
+  // Tính giờ ra: nếu chọn ra sau mốc đêm → đúng mốc đêm; ngược lại 1 giờ trước đó (vẫn trong khung ngày)
+  const exitHour = exitAfter22h ? nightStartHour : Math.max(0, nightStartHour - 1);
 
   let exitTime: Date;
   if (exitDate) {
@@ -376,7 +396,7 @@ export async function calculateFeeQuick(request: Request, response: Response) {
   }
 
   const feeBreakdown = calculateParkingFee(checkInLocal, exitTime, pricing);
-  const additionalFee = session.paymentStatus === "paid"
+  const additionalFee = session.paymentStatus === "fully_paid"
     ? Math.max(0, feeBreakdown.totalFee - (session.paidAmount || 0))
     : feeBreakdown.totalFee;
 
@@ -393,11 +413,12 @@ export async function calculateFeeQuick(request: Request, response: Response) {
     feeBreakdown,
     dayRate,
     nightRate,
+    nightStartHour,
     totalFee: feeBreakdown.totalFee,
     additionalFee,
     paymentStatus: session.paymentStatus,
     paidAmount: session.paidAmount,
-    isPrepaid: session.paymentStatus === "paid",
+    isPrepaid: session.paymentStatus === "fully_paid" || session.paymentStatus === "partial_paid",
   });
 }
 
@@ -474,7 +495,7 @@ export async function confirmPayment(request: Request, response: Response) {
   }
 
   // Cập nhật trạng thái thanh toán
-  session.paymentStatus = "paid";
+  session.paymentStatus = "fully_paid";
   session.paidAmount = session.fee;
   session.paymentMethod = "payos";
   await session.save();
@@ -483,7 +504,7 @@ export async function confirmPayment(request: Request, response: Response) {
     success: true,
     plate: session.plate,
     sessionId: session._id,
-    paymentStatus: "paid",
+    paymentStatus: "fully_paid",
     message: "Thanh toán thành công. Bạn có thể ra bãi xe khi sẵn sàng.",
   });
 }
@@ -564,10 +585,9 @@ export async function extendSession(request: Request, response: Response) {
         sessionId: session._id,
         userId: session.ownerUserId,
         method: "payos",
-        gateway: "payos",
         amount: extensionFee,
         status: "pending",
-        content: `IPARK-EXT-${String(session._id)}`,
+        note: `IPARK-EXT-${String(session._id)}`,
         payosOrderCode: String(payosResult.orderCode),
       });
 
@@ -587,14 +607,16 @@ export async function extendSession(request: Request, response: Response) {
   }
 
   // Cập nhật phiên: phí = phí tới giờ ra mới, dời giờ ra dự kiến, hạ trạng thái thanh toán
-  // (xe đã trả phần cũ nhưng giờ còn nợ phần gia hạn).
+  // (xe đã trả phần cũ nhưng giờ còn nợ phần gia hạn → partial_paid / unpaid).
   session.fee = feeNew.totalFee;
   session.feeBreakdown = feeNew;
   session.expectedCheckOutAt = newExit;
   session.prepaidCheckoutAt = newExit;
   session.paymentStatus = (session.paidAmount || 0) >= session.fee
-    ? "paid"
-    : "pending";
+    ? "fully_paid"
+    : (session.paidAmount || 0) > 0
+      ? "partial_paid"
+      : "unpaid";
   await session.save();
 
   response.json({
@@ -656,7 +678,7 @@ export async function quickLookup(request: Request, response: Response) {
       parkingMinutes,
       currentFee: session.fee,
       paymentStatus: session.paymentStatus,
-      isPrepaid: session.paymentStatus === "paid",
+      isPrepaid: session.paymentStatus === "fully_paid" || session.paymentStatus === "partial_paid",
     },
   });
 }
@@ -683,7 +705,7 @@ export async function checkSessionPaymentStatus(request: Request, response: Resp
     // Chủ động hỏi PayOS xem giao dịch pending đã thanh toán chưa.
     // Cần cho localhost nơi PayOS không gọi webhook tới server được.
     // Chạy khi phiên còn nợ phí, BẤT KỂ status (kể cả đã checkout/hoàn thành).
-    if (session.paymentStatus !== "paid" && (session.fee || 0) - (session.paidAmount || 0) > 0) {
+    if (session.paymentStatus !== "fully_paid" && (session.fee || 0) - (session.paidAmount || 0) > 0) {
       try {
         const { reconcileSessionPayment } = await import("../services/payos-webhook.service.js");
         if (await reconcileSessionPayment(session)) {
@@ -709,14 +731,13 @@ export async function checkSessionPaymentStatus(request: Request, response: Resp
         paymentStatus: session.paymentStatus,
         isPrepaid: false,
         isCompleted: true,
-        transaction: transaction ? {
-          id: transaction._id.toString(),
-          status: transaction.status,
-          amount: transaction.amount,
-          paidAt: transaction.paidAt?.toISOString(),
-          gateway: transaction.gateway,
-          payosOrderCode: transaction.payosOrderCode,
-        } : null,
+      transaction: transaction ? {
+        id: transaction._id.toString(),
+        status: transaction.status,
+        amount: transaction.amount,
+        paidAt: transaction.paidAt?.toISOString(),
+        payosOrderCode: transaction.payosOrderCode,
+      } : null,
       });
       return;
     }
@@ -725,17 +746,49 @@ export async function checkSessionPaymentStatus(request: Request, response: Resp
     response.json({
       sessionId: session._id.toString(),
       paymentStatus: session.paymentStatus,
-      isPrepaid: session.paymentStatus === "paid",
+      isPrepaid: session.paymentStatus === "fully_paid" || session.paymentStatus === "partial_paid",
       isCompleted: false,
       transaction: transaction ? {
         id: transaction._id.toString(),
         status: transaction.status,
         amount: transaction.amount,
-        gateway: transaction.gateway,
         payosOrderCode: transaction.payosOrderCode,
       } : null,
     });
   } catch {
     response.status(500).json({ message: "Lỗi server." });
+  }
+}
+
+/**
+ * GET /api/public/pricing
+ * Trả về pricing config hiện tại cho khách xem bảng giá (không cần auth).
+ */
+export async function publicPricingConfig(_request: Request, response: Response) {
+  try {
+    const config = await getActivePricingConfig();
+    response.json({
+      dayRate: config.dayRate,
+      nightRate: config.nightRate,
+      dayStartHour: config.dayStartHour,
+      nightStartHour: config.nightStartHour,
+      gracePeriod: config.gracePeriod,
+      maxMinutes: config.maxMinutes,
+    });
+  } catch {
+    response.status(500).json({ message: "Lỗi khi lấy cấu hình giá." });
+  }
+}
+
+/**
+ * GET /api/public/subscription-plans
+ * Trả về danh sách gói thành viên active (không cần auth).
+ */
+export async function publicSubscriptionPlans(_request: Request, response: Response) {
+  try {
+    const plans = await listPlans();
+    response.json({ plans: plans.map(serializeSubscriptionPlan) });
+  } catch {
+    response.status(500).json({ message: "Lỗi khi lấy danh sách gói." });
   }
 }

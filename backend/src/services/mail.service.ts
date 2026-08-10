@@ -2,7 +2,7 @@ import nodemailer from "nodemailer";
 import { env } from "../config/env.js";
 
 export function smtpConfigured() {
-  return Boolean(env.smtp.host && env.smtp.user && env.smtp.pass);
+  return Boolean(env.smtpHost && env.smtpUser && env.smtpPass);
 }
 
 export async function sendMail(
@@ -17,17 +17,17 @@ export async function sendMail(
   }
 
   const transporter = nodemailer.createTransport({
-    host: env.smtp.host,
-    port: env.smtp.port,
-    secure: env.smtp.port === 465,
+    host: env.smtpHost,
+    port: env.smtpPort,
+    secure: env.smtpPort === 465,
     auth: {
-      user: env.smtp.user,
-      pass: env.smtp.pass,
+      user: env.smtpUser,
+      pass: env.smtpPass,
     },
   });
 
   await transporter.sendMail({
-    from: env.smtp.from,
+    from: env.smtpFrom,
     to,
     subject,
     text,
@@ -36,8 +36,4 @@ export async function sendMail(
 
   console.log(`[Mail] Sent email to ${to}: ${subject}`);
   return { sent: true };
-}
-
-export async function sendOtpEmail(to: string, otp: string) {
-  await sendMail(to, "Mã OTP iPARK", `Mã OTP của bạn là ${otp}`);
 }

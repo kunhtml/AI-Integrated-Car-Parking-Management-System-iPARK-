@@ -1,78 +1,60 @@
 import mongoose from "mongoose";
-import { PaymentConfig } from "../models/PaymentConfig.js";
 import { ParkingSessionDocument } from "../models/ParkingSession.js";
 import { Transaction } from "../models/Transaction.js";
 
-export async function getActivePaymentConfig() {
-  const config = await PaymentConfig.findOne({ isActive: true }).sort({ updatedAt: -1 });
-  if (config) {
-    return config;
-  }
-
-  return PaymentConfig.create({
-    bankName: "Ngân hàng test",
-    bankBin: "970436",
-    accountNumber: "0000000000",
-    accountName: "IPARK",
-    transferPrefix: "IPARK",
-    isActive: true,
-  });
-}
-
-export function buildVietQrUrl(values: {
-  bankBin: string;
-  accountNumber: string;
-  accountName: string;
-  amount: number;
-  content: string;
-}) {
-  const params = new URLSearchParams({
-    amount: String(values.amount),
-    addInfo: values.content,
-    accountName: values.accountName,
-  });
-  return `https://img.vietqr.io/image/${encodeURIComponent(values.bankBin)}-${encodeURIComponent(
-    values.accountNumber,
-  )}-compact2.png?${params.toString()}`;
-}
-
 export async function createPendingTransactionForSession(session: ParkingSessionDocument) {
-  if (!session.fee) {
-    session.paymentStatus = "paid";
+  // Nếu đã thanh toán đủ (webhook đã xử lý) → không ghi đè
+  if (session.paymentStatus === "fully_paid" || (session.paidAmount || 0) >= (session.fee || 0)) {
     return null;
   }
 
-  const existed = await Transaction.findOne({
+  const existingPending = await Transaction.findOne({
     sessionId: session._id,
-    status: { $in: ["pending", "paid"] },
+    status: "pending",
   });
-  if (existed) {
-    session.transactionId = existed._id;
-    session.paymentStatus = existed.status === "paid" ? "paid" : "pending";
-    return existed;
+  if (existingPending) {
+    session.transactionId = existingPending._id;
+    session.paymentStatus = (session.paidAmount || 0) > 0 ? "partial_paid" : "unpaid";
+    return existingPending;
   }
 
-  const config = await getActivePaymentConfig();
-  const content = `${config.transferPrefix}-${session._id.toString()}`;
+  const amount = session.fee - (session.paidAmount || 0);
+  if (amount <= 0) {
+    session.paymentStatus = "fully_paid";
+    return null;
+  }
+
   const transaction = await Transaction.create({
     sessionId: session._id,
     userId: session.ownerUserId,
-    method: "vietqr",
-    amount: session.fee,
+    method: "payos",
+    amount,
     status: "pending",
-    content,
-    qrUrl: buildVietQrUrl({
-      bankBin: config.bankBin,
-      accountNumber: config.accountNumber,
-      accountName: config.accountName,
-      amount: session.fee,
-      content,
-    }),
   });
 
-  session.transactionId = transaction._id as mongoose.Types.ObjectId;
-  session.paymentStatus = "pending";
+  session.transactionId = transaction._id;
+  session.paymentStatus = (session.paidAmount || 0) > 0 ? "partial_paid" : "unpaid";
   return transaction;
+}
+
+/**
+ * Update transaction with PayOS payment link data
+ */
+export async function updateTransactionWithPayOS(
+  transactionId: string,
+  payosData: {
+    orderCode: string;
+    checkoutUrl?: string;
+    qrCode?: string;
+    paymentLinkId?: string;
+  },
+) {
+  await Transaction.findByIdAndUpdate(transactionId, {
+    payosOrderCode: payosData.orderCode,
+    payosCheckoutUrl: payosData.checkoutUrl,
+    payosQrCode: payosData.qrCode,
+    payosPaymentLinkId: payosData.paymentLinkId,
+  });
 }
 
 export function objectId(value?: string) {

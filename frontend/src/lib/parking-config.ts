@@ -38,8 +38,3 @@ export function calculateParkingFee(checkInAt: Date, checkOutAt: Date) {
   const billableHours = Math.ceil((minutes - parkingConfig.freeMinutes) / 60);
   return billableHours * parkingConfig.hourlyRate;
 }
-
-export const currency = new Intl.NumberFormat("vi-VN", {
-  style: "currency",
-  currency: "VND",
-});

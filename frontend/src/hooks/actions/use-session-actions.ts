@@ -8,6 +8,8 @@ type SessionActionsParams = {
   setSessions: (sessions: ParkingSession[] | ((items: ParkingSession[]) => ParkingSession[])) => void;
   setExitSessionId: (id: string) => void;
   setActionLog: (log: string) => void;
+  // Refresh slot list sau checkin/checkout để UI thấy slot được gán/nhả.
+  reloadSlots: () => Promise<void>;
 };
 
 export function createSessionActions({
@@ -15,11 +17,12 @@ export function createSessionActions({
   setSessions,
   setExitSessionId,
   setActionLog,
+  reloadSlots,
 }: SessionActionsParams) {
   async function createSession(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const owner = String(form.get("owner") ?? "Khách vãng lai");
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const image = form.get("entryImage");
 
     if (!(image instanceof File) || !image.name) {
@@ -30,8 +33,6 @@ export function createSessionActions({
     try {
       const payload = new FormData();
       payload.append("action", "entry");
-      payload.append("owner", owner);
-      payload.append("vehicleType", "Ô tô");
       payload.append("image", image);
 
       const response = await apiFetch("/parking-sessions/upload", { method: "POST", body: payload });
@@ -42,16 +43,23 @@ export function createSessionActions({
       }
       setSessions((items) => [data.session, ...items]);
       setExitSessionId(data.session.id);
-      setActionLog(`Đã nhận diện biển ${data.detection.plate} và ghi nhận xe vào MongoDB.`);
-      event.currentTarget.reset();
-    } catch {
-      setActionLog("Không kết nối được API nhận diện ảnh xe vào. Kiểm tra AI service Python.");
+      await reloadSlots();
+      setActionLog(
+        data.isMember
+          ? `Đã nhận diện biển ${data.detection.plate} → gán vào slot ${data.session.slot ?? ""}. Thành viên hợp lệ.`
+          : `Đã nhận diện biển ${data.detection.plate} → gán vào slot ${data.session.slot ?? ""}.`,
+      );
+      formElement.reset();
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "";
+      setActionLog(msg || "Không kết nối được API nhận diện ảnh xe vào. Kiểm tra AI service Python.");
     }
   }
 
   async function checkoutWithImage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const sessionId = String(form.get("sessionId") ?? "");
     const image = form.get("exitImage");
 
@@ -73,10 +81,12 @@ export function createSessionActions({
       }
 
       setSessions((items) => items.map((item) => (item.id === sessionId ? data.session : item)));
+      await reloadSlots();
       setActionLog(data.message);
-      event.currentTarget.reset();
-    } catch {
-      setActionLog("Không kết nối được API nhận diện ảnh xe ra. Kiểm tra AI service Python.");
+      formElement.reset();
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "";
+      setActionLog(msg || "Không kết nối được API nhận diện ảnh xe ra. Kiểm tra AI service Python.");
     }
   }
 
@@ -93,6 +103,7 @@ export function createSessionActions({
         return;
       }
       setSessions((items) => items.map((item) => (item.id === id ? data.session : item)));
+      await reloadSlots();
       setActionLog(`Đã hoàn thành phiên ${id} và lưu biên lai vào MongoDB.`);
     } catch {
       setActionLog("Không kết nối được API hoàn thành phiên.");
@@ -108,6 +119,7 @@ export function createSessionActions({
     const data = await response.json();
     if (response.ok) {
       setSessions((items) => items.map((item) => (item.id === id ? data.session : item)));
+      await reloadSlots();
       setActionLog("Admin đã duyệt checkout thủ công.");
     } else {
       setActionLog(data.message || "Không duyệt được checkout.");
@@ -118,12 +130,15 @@ export function createSessionActions({
     const response = await apiFetch("/parking-sessions/camera-entry", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ deviceId, owner: "Khách vãng lai" }),
+      body: JSON.stringify({ deviceId }),
     });
     const data = await response.json();
     if (response.ok) {
       setSessions((items) => [data.session, ...items]);
-      setActionLog("Camera đã tạo phiên xe vào.");
+      await reloadSlots();
+      setActionLog(
+        `Camera đã tạo phiên xe vào → gán slot ${data.session?.slot ?? ""}.`,
+      );
     } else {
       setActionLog(data.message || "Camera xe vào lỗi.");
     }
@@ -142,7 +157,8 @@ export function createSessionActions({
     const data = await response.json();
     if (response.ok) {
       setSessions((items) => items.map((item) => (item.id === exitSessionId ? data.session : item)));
-      setActionLog(data.message || "Camera checkout đã xử lý.");
+      await reloadSlots();
+      setActionLog(data.message || "Camera checkout đã xử lý → đã nhả slot.");
     } else {
       setActionLog(data.message || "Camera xe ra lỗi.");
     }

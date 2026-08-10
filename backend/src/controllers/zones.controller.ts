@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { z } from "zod";
+import { ParkingSlot } from "../models/ParkingSlot.js";
 import {
   createZone,
   deleteZone,
@@ -10,41 +11,36 @@ import {
 import { serializeZone } from "../utils/serializers.js";
 
 const zoneBodySchema = z.object({
-  name: z
-    .string({ message: "Tên khu vực là bắt buộc." })
-    .min(1, "Tên khu vực là bắt buộc.")
-    .max(50, "Tên khu vực không được dài quá 50 ký tự.")
-    .trim()
-    .refine(
-      (v) => v.length > 0,
-      "Tên khu vực không được chỉ chứa khoảng trắng.",
-    ),
-  description: z
-    .string()
-    .max(255, "Mô tả không được dài quá 255 ký tự.")
-    .optional(),
-  capacity: z
-    .number({ message: "Sức chứa là bắt buộc." })
-    .int("Sức chứa phải là số nguyên.")
-    .min(1, "Sức chứa phải lớn hơn 0."),
-  allowedVehicleTypes: z.array(z.string().min(1)).min(1, "Phải chọn ít nhất một loại xe."),
-  displayOrder: z
-    .number()
-    .int("Thứ tự phải là số nguyên.")
-    .min(0, "Thứ tự hiển thị không được là số âm.")
-    .optional(),
+  name: z.string().min(1).max(50),
+  description: z.string().optional(),
+  capacity: z.number().int().min(1),
+  walkInQuota: z.number().int().min(0).optional(),
+  subscriberQuota: z.number().int().min(0).optional(),
+  allowedVehicleTypes: z.array(z.string().min(1)).min(1),
+  pricingConfigId: z.string().optional(),
+  displayOrder: z.number().int().optional(),
 });
 
-export async function listZonesHandler(_request: Request, response: Response) {
+export async function listZonesHandler(request: Request, response: Response) {
   const rows = await listZones();
-  response.json({
-    zones: rows.map(({ zone, stats }) => serializeZone(zone, stats)),
-  });
+  response.json({ zones: rows.map(({ zone, stats }) => serializeZone(zone, stats)) });
 }
 
 export async function getZoneHandler(request: Request, response: Response) {
   const zone = await getZoneById(String(request.params.id));
-  response.json({ zone: serializeZone(zone) });
+  const slotBreakdown = await ParkingSlot.aggregate<{ _id: string; count: number }>([
+    { $match: { zoneId: zone._id } },
+    { $group: { _id: "$status", count: { $sum: 1 } } },
+  ]);
+
+  const stats = { total: 0, empty: 0, occupied: 0, reserved: 0, maintenance: 0 };
+  for (const row of slotBreakdown) {
+    const key = row._id as keyof typeof stats;
+    if (key in stats) stats[key] = row.count;
+    stats.total += row.count;
+  }
+
+  response.json({ zone: serializeZone(zone, stats) });
 }
 
 export async function createZoneHandler(request: Request, response: Response) {
