@@ -1,10 +1,9 @@
 import { FormEvent } from "react";
 
 import { apiFetch } from "@/lib/client-api";
-import type { FeedbackItem, IncidentItem, NotificationItem, RegisteredVehicle, ShiftItem } from "@/types";
+import type { IncidentItem, NotificationItem, RegisteredVehicle, ShiftItem, ShiftScheduleItem } from "@/types";
 
 type MiscActionsParams = {
-  setFeedbackList: (items: FeedbackItem[] | ((items: FeedbackItem[]) => FeedbackItem[])) => void;
   setNotificationList: (items: NotificationItem[] | ((items: NotificationItem[]) => NotificationItem[])) => void;
   setShiftList: (items: ShiftItem[] | ((items: ShiftItem[]) => ShiftItem[])) => void;
   setIncidentList: (items: IncidentItem[] | ((items: IncidentItem[]) => IncidentItem[])) => void;
@@ -13,7 +12,6 @@ type MiscActionsParams = {
 };
 
 export function createMiscActions({
-  setFeedbackList,
   setNotificationList,
   setShiftList,
   setIncidentList,
@@ -22,40 +20,6 @@ export function createMiscActions({
 }: MiscActionsParams) {
   function simulateAction(message: string) {
     setActionLog(message);
-  }
-
-  async function createFeedback(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const response = await apiFetch("/feedback", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        subject: String(form.get("subject") || ""),
-        content: String(form.get("content") || ""),
-      }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      setActionLog(data.message || "Không gửi được phản hồi.");
-      return;
-    }
-    setFeedbackList((items) => [data.feedback, ...items]);
-    setActionLog("Đã lưu phản hồi vào MongoDB.");
-    event.currentTarget.reset();
-  }
-
-  async function updateFeedbackStatus(id: string) {
-    const response = await apiFetch(`/feedback/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "Đã phản hồi", response: "Đã tiếp nhận và xử lý." }),
-    });
-    const data = await response.json();
-    if (response.ok) {
-      setFeedbackList((items) => items.map((item) => (item.id === id ? data.feedback : item)));
-      setActionLog("Đã phản hồi khách hàng.");
-    }
   }
 
   async function markNotificationRead(id: string) {
@@ -68,7 +32,8 @@ export function createMiscActions({
 
   async function startShift(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formEl = event.currentTarget;
+    const form = new FormData(formEl);
     const response = await apiFetch("/shifts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -78,7 +43,7 @@ export function createMiscActions({
     if (response.ok) {
       setShiftList((items) => [data.shift, ...items]);
       setActionLog("Đã bắt đầu ca làm việc.");
-      event.currentTarget.reset();
+      formEl.reset();
     }
   }
 
@@ -93,7 +58,8 @@ export function createMiscActions({
 
   async function createIncident(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formEl = event.currentTarget;
+    const form = new FormData(formEl);
     const response = await apiFetch("/incidents", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -107,7 +73,7 @@ export function createMiscActions({
     if (response.ok) {
       setIncidentList((items) => [data.incident, ...items]);
       setActionLog("Đã lưu sự cố vào MongoDB.");
-      event.currentTarget.reset();
+      formEl.reset();
     }
   }
 
@@ -129,7 +95,7 @@ export function createMiscActions({
       simulateAction("Xe này chưa có ID MongoDB để duyệt.");
       return;
     }
-    const response = await apiFetch("/vehicles", {
+    const response = await apiFetch(`/vehicles/${vehicle.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: vehicle.id, status: "Đã đăng ký" }),
@@ -143,15 +109,21 @@ export function createMiscActions({
     simulateAction(`Đã duyệt xe ${vehicle.plate} trong MongoDB.`);
   }
 
+  async function fetchVehicleDetail(id: string): Promise<RegisteredVehicle | null> {
+    const response = await apiFetch(`/vehicles/${id}`);
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.vehicle as RegisteredVehicle;
+  }
+
   return {
     simulateAction,
-    createFeedback,
-    updateFeedbackStatus,
     markNotificationRead,
     startShift,
     endShift,
     createIncident,
     resolveIncident,
     approveVehicle,
+    fetchVehicleDetail,
   };
 }

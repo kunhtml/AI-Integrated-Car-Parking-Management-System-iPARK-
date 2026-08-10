@@ -1,11 +1,17 @@
-export function DataTable({ headers, rows }: { headers: string[]; rows: React.ReactNode[][] }) {
+export function DataTable({
+  headers,
+  rows,
+}: {
+  headers: React.ReactNode[];
+  rows: React.ReactNode[][];
+}) {
   return (
     <div className="table-wrap">
       <table>
         <thead>
           <tr>
-            {headers.map((header) => (
-              <th key={header}>{header}</th>
+            {headers.map((header, idx) => (
+              <th key={idx}>{header}</th>
             ))}
           </tr>
         </thead>

@@ -1,27 +1,39 @@
+import nodemailer from "nodemailer";
 import { env } from "../config/env.js";
-import { mailTransporter } from "../config/mail.js";
 
-export async function sendOtpEmail(email: string, otp: string) {
-  const subject = "iPARK - Mã OTP đặt lại mật khẩu";
-  const html = `
-    <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
-      <h2>iPARK - Xác thực quên mật khẩu</h2>
-      <p>Mã OTP của bạn là:</p>
-      <div style="font-size:28px;font-weight:700;letter-spacing:6px;color:#2563eb">${otp}</div>
-      <p>Mã này sẽ hết hạn sau ${env.otpExpiresInMinutes} phút.</p>
-      <p>Nếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email này.</p>
-    </div>
-  `;
+export function smtpConfigured() {
+  return Boolean(env.smtpHost && env.smtpUser && env.smtpPass);
+}
 
-  if (!env.smtp.host || !env.smtp.user || !env.smtp.pass) {
-    console.log(`[DEV MAIL] Send OTP to ${email}: ${otp}`);
-    return;
+export async function sendMail(
+  to: string,
+  subject: string,
+  text: string,
+  html?: string,
+) {
+  if (!smtpConfigured()) {
+    console.warn("[Mail] SMTP not configured, skipping email to:", to);
+    return { sent: false };
   }
 
-  await mailTransporter.sendMail({
-    from: env.smtp.from,
-    to: email,
-    subject,
-    html,
+  const transporter = nodemailer.createTransport({
+    host: env.smtpHost,
+    port: env.smtpPort,
+    secure: env.smtpPort === 465,
+    auth: {
+      user: env.smtpUser,
+      pass: env.smtpPass,
+    },
   });
+
+  await transporter.sendMail({
+    from: env.smtpFrom,
+    to,
+    subject,
+    text,
+    ...(html ? { html } : {}),
+  });
+
+  console.log(`[Mail] Sent email to ${to}: ${subject}`);
+  return { sent: true };
 }

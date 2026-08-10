@@ -1,5 +1,3 @@
-"use client";
-
 import { LogOut, Menu } from "lucide-react";
 
 import { roleLabels } from "@/lib/constants";

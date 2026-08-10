@@ -1,51 +1,36 @@
-import { SignJWT, jwtVerify } from "jose";
-import type { Types } from "mongoose";
+import { jwtVerify, SignJWT } from "jose";
 import { env } from "../config/env.js";
+import { UserRole } from "../models/User.js";
 
-const jwtSecret = new TextEncoder().encode(env.jwtSecret);
-const resetSecret = new TextEncoder().encode(env.resetTokenSecret);
-
-export interface AccessTokenPayload {
-  userId: string;
+export type AuthUser = {
+  id: string;
+  name: string;
   email: string;
-  role: string;
+  role: UserRole;
+  status: string;
+  avatarUrl?: string;
+  provider?: string;
+};
+
+function secretKey() {
+  return new TextEncoder().encode(env.jwtSecret);
 }
 
-export interface ResetTokenPayload {
-  email: string;
-  purpose: "reset_password";
-}
-
-export async function signAccessToken(payload: AccessTokenPayload) {
-  return new SignJWT({ ...payload })
+export async function signSession(user: AuthUser) {
+  return new SignJWT(user)
     .setProtectedHeader({ alg: "HS256" })
-    .setSubject(payload.userId)
     .setIssuedAt()
-    .setExpirationTime(env.jwtExpiresIn)
-    .sign(jwtSecret);
+    .setExpirationTime("8h")
+    .sign(secretKey());
 }
 
-export async function verifyAccessToken(token: string) {
-  const { payload } = await jwtVerify(token, jwtSecret);
+export async function verifySession(token?: string): Promise<AuthUser | null> {
+  if (!token) return null;
 
-  return payload as unknown as AccessTokenPayload & { sub: string };
-}
-
-export async function signResetToken(payload: ResetTokenPayload) {
-  return new SignJWT({ ...payload })
-    .setProtectedHeader({ alg: "HS256" })
-    .setSubject(payload.email)
-    .setIssuedAt()
-    .setExpirationTime(env.resetTokenExpiresIn)
-    .sign(resetSecret);
-}
-
-export async function verifyResetToken(token: string) {
-  const { payload } = await jwtVerify(token, resetSecret);
-
-  return payload as unknown as ResetTokenPayload & { sub: string };
-}
-
-export function normalizeUserId(id: Types.ObjectId | string) {
-  return typeof id === "string" ? id : id.toString();
+  try {
+    const { payload } = await jwtVerify(token, secretKey());
+    return payload as AuthUser;
+  } catch {
+    return null;
+  }
 }

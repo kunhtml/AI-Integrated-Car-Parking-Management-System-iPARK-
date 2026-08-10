@@ -22,7 +22,7 @@ export function useSessionLoader({ setCurrentUser, setActionLog, setSessionLoadi
         }
       } catch {
         if (!cancelled) {
-          setActionLog("Dùng tài khoản demo — chưa kết nối API đăng nhập.");
+          setActionLog("Chưa kết nối được phiên đăng nhập.");
         }
       } finally {
         if (!cancelled) {
@@ -36,5 +36,6 @@ export function useSessionLoader({ setCurrentUser, setActionLog, setSessionLoadi
     return () => {
       cancelled = true;
     };
+    // Run once on mount; setters are stable via useCallback in provider.
   }, [setCurrentUser, setActionLog, setSessionLoading]);
 }

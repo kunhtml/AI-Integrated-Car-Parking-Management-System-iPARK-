@@ -1,21 +1,35 @@
-import Navbar from "@/components/shared/Navbar";
-import HeroSection from "@/components/landing/HeroSection";
-import FeaturesSection from "@/components/landing/FeaturesSection";
-import PricingSection from "@/components/landing/PricingSection";
-import ContactSection from "@/components/landing/ContactSection";
-import Footer from "@/components/shared/Footer";
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
+import { getDefaultPathForRole } from "@/config/nav-items";
+import { useParkingApp } from "@/context/parking-app-context";
+import { PublicLanding } from "@/features/auth/public-landing";
 
 export default function Home() {
-  return (
-    <>
-      <Navbar />
-      <main>
-        <HeroSection />
-        <FeaturesSection />
-        <PricingSection />
-        <ContactSection />
+  const router = useRouter();
+  const { currentUser, sessionLoading } = useParkingApp();
+
+  useEffect(() => {
+    if (!sessionLoading && currentUser) {
+      router.replace(getDefaultPathForRole(currentUser.role));
+    }
+  }, [sessionLoading, currentUser, router]);
+
+  if (sessionLoading) {
+    return (
+      <main className="public-shell">
+        <section className="public-section">
+          <p>Đang tải...</p>
+        </section>
       </main>
-      <Footer />
-    </>
-  );
+    );
+  }
+
+  if (currentUser) {
+    return null;
+  }
+
+  return <PublicLanding />;
 }

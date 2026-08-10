@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
-import { Providers } from "@/app/providers";
+import { Providers } from "./providers";
 import "./globals.css";
-import "./ipark-app.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "iPARK Management System",
-  description: "AI-Integrated Car Parking Management System",
+  title: "iPARK",
+  description: "Web quản lý bãi đỗ xe iPARK",
 };
 
 export default function RootLayout({

@@ -2,10 +2,12 @@
 
 import { AppHeader } from "@/components/layout/app-header";
 import { Sidebar } from "@/components/layout/sidebar";
+import { SystemLog } from "@/components/layout/system-log";
 import type { DemoUser } from "@/types";
 
 type AppShellProps = {
   currentUser: DemoUser;
+  actionLog: string;
   mobileNavOpen: boolean;
   setMobileNavOpen: (open: boolean) => void;
   onLogout: () => void;
@@ -14,6 +16,7 @@ type AppShellProps = {
 
 export function AppShell({
   currentUser,
+  actionLog,
   mobileNavOpen,
   setMobileNavOpen,
   onLogout,
@@ -32,6 +35,7 @@ export function AppShell({
           onLogout={onLogout}
           onToggleNav={() => setMobileNavOpen(!mobileNavOpen)}
         />
+        <SystemLog message={actionLog} />
         {children}
       </section>
     </main>

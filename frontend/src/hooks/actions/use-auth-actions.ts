@@ -1,6 +1,7 @@
 import { FormEvent } from "react";
 
 import { apiFetch } from "@/lib/client-api";
+import { showError, showInfo, showSuccess } from "@/lib/toast";
 import type { AuthMode, DemoUser } from "@/types";
 
 type AuthActionsParams = {
@@ -33,20 +34,23 @@ export function createAuthActions({
       });
       const data = await response.json();
       if (response.status === 202 && data.requiresTwoFactor) {
+        showInfo(data.message || "Vui lòng nhập mã 2FA.");
         setAuthError(data.message || "Vui lòng nhập mã 2FA.");
         return;
       }
       if (!response.ok) {
+        showError(data.message || "Không đăng nhập được.");
         setAuthError(data.message || "Không đăng nhập được.");
         return;
       }
 
       setAuthError("");
       setCurrentUser(data.user);
-      setActionLog("Đăng nhập thành công bằng JWT cookie.");
+      showSuccess("Đăng nhập thành công!");
       return data.user;
     } catch {
-      setAuthError("Không kết nối được API. Kiểm tra MongoDB local và .env.local.");
+      showError("Không kết nối được server. Kiểm tra backend.");
+      setAuthError("Không kết nối được server.");
       return null;
     }
   }
@@ -57,25 +61,71 @@ export function createAuthActions({
     const name = String(form.get("name") ?? "").trim();
     const email = String(form.get("email") ?? "").trim();
     const password = String(form.get("password") ?? "");
+    const phone = String(form.get("phone") ?? "").trim() || undefined;
+    const gender = String(form.get("gender") ?? "") || undefined;
+    const birthDate = String(form.get("birthDate") ?? "") || undefined;
+    const address = String(form.get("address") ?? "").trim() || undefined;
+    const city = String(form.get("city") ?? "").trim() || undefined;
+    const district = String(form.get("district") ?? "").trim() || undefined;
+    const company = String(form.get("company") ?? "").trim() || undefined;
+    const taxCode = String(form.get("taxCode") ?? "").trim() || undefined;
+    const acceptTerms = form.get("acceptTerms") === "on";
+
+    // Validation
+    if (!name || name.length < 2) {
+      showError("Họ tên phải có ít nhất 2 ký tự.");
+      setAuthError("Họ tên phải có ít nhất 2 ký tự.");
+      return null;
+    }
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      showError("Email không hợp lệ.");
+      setAuthError("Email không hợp lệ.");
+      return null;
+    }
+    if (!password || password.length < 6) {
+      showError("Mật khẩu phải có ít nhất 6 ký tự.");
+      setAuthError("Mật khẩu phải có ít nhất 6 ký tự.");
+      return null;
+    }
+    if (!acceptTerms) {
+      showError("Bạn phải đồng ý với điều khoản sử dụng.");
+      setAuthError("Bạn phải đồng ý với điều khoản sử dụng.");
+      return null;
+    }
 
     try {
       const response = await apiFetch("/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({
+          name,
+          email,
+          password,
+          phone,
+          gender,
+          birthDate,
+          address,
+          city,
+          district,
+          company,
+          taxCode,
+          acceptTerms,
+        }),
       });
       const data = await response.json();
       if (!response.ok) {
+        showError(data.message || "Không đăng ký được.");
         setAuthError(data.message || "Không đăng ký được.");
         return null;
       }
 
       setAuthError("");
       setCurrentUser(data.user);
-      setActionLog("Đăng ký thành công, tài khoản đã lưu MongoDB.");
+      showSuccess("Đăng ký thành công! Chào mừng bạn.");
       return data.user;
     } catch {
-      setAuthError("Không kết nối được API. Kiểm tra MongoDB local.");
+      showError("Không kết nối được server.");
+      setAuthError("Không kết nối được server.");
       return null;
     }
   }
@@ -94,19 +144,31 @@ export function createAuthActions({
         body: JSON.stringify(otp && password ? { email, otp, password } : { email }),
       });
       const data = await response.json();
-      setAuthError(data.devOtp ? `${data.message} OTP demo: ${data.devOtp}` : data.message || "Đã xử lý OTP.");
-      if (response.ok && otp && password) {
+
+      if (!response.ok) {
+        showError(data.message || "Lỗi xử lý OTP.");
+        setAuthError(data.message || "Lỗi.");
+        return;
+      }
+
+      if (otp && password) {
+        showSuccess("Đặt lại mật khẩu thành công! Hãy đăng nhập.");
+        setAuthError("");
         setMode("login");
+      } else {
+        showSuccess(data.message || "Đã gửi OTP đến email.");
+        setAuthError(data.devOtp ? `OTP: ${data.devOtp}` : "Kiểm tra email để lấy mã OTP.");
       }
     } catch {
-      setAuthError("Không kết nối được API OTP.");
+      showError("Không kết nối được server.");
+      setAuthError("Không kết nối được server.");
     }
   }
 
   async function logout() {
     await apiFetch("/auth/logout", { method: "POST" });
     setCurrentUser(null);
-    setActionLog("Đã đăng xuất và xóa JWT cookie.");
+    showInfo("Đã đăng xuất.");
   }
 
   async function setupTwoFactor() {
@@ -122,7 +184,8 @@ export function createAuthActions({
 
   async function verifyTwoFactor(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formEl = event.currentTarget;
+    const form = new FormData(formEl);
     const response = await apiFetch("/auth/2fa/verify", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -133,7 +196,7 @@ export function createAuthActions({
       setCurrentUser(data.user);
       setTwoFactorQr("");
       setActionLog("Đã bật 2FA.");
-      event.currentTarget.reset();
+      formEl.reset();
     } else {
       setActionLog(data.message || "Không xác minh được 2FA.");
     }
@@ -141,7 +204,8 @@ export function createAuthActions({
 
   async function disableTwoFactor(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formEl = event.currentTarget;
+    const form = new FormData(formEl);
     const response = await apiFetch("/auth/2fa/disable", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -151,7 +215,7 @@ export function createAuthActions({
     if (response.ok) {
       setCurrentUser(data.user);
       setActionLog("Đã tắt 2FA.");
-      event.currentTarget.reset();
+      formEl.reset();
     } else {
       setActionLog(data.message || "Không tắt được 2FA.");
     }

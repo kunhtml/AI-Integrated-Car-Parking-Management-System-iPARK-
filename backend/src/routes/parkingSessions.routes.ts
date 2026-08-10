@@ -2,15 +2,16 @@ import { Router } from "express";
 import {
   approveCheckout,
   cameraEntry,
-  cameraExit,
   completeParkingSession,
   createParkingSession,
+  downloadSessionReceiptHandler,
+  getSessionReceiptHandler,
   listParkingSessions,
   requestVerification,
-  uploadParkingImage,
+  scanOverdueHandler,
+  waivePenaltyHandler,
 } from "../controllers/parkingSessions.controller.js";
 import { requireAuth, requireRole } from "../middlewares/auth.middleware.js";
-import { imageUpload } from "../middlewares/upload.middleware.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
 export const parkingSessionsRoutes = Router();
@@ -20,16 +21,13 @@ parkingSessionsRoutes.get("/", asyncHandler(listParkingSessions));
 parkingSessionsRoutes.post("/", requireRole("admin", "staff"), asyncHandler(createParkingSession));
 parkingSessionsRoutes.patch("/", requireRole("admin", "staff"), asyncHandler(completeParkingSession));
 parkingSessionsRoutes.post("/camera-entry", requireRole("admin", "staff"), asyncHandler(cameraEntry));
-parkingSessionsRoutes.post("/camera-exit", requireRole("admin", "staff"), asyncHandler(cameraExit));
-parkingSessionsRoutes.post(
-  "/upload",
-  requireRole("admin", "staff"),
-  imageUpload.single("image"),
-  asyncHandler(uploadParkingImage),
-);
 parkingSessionsRoutes.post(
   "/:id/verification-request",
   requireRole("admin", "staff"),
   asyncHandler(requestVerification),
 );
 parkingSessionsRoutes.post("/:id/approve-checkout", requireRole("admin"), asyncHandler(approveCheckout));
+parkingSessionsRoutes.post("/scan-overdue", requireRole("admin"), asyncHandler(scanOverdueHandler));
+parkingSessionsRoutes.post("/:id/waive-penalty", requireRole("admin", "staff"), asyncHandler(waivePenaltyHandler));
+parkingSessionsRoutes.get("/:id/receipt", asyncHandler(getSessionReceiptHandler));
+parkingSessionsRoutes.get("/:id/receipt/pdf", asyncHandler(downloadSessionReceiptHandler));

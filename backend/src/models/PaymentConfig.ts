@@ -2,12 +2,11 @@ import mongoose, { Model, Schema } from "mongoose";
 
 export type PaymentConfigDocument = {
   _id: mongoose.Types.ObjectId;
-  bankName: string;
-  bankBin: string;
-  accountNumber: string;
-  accountName: string;
-  transferPrefix: string;
   isActive: boolean;
+  payosEnabled?: boolean;
+  payosClientId?: string;
+  payosApiKey?: string;
+  payosWebhookUrl?: string;
   updatedBy?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -15,13 +14,12 @@ export type PaymentConfigDocument = {
 
 const paymentConfigSchema = new Schema<PaymentConfigDocument>(
   {
-    bankName: { type: String, default: "Ngân hàng test" },
-    bankBin: { type: String, default: "970436" },
-    accountNumber: { type: String, default: "0000000000" },
-    accountName: { type: String, default: "IPARK" },
-    transferPrefix: { type: String, default: "IPARK" },
-    isActive: { type: Boolean, default: true, index: true },
+    isActive: { type: Boolean, required: true, default: true, index: true },
     updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    payosEnabled: { type: Boolean, default: false },
+    payosClientId: { type: String },
+    payosApiKey: { type: String },
+    payosWebhookUrl: { type: String },
   },
   { timestamps: true },
 );

@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import { Request, Response } from "express";
+import mongoose from "mongoose";
 import { randomUUID } from "node:crypto";
 import { generateSecret, generateURI, verifySync } from "otplib";
 import QRCode from "qrcode";
@@ -31,9 +32,13 @@ function googleOAuthConfigured() {
 export async function register(request: Request, response: Response) {
   const body = z
     .object({
-      name: z.string().min(2),
-      email: z.email(),
-      password: z.string().min(6),
+      name: z.string().min(2, "Họ tên phải có ít nhất 2 ký tự"),
+      email: z.email({ message: "Email không hợp lệ" }),
+      password: z.string().min(6, "Mật khẩu phải có ít nhất 6 ký tự"),
+      phone: z.string().min(10, "Số điện thoại không hợp lệ").optional(),
+      acceptTerms: z.boolean().refine((val) => val === true, {
+        message: "Bạn phải đồng ý với điều khoản sử dụng",
+      }),
     })
     .parse(request.body);
 
@@ -44,15 +49,33 @@ export async function register(request: Request, response: Response) {
     return;
   }
 
+  // Check phone uniqueness if provided
+  if (body.phone) {
+    const phoneExisted = await User.findOne({ phone: body.phone });
+    if (phoneExisted) {
+      response.status(409).json({ message: "Số điện thoại đã được sử dụng." });
+      return;
+    }
+  }
+
   const passwordHash = await bcrypt.hash(body.password, 12);
+
   const user = await User.create({
     name: body.name,
     email,
     passwordHash,
     role: "customer",
+    phone: body.phone,
+    isVerified: false,
   });
+
   const serialized = serializeUser(user);
   const token = await signSession(serialized);
+  await recordActiveSession(request, user._id);
+
+  // CU-22: Notify on registration
+  const { notifyRegistration } = await import("../services/notificationTriggers.service.js");
+  await notifyRegistration(user._id.toString(), user.name);
 
   response.cookie(cookieName, token, cookieOptions()).status(201).json({ user: serialized });
 }
@@ -94,6 +117,10 @@ export async function login(request: Request, response: Response) {
 
   const serialized = serializeUser(user);
   const token = await signSession(serialized);
+  await recordActiveSession(request, user._id);
+  // Cập nhật lastLoginAt (ghi vào DB; nếu chỉ set trong serializeUser thì không persist)
+  user.lastLoginAt = new Date();
+  await user.save();
 
   response.cookie(cookieName, token, cookieOptions()).json({ user: serialized });
 }
@@ -204,7 +231,30 @@ export async function googleCallback(request: Request, response: Response) {
 
   const serialized = serializeUser(user);
   const token = await signSession(serialized);
+  await recordActiveSession(request, user._id);
+  user.lastLoginAt = new Date();
+  await user.save();
   response.cookie(cookieName, token, cookieOptions()).redirect(env.frontendUrl);
+}
+
+/**
+ * Tạo ActiveSession record mỗi lần login thành công.
+ * TTL index trên expiresAt sẽ tự xoá khi quá hạn.
+ */
+async function recordActiveSession(
+  request: Request,
+  userId: mongoose.Types.ObjectId,
+): Promise<void> {
+  const expiresAt = new Date(Date.now() + cookieOptions().maxAge);
+  const uaHeader = request.headers["user-agent"];
+  const userAgent = (Array.isArray(uaHeader) ? uaHeader[0] : uaHeader) ?? null;
+  await ActiveSession.create({
+    userId,
+    userAgent,
+    ipAddress: request.ip ?? null,
+    expiresAt,
+    isRevoked: false,
+  });
 }
 
 export async function forgotPassword(request: Request, response: Response) {
@@ -342,6 +392,180 @@ export function logout(_request: Request, response: Response) {
   response.clearCookie(cookieName, { path: "/" }).json({ ok: true });
 }
 
-export function me(request: Request, response: Response) {
-  response.json({ user: request.user ?? null });
+export async function me(request: Request, response: Response) {
+  if (!request.user?.id) {
+    response.json({ user: null });
+    return;
+  }
+  // Đọc từ DB để có dữ liệu mới nhất (vd: cập nhật status sau khi đăng nhập).
+  const user = await User.findById(request.user.id);
+  response.json({ user: user ? serializeUser(user) : request.user });
+}
+
+export async function changePassword(request: Request, response: Response) {
+  const body = z
+    .object({
+      currentPassword: z.string().min(1),
+      newPassword: z.string().min(6),
+    })
+    .parse(request.body);
+
+  const user = await User.findById(request.user?.id);
+  if (!user) {
+    response.status(401).json({ message: "Chưa đăng nhập." });
+    return;
+  }
+
+  const valid = await bcrypt.compare(body.currentPassword, user.passwordHash);
+  if (!valid) {
+    response.status(400).json({ message: "Mật khẩu hiện tại không đúng." });
+    return;
+  }
+
+  user.passwordHash = await bcrypt.hash(body.newPassword, 12);
+  await user.save();
+  response.json({ ok: true, message: "Đã thay đổi mật khẩu." });
+}
+
+const profileUpdateSchema = z
+  .object({
+    name: z.string().min(2, "Họ tên phải có ít nhất 2 ký tự").max(100).optional(),
+    email: z.email({ message: "Email không hợp lệ" }).optional(),
+    phone: z
+      .string()
+      .trim()
+      .regex(/^[0-9+\-\s()]{6,20}$/, "Số điện thoại không hợp lệ")
+      .optional()
+      .or(z.literal(""))
+      .transform((v) => (v ? v : undefined)),
+    avatarUrl: z.string().url("URL ảnh không hợp lệ").max(2_000_000).optional(),
+  })
+  .strict();
+
+export async function updateProfile(request: Request, response: Response) {
+  const userId = request.user?.id;
+  if (!userId) {
+    response.status(401).json({ message: "Chưa đăng nhập." });
+    return;
+  }
+
+  const parsed = profileUpdateSchema.safeParse(request.body);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    response.status(400).json({ message: issue?.message ?? "Dữ liệu không hợp lệ." });
+    return;
+  }
+  const body = parsed.data;
+
+  const user = await User.findById(userId);
+  if (!user) {
+    response.status(404).json({ message: "Không tìm thấy tài khoản." });
+    return;
+  }
+
+  // Email uniqueness check
+  if (body.email && body.email.toLowerCase() !== user.email) {
+    const existed = await User.findOne({ email: body.email.toLowerCase(), _id: { $ne: user._id } });
+    if (existed) {
+      response.status(409).json({ message: "Email đã được sử dụng." });
+      return;
+    }
+    user.email = body.email.toLowerCase();
+  }
+
+  // Phone uniqueness check
+  if (body.phone && body.phone !== user.phone) {
+    const existed = await User.findOne({ phone: body.phone, _id: { $ne: user._id } });
+    if (existed) {
+      response.status(409).json({ message: "Số điện thoại đã được sử dụng." });
+      return;
+    }
+    user.phone = body.phone;
+  }
+
+  if (typeof body.name === "string") user.name = body.name.trim();
+  if (typeof body.avatarUrl === "string" && body.avatarUrl) user.avatarUrl = body.avatarUrl;
+
+  await user.save();
+
+  const serialized = serializeUser(user);
+  // Cập nhật cookie session nếu email/role đổi
+  const token = await signSession(serialized);
+  response.cookie(cookieName, token, cookieOptions()).json({ user: serialized, message: "Đã cập nhật hồ sơ." });
+}
+
+export async function resendOtp(request: Request, response: Response) {
+  const body = z.object({ email: z.email() }).parse(request.body);
+  const email = body.email.toLowerCase();
+  const user = await User.findOne({ email });
+  const otp = String(Math.floor(100000 + Math.random() * 900000));
+
+  if (user) {
+    const otpHash = await bcrypt.hash(otp, 12);
+    await OtpToken.create({
+      email,
+      otpHash,
+      purpose: "reset-password",
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+    });
+
+    await sendMail(
+      email,
+      "Mã OTP đặt lại mật khẩu iPARK (gửi lại)",
+      `Mã OTP mới của bạn là ${otp}. Mã có hiệu lực trong 5 phút.`,
+    );
+  }
+
+  response.json({
+    ok: true,
+    message: smtpConfigured()
+      ? "Đã gửi lại OTP."
+      : "SMTP chưa cấu hình, OTP demo trong phản hồi.",
+    ...(smtpConfigured() || !user ? {} : { devOtp: otp }),
+  });
+}
+
+// --- Active Sessions Management (AU-14) ---
+import { ActiveSession } from "../models/ActiveSession.js";
+
+export async function listActiveSessions(request: Request, response: Response) {
+  const sessions = await ActiveSession.find({
+    userId: request.user?.id,
+    isRevoked: false,
+    expiresAt: { $gt: new Date() },
+  }).sort({ lastActiveAt: -1 });
+
+  response.json({
+    sessions: sessions.map((s) => ({
+      id: s._id.toString(),
+      userAgent: s.userAgent,
+      ipAddress: s.ipAddress,
+      loginAt: s.loginAt.toISOString(),
+      lastActiveAt: s.lastActiveAt.toISOString(),
+      expiresAt: s.expiresAt.toISOString(),
+    })),
+  });
+}
+
+export async function revokeSession(request: Request, response: Response) {
+  const sessionId = String(request.params.id);
+  const session = await ActiveSession.findOne({
+    _id: sessionId,
+    userId: request.user?.id,
+  });
+  if (!session) {
+    response.status(404).json({ message: "Phiên không tồn tại." });
+    return;
+  }
+  session.isRevoked = true;
+  await session.save();
+  response.json({ ok: true, message: "Đã thu hồi phiên đăng nhập." });
+}
+
+export async function revokeAllSessions(request: Request, response: Response) {
+  await ActiveSession.updateMany(
+    { userId: request.user?.id, isRevoked: false },
+    { $set: { isRevoked: true } },
+  );
+  response.json({ ok: true, message: "Đã thu hồi tất cả phiên đăng nhập." });
 }

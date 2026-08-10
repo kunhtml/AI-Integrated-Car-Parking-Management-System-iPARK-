@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+  cancelTransaction,
   confirmTransaction,
   createSessionTransaction,
   listTransactions,
@@ -9,7 +10,17 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 
 export const transactionsRoutes = Router();
 
+// Public checkout endpoint (for public landing page - no auth required)
+transactionsRoutes.post("/session/:sessionId", asyncHandler(createSessionTransaction));
+
+// Check PayOS payment by order code
+transactionsRoutes.get("/check-payos/:orderCode", asyncHandler(async (req, res) => {
+  const { checkPayOSPaymentStatus } = await import("../services/payos.service.js");
+  const status = await checkPayOSPaymentStatus(String(req.params.orderCode));
+  res.json(status);
+}));
+
 transactionsRoutes.use(requireAuth);
 transactionsRoutes.get("/", asyncHandler(listTransactions));
-transactionsRoutes.post("/session/:sessionId", asyncHandler(createSessionTransaction));
 transactionsRoutes.post("/:id/confirm", requireRole("admin"), asyncHandler(confirmTransaction));
+transactionsRoutes.post("/:id/cancel", asyncHandler(cancelTransaction));

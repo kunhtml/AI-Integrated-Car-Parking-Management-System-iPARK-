@@ -1,72 +1,632 @@
 "use client";
 
-import { ReceiptText, Settings } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Bell, Pencil, ReceiptText, Settings, Trash2, X, DollarSign, Moon, Sun, Clock, AlertTriangle, Save, Plus } from "lucide-react";
 
-import { DataTable } from "@/components/ui/data-table";
 import { useParkingApp } from "@/context/parking-app-context";
+import { apiFetch } from "@/lib/client-api";
 import { currency } from "@/lib/constants";
-import { parkingConfig } from "@/lib/parking-config";
+
+type NotifTemplate = {
+  id: string;
+  name: string;
+  triggerType: string;
+  title: string;
+  content: string;
+  isActive: boolean;
+};
+
+const TRIGGER_LABELS: Record<string, string> = {
+  entry: "Xe vào",
+  exit: "Xe ra",
+  overdue: "Quá hạn",
+  low_balance: "Số dư thấp",
+  promotion: "Khuyến mãi",
+  reservation_confirmed: "Đặt chỗ xác nhận",
+  reservation_expired: "Đặt chỗ hết hạn",
+  subscription_expiring: "Gói sắp hết",
+  custom: "Tùy chỉnh",
+};
+
+interface ModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+}
+
+function Modal({ isOpen, onClose, title, children }: ModalProps) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="pricing-modal-overlay" onClick={onClose}>
+      <div className="pricing-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="pricing-modal-header">
+          <h3>{title}</h3>
+          <button className="pricing-modal-close" onClick={onClose} type="button">
+            <X size={20} />
+          </button>
+        </div>
+        <div className="pricing-modal-content">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface PricingCardProps {
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+  onEdit: () => void;
+}
+
+function PricingCard({ title, description, icon, children, onEdit }: PricingCardProps) {
+  return (
+    <div className="pricing-card">
+      <div className="pricing-card-header">
+        <div className="pricing-card-icon">{icon}</div>
+        <div className="pricing-card-title">
+          <h3>{title}</h3>
+          <p>{description}</p>
+        </div>
+        <button className="pricing-edit-btn" onClick={onEdit} type="button">
+          <Pencil size={16} />
+          <span>Chỉnh sửa</span>
+        </button>
+      </div>
+      <div className="pricing-card-body">
+        {children}
+      </div>
+    </div>
+  );
+}
 
 export function PricingView() {
   const { pricingConfigState, updatePricing } = useParkingApp();
+  const [activeTab, setActiveTab] = useState<"pricing" | "penalty" | "templates">("pricing");
+  const [templates, setTemplates] = useState<NotifTemplate[]>([]);
+  const [templatesLoaded, setTemplatesLoaded] = useState(false);
+  const [tplMsg, setTplMsg] = useState("");
+
+  // Penalty config
+  const [penaltyAmount, setPenaltyAmount] = useState<number>(0);
+  const [penaltyLoaded, setPenaltyLoaded] = useState(false);
+  const [penaltyMsg, setPenaltyMsg] = useState("");
+
+  // Modals
+  const [pricingModalOpen, setPricingModalOpen] = useState(false);
+  const [penaltyModalOpen, setPenaltyModalOpen] = useState(false);
+  const [createTplModalOpen, setCreateTplModalOpen] = useState(false);
+  const [editTplModalOpen, setEditTplModalOpen] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<NotifTemplate | null>(null);
+
+  // Form states
+  const [pricingForm, setPricingForm] = useState({
+    dayRate: 0,
+    nightRate: 0,
+    dayStartHour: 6,
+    nightStartHour: 18,
+  });
+  const [penaltyForm, setPenaltyForm] = useState({ amount: 0 });
+  const [tplForm, setTplForm] = useState({
+    name: "",
+    triggerType: "custom",
+    title: "",
+    content: "",
+  });
+
+  useEffect(() => {
+    if (pricingConfigState) {
+      setPricingForm({
+        dayRate: pricingConfigState.dayRate || 0,
+        nightRate: pricingConfigState.nightRate || 0,
+        dayStartHour: pricingConfigState.dayStartHour || 6,
+        nightStartHour: pricingConfigState.nightStartHour || 18,
+      });
+    }
+  }, [pricingConfigState]);
+
+  async function loadPenaltyConfig() {
+    const response = await apiFetch("/penalties/config");
+    if (response.ok) {
+      const data = await response.json();
+      const overLine = (data.configs ?? []).find(
+        (c: { violationType: string; amount: number }) => c.violationType === "over_line",
+      );
+      setPenaltyAmount(overLine?.amount ?? 0);
+      setPenaltyForm({ amount: overLine?.amount ?? 0 });
+      setPenaltyLoaded(true);
+    }
+  }
+
+  async function handleSavePricing(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    
+    const success = await updatePricing(formData);
+    if (success) {
+      setPricingModalOpen(false);
+    }
+  }
+
+  async function handleSavePenalty(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    const amount = Number(form.get("amount") || 0);
+    
+    const response = await apiFetch("/penalties/config", {
+      method: "PUT",
+      body: JSON.stringify({ violationType: "over_line", label: "Đỗ lấn vạch", amount }),
+    });
+    const data = await response.json();
+    if (response.ok) {
+      setPenaltyAmount(amount);
+      setPenaltyMsg("Đã lưu giá phạt.");
+      setTimeout(() => setPenaltyMsg(""), 3000);
+    } else {
+      setPenaltyMsg(data.message || "Lỗi.");
+    }
+    setPenaltyModalOpen(false);
+  }
+
+  async function loadTemplates() {
+    const response = await apiFetch("/notification-templates");
+    if (response.ok) {
+      const data = await response.json();
+      setTemplates(data.templates);
+      setTemplatesLoaded(true);
+    }
+  }
+
+  async function handleCreateTemplate(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    const body = {
+      name: String(form.get("name") || ""),
+      triggerType: String(form.get("triggerType") || "custom"),
+      title: String(form.get("title") || ""),
+      content: String(form.get("content") || ""),
+    };
+    const response = await apiFetch("/notification-templates", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    const data = await response.json();
+    if (response.ok) {
+      setTemplates((prev) => [...prev, data.template]);
+      setTplMsg("Đã tạo mẫu thông báo.");
+      setCreateTplModalOpen(false);
+      e.currentTarget.reset();
+    } else {
+      setTplMsg(data.message || "Lỗi.");
+    }
+  }
+
+  async function updateTemplate(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!selectedTemplate) return;
+    
+    const form = new FormData(e.currentTarget);
+    const body = {
+      name: String(form.get("name") || ""),
+      triggerType: String(form.get("triggerType") || "custom"),
+      title: String(form.get("title") || ""),
+      content: String(form.get("content") || ""),
+    };
+    const response = await apiFetch(`/notification-templates/${selectedTemplate.id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+    const data = await response.json();
+    if (response.ok) {
+      setTemplates((prev) => prev.map((t) => (t.id === selectedTemplate.id ? data.template : t)));
+      setTplMsg("Đã cập nhật mẫu thông báo.");
+      setEditTplModalOpen(false);
+    } else {
+      setTplMsg(data.message || "Lỗi.");
+    }
+  }
+
+  async function deleteTemplate(id: string) {
+    const response = await apiFetch(`/notification-templates/${id}`, { method: "DELETE" });
+    if (response.ok) {
+      setTemplates((prev) => prev.filter((t) => t.id !== id));
+      setTplMsg("Đã xóa mẫu.");
+    }
+  }
+
+  function openEditTemplate(tpl: NotifTemplate) {
+    setSelectedTemplate(tpl);
+    setTplForm({
+      name: tpl.name,
+      triggerType: tpl.triggerType,
+      title: tpl.title,
+      content: tpl.content,
+    });
+    setEditTplModalOpen(true);
+  }
 
   return (
-    <section className="content-grid">
-      <div className="panel">
-        <div className="panel-heading">
-          <div>
-            <p>Admin</p>
-            <h2>Cấu hình bảng giá</h2>
+    <section className="pricing-page">
+      {/* Page Header */}
+      <div className="pricing-header">
+        <div className="header-left">
+          <div className="header-icon">
+            <ReceiptText size={24} />
           </div>
-          <Settings size={22} />
+          <div className="header-text">
+            <h1>Cấu hình hệ thống</h1>
+            <p>Quản lý bảng giá và thông báo</p>
+          </div>
         </div>
-        <form className="stack-form" key={pricingConfigState.updatedAt || pricingConfigState.id} onSubmit={updatePricing}>
-          <label>
-            Phút miễn phí
-            <input defaultValue={pricingConfigState.freeMinutes} min={0} name="freeMinutes" required type="number" />
-          </label>
-          <label>
-            Giá theo giờ
-            <input defaultValue={pricingConfigState.hourlyRate} min={0} name="hourlyRate" required type="number" />
-          </label>
-          <label>
-            Giá qua đêm
-            <input defaultValue={pricingConfigState.overnightRate} min={0} name="overnightRate" required type="number" />
-          </label>
-          <label>
-            Gói tháng
-            <input defaultValue={pricingConfigState.monthlyRate} min={0} name="monthlyRate" required type="number" />
-          </label>
-          <label>
-            Phạt quá hạn
-            <input defaultValue={pricingConfigState.overdueFineRate} min={0} name="overdueFineRate" required type="number" />
-          </label>
-          <button className="full-button" type="submit">
-            <Settings size={18} />
-            Lưu bảng giá
-          </button>
+      </div>
+
+      {/* Tabs */}
+      <div className="pricing-tabs">
+        <button
+          className={`pricing-tab ${activeTab === "pricing" ? "active" : ""}`}
+          onClick={() => setActiveTab("pricing")}
+          type="button"
+        >
+          <DollarSign size={18} />
+          <span>Bảng giá</span>
+        </button>
+        <button
+          className={`pricing-tab ${activeTab === "penalty" ? "active" : ""}`}
+          onClick={() => {
+            setActiveTab("penalty");
+            if (!penaltyLoaded) loadPenaltyConfig();
+          }}
+          type="button"
+        >
+          <AlertTriangle size={18} />
+          <span>Giá phạt</span>
+        </button>
+        <button
+          className={`pricing-tab ${activeTab === "templates" ? "active" : ""}`}
+          onClick={() => {
+            setActiveTab("templates");
+            if (!templatesLoaded) loadTemplates();
+          }}
+          type="button"
+        >
+          <Bell size={18} />
+          <span>Mẫu thông báo</span>
+        </button>
+      </div>
+
+      {/* Pricing Tab */}
+      {activeTab === "pricing" && (
+        <div className="pricing-content">
+          <div className="pricing-grid">
+            {/* Day Rate Card */}
+            <PricingCard
+              title="Giá ban ngày"
+              description="Áp dụng trong khung giờ ngày"
+              icon={<Sun size={24} />}
+              onEdit={() => setPricingModalOpen(true)}
+            >
+              <div className="pricing-value-display">
+                <span className="pricing-currency">{currency.format(pricingConfigState.dayRate || 0)}</span>
+                <span className="pricing-unit">/ ngày</span>
+              </div>
+              <div className="pricing-time-range">
+                <Clock size={14} />
+                <span>{pricingConfigState.dayStartHour}:00 - {pricingConfigState.nightStartHour}:00</span>
+              </div>
+            </PricingCard>
+
+            {/* Night Rate Card */}
+            <PricingCard
+              title="Giá ban đêm"
+              description="Áp dụng trong khung giờ đêm"
+              icon={<Moon size={24} />}
+              onEdit={() => setPricingModalOpen(true)}
+            >
+              <div className="pricing-value-display">
+                <span className="pricing-currency">{currency.format(pricingConfigState.nightRate || 0)}</span>
+                <span className="pricing-unit">/ ngày</span>
+              </div>
+              <div className="pricing-time-range">
+                <Clock size={14} />
+                <span>{pricingConfigState.nightStartHour}:00 - {pricingConfigState.dayStartHour}:00 (ngày hôm sau)</span>
+              </div>
+            </PricingCard>
+          </div>
+
+          {/* Quick Info */}
+          <div className="pricing-info-card">
+            <h4><Settings size={18} /> Thông tin bảng giá</h4>
+            <div className="pricing-info-grid">
+              <div className="pricing-info-item">
+                <span className="pricing-info-label">Khung giờ ngày</span>
+                <span className="pricing-info-value">{pricingConfigState.dayStartHour}:00 - {pricingConfigState.nightStartHour}:00</span>
+              </div>
+              <div className="pricing-info-item">
+                <span className="pricing-info-label">Khung giờ đêm</span>
+                <span className="pricing-info-value">{pricingConfigState.nightStartHour}:00 - {pricingConfigState.dayStartHour}:00</span>
+              </div>
+              <div className="pricing-info-item">
+                <span className="pricing-info-label">Giá ngày</span>
+                <span className="pricing-info-value">{currency.format(pricingConfigState.dayRate || 0)}</span>
+              </div>
+              <div className="pricing-info-item">
+                <span className="pricing-info-label">Giá đêm</span>
+                <span className="pricing-info-value">{currency.format(pricingConfigState.nightRate || 0)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Penalty Tab */}
+      {activeTab === "penalty" && (
+        <div className="pricing-content">
+          <div className="penalty-card">
+            <div className="penalty-header">
+              <div className="penalty-icon">
+                <AlertTriangle size={32} />
+              </div>
+              <div className="penalty-info">
+                <h3>Phạt đỗ lấn vạch</h3>
+                <p>Áp dụng khi phát hiện xe đỗ lấn sang vị trí khác</p>
+              </div>
+              <button className="pricing-edit-btn" onClick={() => setPenaltyModalOpen(true)} type="button">
+                <Pencil size={16} />
+                <span>Chỉnh sửa</span>
+              </button>
+            </div>
+            <div className="penalty-value">
+              <span className="penalty-amount">{currency.format(penaltyAmount)}</span>
+              <span className="penalty-label">Mức phạt</span>
+            </div>
+            {penaltyMsg && <div className="penalty-message">{penaltyMsg}</div>}
+          </div>
+        </div>
+      )}
+
+      {/* Templates Tab */}
+      {activeTab === "templates" && (
+        <div className="pricing-content">
+          <div className="templates-header">
+            <h3>Mẫu thông báo</h3>
+            <button className="create-template-btn" onClick={() => setCreateTplModalOpen(true)} type="button">
+              <Plus size={18} />
+              <span>Tạo mẫu mới</span>
+            </button>
+          </div>
+
+          {tplMsg && <div className="template-message">{tplMsg}</div>}
+
+          <div className="templates-grid">
+            {templates.map((tpl) => (
+              <div key={tpl.id} className="template-card">
+                <div className="template-card-header">
+                  <div className="template-trigger">
+                    <Bell size={14} />
+                    <span>{TRIGGER_LABELS[tpl.triggerType] || tpl.triggerType}</span>
+                  </div>
+                  <span className={`template-status ${tpl.isActive ? "active" : ""}`}>
+                    {tpl.isActive ? "Bật" : "Tắt"}
+                  </span>
+                </div>
+                <h4 className="template-name">{tpl.name}</h4>
+                <p className="template-title">{tpl.title}</p>
+                <p className="template-content">{tpl.content.slice(0, 100)}...</p>
+                <div className="template-actions">
+                  <button className="template-edit-btn" onClick={() => openEditTemplate(tpl)} type="button">
+                    <Pencil size={14} />
+                    <span>Sửa</span>
+                  </button>
+                  <button className="template-delete-btn" onClick={() => deleteTemplate(tpl.id)} type="button">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+            {templates.length === 0 && templatesLoaded && (
+              <div className="templates-empty">
+                <Bell size={48} strokeWidth={1} />
+                <p>Chưa có mẫu thông báo nào</p>
+                <span>Tạo mẫu mới để gửi thông báo tự động</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Pricing Edit Modal */}
+      <Modal isOpen={pricingModalOpen} onClose={() => setPricingModalOpen(false)} title="Chỉnh sửa bảng giá">
+        <form className="pricing-edit-form" onSubmit={handleSavePricing}>
+          <div className="form-section">
+            <h4><Sun size={18} /> Giá ban ngày</h4>
+            <div className="form-row">
+              <label className="form-label">
+                <span>Giá (VND/ngày)</span>
+                <input
+                  name="dayRate"
+                  type="number"
+                  min={0}
+                  value={pricingForm.dayRate}
+                  onChange={(e) => setPricingForm({ ...pricingForm, dayRate: Number(e.target.value) })}
+                  required
+                />
+              </label>
+              <label className="form-label">
+                <span>Giờ bắt đầu ngày</span>
+                <input
+                  name="dayStartHour"
+                  type="number"
+                  min={0}
+                  max={23}
+                  value={pricingForm.dayStartHour}
+                  onChange={(e) => setPricingForm({ ...pricingForm, dayStartHour: Number(e.target.value) })}
+                  required
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="form-section">
+            <h4><Moon size={18} /> Giá ban đêm</h4>
+            <div className="form-row">
+              <label className="form-label">
+                <span>Giá (VND/ngày)</span>
+                <input
+                  name="nightRate"
+                  type="number"
+                  min={0}
+                  value={pricingForm.nightRate}
+                  onChange={(e) => setPricingForm({ ...pricingForm, nightRate: Number(e.target.value) })}
+                  required
+                />
+              </label>
+              <label className="form-label">
+                <span>Giờ bắt đầu đêm</span>
+                <input
+                  name="nightStartHour"
+                  type="number"
+                  min={0}
+                  max={23}
+                  value={pricingForm.nightStartHour}
+                  onChange={(e) => setPricingForm({ ...pricingForm, nightStartHour: Number(e.target.value) })}
+                  required
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="form-actions">
+            <button className="cancel-btn" type="button" onClick={() => setPricingModalOpen(false)}>
+              Hủy
+            </button>
+            <button className="save-btn" type="submit">
+              <Save size={16} />
+              <span>Lưu thay đổi</span>
+            </button>
+          </div>
         </form>
-      </div>
-      <div className="panel wide">
-        <div className="panel-heading">
-          <div>
-            <p>Bảng giá hiện tại</p>
-            <h2>Áp dụng khi checkout</h2>
+      </Modal>
+
+      {/* Penalty Edit Modal */}
+      <Modal isOpen={penaltyModalOpen} onClose={() => setPenaltyModalOpen(false)} title="Chỉnh sửa giá phạt">
+        <form className="pricing-edit-form" onSubmit={handleSavePenalty}>
+          <div className="penalty-form-section">
+            <div className="penalty-form-icon">
+              <AlertTriangle size={48} />
+            </div>
+            <h4>Phạt đỗ lấn vạch</h4>
+            <p>Tiền phạt khi xe đỗ lấn sang vị trí khác</p>
+            <label className="form-label full">
+              <span>Mức phạt (VND)</span>
+              <input
+                name="amount"
+                type="number"
+                min={0}
+                step={1000}
+                defaultValue={penaltyForm.amount}
+                required
+              />
+            </label>
           </div>
-          <ReceiptText size={22} />
-        </div>
-        <DataTable
-          headers={["Hạng mục", "Giá trị"]}
-          rows={[
-            ["Miễn phí đầu", `${pricingConfigState.freeMinutes} phút`],
-            ["Theo giờ", currency.format(pricingConfigState.hourlyRate)],
-            ["Qua đêm", currency.format(pricingConfigState.overnightRate)],
-            ["Gói tháng", currency.format(pricingConfigState.monthlyRate)],
-            ["Phạt quá hạn", currency.format(pricingConfigState.overdueFineRate)],
-            ["Sức chứa", `${parkingConfig.totalCapacity} chỗ, khu A/B/C`],
-          ]}
-        />
-      </div>
+
+          <div className="form-actions">
+            <button className="cancel-btn" type="button" onClick={() => setPenaltyModalOpen(false)}>
+              Hủy
+            </button>
+            <button className="save-btn" type="submit">
+              <Save size={16} />
+              <span>Lưu thay đổi</span>
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Create Template Modal */}
+      <Modal isOpen={createTplModalOpen} onClose={() => setCreateTplModalOpen(false)} title="Tạo mẫu thông báo mới">
+        <form className="pricing-edit-form" onSubmit={handleCreateTemplate}>
+          <label className="form-label">
+            <span>Tên mẫu</span>
+            <input name="name" placeholder="VD: ThongBaoXeVao" required />
+          </label>
+          <label className="form-label">
+            <span>Loại trigger</span>
+            <select name="triggerType" required>
+              {Object.entries(TRIGGER_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="form-label">
+            <span>Tiêu đề</span>
+            <input name="title" placeholder="Tiêu đề thông báo..." required />
+          </label>
+          <label className="form-label full">
+            <span>Nội dung</span>
+            <textarea
+              name="content"
+              placeholder="Nội dung thông báo... (hỗ trợ biến: {{plate}}, {{fee}}, {{name}})"
+              required
+              rows={4}
+            />
+          </label>
+
+          <div className="form-actions">
+            <button className="cancel-btn" type="button" onClick={() => setCreateTplModalOpen(false)}>
+              Hủy
+            </button>
+            <button className="save-btn" type="submit">
+              <Plus size={16} />
+              <span>Tạo mẫu</span>
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit Template Modal */}
+      <Modal isOpen={editTplModalOpen} onClose={() => setEditTplModalOpen(false)} title="Sửa mẫu thông báo">
+        <form className="pricing-edit-form" onSubmit={updateTemplate}>
+          <label className="form-label">
+            <span>Tên mẫu</span>
+            <input name="name" defaultValue={selectedTemplate?.name} required />
+          </label>
+          <label className="form-label">
+            <span>Loại trigger</span>
+            <select name="triggerType" defaultValue={selectedTemplate?.triggerType} required>
+              {Object.entries(TRIGGER_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="form-label">
+            <span>Tiêu đề</span>
+            <input name="title" defaultValue={selectedTemplate?.title} required />
+          </label>
+          <label className="form-label full">
+            <span>Nội dung</span>
+            <textarea
+              name="content"
+              defaultValue={selectedTemplate?.content}
+              required
+              rows={4}
+            />
+          </label>
+
+          <div className="form-actions">
+            <button className="cancel-btn" type="button" onClick={() => setEditTplModalOpen(false)}>
+              Hủy
+            </button>
+            <button className="save-btn" type="submit">
+              <Save size={16} />
+              <span>Lưu thay đổi</span>
+            </button>
+          </div>
+        </form>
+      </Modal>
     </section>
   );
 }

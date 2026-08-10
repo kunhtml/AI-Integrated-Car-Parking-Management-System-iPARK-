@@ -1,212 +1,411 @@
 "use client";
 
-import { CreditCard, Package, QrCode, Settings, Wallet } from "lucide-react";
+import { useState, useEffect } from "react";
+import { CreditCard, ExternalLink, Eye, Loader2, RefreshCw, Wallet, X } from "lucide-react";
 
 import { DataTable } from "@/components/ui/data-table";
 import { useParkingApp } from "@/context/parking-app-context";
+import { apiFetch } from "@/lib/client-api";
 import { currency } from "@/lib/constants";
-import { transactions } from "@/lib/mock-data";
 import type { TransactionItem } from "@/types";
+
+function StatusBadge({
+  status,
+  received,
+  total,
+}: {
+  status: string;
+  received?: number;
+  total?: number;
+}) {
+  if (status === "fully_paid" || status === "paid")
+    return <span className="badge success">Đã thanh toán</span>;
+  if (status === "partial_paid")
+    return (
+      <span className="badge warning">
+        Một phần
+        {received !== undefined && total !== undefined && total > 0
+          ? <>: {received.toLocaleString("vi-VN")}đ / {total.toLocaleString("vi-VN")}đ</>
+          : ""}
+      </span>
+    );
+  if (status === "unpaid")
+    return <span className="badge danger">Chưa thanh toán</span>;
+  if (status === "pending")
+    return <span className="badge warning">Chờ thanh toán</span>;
+  if (status === "failed")
+    return <span className="badge danger">Thất bại</span>;
+  if (status === "cancelled")
+    return <span className="badge danger">Đã hủy</span>;
+  return <span className="badge">{status}</span>;
+}
+
+function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", paddingBottom: "8px", borderBottom: "1px solid var(--border, #eee)" }}>
+      <span style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>{label}</span>
+      <span style={{ fontWeight: 500, fontSize: "0.9rem", textAlign: "right", wordBreak: "break-all" }}>{value}</span>
+    </div>
+  );
+}
 
 export function WalletView() {
   const {
     currentUser,
-    paymentConfigState,
-    pricingConfigState,
+    sessions,
+    setSessions,
     transactionList,
-    membershipActive,
-    membershipExpiresAt,
-    updatePaymentConfig,
+    setTransactionList,
     confirmTransaction,
-    topUpWallet,
-    payWithWallet,
-    purchaseParkingPackage,
-    activateMembership,
-    paymentStatusLabel,
   } = useParkingApp();
 
-  if (!currentUser) {
-    return null;
+  const [checkingSessionId, setCheckingSessionId] = useState<string | null>(null);
+  const [sessionCheckResult, setSessionCheckResult] = useState<{ id: string; status: string } | null>(null);
+
+  // Modal chi tiết giao dịch
+  const [detailTransaction, setDetailTransaction] = useState<(typeof transactionList)[0] | null>(null);
+
+  // Lấy phiên chưa thanh toán của user hiện tại
+  const unpaidSession = sessions.find(
+    (s) =>
+      s.status !== "Đã hủy" &&
+      s.ownerEmail?.toLowerCase() === currentUser?.email?.toLowerCase() &&
+      s.paymentStatus !== "fully_paid" &&
+      (s.fee || 0) - (s.paidAmount || 0) > 0,
+  );
+
+  async function handleCheckPaymentStatus() {
+    if (!unpaidSession) return;
+    setCheckingSessionId(unpaidSession.id);
+    setSessionCheckResult(null);
+    try {
+      const r = await apiFetch(`/public/session/${unpaidSession.id}/payment-status`);
+      const d = await r.json();
+      setSessionCheckResult({ id: unpaidSession.id, status: d.paymentStatus });
+    } catch {
+      setSessionCheckResult({ id: unpaidSession.id, status: "error" });
+    } finally {
+      setCheckingSessionId(null);
+    }
   }
 
-  const displayTransactions: TransactionItem[] = transactionList.length
-    ? transactionList
-    : transactions.map((item) => ({
-        id: item.id,
-        method: item.method,
-        amount: item.amount,
-        status: item.status === "Thành công" ? "paid" : "pending",
-        content: item.id,
-        createdAt: item.time,
-      }));
+  // Auto-poll payment status when checking
+  useEffect(() => {
+    if (!sessionCheckResult || !unpaidSession) return;
+    if (sessionCheckResult.status !== "fully_paid") return;
+    const interval = setInterval(async () => {
+      try {
+        const r = await apiFetch(`/public/session/${unpaidSession.id}/payment-status`);
+        const d = await r.json();
+        if (d.paymentStatus === "fully_paid") {
+          setSessionCheckResult({ id: unpaidSession.id, status: d.paymentStatus });
+          clearInterval(interval);
+        }
+      } catch { /* silent */ }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [sessionCheckResult, unpaidSession?.id]);
 
-  const invoices = displayTransactions.filter((item) => item.status === "paid");
+  // Auto-reload sessions every 30s to keep unpaid/partial_paid status fresh
+  useEffect(() => {
+    if (!currentUser) return;
+    const interval = setInterval(async () => {
+      try {
+        const r = await apiFetch("/parking-sessions");
+        if (r.ok) {
+          const d = await r.json();
+          if (d.sessions && setSessions) {
+            setSessions(d.sessions);
+          }
+        }
+      } catch { /* silent */ }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [currentUser, setSessions]);
+
+  if (!currentUser) return null;
+
+  const rows = transactionList.map((item) => {
+    const isTopUp = item.content?.startsWith("TOPUP") ?? false;
+    const hasPayOSLink = !!item.payosCheckoutUrl;
+
+    return [
+      // Thời gian
+      <span key={`${item.id}-t`} className="muted-cell" style={{ fontSize: "0.8rem" }}>
+        {new Date(item.createdAt).toLocaleString("vi-VN", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })}
+      </span>,
+
+      // Biển số
+      <span key={`${item.id}-p`} style={{ fontWeight: 600 }}>
+        {item.plate || (isTopUp ? "—" : "—")}
+      </span>,
+
+      // Chủ xe
+      item.ownerName || "—",
+
+      // Email
+      <span key={`${item.id}-e`} className="muted-cell" style={{ fontSize: "0.8rem" }}>
+        {item.ownerEmail || "—"}
+      </span>,
+
+      // Slot
+      <span key={`${item.id}-s`} className="muted-cell" style={{ fontSize: "0.8rem" }}>
+        {item.slot || "—"}
+      </span>,
+
+      // Số tiền
+      currency.format(item.amount),
+
+      // Phương thức
+      <span key={`${item.id}-m`} className="muted-cell" style={{ fontSize: "0.8rem" }}>
+        {item.method === "payos" ? "PayOS" : item.method === "cash" ? "Tiền mặt" : item.method}
+      </span>,
+
+      // Trạng thái giao dịch
+      <StatusBadge
+        key={`${item.id}-st`}
+        status={item.sessionPaymentStatus || item.status}
+        received={item.sessionPaidAmount}
+        total={item.sessionFee}
+      />,
+
+      // Thao tác
+      (() => {
+        if (item.status === "pending") {
+          return (
+            <div className="inline-actions" key={item.id}>
+              {hasPayOSLink && (
+                <a
+                  className="small-button"
+                  href={item.payosCheckoutUrl}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  <ExternalLink size={14} /> Mở link
+                </a>
+              )}
+              {currentUser.role === "customer" && (
+                <button
+                  className="small-button"
+                  onClick={() => setDetailTransaction(item)}
+                  type="button"
+                >
+                  <Eye size={14} />
+                </button>
+              )}
+              {currentUser.role === "admin" && (
+                <button
+                  className="small-button"
+                  onClick={async () => {
+                    if (window.confirm("Hủy giao dịch này? Giao dịch sẽ bị xóa hoàn toàn.")) {
+                      try {
+                        await apiFetch(`/transactions/${item.id}/cancel`, { method: "POST" });
+                        // Reload transactions
+                        const r = await apiFetch("/transactions");
+                        if (r.ok) {
+                          const d = await r.json();
+                          setTransactionList(d.transactions ?? []);
+                        }
+                      } catch { /* silent */ }
+                    }
+                  }}
+                  style={{ color: "#ef4444" }}
+                  type="button"
+                >
+                  <X size={14} /> Hủy
+                </button>
+              )}
+              {currentUser.role === "admin" && !isTopUp && (
+                <button
+                  className="small-button"
+                  onClick={() => confirmTransaction(item.id)}
+                  type="button"
+                >
+                  Xác nhận
+                </button>
+              )}
+            </div>
+          );
+        }
+        if (item.status === "paid") {
+          return (
+            <div className="inline-actions" key={item.id}>
+              <span style={{ color: "var(--color-success)" }}>✓</span>
+              {currentUser.role === "customer" && (
+                <button
+                  className="small-button"
+                  onClick={() => setDetailTransaction(item)}
+                  type="button"
+                >
+                  <Eye size={14} />
+                </button>
+              )}
+            </div>
+          );
+        }
+        return (
+          <div className="inline-actions" key={item.id}>
+            {currentUser.role === "customer" && (
+              <button
+                className="small-button"
+                onClick={() => setDetailTransaction(item)}
+                type="button"
+              >
+                <Eye size={14} />
+              </button>
+            )}
+            {currentUser.role !== "customer" && "—"}
+          </div>
+        );
+      })(),
+    ];
+  });
 
   return (
     <section className="content-grid">
-      <div className="panel">
-        <div className="panel-heading">
-          <div>
-            <p>Số dư ví</p>
-            <h2>{currency.format(currentUser.wallet || 0)}</h2>
-          </div>
-          <Wallet size={22} />
-        </div>
-        <div className="profile-lines">
-          <span>Gói thành viên: {membershipActive ? `Đang hoạt động đến ${membershipExpiresAt}` : "Chưa kích hoạt"}</span>
-          <span>Giá gói tháng: {currency.format(pricingConfigState.monthlyRate)}</span>
-        </div>
-      </div>
-
-      {currentUser.role !== "admin" && (
-        <>
-          <div className="panel">
-            <div className="panel-heading">
-              <div>
-                <p>Nạp ví</p>
-                <h2>Top Up Wallet</h2>
-              </div>
-              <CreditCard size={22} />
+      {/* Session chưa thanh toán */}
+      {currentUser.role === "customer" && unpaidSession && (
+        <div className="panel">
+          <div className="panel-heading">
+            <div>
+              <p>Thanh toán</p>
+              <h2>Phiên chưa thanh toán</h2>
             </div>
-            <form className="stack-form" onSubmit={topUpWallet}>
-              <label>
-                Số tiền nạp (VND)
-                <input min={10000} name="amount" placeholder="100000" required type="number" />
-              </label>
-              <button className="full-button" type="submit">
-                Nạp tiền vào ví
-              </button>
-            </form>
+            <Wallet size={22} />
+          </div>
+          <div style={{ marginBottom: "16px" }}>
+            <div style={{ display: "flex", gap: "12px", alignItems: "center", marginBottom: "12px", flexWrap: "wrap" }}>
+              <span style={{ fontWeight: 600, fontSize: "1.1rem" }}>{unpaidSession.plate}</span>
+              <span className="badge warning">
+                {unpaidSession.paymentStatus === "partial_paid" ? "Thanh toán một phần" : "Chưa thanh toán"}
+              </span>
+              {unpaidSession.status === "Đã hoàn thành" && (
+                <span className="badge danger">Đã ra bãi · còn nợ phí</span>
+              )}
+              <span className="muted-cell" style={{ fontSize: "0.85rem" }}>
+                {unpaidSession.slot} · {unpaidSession.checkInDate} {unpaidSession.checkIn}
+              </span>
+            </div>
+            {unpaidSession.paymentStatus === "partial_paid" && unpaidSession.paidAmount !== undefined ? (
+              <p style={{ color: "var(--warning, #fbbf24)", fontWeight: 700, fontSize: "1.1rem" }}>
+                Còn thiếu: {currency.format(Math.max(0, (unpaidSession.fee || 0) - unpaidSession.paidAmount))}
+              </p>
+            ) : unpaidSession.fee > 0 ? (
+              <p style={{ color: "var(--primary)", fontWeight: 700, fontSize: "1.2rem" }}>
+                {currency.format(unpaidSession.fee)}
+              </p>
+            ) : null}
           </div>
 
-          <div className="panel">
-            <div className="panel-heading">
-              <div>
-                <p>Gói gửi xe</p>
-                <h2>Mua / gia hạn gói tháng</h2>
-              </div>
-              <Package size={22} />
+          {/* Payment Link */}
+          {(unpaidSession as unknown as { payosCheckoutUrl?: string }).payosCheckoutUrl && (
+            <div style={{ marginBottom: "16px" }}>
+              <a className="full-button" href={(unpaidSession as unknown as { payosCheckoutUrl: string }).payosCheckoutUrl} rel="noreferrer" target="_blank" type="button">
+                <ExternalLink size={16} /> Mở link thanh toán PayOS
+              </a>
             </div>
-            <form className="stack-form" onSubmit={purchaseParkingPackage}>
-              <label>
-                Số tháng
-                <select defaultValue="1" name="months">
-                  <option value="1">1 tháng</option>
-                  <option value="3">3 tháng</option>
-                  <option value="6">6 tháng</option>
-                  <option value="12">12 tháng</option>
-                </select>
-              </label>
-              <button className="full-button" type="submit">
-                Mua / gia hạn gói
-              </button>
-              <button className="full-button" onClick={activateMembership} type="button">
-                Kích hoạt gói thành viên
-              </button>
-            </form>
+          )}
+
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button className="small-button" onClick={handleCheckPaymentStatus} disabled={checkingSessionId === unpaidSession.id} type="button">
+              {checkingSessionId === unpaidSession.id ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              Kiểm tra thanh toán
+            </button>
           </div>
-        </>
+
+          {/* Kết quả check */}
+          {sessionCheckResult && (
+            <div style={{
+              marginTop: "12px",
+              padding: "10px 14px",
+              borderRadius: "8px",
+              background: sessionCheckResult.status === "fully_paid" ? "rgba(34,197,94,0.1)" : "rgba(251,191,36,0.1)",
+              color: sessionCheckResult.status === "fully_paid" ? "#22c55e" : "#fbbf24",
+              fontSize: "0.9rem",
+            }}>
+              {sessionCheckResult.status === "fully_paid"
+                ? "Thanh toán thành công!"
+                : sessionCheckResult.status === "partial_paid"
+                  ? "Thanh toán một phần."
+                  : "Chưa nhận được thanh toán."}
+            </div>
+          )}
+        </div>
       )}
 
-      <div className="panel">
-        <div className="panel-heading">
-          <div>
-            <p>VietQR</p>
-            <h2>{paymentConfigState.bankName}</h2>
-          </div>
-          <QrCode size={22} />
-        </div>
-        {currentUser.role === "admin" ? (
-          <form className="stack-form" key={paymentConfigState.id} onSubmit={updatePaymentConfig}>
-            <label>
-              Ngân hàng
-              <input defaultValue={paymentConfigState.bankName} name="bankName" required />
-            </label>
-            <label>
-              BIN ngân hàng
-              <input defaultValue={paymentConfigState.bankBin} name="bankBin" required />
-            </label>
-            <label>
-              Số tài khoản
-              <input defaultValue={paymentConfigState.accountNumber} name="accountNumber" required />
-            </label>
-            <label>
-              Chủ tài khoản
-              <input defaultValue={paymentConfigState.accountName} name="accountName" required />
-            </label>
-            <label>
-              Tiền tố nội dung
-              <input defaultValue={paymentConfigState.transferPrefix} name="transferPrefix" required />
-            </label>
-            <button className="full-button" type="submit">
-              <Settings size={18} />
-              Lưu VietQR
-            </button>
-          </form>
-        ) : (
-          <div className="profile-lines">
-            <span>Thanh toán online qua VietQR hoặc ví nội bộ.</span>
-            <span>Nội dung chuyển khoản theo từng phiên gửi xe.</span>
-          </div>
-        )}
-      </div>
-
-      <div className="panel wide">
+      {/* Transaction history */}
+      <div className="panel full">
         <div className="panel-heading">
           <div>
             <p>Giao dịch</p>
-            <h2>Trạng thái thanh toán & QR điện tử</h2>
+            <h2>Lịch sử thanh toán</h2>
           </div>
           <CreditCard size={22} />
         </div>
-        <DataTable
-          headers={["Mã", "Phương thức", "Số tiền", "Trạng thái", "Nội dung", "QR", "Thao tác"]}
-          rows={displayTransactions.map((item) => [
-            item.id,
-            item.method,
-            currency.format(item.amount),
-            paymentStatusLabel(item.status),
-            item.content,
-            item.qrUrl ? (
-              <a className="small-button" href={item.qrUrl} key={`${item.id}-qr`} rel="noreferrer" target="_blank">
-                Xem QR
-              </a>
-            ) : (
-              "Không có"
-            ),
-            item.status === "pending" && currentUser.role === "admin" ? (
-              <button className="small-button" key={item.id} onClick={() => confirmTransaction(item.id)} type="button">
-                Xác nhận
-              </button>
-            ) : item.status === "pending" && currentUser.role !== "admin" ? (
-              <button className="small-button" key={item.id} onClick={() => payWithWallet(item.id)} type="button">
-                Thanh toán ví
-              </button>
-            ) : (
-              "OK"
-            ),
-          ])}
-        />
+        {rows.length === 0 ? (
+          <p className="muted-cell" style={{ padding: "1rem 0" }}>Chưa có giao dịch nào.</p>
+        ) : (
+          <DataTable
+            headers={["Thời gian", "Biển số", "Chủ xe", "Email", "Slot", "Số tiền", "PT", "Trạng thái", "Thao tác"]}
+            rows={rows}
+          />
+        )}
       </div>
 
-      <div className="panel wide">
-        <div className="panel-heading">
-          <div>
-            <p>Hóa đơn</p>
-            <h2>Biên lai đã thanh toán</h2>
+      {/* Modal chi tiết giao dịch */}
+      {detailTransaction && (
+        <div
+          onClick={() => setDetailTransaction(null)}
+          style={{
+            position: "fixed", inset: 0, background: "rgba(255,255,255,0.85)",
+            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "var(--bg-primary, #fff)", borderRadius: "16px", padding: "24px",
+              width: "min(420px, 92vw)", maxHeight: "90vh", overflowY: "auto", textAlign: "left",
+              boxShadow: "0 12px 40px rgba(0,0,0,0.3)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <h3 style={{ margin: 0, fontSize: "1.1rem" }}>Chi tiết giao dịch</h3>
+              <button onClick={() => setDetailTransaction(null)} type="button" style={{ background: "none", border: "none", fontSize: "1.4rem", cursor: "pointer", color: "var(--text-muted)", lineHeight: 1 }}>✕</button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              <DetailRow label="Mã giao dịch" value={detailTransaction.id} />
+              <DetailRow label="Biển số" value={detailTransaction.plate} />
+              <DetailRow label="Chủ xe" value={detailTransaction.ownerName || "—"} />
+              <DetailRow label="Email" value={detailTransaction.ownerEmail || "—"} />
+              <DetailRow label="Slot" value={detailTransaction.slot || "—"} />
+              <DetailRow label="Số tiền" value={currency.format(detailTransaction.amount)} />
+              <DetailRow label="Phương thức" value={detailTransaction.method === "payos" ? "PayOS" : detailTransaction.method === "cash" ? "Tiền mặt" : detailTransaction.method} />
+              <DetailRow label="Trạng thái" value={detailTransaction.status} />
+              <DetailRow label="Thời gian" value={detailTransaction.createdAt ? new Date(detailTransaction.createdAt).toLocaleString("vi-VN") : "—"} />
+              {detailTransaction.paidAt && <DetailRow label="Thanh toán lúc" value={new Date(detailTransaction.paidAt).toLocaleString("vi-VN")} />}
+              {detailTransaction.payosOrderCode && <DetailRow label="Mã PayOS" value={detailTransaction.payosOrderCode} />}
+              {detailTransaction.content && <DetailRow label="Nội dung" value={detailTransaction.content} />}
+            </div>
+
+            <button
+              onClick={() => setDetailTransaction(null)}
+              type="button"
+              className="small-button"
+              style={{ marginTop: "20px", width: "100%" }}
+            >
+              Đóng
+            </button>
           </div>
-          <CreditCard size={22} />
         </div>
-        <DataTable
-          headers={["Mã hóa đơn", "Nội dung", "Số tiền", "Thời gian"]}
-          rows={invoices.map((item) => [
-            item.id,
-            item.content,
-            currency.format(item.amount),
-            item.paidAt || item.createdAt,
-          ])}
-        />
-      </div>
+      )}
     </section>
   );
 }

@@ -19,9 +19,11 @@ export function Sidebar({ currentUser, mobileNavOpen, onNavigate }: SidebarProps
   const navItems = getNavItemsForRole(currentUser.role);
 
   return (
-    <aside className={mobileNavOpen ? "sidebar open" : "sidebar"}>
+    <aside className={`sidebar ${mobileNavOpen ? "open" : ""}`}>
       <div className="brand app-brand">
-        <ParkingCircle size={28} />
+        <div className="brand-icon">
+          <ParkingCircle size={26} />
+        </div>
         <span>{parkingConfig.brandName}</span>
       </div>
       <nav>
@@ -30,13 +32,14 @@ export function Sidebar({ currentUser, mobileNavOpen, onNavigate }: SidebarProps
           const isActive = pathname === item.path;
           return (
             <Link
-              className={isActive ? "active" : ""}
+              className={`nav-item ${isActive ? "active" : ""}`}
               href={item.path}
               key={item.id}
               onClick={onNavigate}
             >
               <Icon size={18} />
-              {item.label}
+              <span>{item.label}</span>
+              {isActive && <div className="active-indicator" />}
             </Link>
           );
         })}

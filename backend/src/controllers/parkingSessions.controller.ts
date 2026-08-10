@@ -1,26 +1,80 @@
 import { Request, Response } from "express";
 import { z } from "zod";
-import { allocateCarSlot, parkingConfig } from "../config/parking.js";
+import { parkingConfig } from "../config/parking.js";
 import { Device } from "../models/Device.js";
+import { ParkingSlot } from "../models/ParkingSlot.js";
 import { ParkingSession, ParkingSessionDocument } from "../models/ParkingSession.js";
 import { Vehicle } from "../models/Vehicle.js";
 import { detectVehicleImage } from "../services/ai.service.js";
 import { captureDeviceSnapshot } from "../services/device.service.js";
 import { createNotification } from "../services/notification.service.js";
 import { imageHashSimilarity, platesMatch } from "../services/plate.service.js";
-import { calculateParkingFee, getActivePricingConfig } from "../services/pricing.service.js";
+import { allocateSlot, freeSlot, occupySlot } from "../services/parkingSlot.service.js";
+import { calculateParkingFee, getActivePricingConfigForZone } from "../services/pricing.service.js";
+import { checkSubscriptionDiscountForPlate, findActiveSubscriptionByPlate, getOwnerInfoFromPlate } from "../services/subscription.service.js";
 import { createPendingTransactionForSession, objectId } from "../services/transaction.service.js";
+import { Transaction, TransactionDocument } from "../models/Transaction.js";
 import { saveUploadedImage } from "../services/upload.service.js";
 import { serializeParkingSession } from "../utils/serializers.js";
 
 async function finalizeCheckout(session: ParkingSessionDocument) {
   session.status = "Đã hoàn thành";
   session.checkOutAt = new Date();
-  const pricing = await getActivePricingConfig();
+
+  // Đã trả đủ trước đó (prepaid) → chỉ hoàn tất + nhả slot, KHÔNG tính lại phí.
+  if (session.paymentStatus === "fully_paid") {
+    await freeSlot(session.slotId);
+    return session;
+  }
+
+  // Look up zone via slot for zone-specific pricing
+  const slotDoc = session.slotId ? await ParkingSlot.findById(session.slotId) : null;
+  const pricing = await getActivePricingConfigForZone(slotDoc?.zoneId);
   const feeBreakdown = calculateParkingFee(session.checkInAt, session.checkOutAt, pricing);
   session.fee = feeBreakdown.totalFee;
   session.feeBreakdown = feeBreakdown;
+
+  // PM-05: Add overdue fine if applicable
+  if (session.isOverstayed && session.overdueMinutes && session.overdueMinutes > 0) {
+    const { calculateOverdueFine } = await import("../services/overdue.service.js");
+    const overdueResult = calculateOverdueFine(session.checkInAt, session.checkOutAt!, {
+      gracePeriod: (pricing as any).gracePeriod ?? 0,
+    });
+    if (overdueResult.fineAmount > 0) {
+      session.fee += overdueResult.fineAmount;
+      (session.feeBreakdown as any).overdueFine = overdueResult.fineAmount;
+    }
+  }
+
+  // Apply subscription discount if available (đã check biển số thuộc gói)
+  const subResult = await checkSubscriptionDiscountForPlate(session.ownerUserId, session.plate);
+  if (subResult.discount > 0 || subResult.warn) {
+    const breakdown = (session.feeBreakdown ?? ({} as any)) as Record<string, unknown>;
+    if (subResult.discount > 0) {
+      session.fee = Math.round(session.fee * (1 - subResult.discount / 100));
+      breakdown.subscriptionDiscount = subResult.discount;
+    }
+    if (subResult.warn) {
+      breakdown.subscriptionWarn = subResult.warn;
+    }
+    session.feeBreakdown = breakdown as any;
+  }
+
+  // Cộng vé phạt đang chờ của phiên này vào phí (khách vãng lai trả gộp khi ra).
+  // Làm SAU khi đã tính phí gửi + giảm giá để phần phạt không bị ghi đè/giảm.
+  const { Penalty } = await import("../models/Penalty.js");
+  const pendingPenalties = await Penalty.find({ sessionId: session._id, status: "pending" });
+  const penaltyFine = pendingPenalties.reduce((sum, p) => sum + (p.amount || 0), 0);
+  if (penaltyFine > 0) {
+    session.fee += penaltyFine;
+    const breakdown = (session.feeBreakdown ?? ({} as any)) as Record<string, unknown>;
+    breakdown.penaltyFine = penaltyFine;
+    session.feeBreakdown = breakdown as any;
+  }
+
   await createPendingTransactionForSession(session);
+  // Release the slot
+  await freeSlot(session.slotId);
   return session;
 }
 
@@ -37,41 +91,112 @@ async function ownerFromPlate(plate: string) {
   return vehicle?.userId;
 }
 
+/**
+ * AI-09: Check for duplicate plate — same plate already active in parking.
+ */
+async function checkDuplicatePlate(plate: string): Promise<boolean> {
+  const existing = await ParkingSession.findOne({
+    plate: plate.toUpperCase(),
+    status: "Đang gửi",
+  });
+  return !!existing;
+}
+
+/**
+ * Detect xem biển số có thuộc cư dân có gói active hay không.
+ * Dùng để phân bổ slot theo accessPolicy.
+ */
+async function isSubscriberByPlate(plate: string): Promise<boolean> {
+  const sub = await findActiveSubscriptionByPlate(plate);
+  return !!sub;
+}
+
 export async function listParkingSessions(request: Request, response: Response) {
   const criteria = request.user?.role === "customer" ? { ownerUserId: request.user.id } : {};
   const sessions = await ParkingSession.find(criteria).sort({ createdAt: -1 }).limit(100);
-  response.json({ sessions: sessions.map(serializeParkingSession) });
+  const sessionsWithTransactions = await ParkingSession.find(criteria)
+    .sort({ createdAt: -1 })
+    .limit(100)
+    .populate<{ transactionId: TransactionDocument | null }>("transactionId");
+
+  response.json({
+    sessions: sessionsWithTransactions.map((session) => ({
+      ...serializeParkingSession(session as unknown as ParkingSessionDocument),
+      transactionStatus: session.transactionId?.status ?? null,
+    })),
+  });
 }
 
 export async function createParkingSession(request: Request, response: Response) {
   const body = z
     .object({
       plate: z.string().min(5),
-      owner: z.string().min(2),
       vehicleType: z.literal("Ô tô").default("Ô tô"),
     })
     .parse(request.body);
 
-  const activeCount = await ParkingSession.countDocuments({ status: "Đang gửi" });
-  if (activeCount >= parkingConfig.totalCapacity) {
-    response.status(409).json({ message: "Bãi xe đã đủ 30 chỗ." });
+  // AI-09: Duplicate plate detection
+  if (await checkDuplicatePlate(body.plate)) {
+    response.status(409).json({
+      message: `Biển số ${body.plate} đang có phiên đỗ xe chưa checkout. Không thể tạo phiên mới.`,
+    });
     return;
+  }
+
+  const isSubscriber = await isSubscriberByPlate(body.plate);
+  const slotDoc = await allocateSlot("Ô tô", undefined, { isSubscriber });
+  if (!slotDoc) {
+    response.status(409).json({ message: "Bãi xe đã hết chỗ trống." });
+    return;
+  }
+
+  const ownerUserId = await ownerFromPlate(body.plate);
+  const plateCheck = await checkSubscriptionDiscountForPlate(ownerUserId, body.plate);
+  const isMember = plateCheck.discount === 100;
+  const { name: ownerName, email: ownerEmail } = await getOwnerInfoFromPlate(body.plate);
+  if (plateCheck.warn) {
+    await createNotification({
+      title: "Biển số không thuộc gói thành viên",
+      content: `Biển số ${body.plate} vào bãi nhưng KHÔNG thuộc danh sách đăng ký của user. Đã tính phí khách vãng lai.`,
+      targetRole: "staff",
+    });
   }
 
   const session = await ParkingSession.create({
     plate: body.plate,
-    ownerName: body.owner,
+    ownerName,
+    ownerEmail,
     vehicleType: "Ô tô",
-    slot: allocateCarSlot(activeCount),
-    ownerUserId: await ownerFromPlate(body.plate),
+    slot: slotDoc.slotCode,
+    slotId: slotDoc._id,
+    ownerUserId,
     createdBy: request.user?.id,
+    ...(isMember
+      ? { paymentStatus: "fully_paid", paymentMethod: "subscription", fee: 0, paidAmount: 0 }
+      : {}),
+    ...(plateCheck.warn ? { feeBreakdown: { subscriptionWarn: plateCheck.warn } as any } : {}),
   });
 
-  response.status(201).json({ session: serializeParkingSession(session) });
+  await occupySlot(slotDoc._id, session._id);
+
+  response.status(201).json({
+    session: serializeParkingSession(session),
+    isMember,
+    ...(plateCheck.warn ? { subscriptionWarn: plateCheck.warn } : {}),
+  });
 }
 
 export async function completeParkingSession(request: Request, response: Response) {
-  const body = z.object({ id: z.string().min(1) }).parse(request.body);
+  const body = z
+    .object({
+      id: z.string().min(1),
+      // Tuỳ chọn: ảnh checkout + biển AI detect khi staff checkout thủ công từ UI
+      exitImageUrl: z.string().trim().optional(),
+      exitDetectedPlate: z.string().trim().optional(),
+      exitConfidence: z.number().min(0).max(1).optional(),
+      exitImageHash: z.string().trim().optional(),
+    })
+    .parse(request.body);
   const session = await ParkingSession.findById(body.id);
   if (!session) {
     response.status(404).json({ message: "Không tìm thấy phiên." });
@@ -79,6 +204,11 @@ export async function completeParkingSession(request: Request, response: Respons
   }
 
   await finalizeCheckout(session);
+  // Ghi đè các trường ảnh checkout nếu payload cung cấp (ưu tiên ảnh mới hơn bridge)
+  if (body.exitImageUrl) session.exitImageUrl = body.exitImageUrl;
+  if (body.exitDetectedPlate) session.exitDetectedPlate = body.exitDetectedPlate.toUpperCase();
+  if (typeof body.exitConfidence === "number") session.exitConfidence = body.exitConfidence;
+  if (body.exitImageHash) session.exitImageHash = body.exitImageHash;
   await session.save();
 
   response.json({ session: serializeParkingSession(session) });
@@ -102,28 +232,70 @@ export async function uploadParkingImage(request: Request, response: Response) {
   }
 
   if (action === "entry") {
-    const activeCount = await ParkingSession.countDocuments({ status: "Đang gửi" });
-    if (activeCount >= parkingConfig.totalCapacity) {
-      response.status(409).json({ message: "Bãi xe đã đủ 30 chỗ." });
+    // AI-09: Duplicate plate detection
+    if (await checkDuplicatePlate(detection.plate)) {
+      response.status(409).json({
+        message: `Biển số ${detection.plate} đang có phiên đỗ xe chưa checkout. Không thể tạo phiên mới.`,
+      });
+      return;
+    }
+
+    const isSubscriber = await isSubscriberByPlate(detection.plate);
+    const slotDoc = await allocateSlot("Ô tô", undefined, { isSubscriber });
+    if (!slotDoc) {
+      response.status(409).json({ message: "Bãi xe đã hết chỗ trống." });
       return;
     }
 
     const imageUrl = await saveUploadedImage(image, "entry");
+
+    // Tự động tra cứu biển số trong tất cả subscription còn hiệu lực.
+    // Nếu biển thuộc danh sách đăng ký → set isMember, fee = 0, không cần nhập mã.
+    // Nếu biển KHÔNG thuộc → vẫn cho vào, tính phí như khách vãng lai.
+    let isMember = false;
+    let memberUserId: string | undefined;
+    let subscriptionWarn: string | undefined;
+    const foundSub = await findActiveSubscriptionByPlate(detection.plate);
+    if (foundSub) {
+      isMember = true;
+      memberUserId = foundSub.userId;
+    }
+
+    const { name: ownerName, email: ownerEmail } = await getOwnerInfoFromPlate(
+      detection.plate,
+      request.body.email,
+    );
+
     const session = await ParkingSession.create({
       plate: detection.plate,
-      ownerName: String(request.body.owner || "Khách vãng lai"),
+      ownerName,
+      ownerEmail,
       vehicleType: "Ô tô",
-      slot: allocateCarSlot(activeCount),
+      slot: slotDoc.slotCode,
+      slotId: slotDoc._id,
       entryImageUrl: imageUrl,
       entryDetectedPlate: detection.plate,
       entryConfidence: detection.confidence,
       entryImageHash: detection.imageHash,
       aiRawText: detection.rawText,
-      ownerUserId: await ownerFromPlate(detection.plate),
+      ownerUserId: memberUserId || (await ownerFromPlate(detection.plate)),
       createdBy: request.user?.id,
+      ...(isMember
+        ? { paymentStatus: "fully_paid", paymentMethod: "subscription", fee: 0, paidAmount: 0 }
+        : {}),
+      ...(subscriptionWarn
+        ? { feeBreakdown: { subscriptionWarn } as any }
+        : {}),
     });
 
-    response.status(201).json({ session: serializeParkingSession(session), detection });
+    await occupySlot(slotDoc._id, session._id);
+
+    response.status(201).json({
+      session: serializeParkingSession(session),
+      detection,
+      isMember,
+      ...(subscriptionWarn ? { subscriptionWarn } : {}),
+    });
     return;
   }
 
@@ -222,7 +394,7 @@ export async function approveCheckout(request: Request, response: Response) {
 }
 
 export async function cameraEntry(request: Request, response: Response) {
-  const body = z.object({ deviceId: z.string().min(1), owner: z.string().optional() }).parse(request.body);
+  const body = z.object({ deviceId: z.string().min(1), email: z.string().email().optional() }).parse(request.body);
   const device = await Device.findById(body.deviceId);
   if (!device || device.gate !== "entry") {
     response.status(404).json({ message: "Không tìm thấy camera cổng vào." });
@@ -241,27 +413,56 @@ export async function cameraEntry(request: Request, response: Response) {
     return;
   }
 
-  const activeCount = await ParkingSession.countDocuments({ status: "Đang gửi" });
-  if (activeCount >= parkingConfig.totalCapacity) {
-    response.status(409).json({ message: "Bãi xe đã đủ 30 chỗ." });
+  const isSubscriber = await isSubscriberByPlate(body.plate);
+  const slotDoc = await allocateSlot("Ô tô", undefined, { isSubscriber });
+  if (!slotDoc) {
+    response.status(409).json({ message: "Bãi xe đã hết chỗ trống." });
     return;
+  }
+
+  const ownerUserId = await ownerFromPlate(detection.plate);
+  const plateCheck = await checkSubscriptionDiscountForPlate(ownerUserId, detection.plate);
+  const isMember = plateCheck.discount === 100;
+  const { name: ownerName, email: ownerEmail } = await getOwnerInfoFromPlate(
+    detection.plate,
+    body.email,
+  );
+  if (plateCheck.warn) {
+    await createNotification({
+      title: "Biển số không thuộc gói thành viên",
+      content: `Biển số ${detection.plate} vào bãi nhưng KHÔNG thuộc danh sách đăng ký của user. Đã tính phí khách vãng lai.`,
+      targetRole: "staff",
+    });
   }
 
   const session = await ParkingSession.create({
     plate: detection.plate,
-    ownerName: body.owner || "Khách vãng lai",
+    ownerName,
+    ownerEmail,
     vehicleType: "Ô tô",
-    slot: allocateCarSlot(activeCount),
+    slot: slotDoc.slotCode,
+    slotId: slotDoc._id,
     entryImageUrl: snapshot.imageUrl,
     entryDetectedPlate: detection.plate,
     entryConfidence: detection.confidence,
     entryImageHash: detection.imageHash,
     aiRawText: detection.rawText,
-    ownerUserId: await ownerFromPlate(detection.plate),
+    ownerUserId,
     createdBy: request.user?.id,
+    ...(isMember
+      ? { paymentStatus: "fully_paid", paymentMethod: "subscription", fee: 0, paidAmount: 0 }
+      : {}),
+    ...(plateCheck.warn ? { feeBreakdown: { subscriptionWarn: plateCheck.warn } as any } : {}),
   });
 
-  response.status(201).json({ session: serializeParkingSession(session), detection });
+  await occupySlot(slotDoc._id, session._id);
+
+  response.status(201).json({
+    session: serializeParkingSession(session),
+    detection,
+    isMember,
+    ...(plateCheck.warn ? { subscriptionWarn: plateCheck.warn } : {}),
+  });
 }
 
 export async function cameraExit(request: Request, response: Response) {
@@ -311,4 +512,33 @@ export async function cameraExit(request: Request, response: Response) {
     matched,
     message: matched ? "Camera checkout thành công." : "Camera checkout không khớp, cần admin duyệt.",
   });
+}
+
+// --- PM-05: Overdue scan + ST-13: Penalty waiver ---
+import { scanAndFlagOverdueSessions, waivePenalty } from "../services/overdue.service.js";
+
+export async function scanOverdueHandler(_request: Request, response: Response) {
+  const flagged = await scanAndFlagOverdueSessions();
+  response.json({ flagged, message: `${flagged} phiên đã được đánh dấu quá hạn.` });
+}
+
+export async function waivePenaltyHandler(request: Request, response: Response) {
+  const body = z.object({ reason: z.string().min(2) }).parse(request.body);
+  await waivePenalty(String(request.params.id), request.user!.id, body.reason);
+  response.json({ ok: true, message: "Đã miễn phạt cho phiên này." });
+}
+
+// --- PM-07: Per-session receipt ---
+import { generateReceiptPdf, getReceiptData } from "../services/receipt.service.js";
+
+export async function getSessionReceiptHandler(request: Request, response: Response) {
+  const data = await getReceiptData(String(request.params.id));
+  response.json({ receipt: data });
+}
+
+export async function downloadSessionReceiptHandler(request: Request, response: Response) {
+  const buffer = await generateReceiptPdf(String(request.params.id));
+  response.setHeader("Content-Type", "application/pdf");
+  response.setHeader("Content-Disposition", `attachment; filename="receipt-${request.params.id}.pdf"`);
+  response.end(buffer);
 }

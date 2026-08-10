@@ -9,13 +9,21 @@ export type View =
   | "profile"
   | "wallet"
   | "vehicles"
-  | "feedback"
   | "notifications"
   | "shifts"
   | "incidents"
   | "ai"
+  | "occupancy"
   | "devices"
-  | "security";
+  | "zones"
+  | "parking-slots"
+  | "reservations"
+  | "subscriptions"
+  | "penalties"
+  | "rfid"
+  | "camera-logs"
+  | "cameras"
+  | "capacity-config";
 
 export type DemoUser = {
   id: number | string;
@@ -24,10 +32,28 @@ export type DemoUser = {
   password?: string;
   role: Role;
   status: "Đang hoạt động" | "Đã khóa";
-  wallet: number;
-  avatarUrl?: string;
+  avatarUrl?: string | null;
   provider?: string;
   twoFactorEnabled?: boolean;
+  phone?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  gender?: string | null;
+  birthDate?: string | null;
+  idCardNumber?: string | null;
+  idCardIssuedAt?: string | null;
+  idCardExpiry?: string | null;
+  address?: string | null;
+  city?: string | null;
+  district?: string | null;
+  emergencyContact?: string | null;
+  emergencyPhone?: string | null;
+  company?: string | null;
+  taxCode?: string | null;
+  isVerified?: boolean;
+  lastLoginAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type FeeBreakdown = {
@@ -39,6 +65,18 @@ export type FeeBreakdown = {
   parkingFee: number;
   overdueFine: number;
   totalFee: number;
+  dailyBreakdown?: DailyBreakdownItem[];
+  subscriptionDiscount?: number;
+  subscriptionWarn?: string;
+};
+
+export type DailyRateType = "day" | "night";
+export type DailyBreakdownItem = {
+  dayIndex: number;
+  date: string;
+  rateType: DailyRateType;
+  fee: number;
+  checkOutHour: number;
 };
 
 export type ParkingSession = {
@@ -47,10 +85,17 @@ export type ParkingSession = {
   owner: string;
   vehicleType: "Ô tô";
   checkIn: string;
+  checkInDate: string;
   checkOut?: string;
+  expectedCheckOut?: string;
+  prepaidCheckoutAt?: string;
   slot: string;
-  status: "Đang gửi" | "Đã hoàn thành";
+  slotId?: string;
+  status: "Đang gửi" | "Đã hoàn thành" | "Đã hủy";
+  paymentStatus?: "unpaid" | "partial_paid" | "fully_paid";
   fee: number;
+  paidAmount?: number;
+  dailyBreakdown?: DailyBreakdownItem[];
   entryImageUrl?: string;
   exitImageUrl?: string;
   entryDetectedPlate?: string;
@@ -62,26 +107,77 @@ export type ParkingSession = {
   verificationStatus?: "Không cần" | "Chờ duyệt" | "Đã duyệt" | "Từ chối";
   manualPlate?: string;
   verificationNote?: string;
-  paymentStatus?: "unpaid" | "pending" | "paid";
   transactionId?: string;
+  ownerEmail?: string;
   feeBreakdown?: FeeBreakdown;
 };
 
 export type RegisteredVehicle = {
-  id?: string;
+  id: string;
   plate: string;
   owner: string;
+  ownerPhone?: string | null;
+  ownerAddress?: string | null;
   type: "Ô tô" | string;
+  brand?: string | null;
+  model?: string | null;
+  color?: string | null;
+  year?: number | null;
+  engineNo?: string | null;
+  chassisNo?: string | null;
   status: "Đã đăng ký" | "Cần duyệt" | "Blacklist" | string;
+  userId?: string | null;
+  isCompanyVehicle?: boolean;
+  user?: {
+    name?: string;
+    email?: string;
+    phone?: string | null;
+  } | null;
+  imageUrl?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type VehicleRequest = {
+  id: string;
+  vehicleId: string;
+  subscriptionId: string;
+  type: "edit" | "delete";
+  status: "pending" | "approved" | "rejected";
+  requestedChanges?: {
+    plate?: string;
+    ownerName?: string;
+    ownerPhone?: string;
+    ownerAddress?: string;
+    brand?: string;
+    model?: string;
+    color?: string;
+    year?: number;
+    engineNo?: string;
+    chassisNo?: string;
+  };
+  reason?: string;
+  adminNote?: string;
+  resolvedAt?: string;
+  vehicle?: RegisteredVehicle;
+  user?: {
+    name?: string;
+    email?: string;
+    phone?: string | null;
+  };
+  subscription?: { id: string };
+  createdAt: string;
+  updatedAt?: string;
 };
 
 export type PricingConfig = {
   id: string;
-  freeMinutes: number;
-  hourlyRate: number;
-  overnightRate: number;
-  monthlyRate: number;
-  overdueFineRate: number;
+  dayRate: number;
+  nightRate: number;
+  dayStartHour: number;
+  nightStartHour: number;
+  gracePeriod?: number;
+  maxMinutes?: number;
   isActive: boolean;
   updatedAt?: string;
 };
@@ -99,23 +195,48 @@ export type ReportSummary = {
 
 export type PaymentConfig = {
   id: string;
-  bankName: string;
-  bankBin: string;
-  accountNumber: string;
-  accountName: string;
-  transferPrefix: string;
+  payosEnabled?: boolean;
+};
+
+export type PayOSPaymentData = {
+  qrCode: string;
+  checkoutUrl: string;
+  orderCode: string;
+  amount: number;
+  accountNumber?: string;
+  accountName?: string;
+  bin?: string;
+  description?: string;
 };
 
 export type TransactionItem = {
   id: string;
   sessionId?: string;
+  subscriptionId?: string;
   method: string;
   amount: number;
   status: "pending" | "paid" | "failed" | "cancelled";
-  content: string;
+  content?: string;
   qrUrl?: string;
+  payosQrCode?: string;
+  payosCheckoutUrl?: string;
+  payosOrderCode?: string;
+  gateway?: string;
   paidAt?: string;
   createdAt: string;
+  // Extension tracking
+  extensionId?: string;
+  extensionType?: "initial" | "extend" | "overtime" | "adjustment";
+  previousFee?: number;
+  newFee?: number;
+  // Session info
+  plate?: string;
+  ownerName?: string;
+  ownerEmail?: string;
+  slot?: string;
+  sessionPaymentStatus?: "unpaid" | "partial_paid" | "fully_paid";
+  sessionFee?: number;
+  sessionPaidAmount?: number;
 };
 
 export type NotificationItem = {
@@ -123,15 +244,6 @@ export type NotificationItem = {
   title: string;
   content: string;
   read: boolean;
-  createdAt: string;
-};
-
-export type FeedbackItem = {
-  id: string;
-  subject: string;
-  content: string;
-  status: "Đang xử lý" | "Đã phản hồi" | "Đã đóng";
-  response?: string;
   createdAt: string;
 };
 
@@ -144,6 +256,13 @@ export type DeviceItem = {
   roiNote?: string;
   status: "online" | "offline" | "unknown";
   lastSnapshotUrl?: string;
+  healthCheckEnabled?: boolean;
+  offlineThresholdMinutes?: number;
+  maintenanceSchedule?: {
+    intervalDays: number;
+    lastMaintenanceAt?: string;
+    nextMaintenanceAt?: string;
+  };
 };
 
 export type ShiftItem = {
@@ -153,6 +272,42 @@ export type ShiftItem = {
   endAt?: string;
   status: "Đang làm" | "Đã kết thúc";
   note?: string;
+};
+
+export type ShiftScheduleItem = {
+  id: string;
+  staffId: string;
+  staffName?: string;
+  staffEmail?: string;
+  staffPhone?: string | null;
+  staffAvatarUrl?: string | null;
+  date: string;
+  shiftType: "morning" | "afternoon" | "evening" | "night";
+  startTime: string;
+  endTime: string;
+  status: "scheduled" | "checked_in" | "completed" | "cancelled";
+  assignedBy?: string;
+  assignedByName?: string;
+  note?: string;
+  location?: string;
+  deviceId?: string;
+  createdAt: string;
+  updatedAt?: string;
+};
+
+export type ShiftType = {
+  key: string;
+  label: string;
+  startTime: string;
+  endTime: string;
+};
+
+export type StaffForSchedule = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  avatarUrl: string | null;
 };
 
 export type IncidentItem = {
@@ -165,3 +320,267 @@ export type IncidentItem = {
 };
 
 export type AuthMode = "login" | "register" | "forgot";
+
+export type ZoneStats = {
+  total: number;
+  empty: number;
+  occupied: number;
+  reserved: number;
+  maintenance: number;
+};
+
+export type Zone = {
+  id: string;
+  name: string;
+  description?: string;
+  capacity: number;
+  walkInQuota: number;
+  subscriberQuota: number;
+  allowedVehicleTypes: string[];
+  pricingConfigId?: string;
+  displayOrder: number;
+  isActive: boolean;
+  stats?: ZoneStats;
+  updatedAt?: string;
+};
+
+export type SlotStatus = "empty" | "occupied" | "reserved" | "maintenance";
+export type SlotType = "regular" | "VIP" | "electric" | "handicap";
+// "resident" = chỉ dành cho cư dân. "guest" = chỉ dành cho khách vãng lai.
+// "shared" = ưu tiên cư dân, khi rảnh khách vãng lai vẫn đậu được.
+export type SlotAccessPolicy = "resident" | "guest" | "shared";
+
+export type ParkingSlot = {
+  id: string;
+  slotCode: string;
+  zoneId: string;
+  zoneName: string;
+  slotType: SlotType;
+  features: string[];
+  status: SlotStatus;
+  currentSessionId?: string;
+  /** Biển số xe hiện đang đỗ tại slot (chỉ có khi status === "occupied"). */
+  currentPlate?: string;
+  floor: number;
+  notes?: string;
+  accessPolicy: SlotAccessPolicy;
+  aiPolygon?: [number, number][];
+  updatedAt?: string;
+};
+
+export type SlotMapEntry = {
+  zoneId: string;
+  zoneName: string;
+  slots: ParkingSlot[];
+};
+
+// --- Subscription ---
+export type SubscriptionPlan = {
+  id: string;
+  name: string;
+  description?: string;
+  duration: "monthly" | "quarterly" | "yearly";
+  durationDays: number;
+  price: number;
+  isActive: boolean;
+  // -1 = không giới hạn (mặc định), >=0 = giới hạn tối đa
+  maxVehicles: number;
+};
+
+export type SubscriptionVehicle = {
+  id: string;
+  plate: string;
+  ownerName?: string;
+  brand?: string | null;
+  model?: string | null;
+  color?: string | null;
+  engineNo?: string | null;
+  chassisNo?: string | null;
+  year?: number | null;
+  status?: string | null;
+};
+
+export type Subscription = {
+  id: string;
+  userId: string;
+  planId: string;
+  planName: string;
+  /**
+   * Xe chính mà gói này đang gắn vào (1 gói = 1 xe).
+   * Mỗi user có thể có nhiều gói, mỗi gói có 1 xe riêng.
+   */
+  primaryVehicleId?: string | null;
+  primaryVehicle?: SubscriptionVehicle | null;
+  /**
+   * Mã thành viên per-sub (mỗi xe có 1 mã riêng → quét QR ở cổng).
+   */
+  memberCode?: string | null;
+  startDate: string;
+  endDate: string;
+  status: "pending_payment" | "active" | "expired" | "cancelled";
+  autoRenew: boolean;
+  transactionId?: string;
+  renewalCount: number;
+  createdAt: string;
+  // Chỉ trả về cho admin: thông tin khách hàng sở hữu gói.
+  user?: SubscriptionCustomerInfo | null;
+};
+
+export type SubscriptionCustomerInfo = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  status: string;
+  avatarUrl: string | null;
+  address: string | null;
+  city: string | null;
+  district: string | null;
+  company: string | null;
+  emergencyContact: string | null;
+  emergencyPhone: string | null;
+  createdAt: string;
+};
+
+// --- Device Maintenance ---
+export type DeviceMaintenanceLog = {
+  id: string;
+  deviceId: string;
+  deviceName: string;
+  type: "scheduled" | "repair" | "inspection" | "replacement";
+  description: string;
+  performedBy?: string;
+  performedAt: string;
+  cost: number;
+  notes?: string;
+  status: "planned" | "in_progress" | "completed";
+  createdAt: string;
+};
+
+// --- Analytics ---
+export type RevenueChartPoint = {
+  date: string;
+  revenue: number;
+  count: number;
+};
+
+export type OccupancyHourPoint = {
+  hour: number;
+  avgOccupancy: number;
+  maxOccupancy: number;
+};
+
+export type TopCustomer = {
+  userId: string;
+  name: string;
+  email?: string;
+  sessionCount: number;
+  totalSpent: number;
+};
+
+export type PeakHourPoint = {
+  dayOfWeek: number;
+  hour: number;
+  count: number;
+};
+
+export type CapacityConfig = {
+  id: string;
+  key: string;
+  globalCapacity: number;
+  updatedBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CapacityZoneSummary = {
+  id: string;
+  name: string;
+  capacity: number;
+  walkInQuota: number;
+  subscriberQuota: number;
+  isActive: boolean;
+};
+
+export type CapacityChangeLog = {
+  id: string;
+  entityType: "global" | "zone";
+  zoneId?: string | null;
+  zoneName?: string | null;
+  before: Record<string, unknown>;
+  after: Record<string, unknown>;
+  changedBy?: { id: string | null; name: string | null; email: string | null } | null;
+  changedAt: string;
+  reason?: string | null;
+};
+
+export type ZoneUsage = {
+  zoneId: string;
+  zoneName: string;
+  capacity: number;
+  walkInQuota: number;
+  subscriberQuota: number;
+  occupied: number;
+  walkInOccupied: number;
+  subscriberOccupied: number;
+  walkInOver: boolean;
+  subscriberOver: boolean;
+};
+
+export type CapacityUsage = {
+  global: {
+    capacity: number;
+    occupied: number;
+    walkInOccupied: number;
+    subscriberOccupied: number;
+    over: boolean;
+  };
+  perZone: ZoneUsage[];
+};
+
+export type SlotStatusBadge = "empty" | "occupied" | "reserved" | "maintenance";
+
+export type ZoneSlotItem = {
+  id: string;
+  slotCode: string;
+  floor: number;
+  slotType: string;
+  status: SlotStatusBadge;
+  currentSessionId: string | null;
+  currentPlate: string | null;
+  isSubscriber: boolean;
+  features: string[];
+  notes: string | null;
+};
+
+export type ZoneFloorSummary = {
+  floor: number;
+  total: number;
+  empty: number;
+  occupied: number;
+  reserved: number;
+  maintenance: number;
+};
+
+export type ZoneSlotsResponse = {
+  zone: {
+    id: string;
+    name: string;
+    capacity: number;
+    walkInQuota: number;
+    subscriberQuota: number;
+  };
+  summary: {
+    total: number;
+    empty: number;
+    occupied: number;
+    reserved: number;
+    maintenance: number;
+    walkInOccupied: number;
+    subscriberOccupied: number;
+    walkInOver: boolean;
+    subscriberOver: boolean;
+  };
+  floors: ZoneFloorSummary[];
+  slots: ZoneSlotItem[];
+};
