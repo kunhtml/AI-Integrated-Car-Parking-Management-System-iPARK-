@@ -1,23 +1,79 @@
 import bcrypt from "bcryptjs";
-import mongoose from "mongoose";
 import { Request, Response } from "express";
 import mongoose from "mongoose";
-import { randomUUID } from "node:crypto";
-import { generateSecret, generateURI, verifySync } from "otplib";
-import QRCode from "qrcode";
+import { randomInt, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { env } from "../config/env.js";
 import { OtpToken } from "../models/OtpToken.js";
 import { User } from "../models/User.js";
 import { sendMail, smtpConfigured } from "../services/mail.service.js";
-import { decryptSecret, encryptSecret } from "../services/secret.service.js";
 import { signSession } from "../services/token.service.js";
 import { serializeUser } from "../utils/serializers.js";
 
 const cookieName = "parking_session";
+const OTP_TTL_MS = 5 * 60 * 1000;
+const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
+const OTP_MAX_ATTEMPTS = 5;
 
-function dbReady() {
-  return mongoose.connection.readyState === 1;
+function generateOtp() {
+  return randomInt(0, 1_000_000).toString().padStart(6, "0");
+}
+
+async function rejectInvalidOtp(
+  token: { _id: mongoose.Types.ObjectId },
+  response: Response,
+  status: number,
+) {
+  const updated = await OtpToken.findOneAndUpdate(
+    {
+      _id: token._id,
+      usedAt: { $exists: false },
+      attempts: { $lt: OTP_MAX_ATTEMPTS },
+    },
+    { $inc: { attempts: 1 } },
+    { new: true },
+  );
+  if (!updated || updated.attempts >= OTP_MAX_ATTEMPTS) {
+    await OtpToken.deleteOne({ _id: token._id });
+    response
+      .status(status)
+      .json({
+        message:
+          "M├ú OTP ─æ├ú bß╗ï v├┤ hiß╗çu h├│a do nhß║¡p sai qu├í nhiß╗üu lß║ºn.",
+      });
+    return;
+  }
+  response
+    .status(status)
+    .json({ message: "M├ú OTP kh├┤ng ─æ├║ng hoß║╖c ─æ├ú hß║┐t hß║ín." });
+}
+
+async function enforceOtpCooldown(email: string, response: Response) {
+  const latest = await OtpToken.findOne({ email, purpose: "two-factor" }).sort({
+    createdAt: -1,
+  });
+  if (!latest) return false;
+  const retryAfter = Math.ceil(
+    (latest.createdAt.getTime() + OTP_RESEND_COOLDOWN_MS - Date.now()) / 1000,
+  );
+  if (retryAfter <= 0) return false;
+  response
+    .status(429)
+    .json({
+      message:
+        "Vui l├▓ng chß╗¥ " +
+        retryAfter +
+        " gi├óy tr╞░ß╗¢c khi gß╗¡i lß║íi OTP.",
+      retryAfter,
+    });
+  return true;
+}
+
+function maskEmail(email: string) {
+  const [local, domain] = email.split("@");
+  if (!local || !domain) return "***";
+  const visible = local.slice(0, Math.min(2, local.length));
+  return `${visible}${"*".repeat(Math.max(3, local.length - visible.length))}@${domain}`;
 }
 
 function cookieOptions() {
@@ -36,64 +92,204 @@ function googleOAuthConfigured() {
   );
 }
 
-// Password regex: Yêu cầu ít nhất 1 chữ hoa, 1 chữ thường, 1 chữ số và 1 ký tự đặc biệt
-const passwordRegex =
-  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-const passwordErrorMessage =
-  "Mật khẩu phải dài ít nhất 8 ký tự, bao gồm chữ hoa, chữ thường, số và ký tự đặc biệt (@$!%*?&)";
+const pendingUserSchema = z
+  .object({
+    name: z.string().min(2),
+    email: z.email(),
+    password: z.string().min(6),
+  })
+  .strict();
 
+/**
+ * BÆ°á»›c 1 Ä‘Äƒng kÃ½: validate, hash máº­t kháº©u, lÆ°u payload vÃ o OtpToken (purpose=verify-email)
+ * vÃ  gá»­i OTP qua email. KHÃ”NG táº¡o user á»Ÿ bÆ°á»›c nÃ y.
+ */
 export async function register(request: Request, response: Response) {
-  const body = z
-    .object({
-      name: z.string().min(2, "Họ tên phải có ít nhất 2 ký tự"),
-      email: z.email({ message: "Email không hợp lệ" }),
-      password: z.string().min(6, "Mật khẩu phải có ít nhất 6 ký tự"),
-      phone: z.string().min(10, "Số điện thoại không hợp lệ").optional(),
-      acceptTerms: z.boolean().refine((val) => val === true, {
-        message: "Bạn phải đồng ý với điều khoản sử dụng",
-      }),
-    })
-    .parse(request.body);
+  const body = pendingUserSchema.parse(request.body);
+
+  if (!smtpConfigured()) {
+    response.status(503).json({
+      message:
+        "SMTP chÆ°a Ä‘Æ°á»£c cáº¥u hÃ¬nh. Vui lÃ²ng liÃªn há»‡ quáº£n trá»‹ viÃªn Ä‘á»ƒ hoÃ n táº¥t Ä‘Äƒng kÃ½.",
+    });
+    return;
+  }
 
   const email = body.email.toLowerCase();
   const existed = await User.findOne({ email });
   if (existed) {
-    response.status(409).json({ message: "Email đã tồn tại." });
+    response.status(409).json({ message: "Email Ä‘Ã£ tá»“n táº¡i." });
     return;
   }
 
-  // Check phone uniqueness if provided
-  if (body.phone) {
-    const phoneExisted = await User.findOne({ phone: body.phone });
-    if (phoneExisted) {
-      response.status(409).json({ message: "Số điện thoại đã được sử dụng." });
-      return;
-    }
-  }
-
   const passwordHash = await bcrypt.hash(body.password, 12);
+  const otp = generateOtp();
+  const otpHash = await bcrypt.hash(otp, 12);
 
-  const user = await User.create({
-    name: body.name,
+  // XoÃ¡ OTP verify-email cu (neu co) truoc khi tao moi
+  await OtpToken.deleteMany({ email, purpose: "verify-email" });
+
+  await OtpToken.create({
     email,
-    passwordHash,
-    role: "customer",
-    phone: body.phone,
-    isVerified: false,
+    otpHash,
+    purpose: "verify-email",
+    pendingUser: {
+      name: body.name,
+      passwordHash,
+    },
+    expiresAt: new Date(Date.now() + OTP_TTL_MS),
   });
 
+  await sendMail(
+    email,
+    "MÃ£ OTP xÃ¡c nháº­n Ä‘Äƒng kÃ½ tÃ i khoáº£n iPARK",
+    `MÃ£ OTP xÃ¡c nháº­n Ä‘Äƒng kÃ½ tÃ i khoáº£n iPARK cá»§a báº¡n lÃ  ${otp}. MÃ£ cÃ³ hiá»‡u lá»±c trong 5 phÃºt. Náº¿u báº¡n khÃ´ng thá»±c hiá»‡n yÃªu cáº§u nÃ y, vui lÃ²ng bá» qua email.`,
+  );
+
+  response.status(202).json({
+    requiresOtp: true,
+    message:
+      "ÄÃ£ gá»­i mÃ£ OTP xÃ¡c nháº­n Ä‘áº¿n email. Vui lÃ²ng kiá»ƒm tra há»™p thÆ° vÃ  nháº­p mÃ£ Ä‘á»ƒ hoÃ n táº¥t Ä‘Äƒng kÃ½.",
+  });
+}
+
+/**
+ * BÆ°á»›c 2 Ä‘Äƒng kÃ½: xÃ¡c minh OTP, táº¡o user, Ä‘Ã¡nh dáº¥u verified vÃ  tá»± Ä‘á»™ng Ä‘Äƒng nháº­p.
+ */
+export async function verifyEmailOtp(request: Request, response: Response) {
+  const body = z
+    .object({
+      email: z.email(),
+      otp: z.string().min(6).max(6),
+    })
+    .parse(request.body);
+
+  const email = body.email.toLowerCase();
+  const token = await OtpToken.findOne({
+    email,
+    purpose: "verify-email",
+    usedAt: { $exists: false },
+    expiresAt: { $gt: new Date() },
+  }).sort({ createdAt: -1 });
+
+  if (!token || !(await bcrypt.compare(body.otp, token.otpHash))) {
+    response
+      .status(400)
+      .json({ message: "OTP khÃ´ng Ä‘Ãºng hoáº·c Ä‘Ã£ háº¿t háº¡n." });
+    return;
+  }
+
+  if (!token.pendingUser) {
+    response.status(400).json({
+      message:
+        "KhÃ´ng tÃ¬m tháº¥y thÃ´ng tin Ä‘Äƒng kÃ½. Vui lÃ²ng Ä‘Äƒng kÃ½ láº¡i.",
+    });
+    return;
+  }
+
+  // Tranh user tao cung luc
+  const existed = await User.findOne({ email });
+  if (existed) {
+    response.status(409).json({ message: "Email Ä‘Ã£ tá»“n táº¡i." });
+    return;
+  }
+
+  const pending = token.pendingUser as {
+    name: string;
+    passwordHash: string;
+    phone?: string;
+  };
+
+  const user = await User.create({
+    name: pending.name,
+    email,
+    passwordHash: pending.passwordHash,
+    role: "customer",
+    phone: pending.phone,
+    isVerified: true,
+    provider: "credentials",
+  });
+
+  token.usedAt = new Date();
+  await token.save();
+
   const serialized = serializeUser(user);
-  const token = await signSession(serialized);
+  const sessionToken = await signSession(serialized);
   await recordActiveSession(request, user._id);
 
-  // CU-22: Notify on registration
-  const { notifyRegistration } = await import("../services/notificationTriggers.service.js");
+  const { notifyRegistration } =
+    await import("../services/notificationTriggers.service.js");
   await notifyRegistration(user._id.toString(), user.name);
 
-  response
-    .cookie(cookieName, token, cookieOptions())
-    .status(201)
-    .json({ user: serialized });
+  response.cookie(cookieName, sessionToken, cookieOptions()).status(201).json({
+    user: serialized,
+    message: "ÄÄƒng kÃ½ thÃ nh cÃ´ng. TÃ i khoáº£n Ä‘Ã£ Ä‘Æ°á»£c xÃ¡c minh.",
+  });
+}
+
+/**
+ * Gá»­i láº¡i OTP xÃ¡c nháº­n email (purpose=verify-email). Chá»‰ dÃ¹ng khi chÆ°a cÃ³ user.
+ */
+export async function resendVerificationOtp(
+  request: Request,
+  response: Response,
+) {
+  const body = z.object({ email: z.email() }).parse(request.body);
+  const email = body.email.toLowerCase();
+
+  if (!smtpConfigured()) {
+    response.status(503).json({
+      message: "SMTP chÆ°a Ä‘Æ°á»£c cáº¥u hÃ¬nh. KhÃ´ng thá»ƒ gá»­i láº¡i OTP.",
+    });
+    return;
+  }
+
+  const existing = await OtpToken.findOne({
+    email,
+    purpose: "verify-email",
+    usedAt: { $exists: false },
+  }).sort({ createdAt: -1 });
+
+  if (!existing) {
+    response.status(404).json({
+      message:
+        "KhÃ´ng cÃ³ yÃªu cáº§u Ä‘Äƒng kÃ½ nÃ o Ä‘ang chá». Vui lÃ²ng Ä‘Äƒng kÃ½ láº¡i.",
+    });
+    return;
+  }
+
+  const userExists = await User.findOne({ email });
+  if (userExists) {
+    response.status(409).json({ message: "Email Ä‘Ã£ Ä‘Æ°á»£c Ä‘Äƒng kÃ½." });
+    return;
+  }
+
+  const otp = generateOtp();
+  const otpHash = await bcrypt.hash(otp, 12);
+
+  // Tao OTP moi va vo hieu hoa OTP cu
+  await OtpToken.updateMany(
+    { email, purpose: "verify-email", usedAt: { $exists: false } },
+    { $set: { usedAt: new Date() } },
+  );
+  await OtpToken.create({
+    email,
+    otpHash,
+    purpose: "verify-email",
+    pendingUser: existing.pendingUser,
+    expiresAt: new Date(Date.now() + OTP_TTL_MS),
+  });
+
+  await sendMail(
+    email,
+    "MÃ£ OTP xÃ¡c nháº­n Ä‘Äƒng kÃ½ tÃ i khoáº£n iPARK (gá»­i láº¡i)",
+    `MÃ£ OTP má»›i cá»§a báº¡n lÃ  ${otp}. MÃ£ cÃ³ hiá»‡u lá»±c trong 5 phÃºt.`,
+  );
+
+  response.json({
+    ok: true,
+    message: "ÄÃ£ gá»­i láº¡i mÃ£ OTP xÃ¡c nháº­n Ä‘áº¿n email.",
+  });
 }
 
 export async function login(request: Request, response: Response) {
@@ -101,16 +297,8 @@ export async function login(request: Request, response: Response) {
     .object({
       email: z.email(),
       password: z.string().min(1),
-      twoFactorCode: z.string().optional(),
     })
     .parse(request.body);
-
-  if (!dbReady()) {
-    response
-      .status(503)
-      .json({ message: "Chưa kết nối DB nên chưa thể đăng nhập." });
-    return;
-  }
 
   const user = await User.findOne({ email: body.email.toLowerCase() });
   if (!user || user.status === "Đã khóa") {
@@ -124,26 +312,56 @@ export async function login(request: Request, response: Response) {
     return;
   }
 
+  // Chan dang nhap neu email chua xac minh (chi ap dung voi tai khoan credentials)
+  if (!user.isVerified && user.provider === "credentials") {
+    response.status(403).json({
+      requiresEmailVerification: true,
+      email: user.email,
+      message:
+        "Email chÆ°a Ä‘Æ°á»£c xÃ¡c minh. Vui lÃ²ng nháº­p mÃ£ OTP Ä‘Ã£ gá»­i Ä‘áº¿n email Ä‘á»ƒ kÃ­ch hoáº¡t tÃ i khoáº£n.",
+    });
+    return;
+  }
+
   if (user.twoFactorEnabled) {
-    if (!body.twoFactorCode || !user.twoFactorSecret) {
-      response
-        .status(202)
-        .json({ requiresTwoFactor: true, message: "Vui lòng nhập mã 2FA." });
+    if (!smtpConfigured()) {
+      response.status(503).json({
+        message:
+          "SMTP chÆ°a Ä‘Æ°á»£c cáº¥u hÃ¬nh. KhÃ´ng thá»ƒ gá»­i mÃ£ 2FA qua email.",
+      });
       return;
     }
 
-    const secret = decryptSecret(user.twoFactorSecret);
-    const validCode = verifySync({ token: body.twoFactorCode, secret }).valid;
-    if (!validCode) {
-      response.status(401).json({ message: "Mã 2FA không đúng." });
-      return;
-    }
+    // Sinh OTP 6 sá»‘, lÆ°u OtpToken(purpose=two-factor) vÃ  gá»­i vá» email
+    const otp = generateOtp();
+    const otpHash = await bcrypt.hash(otp, 12);
+    const token = await OtpToken.create({
+      email: user.email,
+      otpHash,
+      purpose: "two-factor",
+      expiresAt: new Date(Date.now() + OTP_TTL_MS),
+    });
+
+    await sendMail(
+      user.email,
+      "MÃ£ xÃ¡c thá»±c 2 lá»›p (2FA) iPARK",
+      `MÃ£ xÃ¡c thá»±c 2 lá»›p iPARK cá»§a báº¡n lÃ  ${otp}. MÃ£ cÃ³ hiá»‡u lá»±c trong 5 phÃºt. Náº¿u báº¡n khÃ´ng thá»±c hiá»‡n yÃªu cáº§u nÃ y, vui lÃ²ng bá» qua email.`,
+    );
+
+    response.status(202).json({
+      requiresTwoFactor: true,
+      pendingTwoFactorId: token._id.toString(),
+      email: user.email,
+      message:
+        "Máº­t kháº©u Ä‘Ãºng. Vui lÃ²ng nháº­p mÃ£ 6 sá»‘ Ä‘Ã£ Ä‘Æ°á»£c gá»­i Ä‘áº¿n email Ä‘á»ƒ hoÃ n táº¥t Ä‘Äƒng nháº­p.",
+    });
+    return;
   }
 
   const serialized = serializeUser(user);
   const token = await signSession(serialized);
   await recordActiveSession(request, user._id);
-  // Cập nhật lastLoginAt (ghi vào DB; nếu chỉ set trong serializeUser thì không persist)
+  // Cáº­p nháº­t lastLoginAt (ghi vÃ o DB; náº¿u chá»‰ set trong serializeUser thÃ¬ khÃ´ng persist)
   user.lastLoginAt = new Date();
   await user.save();
 
@@ -156,7 +374,7 @@ export function googleLogin(_request: Request, response: Response) {
   if (!googleOAuthConfigured()) {
     response.status(503).json({
       message:
-        "Chưa cấu hình Google OAuth. Vui lòng bổ sung GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET và GOOGLE_CALLBACK_URL trong backend/.env.",
+        "ChÆ°a cáº¥u hÃ¬nh Google OAuth. Vui lÃ²ng bá»• sung GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET vÃ  GOOGLE_CALLBACK_URL trong backend/.env.",
     });
     return;
   }
@@ -185,7 +403,7 @@ export async function googleCallback(request: Request, response: Response) {
   if (!googleOAuthConfigured()) {
     response.status(503).json({
       message:
-        "Chưa cấu hình Google OAuth. Vui lòng bổ sung GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET và GOOGLE_CALLBACK_URL trong backend/.env.",
+        "ChÆ°a cáº¥u hÃ¬nh Google OAuth. Vui lÃ²ng bá»• sung GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET vÃ  GOOGLE_CALLBACK_URL trong backend/.env.",
     });
     return;
   }
@@ -196,7 +414,8 @@ export async function googleCallback(request: Request, response: Response) {
 
   if (!code || !state || !expectedState || state !== expectedState) {
     response.status(400).json({
-      message: "Phiên đăng nhập Google không hợp lệ hoặc đã hết hạn.",
+      message:
+        "PhiÃªn Ä‘Äƒng nháº­p Google khÃ´ng há»£p lá»‡ hoáº·c Ä‘Ã£ háº¿t háº¡n.",
     });
     return;
   }
@@ -220,7 +439,9 @@ export async function googleCallback(request: Request, response: Response) {
   };
 
   if (!tokenResponse.ok || !tokenData.access_token) {
-    response.status(502).json({ message: "Không lấy được token Google." });
+    response
+      .status(502)
+      .json({ message: "KhÃ´ng láº¥y Ä‘Æ°á»£c token Google." });
     return;
   }
 
@@ -246,7 +467,7 @@ export async function googleCallback(request: Request, response: Response) {
   ) {
     response
       .status(502)
-      .json({ message: "Không lấy được email Google đã xác minh." });
+      .json({ message: "KhÃ´ng láº¥y Ä‘Æ°á»£c email Google Ä‘Ã£ xÃ¡c minh." });
     return;
   }
 
@@ -256,7 +477,7 @@ export async function googleCallback(request: Request, response: Response) {
   });
 
   if (user?.status === "Đã khóa") {
-    response.status(403).json({ message: "Tài khoản đã bị khóa." });
+    response.status(403).json({ message: "TÃ i khoáº£n Ä‘Ã£ bá»‹ khÃ³a." });
     return;
   }
 
@@ -287,8 +508,8 @@ export async function googleCallback(request: Request, response: Response) {
 }
 
 /**
- * Tạo ActiveSession record mỗi lần login thành công.
- * TTL index trên expiresAt sẽ tự xoá khi quá hạn.
+ * Táº¡o ActiveSession record má»—i láº§n login thÃ nh cÃ´ng.
+ * TTL index trÃªn expiresAt sáº½ tá»± xoÃ¡ khi quÃ¡ háº¡n.
  */
 async function recordActiveSession(
   request: Request,
@@ -311,95 +532,36 @@ export async function forgotPassword(request: Request, response: Response) {
   const email = body.email.toLowerCase();
   const user = await User.findOne({ email });
 
-  // Sử dụng crypto.randomInt để sinh OTP an toàn, tránh Math.random()
-  const otpVal = randomInt(100000, 999999);
-  const otp = String(otpVal);
+  if (!smtpConfigured()) {
+    response.status(503).json({
+      message:
+        "SMTP chÆ°a Ä‘Æ°á»£c cáº¥u hÃ¬nh. KhÃ´ng thá»ƒ gá»­i OTP Ä‘áº·t láº¡i máº­t kháº©u.",
+    });
+    return;
+  }
 
   if (user) {
+    const otp = generateOtp();
     const otpHash = await bcrypt.hash(otp, 12);
-    // Vô hiệu hoá tất cả OTP cũ của email này trước khi tạo OTP mới
-    await OtpToken.updateMany(
-      { email, purpose: "reset-password", usedAt: { $exists: false } },
-      { $set: { usedAt: new Date() } },
-    );
-
     await OtpToken.create({
       email,
       otpHash,
       purpose: "reset-password",
-      expiresAt: new Date(Date.now() + 5 * 60 * 1000),
-      attempts: 0,
-      verified: false,
+      expiresAt: new Date(Date.now() + OTP_TTL_MS),
     });
 
     await sendMail(
       email,
-      "Mã OTP đặt lại mật khẩu iPARK",
-      `Mã OTP của bạn là ${otp}. Mã có hiệu lực trong 5 phút.`,
+      "MÃ£ OTP Ä‘áº·t láº¡i máº­t kháº©u iPARK",
+      `MÃ£ OTP cá»§a báº¡n lÃ  ${otp}. MÃ£ cÃ³ hiá»‡u lá»±c trong 5 phÃºt.`,
     );
   }
 
   response.json({
     ok: true,
-    message: smtpConfigured()
-      ? "Nếu email tồn tại, hệ thống đã gửi OTP đặt lại mật khẩu."
-      : "SMTP chưa cấu hình, OTP demo được trả trong phản hồi.",
-    ...(smtpConfigured() || !user ? {} : { devOtp: otp }),
+    message:
+      "Náº¿u email tá»“n táº¡i, há»‡ thá»‘ng Ä‘Ã£ gá»­i OTP Ä‘áº·t láº¡i máº­t kháº©u.",
   });
-}
-
-export async function verifyOtp(request: Request, response: Response) {
-  const body = z
-    .object({
-      email: z.string().email(),
-      otp: z.string().min(6).max(6),
-    })
-    .parse(request.body);
-
-  const email = body.email.toLowerCase();
-  const token = await OtpToken.findOne({
-    email,
-    purpose: "reset-password",
-    usedAt: { $exists: false },
-    expiresAt: { $gt: new Date() },
-  }).sort({ createdAt: -1 });
-
-  if (!token) {
-    response
-      .status(400)
-      .json({ message: "Không tìm thấy yêu cầu OTP hoặc OTP đã hết hạn." });
-    return;
-  }
-
-  // Chống brute-force: Giới hạn tối đa 5 lần thử sai cho mỗi mã OTP
-  if (token.attempts >= 5) {
-    token.usedAt = new Date(); // Vô hiệu hoá mã OTP ngay lập tức
-    await token.save();
-    response
-      .status(400)
-      .json({
-        message:
-          "OTP đã bị vô hiệu hóa do thử sai quá 5 lần. Vui lòng yêu cầu mã mới.",
-      });
-    return;
-  }
-
-  const isMatched = await bcrypt.compare(body.otp, token.otpHash);
-  if (!isMatched) {
-    token.attempts += 1;
-    if (token.attempts >= 5) {
-      token.usedAt = new Date();
-    }
-    await token.save();
-    response.status(400).json({ message: "OTP không đúng hoặc đã hết hạn." });
-    return;
-  }
-
-  // Đánh dấu đã xác thực OTP thành công
-  token.verified = true;
-  await token.save();
-
-  response.json({ ok: true, message: "Mã OTP hợp lệ." });
 }
 
 export async function resetPassword(request: Request, response: Response) {
@@ -407,7 +569,7 @@ export async function resetPassword(request: Request, response: Response) {
     .object({
       email: z.email(),
       otp: z.string().min(6).max(6),
-      password: z.string().regex(passwordRegex, passwordErrorMessage),
+      password: z.string().min(6),
     })
     .parse(request.body);
 
@@ -417,22 +579,18 @@ export async function resetPassword(request: Request, response: Response) {
     purpose: "reset-password",
     usedAt: { $exists: false },
     expiresAt: { $gt: new Date() },
-    verified: true, // Yêu cầu OTP phải được verify thành công trước đó
   }).sort({ createdAt: -1 });
 
-  if (!token) {
+  if (!token || !(await bcrypt.compare(body.otp, token.otpHash))) {
     response
       .status(400)
-      .json({
-        message:
-          "Phiên làm việc không hợp lệ hoặc đã hết hạn. Vui lòng xác thực lại OTP.",
-      });
+      .json({ message: "OTP khÃ´ng Ä‘Ãºng hoáº·c Ä‘Ã£ háº¿t háº¡n." });
     return;
   }
 
   const user = await User.findOne({ email });
   if (!user) {
-    response.status(404).json({ message: "Không tìm thấy tài khoản." });
+    response.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y tÃ i khoáº£n." });
     return;
   }
 
@@ -441,138 +599,282 @@ export async function resetPassword(request: Request, response: Response) {
   token.usedAt = new Date();
   await Promise.all([user.save(), token.save()]);
 
-  response.json({ ok: true, message: "Đã đặt lại mật khẩu." });
-}
-
-export async function changePassword(request: Request, response: Response) {
-  const body = z
-    .object({
-      currentPassword: z.string().min(1),
-      newPassword: z.string().regex(passwordRegex, passwordErrorMessage),
-    })
-    .parse(request.body);
-
-  if (!dbReady()) {
-    response
-      .status(503)
-      .json({ message: "Chưa kết nối DB nên chưa thể đổi mật khẩu." });
-    return;
-  }
-
-  const requester = request.user;
-  const user =
-    requester?.id && mongoose.Types.ObjectId.isValid(requester.id)
-      ? await User.findById(requester.id)
-      : requester?.email
-        ? await User.findOne({ email: requester.email.toLowerCase() })
-        : null;
-
-  if (!user) {
-    response
-      .status(401)
-      .json({ message: "Không xác định được tài khoản đang đăng nhập." });
-    return;
-  }
-
-  if (!user.passwordHash) {
-    response
-      .status(400)
-      .json({ message: "Tài khoản này chưa có mật khẩu cục bộ." });
-    return;
-  }
-
-  const passwordMatches = await bcrypt.compare(
-    body.currentPassword,
-    user.passwordHash,
-  );
-  if (!passwordMatches) {
-    response.status(400).json({ message: "Mật khẩu hiện tại không đúng." });
-    return;
-  }
-
-  user.passwordHash = await bcrypt.hash(body.newPassword, 12);
-  user.provider = user.provider === "google" ? "mixed" : user.provider;
-  await user.save();
-
-  response.json({ ok: true, message: "Đã thay đổi mật khẩu." });
+  response.json({ ok: true, message: "ÄÃ£ Ä‘áº·t láº¡i máº­t kháº©u." });
 }
 
 export async function setupTwoFactor(request: Request, response: Response) {
   const user = await User.findById(request.user?.id);
-  if (!user || user.role !== "admin") {
-    response.status(403).json({ message: "Chỉ admin được bật 2FA." });
+  if (!user) {
+    response
+      .status(401)
+      .json({ message: "Báº¡n cáº§n Ä‘Äƒng nháº­p Ä‘á»ƒ báº­t 2FA." });
     return;
   }
 
-  const secret = generateSecret();
-  const otpauthUrl = generateURI({
-    issuer: env.totpIssuer,
-    label: user.email,
-    secret,
+  if (!smtpConfigured()) {
+    response.status(503).json({
+      message:
+        "SMTP chÆ°a Ä‘Æ°á»£c cáº¥u hÃ¬nh. KhÃ´ng thá»ƒ gá»­i mÃ£ 2FA qua email.",
+    });
+    return;
+  }
+
+  // Sinh OTP 6 sá»‘, lÆ°u OtpToken(purpose=two-factor) vÃ  gá»­i vá» email Ä‘á»ƒ xÃ¡c nháº­n báº­t
+  const otp = generateOtp();
+  const otpHash = await bcrypt.hash(otp, 12);
+  const token = await OtpToken.create({
+    email: user.email,
+    otpHash,
+    purpose: "two-factor",
+    expiresAt: new Date(Date.now() + OTP_TTL_MS),
   });
-  user.twoFactorPendingSecret = encryptSecret(secret);
-  await user.save();
+
+  await sendMail(
+    user.email,
+    "MÃ£ xÃ¡c nháº­n báº­t xÃ¡c thá»±c 2 lá»›p (2FA) iPARK",
+    `MÃ£ xÃ¡c nháº­n báº­t 2FA iPARK cá»§a báº¡n lÃ  ${otp}. MÃ£ cÃ³ hiá»‡u lá»±c trong 5 phÃºt. Náº¿u báº¡n khÃ´ng thá»±c hiá»‡n yÃªu cáº§u nÃ y, vui lÃ²ng bá» qua email.`,
+  );
 
   response.json({
-    otpauthUrl,
-    qrDataUrl: await QRCode.toDataURL(otpauthUrl),
-    message: "Quét QR bằng app xác thực, sau đó nhập mã để xác minh.",
+    setupTwoFactorId: token._id.toString(),
+    email: user.email,
+    message:
+      "ÄÃ£ gá»­i mÃ£ xÃ¡c nháº­n 6 sá»‘ vá» email. Vui lÃ²ng nháº­p mÃ£ Ä‘á»ƒ hoÃ n táº¥t báº­t 2FA.",
   });
 }
 
 export async function verifyTwoFactor(request: Request, response: Response) {
-  const body = z.object({ code: z.string().min(6).max(6) }).parse(request.body);
+  const body = z
+    .object({
+      setupTwoFactorId: z.string().min(1),
+      code: z.string().min(6).max(6),
+    })
+    .parse(request.body);
   const user = await User.findById(request.user?.id);
-  if (!user || user.role !== "admin" || !user.twoFactorPendingSecret) {
-    response.status(400).json({ message: "Chưa có phiên thiết lập 2FA." });
+  if (!user) {
+    response
+      .status(401)
+      .json({ message: "Báº¡n cáº§n Ä‘Äƒng nháº­p Ä‘á»ƒ báº­t 2FA." });
     return;
   }
 
-  const secret = decryptSecret(user.twoFactorPendingSecret);
-  if (!verifySync({ token: body.code, secret }).valid) {
-    response.status(400).json({ message: "Mã 2FA không đúng." });
+  const token = await OtpToken.findOne({
+    _id: body.setupTwoFactorId,
+    email: user.email,
+    purpose: "two-factor",
+    usedAt: { $exists: false },
+    expiresAt: { $gt: new Date() },
+  });
+
+  if (!token || !(await bcrypt.compare(body.code, token.otpHash))) {
+    response
+      .status(400)
+      .json({ message: "MÃ£ 2FA khÃ´ng Ä‘Ãºng hoáº·c Ä‘Ã£ háº¿t háº¡n." });
     return;
   }
 
-  user.twoFactorSecret = user.twoFactorPendingSecret;
-  user.twoFactorPendingSecret = undefined;
+  token.usedAt = new Date();
   user.twoFactorEnabled = true;
-  await user.save();
+  await Promise.all([user.save(), token.save()]);
 
-  response.json({ user: serializeUser(user), message: "Đã bật 2FA." });
+  response.json({ user: serializeUser(user), message: "ÄÃ£ báº­t 2FA." });
+}
+
+export async function resendTwoFactorOtp(request: Request, response: Response) {
+  const body = z
+    .object({ setupTwoFactorId: z.string().optional() })
+    .parse(request.body);
+  const user = await User.findById(request.user?.id);
+  if (!user) {
+    response.status(401).json({ message: "Báº¡n cáº§n Ä‘Äƒng nháº­p." });
+    return;
+  }
+
+  if (!smtpConfigured()) {
+    response.status(503).json({
+      message:
+        "SMTP chÆ°a Ä‘Æ°á»£c cáº¥u hÃ¬nh. KhÃ´ng thá»ƒ gá»­i láº¡i mÃ£ 2FA.",
+    });
+    return;
+  }
+
+  // VÃ´ hiá»‡u hoÃ¡ cÃ¡c OtpToken two-factor cÅ© cÃ¹ng user
+  await OtpToken.updateMany(
+    { email: user.email, purpose: "two-factor", usedAt: { $exists: false } },
+    { $set: { usedAt: new Date() } },
+  );
+
+  const otp = generateOtp();
+  const otpHash = await bcrypt.hash(otp, 12);
+  const token = await OtpToken.create({
+    email: user.email,
+    otpHash,
+    purpose: "two-factor",
+    expiresAt: new Date(Date.now() + OTP_TTL_MS),
+  });
+
+  await sendMail(
+    user.email,
+    "MÃ£ xÃ¡c thá»±c 2 lá»›p (2FA) iPARK (gá»­i láº¡i)",
+    `MÃ£ 2FA má»›i cá»§a báº¡n lÃ  ${otp}. MÃ£ cÃ³ hiá»‡u lá»±c trong 5 phÃºt.`,
+  );
+
+  response.json({
+    setupTwoFactorId: token._id.toString(),
+    message: "ÄÃ£ gá»­i láº¡i mÃ£ 2FA. Vui lÃ²ng kiá»ƒm tra email.",
+  });
 }
 
 export async function disableTwoFactor(request: Request, response: Response) {
-  const body = z.object({ code: z.string().optional() }).parse(request.body);
+  const body = z.object({ code: z.string().min(6).max(6) }).parse(request.body);
   const user = await User.findById(request.user?.id);
-  if (!user || user.role !== "admin") {
-    response.status(403).json({ message: "Chỉ admin được tắt 2FA." });
+  if (!user) {
+    response
+      .status(401)
+      .json({ message: "Báº¡n cáº§n Ä‘Äƒng nháº­p Ä‘á»ƒ táº¯t 2FA." });
     return;
   }
 
-  if (user.twoFactorEnabled && user.twoFactorSecret) {
-    if (
-      !body.code ||
-      !verifySync({
-        token: body.code,
-        secret: decryptSecret(user.twoFactorSecret),
-      }).valid
-    ) {
-      response.status(400).json({ message: "Mã 2FA không đúng." });
-      return;
-    }
+  if (!user.twoFactorEnabled) {
+    response.status(400).json({ message: "2FA chÆ°a Ä‘Æ°á»£c báº­t." });
+    return;
   }
 
-  user.twoFactorEnabled = false;
-  user.twoFactorSecret = undefined;
-  user.twoFactorPendingSecret = undefined;
-  await user.save();
+  // Láº¥y OTP má»›i nháº¥t (chÆ°a dÃ¹ng, cÃ²n háº¡n) thuá»™c user nÃ y
+  const token = await OtpToken.findOne({
+    email: user.email,
+    purpose: "two-factor",
+    usedAt: { $exists: false },
+    expiresAt: { $gt: new Date() },
+  }).sort({ createdAt: -1 });
 
-  response.json({ user: serializeUser(user), message: "Đã tắt 2FA." });
+  if (!token) {
+    response.status(400).json({
+      message:
+        "ChÆ°a cÃ³ mÃ£ 2FA nÃ o Ä‘Æ°á»£c gá»­i. Vui lÃ²ng báº¥m 'Gá»­i mÃ£' trÆ°á»›c.",
+    });
+    return;
+  }
+
+  if (!(await bcrypt.compare(body.code, token.otpHash))) {
+    response.status(400).json({ message: "MÃ£ 2FA khÃ´ng Ä‘Ãºng." });
+    return;
+  }
+
+  token.usedAt = new Date();
+  user.twoFactorEnabled = false;
+  await Promise.all([user.save(), token.save()]);
+
+  response.json({ user: serializeUser(user), message: "ÄÃ£ táº¯t 2FA." });
+}
+
+export async function requestDisableTwoFactor(
+  request: Request,
+  response: Response,
+) {
+  const user = await User.findById(request.user?.id);
+  if (!user) {
+    response
+      .status(401)
+      .json({ message: "Báº¡n cáº§n Ä‘Äƒng nháº­p Ä‘á»ƒ táº¯t 2FA." });
+    return;
+  }
+
+  if (!user.twoFactorEnabled) {
+    response.status(400).json({ message: "2FA chÆ°a Ä‘Æ°á»£c báº­t." });
+    return;
+  }
+
+  if (!smtpConfigured()) {
+    response.status(503).json({
+      message:
+        "SMTP chÆ°a Ä‘Æ°á»£c cáº¥u hÃ¬nh. KhÃ´ng thá»ƒ gá»­i mÃ£ 2FA qua email.",
+    });
+    return;
+  }
+
+  await OtpToken.updateMany(
+    { email: user.email, purpose: "two-factor", usedAt: { $exists: false } },
+    { $set: { usedAt: new Date() } },
+  );
+
+  const otp = generateOtp();
+  const otpHash = await bcrypt.hash(otp, 12);
+  const token = await OtpToken.create({
+    email: user.email,
+    otpHash,
+    purpose: "two-factor",
+    expiresAt: new Date(Date.now() + OTP_TTL_MS),
+  });
+
+  await sendMail(
+    user.email,
+    "MÃ£ xÃ¡c nháº­n táº¯t xÃ¡c thá»±c 2 lá»›p (2FA) iPARK",
+    `MÃ£ xÃ¡c nháº­n táº¯t 2FA iPARK cá»§a báº¡n lÃ  ${otp}. MÃ£ cÃ³ hiá»‡u lá»±c trong 5 phÃºt. Náº¿u báº¡n khÃ´ng thá»±c hiá»‡n yÃªu cáº§u nÃ y, vui lÃ²ng bá» qua email.`,
+  );
+
+  response.json({
+    disableTwoFactorId: token._id.toString(),
+    message:
+      "ÄÃ£ gá»­i mÃ£ xÃ¡c nháº­n 6 sá»‘ vá» email. Vui lÃ²ng nháº­p mÃ£ Ä‘á»ƒ hoÃ n táº¥t táº¯t 2FA.",
+  });
+}
+
+/**
+ * BÆ°á»›c 2 cá»§a login flow: xÃ¡c minh OTP 2FA vÃ  cáº¥p session cookie.
+ * Client gá»­i pendingTwoFactorId (láº¥y tá»« response 202 cá»§a /auth/login) + code 6 sá»‘.
+ */
+export async function verifyLoginTwoFactor(
+  request: Request,
+  response: Response,
+) {
+  const body = z
+    .object({
+      pendingTwoFactorId: z.string().min(1),
+      code: z.string().min(6).max(6),
+    })
+    .parse(request.body);
+
+  const otpToken = await OtpToken.findOne({
+    _id: body.pendingTwoFactorId,
+    purpose: "two-factor",
+    usedAt: { $exists: false },
+    expiresAt: { $gt: new Date() },
+  });
+
+  if (!otpToken || !(await bcrypt.compare(body.code, otpToken.otpHash))) {
+    response
+      .status(401)
+      .json({ message: "MÃ£ 2FA khÃ´ng Ä‘Ãºng hoáº·c Ä‘Ã£ háº¿t háº¡n." });
+    return;
+  }
+
+  const user = await User.findOne({ email: otpToken.email });
+  if (!user || user.status === "Đã khóa") {
+    response
+      .status(401)
+      .json({
+        message: "TÃ i khoáº£n khÃ´ng tá»“n táº¡i hoáº·c Ä‘Ã£ bá»‹ khÃ³a.",
+      });
+    return;
+  }
+
+  otpToken.usedAt = new Date();
+  user.lastLoginAt = new Date();
+  await Promise.all([otpToken.save(), user.save()]);
+
+  const serialized = serializeUser(user);
+  const sessionToken = await signSession(serialized);
+  await recordActiveSession(request, user._id);
+
+  response.cookie(cookieName, sessionToken, cookieOptions()).json({
+    user: serialized,
+    message: "ÄÄƒng nháº­p thÃ nh cÃ´ng.",
+  });
 }
 
 export function logout(_request: Request, response: Response) {
-  response.clearCookie(cookieName, cookieOptions()).json({ ok: true });
+  response.clearCookie(cookieName, { path: "/" }).json({ ok: true });
 }
 
 export async function me(request: Request, response: Response) {
@@ -580,7 +882,7 @@ export async function me(request: Request, response: Response) {
     response.json({ user: null });
     return;
   }
-  // Đọc từ DB để có dữ liệu mới nhất (vd: cập nhật status sau khi đăng nhập).
+  // Äá»c tá»« DB Ä‘á»ƒ cÃ³ dá»¯ liá»‡u má»›i nháº¥t (vd: cáº­p nháº­t status sau khi Ä‘Äƒng nháº­p).
   const user = await User.findById(request.user.id);
   response.json({ user: user ? serializeUser(user) : request.user });
 }
@@ -595,121 +897,285 @@ export async function changePassword(request: Request, response: Response) {
 
   const user = await User.findById(request.user?.id);
   if (!user) {
-    response.status(401).json({ message: "Chưa đăng nhập." });
+    response.status(401).json({ message: "ChÆ°a Ä‘Äƒng nháº­p." });
     return;
   }
 
   const valid = await bcrypt.compare(body.currentPassword, user.passwordHash);
   if (!valid) {
-    response.status(400).json({ message: "Mật khẩu hiện tại không đúng." });
+    response
+      .status(400)
+      .json({ message: "Máº­t kháº©u hiá»‡n táº¡i khÃ´ng Ä‘Ãºng." });
     return;
   }
 
   user.passwordHash = await bcrypt.hash(body.newPassword, 12);
   await user.save();
-  response.json({ ok: true, message: "Đã thay đổi mật khẩu." });
+  response.json({ ok: true, message: "ÄÃ£ thay Ä‘á»•i máº­t kháº©u." });
 }
 
 const profileUpdateSchema = z
   .object({
-    name: z.string().min(2, "Họ tên phải có ít nhất 2 ký tự").max(100).optional(),
-    email: z.email({ message: "Email không hợp lệ" }).optional(),
+    name: z
+      .string()
+      .min(2, "Há» tÃªn pháº£i cÃ³ Ã­t nháº¥t 2 kÃ½ tá»±")
+      .max(100)
+      .optional(),
+    // Email KHÃ”NG Ä‘Æ°á»£c Ä‘á»•i qua endpoint nÃ y ná»¯a â€” dÃ¹ng /request-change-email + /verify-change-email
     phone: z
       .string()
       .trim()
-      .regex(/^[0-9+\-\s()]{6,20}$/, "Số điện thoại không hợp lệ")
+      .regex(/^[0-9+\-\s()]{6,20}$/, "Sá»‘ Ä‘iá»‡n thoáº¡i khÃ´ng há»£p lá»‡")
       .optional()
       .or(z.literal(""))
       .transform((v) => (v ? v : undefined)),
-    avatarUrl: z.string().url("URL ảnh không hợp lệ").max(2_000_000).optional(),
+    avatarUrl: z
+      .string()
+      .url("URL áº£nh khÃ´ng há»£p lá»‡")
+      .max(2_000_000)
+      .optional(),
   })
   .strict();
 
 export async function updateProfile(request: Request, response: Response) {
   const userId = request.user?.id;
   if (!userId) {
-    response.status(401).json({ message: "Chưa đăng nhập." });
+    response.status(401).json({ message: "ChÆ°a Ä‘Äƒng nháº­p." });
     return;
   }
 
   const parsed = profileUpdateSchema.safeParse(request.body);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
-    response.status(400).json({ message: issue?.message ?? "Dữ liệu không hợp lệ." });
+    response
+      .status(400)
+      .json({ message: issue?.message ?? "Dá»¯ liá»‡u khÃ´ng há»£p lá»‡." });
     return;
   }
   const body = parsed.data;
 
   const user = await User.findById(userId);
   if (!user) {
-    response.status(404).json({ message: "Không tìm thấy tài khoản." });
+    response.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y tÃ i khoáº£n." });
     return;
-  }
-
-  // Email uniqueness check
-  if (body.email && body.email.toLowerCase() !== user.email) {
-    const existed = await User.findOne({ email: body.email.toLowerCase(), _id: { $ne: user._id } });
-    if (existed) {
-      response.status(409).json({ message: "Email đã được sử dụng." });
-      return;
-    }
-    user.email = body.email.toLowerCase();
   }
 
   // Phone uniqueness check
   if (body.phone && body.phone !== user.phone) {
-    const existed = await User.findOne({ phone: body.phone, _id: { $ne: user._id } });
+    const existed = await User.findOne({
+      phone: body.phone,
+      _id: { $ne: user._id },
+    });
     if (existed) {
-      response.status(409).json({ message: "Số điện thoại đã được sử dụng." });
+      response
+        .status(409)
+        .json({ message: "Sá»‘ Ä‘iá»‡n thoáº¡i Ä‘Ã£ Ä‘Æ°á»£c sá»­ dá»¥ng." });
       return;
     }
     user.phone = body.phone;
   }
 
   if (typeof body.name === "string") user.name = body.name.trim();
-  if (typeof body.avatarUrl === "string" && body.avatarUrl) user.avatarUrl = body.avatarUrl;
+  if (typeof body.avatarUrl === "string" && body.avatarUrl)
+    user.avatarUrl = body.avatarUrl;
 
   await user.save();
 
   const serialized = serializeUser(user);
-  // Cập nhật cookie session nếu email/role đổi
   const token = await signSession(serialized);
-  response.cookie(cookieName, token, cookieOptions()).json({ user: serialized, message: "Đã cập nhật hồ sơ." });
+  response
+    .cookie(cookieName, token, cookieOptions())
+    .json({ user: serialized, message: "ÄÃ£ cáº­p nháº­t há»“ sÆ¡." });
 }
 
 export async function resendOtp(request: Request, response: Response) {
   const body = z.object({ email: z.email() }).parse(request.body);
   const email = body.email.toLowerCase();
   const user = await User.findOne({ email });
-  const otp = String(Math.floor(100000 + Math.random() * 900000));
+
+  if (!smtpConfigured()) {
+    response.status(503).json({
+      message: "SMTP chÆ°a Ä‘Æ°á»£c cáº¥u hÃ¬nh. KhÃ´ng thá»ƒ gá»­i láº¡i OTP.",
+    });
+    return;
+  }
 
   if (user) {
+    const otp = generateOtp();
     const otpHash = await bcrypt.hash(otp, 12);
     await OtpToken.create({
       email,
       otpHash,
       purpose: "reset-password",
-      expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+      expiresAt: new Date(Date.now() + OTP_TTL_MS),
     });
 
     await sendMail(
       email,
-      "Mã OTP đặt lại mật khẩu iPARK (gửi lại)",
-      `Mã OTP mới của bạn là ${otp}. Mã có hiệu lực trong 5 phút.`,
+      "MÃ£ OTP Ä‘áº·t láº¡i máº­t kháº©u iPARK (gá»­i láº¡i)",
+      `MÃ£ OTP má»›i cá»§a báº¡n lÃ  ${otp}. MÃ£ cÃ³ hiá»‡u lá»±c trong 5 phÃºt.`,
     );
   }
 
-  response.json({
-    ok: true,
-    message: smtpConfigured()
-      ? "Đã gửi lại OTP."
-      : "SMTP chưa cấu hình, OTP demo trong phản hồi.",
-    ...(smtpConfigured() || !user ? {} : { devOtp: otp }),
-  });
+  response.json({ ok: true, message: "ÄÃ£ gá»­i láº¡i OTP." });
 }
 
 // --- Active Sessions Management (AU-14) ---
 import { ActiveSession } from "../models/ActiveSession.js";
+
+/**
+ * BÆ°á»›c 1 Ä‘á»•i email: user Ä‘ang Ä‘Äƒng nháº­p gá»­i email má»›i â†’ backend kiá»ƒm tra tÃ­nh há»£p lá»‡,
+ * gá»­i OTP 6 sá»‘ Ä‘áº¿n EMAIL Má»šI Ä‘á»ƒ xÃ¡c minh.
+ */
+export async function requestChangeEmail(request: Request, response: Response) {
+  const userId = request.user?.id;
+  if (!userId) {
+    response.status(401).json({ message: "ChÆ°a Ä‘Äƒng nháº­p." });
+    return;
+  }
+
+  const body = z
+    .object({ newEmail: z.email({ message: "Email khÃ´ng há»£p lá»‡." }) })
+    .parse(request.body);
+  const newEmail = body.newEmail.toLowerCase();
+
+  if (!smtpConfigured()) {
+    response
+      .status(503)
+      .json({
+        message:
+          "SMTP chÆ°a Ä‘Æ°á»£c cáº¥u hÃ¬nh. KhÃ´ng thá»ƒ gá»­i OTP xÃ¡c minh email.",
+      });
+    return;
+  }
+
+  const user = await User.findById(userId);
+  if (!user) {
+    response.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y tÃ i khoáº£n." });
+    return;
+  }
+
+  // KhÃ´ng Ä‘á»•i náº¿u email má»›i giá»‘ng email hiá»‡n táº¡i
+  if (newEmail === user.email) {
+    response
+      .status(400)
+      .json({ message: "Email má»›i pháº£i khÃ¡c email hiá»‡n táº¡i." });
+    return;
+  }
+
+  // Kiá»ƒm tra email má»›i cÃ³ bá»‹ trÃ¹ng khÃ´ng
+  const existed = await User.findOne({
+    email: newEmail,
+    _id: { $ne: user._id },
+  });
+  if (existed) {
+    response
+      .status(409)
+      .json({
+        message:
+          "Email nÃ y Ä‘Ã£ Ä‘Æ°á»£c sá»­ dá»¥ng bá»Ÿi tÃ i khoáº£n khÃ¡c.",
+      });
+    return;
+  }
+
+  // XoÃ¡ cÃ¡c OTP change-email cÅ© chÆ°a dÃ¹ng cá»§a user nÃ y
+  await OtpToken.updateMany(
+    { email: user.email, purpose: "change-email", usedAt: { $exists: false } },
+    { $set: { usedAt: new Date() } },
+  );
+
+  const otp = generateOtp();
+  const otpHash = await bcrypt.hash(otp, 12);
+  const token = await OtpToken.create({
+    email: user.email, // lÆ°u email hiá»‡n táº¡i Ä‘á»ƒ tÃ¬m láº¡i token
+    newEmail, // email má»›i cáº§n xÃ¡c minh
+    otpHash,
+    purpose: "change-email",
+    expiresAt: new Date(Date.now() + OTP_TTL_MS),
+  });
+
+  await sendMail(
+    newEmail,
+    "MÃ£ OTP xÃ¡c nháº­n Ä‘á»•i email iPARK",
+    `MÃ£ OTP xÃ¡c nháº­n Ä‘á»•i email iPARK cá»§a báº¡n lÃ  ${otp}. MÃ£ cÃ³ hiá»‡u lá»±c trong 5 phÃºt. Náº¿u báº¡n khÃ´ng thá»±c hiá»‡n yÃªu cáº§u nÃ y, vui lÃ²ng bá» qua email nÃ y.`,
+  );
+
+  response.json({
+    changeEmailTokenId: token._id.toString(),
+    message:
+      "ÄÃ£ gá»­i mÃ£ OTP 6 sá»‘ Ä‘áº¿n email má»›i. Vui lÃ²ng kiá»ƒm tra há»™p thÆ° vÃ  nháº­p mÃ£ Ä‘á»ƒ xÃ¡c nháº­n.",
+  });
+}
+
+/**
+ * BÆ°á»›c 2 Ä‘á»•i email: xÃ¡c minh OTP gá»­i Ä‘áº¿n email má»›i â†’ cáº­p nháº­t email trong DB.
+ */
+export async function verifyChangeEmail(request: Request, response: Response) {
+  const userId = request.user?.id;
+  if (!userId) {
+    response.status(401).json({ message: "ChÆ°a Ä‘Äƒng nháº­p." });
+    return;
+  }
+
+  const body = z
+    .object({
+      changeEmailTokenId: z.string().min(1),
+      otp: z.string().min(6).max(6),
+    })
+    .parse(request.body);
+
+  const user = await User.findById(userId);
+  if (!user) {
+    response.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y tÃ i khoáº£n." });
+    return;
+  }
+
+  const token = await OtpToken.findOne({
+    _id: body.changeEmailTokenId,
+    email: user.email,
+    purpose: "change-email",
+    usedAt: { $exists: false },
+    expiresAt: { $gt: new Date() },
+  });
+
+  if (!token || !(await bcrypt.compare(body.otp, token.otpHash))) {
+    response
+      .status(400)
+      .json({ message: "OTP khÃ´ng Ä‘Ãºng hoáº·c Ä‘Ã£ háº¿t háº¡n." });
+    return;
+  }
+
+  const newEmail = token.newEmail!;
+
+  // Kiá»ƒm tra láº¡i email má»›i váº«n chÆ°a bá»‹ dÃ¹ng (race condition)
+  const existed = await User.findOne({
+    email: newEmail,
+    _id: { $ne: user._id },
+  });
+  if (existed) {
+    response
+      .status(409)
+      .json({
+        message:
+          "Email nÃ y Ä‘Ã£ Ä‘Æ°á»£c sá»­ dá»¥ng bá»Ÿi tÃ i khoáº£n khÃ¡c.",
+      });
+    return;
+  }
+
+  user.email = newEmail;
+  token.usedAt = new Date();
+  await Promise.all([user.save(), token.save()]);
+
+  const serialized = serializeUser(user);
+  // Cáº­p nháº­t cookie session vá»›i email má»›i
+  const sessionToken = await signSession(serialized);
+  response
+    .cookie(cookieName, sessionToken, cookieOptions())
+    .json({
+      user: serialized,
+      message: "ÄÃ£ cáº­p nháº­t email thÃ nh cÃ´ng.",
+    });
+}
 
 export async function listActiveSessions(request: Request, response: Response) {
   const sessions = await ActiveSession.find({
@@ -737,12 +1203,12 @@ export async function revokeSession(request: Request, response: Response) {
     userId: request.user?.id,
   });
   if (!session) {
-    response.status(404).json({ message: "Phiên không tồn tại." });
+    response.status(404).json({ message: "PhiÃªn khÃ´ng tá»“n táº¡i." });
     return;
   }
   session.isRevoked = true;
   await session.save();
-  response.json({ ok: true, message: "Đã thu hồi phiên đăng nhập." });
+  response.json({ ok: true, message: "ÄÃ£ thu há»“i phiÃªn Ä‘Äƒng nháº­p." });
 }
 
 export async function revokeAllSessions(request: Request, response: Response) {
@@ -750,5 +1216,8 @@ export async function revokeAllSessions(request: Request, response: Response) {
     { userId: request.user?.id, isRevoked: false },
     { $set: { isRevoked: true } },
   );
-  response.json({ ok: true, message: "Đã thu hồi tất cả phiên đăng nhập." });
+  response.json({
+    ok: true,
+    message: "ÄÃ£ thu há»“i táº¥t cáº£ phiÃªn Ä‘Äƒng nháº­p.",
+  });
 }
