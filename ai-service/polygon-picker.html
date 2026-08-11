@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>iPARK — Công cụ vẽ ô đỗ (polygon picker)</title>
+<style>
+  :root { --bg:#0a0f1a; --fg:#e5e7eb; --muted:#94a3b8; --accent:#3b82f6; --border:#1e293b; --ok:#22c55e; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font-family: system-ui, "Segoe UI", sans-serif; }
+  header { padding:16px 20px; border-bottom:1px solid var(--border); }
+  header h1 { font-size:18px; margin:0 0 4px; }
+  header p { margin:0; color:var(--muted); font-size:13px; }
+  .wrap { display:flex; gap:16px; padding:16px 20px; align-items:flex-start; flex-wrap:wrap; }
+  .canvas-col { flex:1 1 560px; min-width:320px; }
+  .side { flex:1 1 320px; min-width:300px; }
+  .toolbar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
+  button { background:var(--accent); color:#fff; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-size:13px; }
+  button.secondary { background:transparent; border:1px solid var(--border); color:var(--fg); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  input[type=text] { background:#0f172a; border:1px solid var(--border); color:var(--fg); padding:7px 10px; border-radius:6px; font-size:13px; }
+  label.file { display:inline-block; }
+  #canvasHost { position:relative; border:1px solid var(--border); border-radius:8px; overflow:hidden; background:#000; }
+  canvas { display:block; max-width:100%; cursor:crosshair; }
+  .hint { color:var(--muted); font-size:12px; line-height:1.6; }
+  .hint kbd { background:#0f172a; border:1px solid var(--border); border-radius:4px; padding:1px 6px; font-size:11px; }
+  ul.slots { list-style:none; padding:0; margin:12px 0; }
+  ul.slots li { display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border:1px solid var(--border); border-radius:6px; margin-bottom:6px; font-size:13px; }
+  ul.slots li span.code { font-weight:600; }
+  ul.slots li button { padding:3px 8px; font-size:12px; background:#7f1d1d; }
+  textarea { width:100%; height:200px; background:#0f172a; border:1px solid var(--border); color:var(--fg); border-radius:6px; padding:10px; font-family: ui-monospace, "Cascadia Code", monospace; font-size:12px; }
+  .row { display:flex; gap:8px; align-items:center; margin-bottom:10px; }
+  .badge { font-size:11px; color:var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>iPARK — Công cụ vẽ ô đỗ</h1>
+  <p>Tải ảnh bãi đỗ → click các góc để vẽ từng ô → xuất JSON đưa vào trường <code>slots</code> của <code>/detect-occupancy</code>.</p>
+</header>
+
+<div class="wrap">
+  <div class="canvas-col">
+    <div class="toolbar">
+      <label class="file"><button type="button" onclick="document.getElementById('imgInput').click()">Tải ảnh…</button></label>
+      <input id="imgInput" type="file" accept="image/*" hidden />
+      <input id="slotCode" type="text" placeholder="Mã ô (vd: A-01)" />
+      <button id="finishBtn" class="secondary" disabled>Hoàn tất ô (Enter)</button>
+      <button id="undoBtn" class="secondary" disabled>Bỏ điểm cuối (Esc)</button>
+    </div>
+    <div id="canvasHost">
+      <canvas id="cv" width="800" height="450"></canvas>
+    </div>
+    <p class="hint">
+      <kbd>Click</kbd> đặt từng góc ô (tối thiểu 3 điểm). <kbd>Enter</kbd> chốt ô hiện tại.
+      <kbd>Esc</kbd> bỏ điểm vừa đặt. Toạ độ được lưu chuẩn hoá 0–1 nên không phụ thuộc kích thước ảnh.
+    </p>
+  </div>
+
+  <div class="side">
+    <div class="row">
+      <strong>Các ô đã vẽ</strong>
+      <span class="badge" id="count">(0)</span>
+    </div>
+    <ul class="slots" id="slotList"></ul>
+
+    <div class="row" style="justify-content:space-between">
+      <strong>JSON xuất ra</strong>
+      <span>
+        <button id="copyBtn" class="secondary">Sao chép</button>
+        <button id="clearBtn" class="secondary">Xoá hết</button>
+      </span>
+    </div>
+    <textarea id="output" readonly placeholder="[]"></textarea>
+  </div>
+</div>
+
+<script>
+(() => {
+  const cv = document.getElementById("cv");
+  const ctx = cv.getContext("2d");
+  const slotCodeInput = document.getElementById("slotCode");
+  const finishBtn = document.getElementById("finishBtn");
+  const undoBtn = document.getElementById("undoBtn");
+  const slotListEl = document.getElementById("slotList");
+  const outputEl = document.getElementById("output");
+  const countEl = document.getElementById("count");
+
+  let img = null;            // HTMLImageElement
+  let slots = [];            // [{ slotCode, polygon: [[x,y]...] }] normalized 0..1
+  let current = [];          // điểm ô đang vẽ, toạ độ pixel canvas
+
+  const PALETTE = ["#3b82f6","#22c55e","#f59e0b","#ec4899","#8b5cf6","#14b8a6","#ef4444","#eab308"];
+
+  function fitCanvasToImage() {
+    // Giữ ảnh trong khung tối đa 800px chiều rộng, canvas đúng tỷ lệ ảnh.
+    const maxW = 800;
+    const scale = Math.min(1, maxW / img.naturalWidth);
+    cv.width = Math.round(img.naturalWidth * scale);
+    cv.height = Math.round(img.naturalHeight * scale);
+  }
+
+  function redraw() {
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    if (img) ctx.drawImage(img, 0, 0, cv.width, cv.height);
+
+    // Các ô đã chốt
+    slots.forEach((slot, idx) => {
+      const color = PALETTE[idx % PALETTE.length];
+      drawPolygon(slot.polygon.map(([nx, ny]) => [nx * cv.width, ny * cv.height]), color, slot.slotCode);
+    });
+
+    // Ô đang vẽ
+    if (current.length) {
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      current.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
+      ctx.stroke();
+      current.forEach((p) => {
+        ctx.fillStyle = "#fff";
+        ctx.beginPath();
+        ctx.arc(p[0], p[1], 4, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+  }
+
+  function drawPolygon(pts, color, label) {
+    ctx.beginPath();
+    pts.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
+    ctx.closePath();
+    ctx.fillStyle = color + "33";
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    if (label) {
+      const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length;
+      const cy = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 13px system-ui";
+      ctx.textAlign = "center";
+      ctx.fillText(label, cx, cy);
+    }
+  }
+
+  function updateOutput() {
+    outputEl.value = JSON.stringify(slots, null, 2);
+    countEl.textContent = `(${slots.length})`;
+    slotListEl.innerHTML = "";
+    slots.forEach((slot, idx) => {
+      const li = document.createElement("li");
+      const color = PALETTE[idx % PALETTE.length];
+      li.innerHTML = `<span class="code" style="color:${color}">${slot.slotCode}</span>
+        <span class="badge">${slot.polygon.length} điểm</span>`;
+      const del = document.createElement("button");
+      del.textContent = "Xoá";
+      del.onclick = () => { slots.splice(idx, 1); updateOutput(); redraw(); };
+      li.appendChild(del);
+      slotListEl.appendChild(li);
+    });
+  }
+
+  function finishCurrent() {
+    if (current.length < 3) { alert("Cần ít nhất 3 điểm để tạo ô."); return; }
+    const code = slotCodeInput.value.trim() || `S-${slots.length + 1}`;
+    slots.push({
+      slotCode: code,
+      polygon: current.map(([x, y]) => [
+        +(x / cv.width).toFixed(4),
+        +(y / cv.height).toFixed(4),
+      ]),
+    });
+    current = [];
+    slotCodeInput.value = "";
+    finishBtn.disabled = true;
+    undoBtn.disabled = true;
+    updateOutput();
+    redraw();
+  }
+
+  cv.addEventListener("click", (e) => {
+    if (!img) { alert("Hãy tải ảnh trước."); return; }
+    const rect = cv.getBoundingClientRect();
+    // canvas hiển thị có thể bị co (max-width), quy đổi về toạ độ nội bộ canvas
+    const x = (e.clientX - rect.left) * (cv.width / rect.width);
+    const y = (e.clientY - rect.top) * (cv.height / rect.height);
+    current.push([x, y]);
+    finishBtn.disabled = current.length < 3;
+    undoBtn.disabled = current.length === 0;
+    redraw();
+  });
+
+  document.getElementById("imgInput").addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      img = new Image();
+      img.onload = () => { fitCanvasToImage(); redraw(); };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  finishBtn.addEventListener("click", finishCurrent);
+  undoBtn.addEventListener("click", () => {
+    current.pop();
+    finishBtn.disabled = current.length < 3;
+    undoBtn.disabled = current.length === 0;
+    redraw();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !finishBtn.disabled) { e.preventDefault(); finishCurrent(); }
+    if (e.key === "Escape" && current.length) { current.pop(); finishBtn.disabled = current.length < 3; undoBtn.disabled = current.length === 0; redraw(); }
+  });
+
+  document.getElementById("copyBtn").addEventListener("click", () => {
+    outputEl.select();
+    navigator.clipboard.writeText(outputEl.value).then(() => {
+      const b = document.getElementById("copyBtn");
+      b.textContent = "Đã sao chép!";
+      setTimeout(() => (b.textContent = "Sao chép"), 1500);
+    });
+  });
+
+  document.getElementById("clearBtn").addEventListener("click", () => {
+    if (!confirm("Xoá tất cả ô đã vẽ?")) return;
+    slots = []; current = [];
+    finishBtn.disabled = true; undoBtn.disabled = true;
+    updateOutput(); redraw();
+  });
+
+  updateOutput();
+})();
+</script>
+</body>
+</html>
