@@ -23,5 +23,17 @@ export const env = {
   smtpPass: process.env.SMTP_PASS || "",
   smtpFrom: process.env.SMTP_FROM || process.env.SMTP_USER || "iPARK <no-reply@ipark.local>",
   totpIssuer: process.env.TOTP_ISSUER || "iPARK",
+<<<<<<< Updated upstream
   serviceToken: process.env.SERVICE_TOKEN || "smart-parking-rut-gon-service-token-change-me",
+=======
+  encryptionKey: process.env.ENCRYPTION_KEY || "dev_encryption_key_change_me",
+  bridgeServiceToken: process.env.BRIDGE_SERVICE_TOKEN || "dev_bridge_token_change_me",
+  smtp: {
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT ?? 587),
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+    from: process.env.SMTP_FROM ?? "iPARK <no-reply@ipark.local>",
+  },
+>>>>>>> Stashed changes
 };

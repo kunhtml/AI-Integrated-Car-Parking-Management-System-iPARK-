@@ -53,4 +53,8 @@ parkingCameraLogSchema.index({ createdAt: -1 });
 
 export const ParkingCameraLog: Model<ParkingCameraLogDocument> =
   mongoose.models.ParkingCameraLog ||
+<<<<<<< Updated upstream
   mongoose.model<ParkingCameraLogDocument>("ParkingCameraLog", parkingCameraLogSchema);
+=======
+  mongoose.model<ParkingCameraLogDocument>("ParkingCameraLog", parkingCameraLogSchema);
+>>>>>>> Stashed changes

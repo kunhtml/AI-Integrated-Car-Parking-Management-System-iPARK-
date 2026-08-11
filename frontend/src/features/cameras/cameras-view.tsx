@@ -8,15 +8,22 @@ import {
   Loader2,
   Lock,
   LockOpen,
+<<<<<<< Updated upstream
   Power,
   RefreshCcw,
   ShieldAlert,
   Signal,
+=======
+  RefreshCcw,
+>>>>>>> Stashed changes
   WifiOff,
 } from "lucide-react";
 
 import { bridgeBaseUrl } from "@/lib/constants";
+<<<<<<< Updated upstream
 import { bridgeFetch } from "@/lib/client-api";
+=======
+>>>>>>> Stashed changes
 import { CamerasLogsPanel } from "@/features/cameras/cameras-logs-panel";
 
 type Gate = "in" | "out";
@@ -25,9 +32,13 @@ type CameraStream = {
   id: string;
   gate: Gate;
   name: string;
+<<<<<<< Updated upstream
   // snapshotUrl: ảnh tĩnh (fallback nếu stream lỗi)
   snapshotUrl: string;
   // streamUrl: MJPEG multipart stream (realtime, browser tự kéo liên tục)
+=======
+  snapshotUrl: string;
+>>>>>>> Stashed changes
   streamUrl?: string;
 };
 
@@ -60,16 +71,25 @@ export function CamerasView() {
   const [bridgeOnline, setBridgeOnline] = useState<boolean | null>(null);
   const [loadedAt, setLoadedAt] = useState<Record<string, Date>>({});
   const [failedAt, setFailedAt] = useState<Record<string, boolean>>({});
+<<<<<<< Updated upstream
   // Cache-buster cho mỗi camera; chỉ thay đổi khi user bấm "Reconnect"
   // để ép <img> reload stream kết nối mới (vd: bridge restart).
   const [streamKey, setStreamKey] = useState<Record<string, number>>({});
   const imgRefs = useRef<Record<string, HTMLImageElement | null>>({});
   // Trạng thái barie per-gate + cooldown chống double-click
+=======
+  const [streamKey, setStreamKey] = useState<Record<string, number>>({});
+  const imgRefs = useRef<Record<string, HTMLImageElement | null>>({});
+>>>>>>> Stashed changes
   const [barriers, setBarriers] = useState<BarrierState>(INITIAL_BARRIER);
   const [barrierMsg, setBarrierMsg] = useState<string>("");
   const barrierActionLockRef = useRef<Record<Gate, boolean>>({ in: false, out: false });
 
+<<<<<<< Updated upstream
   // Probe bridge service để biết online/offline
+=======
+  // Probe bridge service
+>>>>>>> Stashed changes
   useEffect(() => {
     let cancelled = false;
     async function probe() {
@@ -90,7 +110,11 @@ export function CamerasView() {
     };
   }, []);
 
+<<<<<<< Updated upstream
   // Lấy danh sách camera từ bridge (nếu được) — fallback về default
+=======
+  // Load cameras from bridge
+>>>>>>> Stashed changes
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -105,7 +129,10 @@ export function CamerasView() {
           Array.isArray(data.cameras) &&
           data.cameras.length > 0
         ) {
+<<<<<<< Updated upstream
           // Normalize gate → "in" | "out" (giữ default nếu bridge trả "entry"/"exit")
+=======
+>>>>>>> Stashed changes
           const normalized = data.cameras.map((c: CameraStream) => ({
             ...c,
             gate: c.gate === "exit" ? "out" : "in",
@@ -113,7 +140,11 @@ export function CamerasView() {
           setStreams(normalized);
         }
       } catch {
+<<<<<<< Updated upstream
         // ignore — dùng defaults
+=======
+        // ignore
+>>>>>>> Stashed changes
       }
     }
     load();
@@ -131,8 +162,11 @@ export function CamerasView() {
   }
 
   function reconnectAll() {
+<<<<<<< Updated upstream
     // Bump cache-buster cho tất cả camera → browser ép reload <img>
     // (dùng cho MJPEG, trick cache-buster thay đổi là browser sẽ reconnect)
+=======
+>>>>>>> Stashed changes
     const next: Record<string, number> = {};
     orderedStreams.forEach((s) => {
       next[s.id] = (streamKey[s.id] || 0) + 1;
@@ -142,18 +176,24 @@ export function CamerasView() {
     setFailedAt({});
   }
 
+<<<<<<< Updated upstream
   // Build URL cho <img>: dùng streamUrl nếu bridge trả về, fallback về /video_feed/<id>
+=======
+>>>>>>> Stashed changes
   function buildStreamUrl(stream: CameraStream): string {
     const base = stream.streamUrl || `${bridgeBaseUrl}/video_feed/${stream.id}`;
     const bust = streamKey[stream.id] || 0;
     return `${base}${base.includes("?") ? "&" : "?"}t=${bust}`;
   }
 
+<<<<<<< Updated upstream
   /**
    * Gửi lệnh mở/đóng barie tới bridge.
    * Endpoint: POST {bridgeBaseUrl}/gate/<in|out>/<open|close>
    * Có cooldown 1.2s để chống spam (ESP32/Arduino cần thời gian xử lý).
    */
+=======
+>>>>>>> Stashed changes
   async function controlBarrier(gate: Gate, action: "open" | "close") {
     if (barrierActionLockRef.current[gate]) return;
     if (bridgeOnline !== true) {
@@ -166,7 +206,13 @@ export function CamerasView() {
     setBarriers((cur) => ({ ...cur, [gate]: nextPhase }));
     setBarrierMsg("");
     try {
+<<<<<<< Updated upstream
       const res = await bridgeFetch(`/gate/${gate}/${action}`, { method: "POST" });
+=======
+      const res = await fetch(`${bridgeBaseUrl}/gate/${gate}/${action}`, {
+        method: "POST",
+      });
+>>>>>>> Stashed changes
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setBarriers((cur) => ({ ...cur, [gate]: action === "open" ? "open" : "closed" }));
@@ -181,7 +227,10 @@ export function CamerasView() {
       }
     } catch (err) {
       setBarriers((cur) => ({ ...cur, [gate]: "error" }));
+<<<<<<< Updated upstream
       // TypeError "Failed to fetch" thường là network/CORS/down
+=======
+>>>>>>> Stashed changes
       setBarrierMsg(
         err instanceof TypeError
           ? "Không kết nối được bridge service. Kiểm tra port 5050 và CORS."
@@ -189,14 +238,20 @@ export function CamerasView() {
       );
       console.error("Barrier control error", err);
     } finally {
+<<<<<<< Updated upstream
       // Cooldown 1.2s
+=======
+>>>>>>> Stashed changes
       window.setTimeout(() => {
         barrierActionLockRef.current[gate] = false;
       }, 1200);
     }
   }
 
+<<<<<<< Updated upstream
   // Auto-clear barrierMsg sau 4s
+=======
+>>>>>>> Stashed changes
   useEffect(() => {
     if (!barrierMsg) return;
     const id = window.setTimeout(() => setBarrierMsg(""), 4000);
@@ -225,15 +280,24 @@ export function CamerasView() {
                 Bridge service chưa chạy hoặc không truy cập được
               </div>
               <div>
+<<<<<<< Updated upstream
                 Camera stream yêu cầu Python service (<code>smart_parking_rut_gon</code>) chạy tại{" "}
                 <code>{bridgeBaseUrl}</code>. Chạy <code>python app.py</code> trong thư mục{" "}
                 <code>smart_parking_rut_gon</code> để bật camera.
+=======
+                Camera stream yêu cầu Python service chạy tại{" "}
+                <code>{bridgeBaseUrl}</code>. Chạy <code>python app.py</code> trong thư mục{" "}
+                <code>ai-service</code> để bật camera.
+>>>>>>> Stashed changes
               </div>
             </div>
           </div>
         )}
 
+<<<<<<< Updated upstream
         {/* Toolbar */}
+=======
+>>>>>>> Stashed changes
         <div className="cam-toolbar">
           <button
             className="small-button primary"
@@ -264,7 +328,10 @@ export function CamerasView() {
           </div>
         )}
 
+<<<<<<< Updated upstream
         {/* Camera grid */}
+=======
+>>>>>>> Stashed changes
         <div className="cam-grid">
           {orderedStreams.map((stream) => {
             const failed = !!failedAt[stream.id];
@@ -310,8 +377,11 @@ export function CamerasView() {
                       </div>
                     </div>
                   ) : (
+<<<<<<< Updated upstream
                     // MJPEG stream: browser tự đọc multipart và render liên tục.
                     // Không cần reload theo interval — backend push frame mới liên tục.
+=======
+>>>>>>> Stashed changes
                     <img
                       ref={(el) => {
                         imgRefs.current[stream.id] = el;
@@ -325,7 +395,10 @@ export function CamerasView() {
                   )}
                 </div>
 
+<<<<<<< Updated upstream
                 {/* Footer: meta + barrier controls */}
+=======
+>>>>>>> Stashed changes
                 <footer className="cam-card-foot">
                   <div className="cam-meta">
                     <span
@@ -401,12 +474,15 @@ export function CamerasView() {
             );
           })}
         </div>
+<<<<<<< Updated upstream
 
         {orderedStreams.length === 0 && (
           <p className="cam-loading">
             <Loader2 size={16} className="spin" /> Đang tải danh sách camera từ bridge service...
           </p>
         )}
+=======
+>>>>>>> Stashed changes
       </div>
 
       <CamerasLogsPanel />
@@ -414,6 +490,7 @@ export function CamerasView() {
   );
 }
 
+<<<<<<< Updated upstream
 /* =========================== Sub components =========================== */
 
 function BridgeStatus({ online }: { online: boolean | null }) {
@@ -434,10 +511,21 @@ function BridgeStatus({ online }: { online: boolean | null }) {
   return (
     <span className="badge warning cam-badge">
       <WifiOff size={11} /> Bridge offline
+=======
+function BridgeStatus({ online }: { online: boolean | null }) {
+  if (online === null) {
+    return <span className="bridge-status checking">Đang kiểm tra...</span>;
+  }
+  return (
+    <span className={`bridge-status ${online ? "online" : "offline"}`}>
+      <span className="bridge-dot" />
+      {online ? "Bridge Online" : "Bridge Offline"}
+>>>>>>> Stashed changes
     </span>
   );
 }
 
+<<<<<<< Updated upstream
 function BarrierStatusIcon({ state }: { state: BarrierState["in"] }) {
   if (state === "opening" || state === "closing") return <Loader2 size={13} className="spin" />;
   if (state === "open") return <LockOpen size={13} />;
@@ -446,11 +534,34 @@ function BarrierStatusIcon({ state }: { state: BarrierState["in"] }) {
 }
 
 function barrierLabel(state: BarrierState["in"]) {
+=======
+function BarrierStatusIcon({ state }: { state: string }) {
+  switch (state) {
+    case "open":
+      return <LockOpen size={13} />;
+    case "closed":
+      return <Lock size={13} />;
+    case "opening":
+    case "closing":
+      return <Loader2 size={13} className="spin" />;
+    case "error":
+      return <WifiOff size={13} />;
+    default:
+      return <Lock size={13} />;
+  }
+}
+
+function barrierLabel(state: string): string {
+>>>>>>> Stashed changes
   switch (state) {
     case "open":
       return "Đang mở";
     case "closed":
+<<<<<<< Updated upstream
       return "Đã đóng";
+=======
+      return "Đang đóng";
+>>>>>>> Stashed changes
     case "opening":
       return "Đang mở...";
     case "closing":
@@ -458,6 +569,12 @@ function barrierLabel(state: BarrierState["in"]) {
     case "error":
       return "Lỗi";
     default:
+<<<<<<< Updated upstream
       return "—";
   }
 }
+=======
+      return "Đang đóng";
+  }
+}
+>>>>>>> Stashed changes

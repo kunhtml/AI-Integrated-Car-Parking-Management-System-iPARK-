@@ -19,6 +19,7 @@ export const currency = {
 
 export const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
 
+<<<<<<< Updated upstream
 /**
  * URL của Python bridge service (smart_parking_rut_gon).
  * Service này chạy độc lập, đọc ảnh từ camera + RFID và đẩy log về backend.
@@ -26,6 +27,9 @@ export const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4
  */
 export const bridgeBaseUrl =
   process.env.NEXT_PUBLIC_BRIDGE_URL || "http://localhost:5050";
+=======
+export const bridgeBaseUrl = process.env.NEXT_PUBLIC_BRIDGE_URL || "http://localhost:5050";
+>>>>>>> Stashed changes
 
 export function todayInputValue() {
   return new Date().toISOString().slice(0, 10);

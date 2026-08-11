@@ -5,11 +5,17 @@ import { ParkingCameraLog } from "../models/ParkingCameraLog.js";
 import { ParkingSession, ParkingSessionDocument } from "../models/ParkingSession.js";
 import { RfidCard } from "../models/RfidCard.js";
 import { Vehicle } from "../models/Vehicle.js";
+<<<<<<< Updated upstream
 import { allocateSlot, freeSlot, occupySlot } from "../services/parkingSlot.service.js";
 import { checkSubscriptionDiscountForPlate, findActiveSubscriptionByPlate, getOwnerInfoFromPlate } from "../services/subscription.service.js";
 import { createNotification } from "../services/notification.service.js";
 import { createPendingTransactionForSession } from "../services/transaction.service.js";
 import { serializeParkingSession } from "../utils/serializers.js";
+=======
+import { allocateCarSlot, canEnterParking } from "../config/parking.js";
+import { createNotification } from "../services/notification.service.js";
+import { createPendingTransactionForSession } from "../services/transaction.service.js";
+>>>>>>> Stashed changes
 
 function normalizePlate(plate: string): string {
   return (plate || "").trim().toUpperCase().replace(/[\s-]+/g, "");
@@ -37,12 +43,17 @@ async function buildSessionForEntry(
   rfidUid?: string,
   imagePath?: string,
 ) {
+<<<<<<< Updated upstream
   // AI-09: Duplicate detection
+=======
+  // Duplicate detection
+>>>>>>> Stashed changes
   const dup = await ParkingSession.findOne({ plate, status: "Đang gửi" });
   if (dup) {
     return { duplicate: true, session: dup };
   }
 
+<<<<<<< Updated upstream
   // Xác định isSubscriber (để allocate slot và check member fee).
   // Ưu tiên theo thẻ RFID: nếu thẻ là resident → resident (vào slot resident/shared);
   // nếu thẻ là guest → guest/shared. Khi không có thẻ, check theo biển có trong subscription.
@@ -77,18 +88,47 @@ async function buildSessionForEntry(
       targetRole: "staff",
     });
   }
+=======
+  let isSubscriber = false;
+  let rfidCard: { userType: "resident" | "guest" } | null = null;
+  if (rfidUid) {
+    const card = await RfidCard.findOne({ cardId: rfidUid.trim() });
+    if (card) {
+      rfidCard = { userType: card.status === "in-use" ? "resident" : "guest" };
+      isSubscriber = card.status === "in-use";
+    }
+  }
+
+  const activeCount = await ParkingSession.countDocuments({ status: "Đang gửi" });
+  const capacityCheck = await canEnterParking(isSubscriber, activeCount);
+  if (!capacityCheck.allowed) {
+    return { duplicate: false, noSlot: true, reason: capacityCheck.reason };
+  }
+
+  const ownerUserId = await ownerFromPlate(plate);
+  const vehicle = await Vehicle.findOne({ plate });
+  const ownerName = vehicle?.ownerName || "Khách vãng lai";
+  const ownerEmail = "";
+
+  const slotCode = allocateCarSlot(activeCount);
+>>>>>>> Stashed changes
 
   const session = await ParkingSession.create({
     plate,
     ownerName,
     ownerEmail,
     vehicleType: "Ô tô",
+<<<<<<< Updated upstream
     slot: slotDoc.slotCode,
     slotId: slotDoc._id,
+=======
+    slot: slotCode,
+>>>>>>> Stashed changes
     ownerUserId,
     entryDetectedPlate: plate,
     entryConfidence: source === "camera" ? 0.9 : 1,
     ...(imagePath ? { entryImageUrl: imagePath } : {}),
+<<<<<<< Updated upstream
     ...(isMember
       ? { paymentStatus: "fully_paid", paymentMethod: "subscription", fee: 0, paidAmount: 0 }
       : {}),
@@ -104,11 +144,23 @@ async function buildSessionForEntry(
  * Xử lý checkout cho phiên đang đỗ.
  * Bridge không có AI service đầy đủ nên dùng giá đơn giản (giờ * 5000).
  */
+=======
+    ...(isSubscriber ? { paymentStatus: "paid", fee: 0, paidAmount: 0 } : {}),
+  });
+
+  return { duplicate: false, session };
+}
+
+>>>>>>> Stashed changes
 async function finalizeBridgeCheckout(session: ParkingSessionDocument) {
   session.status = "Đã hoàn thành";
   session.checkOutAt = new Date();
 
+<<<<<<< Updated upstream
   if (session.paymentStatus !== "fully_paid") {
+=======
+  if (session.paymentStatus !== "paid") {
+>>>>>>> Stashed changes
     session.fee = calcSimpleFee(session.checkInAt, session.checkOutAt);
     session.feeBreakdown = {
       totalMinutes: Math.max(0, Math.floor((session.checkOutAt.getTime() - session.checkInAt.getTime()) / 60000)),
@@ -119,11 +171,15 @@ async function finalizeBridgeCheckout(session: ParkingSessionDocument) {
       parkingFee: session.fee,
       overdueFine: 0,
       totalFee: session.fee,
+<<<<<<< Updated upstream
       dailyBreakdown: [],
+=======
+>>>>>>> Stashed changes
     };
     await createPendingTransactionForSession(session);
   }
 
+<<<<<<< Updated upstream
   await freeSlot(session.slotId);
   return session;
 }
@@ -146,6 +202,11 @@ async function finalizeBridgeCheckout(session: ParkingSessionDocument) {
  *   metadata?: object
  * }
  */
+=======
+  return session;
+}
+
+>>>>>>> Stashed changes
 export async function pushCameraLog(request: Request, response: Response) {
   const body = z
     .object({
@@ -165,6 +226,7 @@ export async function pushCameraLog(request: Request, response: Response) {
   const plate = normalizePlate(body.plate || body.detectedPlate);
   const detectedPlate = normalizePlate(body.detectedPlate);
 
+<<<<<<< Updated upstream
   // Tìm RfidCard nếu có
   let rfidCard = null as null | { _id: any; uid: string };
   if (body.rfidUid) {
@@ -172,6 +234,13 @@ export async function pushCameraLog(request: Request, response: Response) {
   }
 
   // Tìm vehicle
+=======
+  let rfidCard = null as null | { _id: any; cardId: string };
+  if (body.rfidUid) {
+    rfidCard = await RfidCard.findOne({ cardId: body.rfidUid.trim() });
+  }
+
+>>>>>>> Stashed changes
   const vehicle = await Vehicle.findOne({ plate });
 
   let sessionId: any = undefined;
@@ -194,11 +263,16 @@ export async function pushCameraLog(request: Request, response: Response) {
       action = "created";
     }
   } else {
+<<<<<<< Updated upstream
     // OUT: tìm phiên đang mở gần nhất theo biển số
     const openSession = await ParkingSession.findOne({ plate, status: "Đang gửi" }).sort({ checkInAt: -1 });
     if (openSession) {
       // Gán ảnh ra từ camera vào phiên trước khi finalize.
       // Bridge gửi imagePath = path tương đối dưới /uploads/cameras/<file>.jpg
+=======
+    const openSession = await ParkingSession.findOne({ plate, status: "Đang gửi" }).sort({ checkInAt: -1 });
+    if (openSession) {
+>>>>>>> Stashed changes
       if (body.imagePath) {
         openSession.exitImageUrl = body.imagePath;
       }
@@ -222,7 +296,11 @@ export async function pushCameraLog(request: Request, response: Response) {
     detectedPlate,
     confidence: body.confidence,
     rfidUid: body.rfidUid,
+<<<<<<< Updated upstream
     ownerName: body.ownerName || (rfidCard?.uid ? "" : ""),
+=======
+    ownerName: body.ownerName || (rfidCard?.cardId ? "" : ""),
+>>>>>>> Stashed changes
     plate,
     userType: body.userType,
     imagePath: body.imagePath,
@@ -252,10 +330,13 @@ export async function pushCameraLog(request: Request, response: Response) {
   });
 }
 
+<<<<<<< Updated upstream
 /**
  * GET /api/bridge/logs?limit=20
  * Trả về log gần nhất cho dashboard.
  */
+=======
+>>>>>>> Stashed changes
 export async function listCameraLogs(request: Request, response: Response) {
   const limit = Math.min(Number(request.query.limit || 20), 200);
   const logs = await ParkingCameraLog.find()
@@ -298,10 +379,13 @@ export async function listCameraLogs(request: Request, response: Response) {
   });
 }
 
+<<<<<<< Updated upstream
 /**
  * DELETE /api/bridge/logs
  * Xóa toàn bộ nhật ký camera (chỉ admin).
  */
+=======
+>>>>>>> Stashed changes
 export async function clearCameraLogs(request: Request, response: Response) {
   const result = await ParkingCameraLog.deleteMany({});
   response.json({
@@ -311,12 +395,15 @@ export async function clearCameraLogs(request: Request, response: Response) {
   });
 }
 
+<<<<<<< Updated upstream
 /**
  * POST /api/bridge/gate/:direction/:action
  * Bridge ghi nhận barrier open/close (manual). Không tạo ParkingCameraLog
  * vì log này dành cho camera detect biển số — manual gate không có detectedPlate.
  * Nếu cần audit trail cho manual gate, mở rộng thêm collection riêng sau.
  */
+=======
+>>>>>>> Stashed changes
 export async function bridgeGateControl(request: Request, response: Response) {
   const direction = String(request.params.direction || "");
   const action = String(request.params.action || "");
@@ -324,18 +411,24 @@ export async function bridgeGateControl(request: Request, response: Response) {
     response.status(400).json({ ok: false, message: "Invalid direction or action" });
     return;
   }
+<<<<<<< Updated upstream
   // Audit qua console (chưa cần collection riêng)
   // eslint-disable-next-line no-console
+=======
+>>>>>>> Stashed changes
   console.log(
     `[bridge.gate] direction=${direction} action=${action} ts=${new Date().toISOString()}`,
   );
   response.json({ ok: true, message: `Gate ${direction} ${action} recorded` });
 }
 
+<<<<<<< Updated upstream
 /**
  * GET /api/bridge/health
  * Kiểm tra Python service có gọi được backend không.
  */
+=======
+>>>>>>> Stashed changes
 export async function bridgeHealth(_request: Request, response: Response) {
   response.json({
     ok: true,
@@ -343,4 +436,8 @@ export async function bridgeHealth(_request: Request, response: Response) {
     backend: "ipark-backend",
     timestamp: new Date().toISOString(),
   });
+<<<<<<< Updated upstream
 }
+=======
+}
+>>>>>>> Stashed changes

@@ -14225,3 +14225,185 @@ textarea.form-input {
     align-items: flex-start;
   }
 }
+
+/* ── Camera Live Stream & Barrier Control ── */
+@layer components {
+  .cam-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 16px;
+  }
+
+  .cam-card {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .cam-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-bottom: 1px solid hsl(var(--border));
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+
+  .cam-stage {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #0b0f19;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .cam-stage img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .cam-stage__placeholder {
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 0.8rem;
+    text-align: center;
+    padding: 16px;
+  }
+
+  .cam-live {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    background: rgba(220, 38, 38, 0.85);
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    animation: cam-pulse 2s ease-in-out infinite;
+  }
+
+  .cam-failed {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    background: rgba(239, 68, 68, 0.85);
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    text-transform: uppercase;
+  }
+
+  @keyframes cam-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+
+  .cam-barrier {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-top: 1px solid hsl(var(--border));
+    font-size: 0.8rem;
+  }
+
+  .cam-barrier__status {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1;
+  }
+
+  .cam-barrier-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--card));
+    color: hsl(var(--foreground));
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .cam-barrier-btn:hover:not(:disabled) {
+    background: hsl(var(--accent));
+    border-color: hsl(var(--primary));
+  }
+
+  .cam-barrier-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .cam-barrier-btn--open {
+    color: #16a34a;
+    border-color: rgba(22, 163, 74, 0.3);
+  }
+
+  .cam-barrier-btn--close {
+    color: #dc2626;
+    border-color: rgba(220, 38, 38, 0.3);
+  }
+
+  .bridge-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 9999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+
+  .bridge-status--online {
+    background: rgba(16, 185, 129, 0.1);
+    color: #16a34a;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+  }
+
+  .bridge-status--offline {
+    background: rgba(239, 68, 68, 0.1);
+    color: #dc2626;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+  }
+
+  .cam-bridge-offline {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 48px 24px;
+    text-align: center;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .cam-bridge-offline h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: hsl(var(--foreground));
+  }
+
+  .cam-bridge-offline p {
+    margin: 0;
+    font-size: 0.85rem;
+    max-width: 400px;
+    line-height: 1.5;
+  }
+}

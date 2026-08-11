@@ -23,4 +23,8 @@ cameraBridgeAdminRoutes.use(requireAuth);
 cameraBridgeAdminRoutes.get("/logs", requireRole("admin", "staff"), asyncHandler(listCameraLogs));
 cameraBridgeAdminRoutes.delete("/logs", requireRole("admin"), asyncHandler(clearCameraLogs));
 
+<<<<<<< Updated upstream
 export { cameraBridgeAdminRoutes };
+=======
+export { cameraBridgeAdminRoutes };
+>>>>>>> Stashed changes

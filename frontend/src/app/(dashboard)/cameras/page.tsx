@@ -1,3 +1,4 @@
+<<<<<<< Updated upstream
 "use client";
 
 import { RoleGuard } from "@/components/layout/role-guard";
@@ -10,3 +11,10 @@ export default function CamerasPage() {
     </RoleGuard>
   );
 }
+=======
+import { CamerasView } from "@/features/cameras/cameras-view";
+
+export default function CamerasPage() {
+  return <CamerasView />;
+}
+>>>>>>> Stashed changes

@@ -18,6 +18,7 @@ import { usersRoutes } from "./users.routes.js";
 import { vehiclesRoutes } from "./vehicles.routes.js";
 import { vehicleRequestsRoutes } from "./vehicleRequests.routes.js";
 import { zonesRoutes } from "./zones.routes.js";
+<<<<<<< Updated upstream
 import { payosRoutes } from "./payos.routes.js";
 import { aiRoutes } from "./ai.routes.js";
 import { penaltiesRoutes } from "./penalties.routes.js";
@@ -25,6 +26,17 @@ import { rfidRoutes, bridgeRfid } from "./rfid.routes.js";
 import { cameraBridgeAdminRoutes, cameraBridgeRoutes } from "./camera-bridge.routes.js";
 import { uploadsRoutes } from "./uploads.routes.js";
 import { capacityConfigRoutes } from "./capacityConfig.routes.js";
+=======
+import { rfidRoutes } from "./rfid.routes.js";
+import { backupRoutes } from "./backup.routes.js";
+import { auditLogRoutes } from "./auditLog.routes.js";
+import { assistedRegistrationRoutes } from "./assistedRegistration.routes.js";
+import { privacyRoutes } from "./privacy.routes.js";
+import { rfidReportRoutes } from "./rfidReport.routes.js";
+import { alertsRoutes } from "./alerts.routes.js";
+import { invoiceRoutes } from "./invoice.routes.js";
+import { cameraBridgeRoutes, cameraBridgeAdminRoutes } from "./camera-bridge.routes.js";
+>>>>>>> Stashed changes
 
 export const apiRoutes = Router();
 
@@ -91,6 +103,7 @@ apiRoutes.use("/notification-templates", notificationTemplatesRoutes);
 apiRoutes.use("/shifts", shiftsRoutes);
 apiRoutes.use("/shift-schedules", shiftScheduleRoutes);
 apiRoutes.use("/incidents", incidentsRoutes);
+<<<<<<< Updated upstream
 apiRoutes.use("/payos", payosRoutes);
 apiRoutes.use("/ai", aiRoutes);
 apiRoutes.use("/penalties", penaltiesRoutes);
@@ -98,3 +111,16 @@ apiRoutes.use("/rfid", rfidRoutes);
 apiRoutes.use("/camera-logs", cameraBridgeAdminRoutes);
 apiRoutes.use("/uploads", uploadsRoutes);
 apiRoutes.use("/capacity-config", capacityConfigRoutes);
+=======
+apiRoutes.use("/zones", zonesRoutes);
+apiRoutes.use("/rfid-cards", rfidRoutes);
+apiRoutes.use("/backups", backupRoutes);
+apiRoutes.use("/audit-logs", auditLogRoutes);
+apiRoutes.use("/alerts", alertsRoutes);
+apiRoutes.use("/privacy", privacyRoutes);
+apiRoutes.use("/rfid-reports", rfidReportRoutes);
+apiRoutes.use("/invoices", invoiceRoutes);
+apiRoutes.use("/assisted-registration", assistedRegistrationRoutes);
+apiRoutes.use("/camera-bridge", cameraBridgeRoutes);
+apiRoutes.use("/camera-logs", cameraBridgeAdminRoutes);
+>>>>>>> Stashed changes

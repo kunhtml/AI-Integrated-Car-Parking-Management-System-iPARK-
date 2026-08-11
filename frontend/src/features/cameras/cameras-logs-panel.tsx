@@ -135,17 +135,23 @@ export function CamerasLogsPanel() {
     load();
   }, []);
 
+<<<<<<< Updated upstream
   /**
    * Khách vãng lai checkout (qua camera hoặc thủ công):
    * - Nếu phiên đang mở → gọi PATCH /parking-sessions để finalizeCheckout (tính phí).
    * - Tạo PayOS payment link và mở modal QR nếu còn nợ phí.
    */
+=======
+>>>>>>> Stashed changes
   async function handleCheckoutPayment(log: CameraLog) {
     if (!log.sessionId) return;
     setPayingId(log.id);
     setMsg("");
     try {
+<<<<<<< Updated upstream
       // Bước 1: nếu phiên còn "Đang gửi" → kết thúc phiên để tính phí theo PricingConfig
+=======
+>>>>>>> Stashed changes
       if (log.sessionStatus === "Đang gửi") {
         const checkoutRes = await apiFetch(`/parking-sessions`, {
           method: "PATCH",
@@ -157,12 +163,18 @@ export function CamerasLogsPanel() {
           setMsg(checkoutData.message || "Không thể kết thúc phiên đỗ xe.");
           return;
         }
+<<<<<<< Updated upstream
         // cập nhật log cục bộ để hiển thị phí mới
+=======
+>>>>>>> Stashed changes
         log.sessionStatus = "Đã hoàn thành";
         log.sessionFee = Number(checkoutData?.session?.fee ?? log.sessionFee ?? 0);
       }
 
+<<<<<<< Updated upstream
       // Bước 2: tạo PayOS link (nếu còn phí)
+=======
+>>>>>>> Stashed changes
       const res = await apiFetch(`/transactions/session/${log.sessionId}`, {
         method: "POST",
       });
@@ -173,7 +185,10 @@ export function CamerasLogsPanel() {
         return;
       }
       if (!data.payos?.qrCode) {
+<<<<<<< Updated upstream
         // Đã thanh toán đủ hoặc không phát sinh phí → reload & thông báo
+=======
+>>>>>>> Stashed changes
         await load();
         setMsg(data.message || "Phiên không phát sinh phí / đã thanh toán đủ.");
         return;
@@ -287,7 +302,10 @@ export function CamerasLogsPanel() {
           ]}
           rows={logs.map((log) => {
             const fee = Number(log.sessionFee ?? 0);
+<<<<<<< Updated upstream
             // Phiên còn nợ gì: có phí chưa thanh toán, HOẶC phiên vẫn "Đang gửi"
+=======
+>>>>>>> Stashed changes
             const hasPendingFee =
               Boolean(log.sessionId) && fee > 0 && log.sessionPaymentStatus !== "fully_paid";
             const isOpenSession =
@@ -352,12 +370,20 @@ export function CamerasLogsPanel() {
                   "—"
                 )}
               </span>,
+<<<<<<< Updated upstream
               <span key="pay">{paymentBadge(log.sessionPaymentStatus)}</span>,
               <span key="act" style={{ display: "inline-flex", gap: 4 }}>
+=======
+              <span key="payment">
+                {log.sessionId ? paymentBadge(log.sessionPaymentStatus) : "—"}
+              </span>,
+              <span key="action">
+>>>>>>> Stashed changes
                 {isActionable ? (
                   <button
                     type="button"
                     className="small-button primary"
+<<<<<<< Updated upstream
                     style={{ padding: "4px 10px", fontSize: "0.78rem" }}
                     disabled={payingId === log.id || pending !== null}
                     onClick={() => handleCheckoutPayment(log)}
@@ -366,12 +392,18 @@ export function CamerasLogsPanel() {
                         ? "Kết thúc phiên đỗ và tạo QR thanh toán"
                         : "Tạo QR PayOS để khách chuyển khoản"
                     }
+=======
+                    onClick={() => handleCheckoutPayment(log)}
+                    disabled={payingId === log.id}
+                    style={{ fontSize: "0.78rem" }}
+>>>>>>> Stashed changes
                   >
                     {payingId === log.id ? (
                       <Loader2 size={12} className="spin" />
                     ) : (
                       <CreditCard size={12} />
                     )}
+<<<<<<< Updated upstream
                     {isOpenSession ? (hasPendingFee ? "Checkout & TT" : "Checkout") : "Thanh toán"}
                   </button>
                 ) : log.sessionId && log.sessionPaymentStatus === "fully_paid" ? (
@@ -386,6 +418,12 @@ export function CamerasLogsPanel() {
                   </span>
                 ) : (
                   <span style={{ fontSize: "0.75rem", color: "var(--muted)" }}>—</span>
+=======
+                    Thanh toán
+                  </button>
+                ) : (
+                  <span style={{ color: "var(--muted)", fontSize: "0.8rem" }}>—</span>
+>>>>>>> Stashed changes
                 )}
               </span>,
             ];
@@ -393,12 +431,15 @@ export function CamerasLogsPanel() {
         />
       )}
 
+<<<<<<< Updated upstream
       {logs.length === 0 && !loading && (
         <p style={{ padding: 32, textAlign: "center", color: "var(--muted)" }}>
           Chưa có nhật ký nào. Bật Python bridge service để bắt đầu ghi log.
         </p>
       )}
 
+=======
+>>>>>>> Stashed changes
       {pending && (
         <CheckoutPaymentModal
           sessionId={pending.sessionId}
@@ -406,12 +447,20 @@ export function CamerasLogsPanel() {
           fee={pending.fee}
           payos={pending.payos}
           onClose={() => setPending(null)}
+<<<<<<< Updated upstream
           onPaid={() => {
             setPending(null);
             handlePaid();
           }}
+=======
+          onPaid={handlePaid}
+>>>>>>> Stashed changes
         />
       )}
     </div>
   );
+<<<<<<< Updated upstream
 }
+=======
+}
+>>>>>>> Stashed changes

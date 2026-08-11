@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import { constantTimeEqual, getServiceToken } from "../services/service-token.js";
 
+<<<<<<< Updated upstream
 /**
  * Middleware xác thực cho Python bridge service (smart_parking_rut_gon).
  *
@@ -9,6 +10,8 @@ import { constantTimeEqual, getServiceToken } from "../services/service-token.js
  *
  * So sánh constant-time để chống timing attack.
  */
+=======
+>>>>>>> Stashed changes
 export function requireServiceToken(request: Request, response: Response, next: NextFunction) {
   const token = request.header("x-service-token") || request.header("X-Service-Token");
   const expected = getServiceToken();
@@ -29,7 +32,13 @@ export function requireServiceToken(request: Request, response: Response, next: 
     return;
   }
 
+<<<<<<< Updated upstream
   // Service được coi như staff role để tương thích với các flow sẵn có
   (request as Request & { serviceRole?: string }).serviceRole = "staff";
   next();
 }
+=======
+  (request as Request & { serviceRole?: string }).serviceRole = "staff";
+  next();
+}
+>>>>>>> Stashed changes
