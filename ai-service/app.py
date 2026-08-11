@@ -10,17 +10,67 @@ Cấu hình (đặt trong file .env hoặc biến môi trường):
 - BRIDGE_SERVICE_TOKEN: token dùng để xác thực với backend
 """
 
+import os
+import sys
+from dotenv import load_dotenv
+
+# Load .env nằm cùng thư mục với app.py (không phụ thuộc cwd khi chạy).
+# PHẢI chạy trước khi import cv2/torch để các biến giới hạn thread có tác dụng.
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+
+# ================== GIỚI HẠN THREAD (CHỐNG LAG) ==================
+# torch/OpenBLAS/MKL mặc định dùng HẾT số core logic -> EasyOCR đẩy CPU lên
+# ~100% và làm cả máy lag. Các biến này PHẢI được set TRƯỚC khi numpy/torch
+# được import, nếu không thread pool đã khởi tạo và không đổi được nữa.
+_TORCH_THREADS = os.getenv("TORCH_NUM_THREADS", "2")
+for _var in (
+    "OMP_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "OPENBLAS_NUM_THREADS",
+    "NUMEXPR_NUM_THREADS",
+):
+    os.environ.setdefault(_var, _TORCH_THREADS)
+
+# OCR_ENABLED=false -> KHÔNG import easyocr/torch. Dùng để test camera thuần
+# (EasyOCR + torch tốn ~500MB RAM và là nguyên nhân chính gây lag CPU).
+OCR_ENABLED = os.getenv("OCR_ENABLED", "true").strip().lower() not in (
+    "0", "false", "no", "off",
+)
+
 import cv2
-import easyocr
 import re
 import time
 import serial
 import threading
-import os
-import sys
 import requests
 from datetime import datetime
 from flask import Flask, Response, jsonify, request
+
+if OCR_ENABLED:
+    import torch
+    from ultralytics import YOLO
+    # PaddleOCR tốt hơn EasyOCR cho biển số xe:
+    # - Hỗ trợ tiếng Việt + latin tốt, ít nhầm A↔4, 0↔D, B↔8.
+    # - Mobile model ~5MB, chạy CPU nhanh hơn EasyOCR ~2-3 lần.
+    # - Whitelist ký tự dễ dàng (chỉ 0-9 + A-Z).
+    from paddleocr import PaddleOCR
+    paddle_ocr = None  # lazy-init sau khi YOLO sẵn sàng (xem bên dưới)
+
+    # Giới hạn thread ở tầng runtime (bổ sung cho env var phía trên).
+    try:
+        torch.set_num_threads(int(_TORCH_THREADS))
+    except Exception:
+        pass
+else:
+    PaddleOCR = None
+    torch = None
+    YOLO = None
+    print("[OCR] DISABLED (OCR_ENABLED=false) — chỉ chạy camera, không nhận biển số.")
+try:
+    # OpenCV cũng tự parallel hoá resize/cvtColor; giới hạn để nhường CPU.
+    cv2.setNumThreads(int(os.getenv("CV_NUM_THREADS", "2")))
+except Exception:
+    pass
 
 # Chặn OpenCV spam warning liên tục khi camera fail (MSMF/DSHOW backend).
 # -1072875772 (0xC00D3704) là HRESULT của MSMF grab frame fail; nó sẽ
@@ -68,6 +118,35 @@ _OPEN_BACKEND = _BACKEND_MAP.get(CAMERA_BACKEND, cv2.CAP_DSHOW)
 # tránh "chụp ảnh liên tục" gây nặng đĩa.
 # Snapshot đính kèm session chỉ ghi khi có RFID scan / DATA log từ ESP32.
 LIVE_PREVIEW_INTERVAL_SEC = float(os.getenv("LIVE_PREVIEW_INTERVAL_SEC", "1.0"))
+
+# ================== HIỆU NĂNG (CHỐNG LAG) ==================
+# EasyOCR chạy CPU tốn 200-800ms/frame. Nếu OCR mỗi vòng lặp cho cả 2 camera
+# thì CPU bị đốt 100% liên tục -> máy lag, stream giật.
+# OCR_INTERVAL_SEC: khoảng cách tối thiểu giữa 2 lần OCR của MỖI camera.
+# Frame vẫn được đọc liên tục cho preview/stream, chỉ OCR là bị điều tiết.
+# 2.0s cho mỗi camera: 2 camera = OCR 1 lần/giây tổng. EasyOCR 200-800ms/frame
+# trên CPU i5 thường; interval dài hơn 2s nếu CPU yếu (set biến môi trường).
+OCR_INTERVAL_SEC = float(os.getenv("OCR_INTERVAL_SEC", "0.5"))
+# Hạ chiều rộng ảnh trước khi OCR (0 = không hạ). Thời gian OCR ~ số pixel.
+OCR_MAX_WIDTH = int(os.getenv("OCR_MAX_WIDTH", "480"))
+# FPS tối đa của MJPEG stream. 12fps cân bằng mượt/CPU cho MJPEG qua HTTP
+# (15-20fps không cải thiện cảm nhận vì MJPEG đã có latency 100-300ms do HTTP).
+MJPEG_FPS = float(os.getenv("MJPEG_FPS", "12"))
+# Chất lượng JPEG cho stream. 65 là điểm ngọt — thấp hơn gây blockiness,
+# cao hơn đốt CPU encode mà mắt thường không phân biệt ở 640px.
+JPEG_QUALITY = int(os.getenv("JPEG_QUALITY", "65"))
+# Nghỉ giữa 2 vòng camera_loop (giây). 0.03 (~33fps đọc) — OCR thread
+# chạy song song nên loop chính vẫn cần tick nhanh để last_frame cập nhật
+# kịp cho MJPEG stream. KHÔNG tăng lên — sẽ gây giật stream.
+CAMERA_LOOP_SLEEP = float(os.getenv("CAMERA_LOOP_SLEEP", "0.03"))
+# Giảm độ phân giải stream để giảm CPU encode JPEG. 480px đủ cho giám sát
+# biển số và giảm ~50% thời gian encode so với 640px.
+STREAM_MAX_WIDTH = int(os.getenv("STREAM_MAX_WIDTH", "480"))
+# Khoảng cách tối thiểu giữa 2 lần ACCEPT cùng 1 biển số (giây).
+# Tránh spam khi xe đứng trước camera (YOLO detect liên tục).
+# 5s đủ để xe đi qua hoặc tài xế dừng lại check-in.
+PLATE_COOLDOWN_SEC = float(os.getenv("PLATE_COOLDOWN_SEC", "5.0"))
+
 # Dùng đường dẫn tuyệt đối theo thư mục app.py để không phụ thuộc CWD
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(_BASE_DIR, "static")
@@ -341,12 +420,58 @@ def _reconnect(index):
     return _open_camera(index)
 
 
+print(
+    f"[CAM] Using CAMERA_INDEX_IN={CAMERA_INDEX_IN}, "
+    f"CAMERA_INDEX_OUT={CAMERA_INDEX_OUT}, backend={CAMERA_BACKEND}"
+)
 cap_in = _open_camera(CAMERA_INDEX_IN)
 cap_out = _open_camera(CAMERA_INDEX_OUT)
 
-reader = easyocr.Reader(['en', 'vi'])
+# Chỉ load PaddleOCR khi OCR được bật — model ~5MB, nhanh hơn EasyOCR.
+# use_angle_cls=False: biển số xe đã được YOLO crop vuông, không cần xoay.
+# lang='en': latin alphabet (A-Z + 0-9) đủ cho biển số VN, nhẹ hơn 'vi' nhiều.
+# show_log=False: tránh spam PaddleOCR info log ra stdout.
+paddle_ocr = PaddleOCR(use_angle_cls=False, lang='en', show_log=False) if OCR_ENABLED else None
+
+# YOLO model cho detect bbox biển số — chạy nhanh (~20-50ms) trên CPU.
+# Sau khi YOLO tìm được bbox, crop ra rồi đưa vào PaddleOCR đọc text.
+# PyTorch >=2.6 đổi `torch.load(weights_only=True)` mặc định → block load
+# pickle có custom class (ultralytics DetectionModel). best.pt ở đây là
+# file local tin cậy nên ép weights_only=False qua wrapper.
+YOLO_MODEL_PATH = os.path.join(_BASE_DIR, "yolo_model", "best.pt")
+if OCR_ENABLED and YOLO is not None:
+    try:
+        import torch.serialization as _torch_ser
+
+        _orig_torch_load = _torch_ser.load
+
+        def _torch_load_unsafe(*args, **kwargs):
+            """Cho phép load pickle chứa class ultralytics — best.pt là file local."""
+            kwargs.setdefault("weights_only", False)
+            return _orig_torch_load(*args, **kwargs)
+
+        # Patch cả 2 vị trí ultralytics có thể gọi (torch.load trực tiếp + torch.serialization.load)
+        import torch as _torch
+        _torch.load = _torch_load_unsafe
+        _torch_ser.load = _torch_load_unsafe
+    except Exception as _e:
+        print(f"[YOLO][WARN] cannot patch torch.load: {_e}")
+    yolo_model = YOLO(YOLO_MODEL_PATH)
+else:
+    yolo_model = None
+YOLO_CONF_THR = float(os.getenv("YOLO_CONF_THR", "0.25"))
+
+if yolo_model is not None:
+    print(f"[YOLO] Loaded model from {YOLO_MODEL_PATH}")
+else:
+    print("[YOLO] DISABLED — YOLO not loaded (OCR_ENABLED=false or ultralytics missing).")
+
 pattern = re.compile(r"^\d{2}[A-Z]-?\d{4,5}$")
-required_count = 3
+# YOLO + EasyOCR đã đủ chính xác để nhận biển số trong 1 frame.
+# Đếm 3 lần (cũ) khiến tốc độ phát hiện rất chậm: mỗi lần OCR mất ~500ms
+# + interval 2s => cần 6s mới xác nhận được 1 biển số. Đặt =1 để phát hiện
+# ngay lập tức. Anti-spam vẫn dùng cooldown `plate_cooldown_sec`.
+required_count = int(os.getenv("PLATE_CONFIRM_COUNT", "1"))
 timeout = 2
 
 # ==== BIẾN TOÀN CỤC ====
@@ -363,6 +488,41 @@ last_preview_write_out = 0.0
 last_detected_plate_in = ""
 last_detected_plate_out = ""
 
+# Thông tin xe vừa detect OCR (direction IN) — đã check subscriber trong DB.
+# Dùng khi staff quét thẻ trắng để tạo card đúng loại mà không cần gọi API lại.
+# lookupDone: True khi background lookup đã hoàn tất (tránh staff quét trước khi có kết quả).
+# detectedAt: thời điểm OCR detect, dùng timeout để tránh dùng dữ liệu cũ.
+_PENDING_TIMEOUT = 60  # giây — nếu quá thời gian này thì coi như pending_vehicle_info hết hạn
+pending_vehicle_info = {
+    "plate": "",
+    "lookupDone": False,
+    "isSubscriber": False,
+    "ownerName": "Guest",
+    "vehicle": None,
+    "detectedAt": 0.0,
+}
+
+# Path tương đối của snapshot gần nhất do OCR chụp (sau khi YOLO detect
+# bbox biển số). Dùng cho việc gắn ảnh vào session/log khi xe vào/ra.
+# "" nếu chưa có snapshot cho hướng đó.
+last_snapshot_in = ""
+last_snapshot_out = ""
+
+# Bbox biển số mới nhất do YOLO detect (để vẽ overlay lên live stream).
+# Format: list of (x1, y1, x2, y2, label_text). label_text="" nếu OCR chưa xong.
+# Cập nhật bởi _ocr_worker, đọc bởi MJPEG generator.
+last_boxes_in: list = []
+last_boxes_out: list = []
+
+# Event-based wake-up cho MJPEG generator: mỗi camera có 1 threading.Event
+# được set khi camera_loop publish frame mới (last_frame đổi id). Generator
+# chờ event thay vì time.sleep cố định → tránh gửi đi gửi lại cùng JPEG
+# khi OCR chiếm CPU, là nguyên nhân chính gây cảm giác "giật".
+_stream_events: dict[str, threading.Event] = {
+    "in": threading.Event(),
+    "out": threading.Event(),
+}
+
 # Cached host URL cho background thread (cập nhật mỗi request)
 _last_bridge_host = ""
 
@@ -371,6 +531,7 @@ scan_start_time = 0
 scan_timeout = 15
 last_scanned_uid = None
 scan_result = None
+scan_message = ""
 
 
 # ==== RFID SCAN POLLING STATE (cho Flask UI) ====
@@ -379,16 +540,18 @@ def poll_rfid_scan_state():
     return {
         "scanEnabled": scan_enabled,
         "scanResult": scan_result,
+        "scanMessage": scan_message,
         "lastScannedUid": last_scanned_uid,
         "scanStartTime": scan_start_time,
     }
 
 
 def set_rfid_scan_enabled(value: bool):
-    global scan_enabled, scan_start_time, scan_result, last_scanned_uid
+    global scan_enabled, scan_start_time, scan_result, last_scanned_uid, scan_message
     scan_enabled = value
     scan_start_time = time.time() if value else 0
     scan_result = None
+    scan_message = ""
     last_scanned_uid = None
     if value:
         send_to_both("SCAN_ON")
@@ -397,43 +560,217 @@ def set_rfid_scan_enabled(value: bool):
 
 
 # ==== OCR & XỬ LÝ FRAME ====
+def _save_plate_snapshot(crop_img, full_frame, direction: str, plate_hint: str = "") -> str:
+    """
+    Khi YOLO vừa detect được bbox biển số -> chụp lại:
+      1. Ảnh crop biển số (chỉ phần bbox, có padding) — dùng để OCR.
+      2. Ảnh full frame (đã vẽ bbox YOLO + label OCR) — dùng làm bằng chứng.
+
+    Lưu cả 2 vào SNAPSHOT_DIR, tên file chứa direction + timestamp + plate
+    để debug. Trả về RELATIVE path của ảnh crop (ảnh dùng để OCR). Nếu lỗi
+    I/O trả về "" — caller vẫn tiếp tục OCR trên crop trong RAM.
+    """
+    try:
+        os.makedirs(SNAPSHOT_DIR, exist_ok=True)
+    except Exception:
+        return ""
+
+    direction_norm = (direction or "in").lower().strip()
+    if direction_norm not in ("in", "out"):
+        direction_norm = "in"
+
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+    plate_norm = _normalize_plate(plate_hint) or "nopl"
+    base_name = f"{direction_norm}_{ts}_{plate_norm}"
+
+    crop_path = os.path.join(SNAPSHOT_DIR, f"{base_name}_crop.jpg")
+    full_path = os.path.join(SNAPSHOT_DIR, f"{base_name}_full.jpg")
+
+    saved_any = False
+    if crop_img is not None and crop_img.size > 0 and _safe_imwrite(crop_path, crop_img):
+        saved_any = True
+    if full_frame is not None and _safe_imwrite(full_path, full_frame):
+        saved_any = True
+
+    if not saved_any:
+        return ""
+    # Trả về path tương đối để frontend dùng qua Flask static handler
+    return f"/static/snapshots/{base_name}_crop.jpg"
+
+
 def process_frame(frame, plate_counter, last_plate, last_seen_time, prefix, ser, lock=None, direction="in"):
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    results = reader.readtext(gray)
-    parts = []
+    global last_boxes_in, last_boxes_out
+    # OCR tắt -> trả frame nguyên bản, không tốn CPU.
+    if not OCR_ENABLED or paddle_ocr is None:
+        return frame, plate_counter, last_plate, last_seen_time, "", ""
 
-    for (bbox, text, prob) in results:
-        text = re.sub(r'[^A-Z0-9]', '', text.upper())
-        if len(text) >= 2 and prob > 0.5:
-            parts.append(text)
-            (top_left, _, bottom_right, _) = bbox
-            top_left = tuple(map(int, top_left))
-            bottom_right = tuple(map(int, bottom_right))
-            cv2.rectangle(frame, top_left, bottom_right, (0, 255, 0), 2)
-            cv2.putText(frame, text, (top_left[0], top_left[1] - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+    detected_snap = ""
+    is_in = (direction == "in")
 
-    candidate = None
-    if len(parts) == 1:
-        candidate = parts[0]
-    elif len(parts) >= 2:
-        candidate = parts[0] + "" + "".join(parts[1:])
+    # ---- BƯỚC 1: YOLO detect bbox biển số (chạy nhanh ~20-50ms) ----
+    if yolo_model is not None:
+        results = yolo_model(frame, conf=YOLO_CONF_THR, verbose=False)
+        boxes = []
+        if results and len(results) > 0:
+            for r in results:
+                if r.boxes is not None and len(r.boxes) > 0:
+                    for box in r.boxes:
+                        x1, y1, x2, y2 = box.xyxy[0].tolist()
+                        conf = float(box.conf[0])
+                        boxes.append((int(x1), int(y1), int(x2), int(y2), conf))
 
+        if not boxes:
+            # Không tìm thấy bbox -> clear overlay boxes, skip OCR/chụp
+            if is_in:
+                last_boxes_in = []
+            else:
+                last_boxes_out = []
+            return frame, plate_counter, last_plate, last_seen_time, "", ""
+
+        # Log confidences để debug khi bị thấp (0.3-0.5 hay gặp với biển số)
+        confs = [b[4] for b in boxes]
+        max_conf = max(confs) if confs else 0.0
+        # Chỉ log khi conf thấp để tránh spam
+        if max_conf < 0.5:
+            print(f"[YOLO][{direction}] confs={confs} (max={max_conf:.2f}, thr={YOLO_CONF_THR})")
+
+        # Vẽ bbox YOLO lên frame (debug visual) - chỉ vẽ tạm trên frame copy
+        for (x1, y1, x2, y2, conf) in boxes:
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
+            cv2.putText(frame, f"YOLO {conf:.2f}", (x1, y1 - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+
+        # Lưu boxes vào global để MJPEG stream vẽ overlay lên last_frame.
+        # Tuple (x1, y1, x2, y2, conf, ocr_text). ocr_text ban đầu rỗng,
+        # sẽ được cập nhật sau khi OCR xong (nếu ra được text).
+        overlay_boxes = [
+            (x1, y1, x2, y2, conf, "") for (x1, y1, x2, y2, conf) in boxes
+        ]
+        if is_in:
+            last_boxes_in = overlay_boxes
+        else:
+            last_boxes_out = overlay_boxes
+
+        # ---- BƯỚC 2: CHỤP crop + full frame ra đĩa (bằng chứng) ----
+        # Lưu 1 lần duy nhất cho lần detect này, dùng bbox đầu tiên
+        # (YOLO thường chỉ trả 1 bbox cho biển số).
+        first_box = boxes[0]
+        x1, y1, x2, y2, _ = first_box
+        h_img, w_img = frame.shape[:2]
+        pad = 10
+        cx1 = max(0, x1 - pad)
+        cy1 = max(0, y1 - pad)
+        cx2 = min(w_img, x2 + pad)
+        cy2 = min(h_img, y2 + pad)
+        crop = frame[cy1:cy2, cx1:cx2]
+
+        if crop.size > 0:
+            # CHỤP trước, đặt tên tạm "nopl" — sẽ giữ nguyên nếu OCR ra
+            # được plate hợp lệ. Lưu NGAY khi detect để có bằng chứng kể
+            # cả khi OCR sau đó fail.
+            detected_snap = _save_plate_snapshot(
+                crop, frame, direction, plate_hint=""
+            )
+
+            # ---- BƯỚC 3: PaddleOCR đọc text trên crop trong RAM ----
+            # PaddleOCR.ocr() trả về List[List[Tuple[bbox, (text, prob)]]]
+            # nếu có kết quả, hoặc [None] nếu không. Format khác EasyOCR
+            # nên phải adapt.
+            # cls=False: đã disable angle classifier khi init nên không cần.
+            ocr_raw = paddle_ocr.ocr(crop, cls=False)
+            if ocr_raw and ocr_raw[0] is not None:
+                ocr_results = ocr_raw[0]  # list of (bbox, (text, prob))
+            else:
+                ocr_results = []
+        else:
+            ocr_results = []
+
+        parts_all = []
+        for item in ocr_results:
+            # PaddleOCR item: (bbox, (text, prob)) — bbox là list 4 điểm
+            bbox_ocr, (text, prob) = item
+            text_clean = re.sub(r'[^A-Z0-9]', '', text.upper())
+            if len(text_clean) >= 2 and prob > 0.3:
+                parts_all.append(text_clean)
+                # Vẽ kết quả OCR lên frame (tọa độ gốc)
+                if bbox_ocr is not None and len(bbox_ocr) >= 2:
+                    tl = bbox_ocr[0]
+                    br = bbox_ocr[2]
+                    pt1 = (int(tl[0]) + cx1, int(tl[1]) + cy1)
+                    pt2 = (int(br[0]) + cx1, int(br[1]) + cy1)
+                    cv2.rectangle(frame, pt1, pt2, (0, 255, 0), 2)
+                    cv2.putText(frame, text_clean, (pt1[0], pt1[1] - 10),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
+        if len(parts_all) == 1:
+            candidate = parts_all[0]
+        elif len(parts_all) >= 2:
+            candidate = parts_all[0] + "".join(parts_all[1:])
+        else:
+            candidate = None
+
+        # Cập nhật text OCR vào overlay_boxes để MJPEG stream hiển thị
+        # luôn biển số ngay khi YOLO detect (không cần đợi cooldown).
+        if candidate and yolo_model is not None:
+            updated = []
+            for (bx1, by1, bx2, by2, bconf, _) in overlay_boxes:
+                updated.append((bx1, by1, bx2, by2, bconf, candidate))
+            if is_in:
+                last_boxes_in = updated
+            else:
+                last_boxes_out = updated
+
+    else:
+        # Fallback: không có YOLO -> OCR trên toàn frame
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        scale = 1.0
+        if OCR_MAX_WIDTH > 0 and gray.shape[1] > OCR_MAX_WIDTH:
+            scale = OCR_MAX_WIDTH / gray.shape[1]
+            gray = cv2.resize(
+                gray,
+                (OCR_MAX_WIDTH, max(1, int(gray.shape[0] * scale))),
+                interpolation=cv2.INTER_AREA,
+            )
+        ocr_raw = paddle_ocr.ocr(gray, cls=False)
+        if ocr_raw and ocr_raw[0] is not None:
+            results = ocr_raw[0]
+        else:
+            results = []
+        parts_all = []
+        for item in results:
+            # PaddleOCR item: (bbox, (text, prob))
+            _, (text, prob) = item
+            text_clean = re.sub(r'[^A-Z0-9]', '', text.upper())
+            if len(text_clean) >= 2 and prob > 0.5:
+                parts_all.append(text_clean)
+        if len(parts_all) == 1:
+            candidate = parts_all[0]
+        elif len(parts_all) >= 2:
+            candidate = parts_all[0] + "".join(parts_all[1:])
+        else:
+            candidate = None
+
+    # ---- BƯỚC 4: Xác nhận biển số với cooldown ----
+    # plate_cooldown_sec: tối thiểu giây giữa 2 lần ACCEPT cùng 1 biển số.
+    # Tránh spam khi xe đậu trước camera.
     if candidate and pattern.match(candidate):
         plate_counter[candidate] = plate_counter.get(candidate, 0) + 1
-        if plate_counter[candidate] >= required_count and candidate != last_plate:
+        if (
+            plate_counter[candidate] >= required_count
+            and candidate != last_plate
+            and (time.time() - last_seen_time) > PLATE_COOLDOWN_SEC
+        ):
             print(f"{prefix} Biển số:", candidate)
             last_plate = candidate
             last_seen_time = time.time()
             plate_counter.clear()
 
-            # OCR CHỈ DETECT biển số — KHÔNG tạo phiên vào/ra ở đây.
-            # Phiên chỉ được tạo khi ESP32 gửi DATA,uid,... (chỉ xảy ra khi có
-            # RFID scan thật). Việc push log mỗi lần detect biển sẽ tạo
-            # hàng chục phiên ảo cho cùng 1 lượt xe, gây spam DB.
-            #
-            # Vẫn giữ gửi biển số xuống ESP32 (nếu cần) — ESP32 sẽ tự broadcast
-            # DATA,... về khi RFID được quét.
+            # Nếu snapshot chưa có (fallback không-YOLO) thì chụp full frame
+            if not detected_snap:
+                detected_snap = _save_plate_snapshot(
+                    None, frame, direction, plate_hint=candidate
+                )
+
             try:
                 line = prefix + candidate
                 if ser is not None:
@@ -443,21 +780,21 @@ def process_frame(frame, plate_counter, last_plate, last_seen_time, prefix, ser,
                         safe_write(ser, lock, line)
                     print("Sent to Arduino:", line)
             except Exception as e:
-                # Serial lỗi không được giết thread camera_loop.
                 print(f"[OCR][ERROR] serial write failed: {type(e).__name__}: {e}")
 
     if time.time() - last_seen_time > timeout:
         last_plate = ""
 
     detected = candidate if (candidate and pattern.match(candidate)) else ""
-    return frame, plate_counter, last_plate, last_seen_time, detected
+    return frame, plate_counter, last_plate, last_seen_time, detected, detected_snap
 
 
 # ==== ĐỌC TỪ ARDUINO ====
 def read_from_arduino(ser, ser_out=None, direction="in"):
-    global scan_enabled, last_scanned_uid, scan_result
+    global scan_enabled, last_scanned_uid, scan_result, pending_vehicle_info
 
-    if ser.in_waiting <= 0:
+    # ser=None khi COM port chưa cắm/không mở được -> skip, không crash thread.
+    if ser is None or ser.in_waiting <= 0:
         return
 
     line = ser.readline().decode(errors="ignore").strip()
@@ -467,18 +804,118 @@ def read_from_arduino(ser, ser_out=None, direction="in"):
     if line.startswith("UID:"):
         print("[SCAN][UID RAW]", line)
 
-    # RFID UID SCAN
+    # RFID UID SCAN — Staff quét thẻ trắng替客人 tạo phiên
+    # Flow: Camera OCR detect biển số → lookup subscriber ngay →
+    #       Staff quét thẻ → dùng kết quả đã lưu → tạo card đúng loại
     if scan_enabled and line.startswith("UID:"):
         uid = line.replace("UID:", "").strip()
         if not uid:
             return
 
-        result = backend.rfid_scan_register(uid)
-        scan_result = "success" if result.get("created") else "duplicate"
+        # Kiểm tra lookup đã hoàn tất chưa (background thread có thể chưa xong)
+        if not pending_vehicle_info.get("lookupDone"):
+            waited = 0.0
+            while waited < 5.0 and not pending_vehicle_info.get("lookupDone"):
+                time.sleep(0.2)
+                waited += 0.2
+            if not pending_vehicle_info.get("lookupDone"):
+                scan_result = "error"
+                scan_message = "Đang xác minh biển số, vui lòng thử lại."
+                last_scanned_uid = uid
+                scan_enabled = False
+                send_to_both("SCAN_OFF")
+                return
+
+        # Kiểm tra lookup có bị lỗi không — fail-safe: không cho scan
+        if pending_vehicle_info.get("lookupError"):
+            scan_result = "error"
+            scan_message = "Không thể xác minh thông tin xe, vui lòng thử lại."
+            last_scanned_uid = uid
+            scan_enabled = False
+            pending_vehicle_info = {"plate": "", "lookupDone": False, "lookupError": False, "isSubscriber": False, "ownerName": "Guest", "vehicle": None, "detectedAt": 0.0}
+            send_to_both("SCAN_OFF")
+            return
+
+        # Kiểm tra timeout — dữ liệu quá cũ thì không dùng
+        elapsed = time.time() - (pending_vehicle_info.get("detectedAt") or 0)
+        if elapsed > _PENDING_TIMEOUT:
+            scan_result = "error"
+            scan_message = "Dữ liệu biển số đã hết hạn. Xe vui lòng lùi lại để camera nhận lại."
+            last_scanned_uid = uid
+            scan_enabled = False
+            pending_vehicle_info = {"plate": "", "lookupDone": False, "lookupError": False, "isSubscriber": False, "ownerName": "Guest", "vehicle": None, "detectedAt": 0.0}
+            send_to_both("SCAN_OFF")
+            return
+
+        # Kiểm tra plate trong pending_vehicle_info khớp với biển số hiện tại
+        # (tránh trường hợp xe A detect xong, xe B tiến vào nhưng pending chưa reset)
+        pending_plate = _normalize_plate(pending_vehicle_info.get("plate") or "")
+        current_plate = pending_plate or _normalize_plate(last_detected_plate_in or "")
+        if pending_plate and pending_plate != _normalize_plate(last_detected_plate_in or ""):
+            # Biển số đã thay đổi (xe mới tiến vào) → bỏ qua pending cũ
+            scan_result = "error"
+            scan_message = "Biển số đã thay đổi, vui lòng chờ camera nhận lại."
+            last_scanned_uid = uid
+            scan_enabled = False
+            pending_vehicle_info = {"plate": "", "lookupDone": False, "lookupError": False, "isSubscriber": False, "ownerName": "Guest", "vehicle": None, "detectedAt": 0.0}
+            send_to_both("SCAN_OFF")
+            return
+
+        is_subscriber = pending_vehicle_info.get("isSubscriber", False)
+        owner_name = pending_vehicle_info.get("ownerName") or "Guest"
+        card_user_type = "resident" if is_subscriber else "guest"
+
+        result = backend.rfid_scan_register(uid, owner_name=owner_name, plate=current_plate, user_type=card_user_type)
         if not result.get("ok"):
             scan_result = "error"
+            scan_message = result.get("message") or "Thẻ RFID không hợp lệ hoặc đã bị vô hiệu hóa."
+        else:
+            # Thẻ đã tồn tại hoặc mới tạo — đều hợp lệ
+            scan_result = "success"
+            scan_message = ""
+
+            # Đồng bộ card + plate xuống ESP32 (cả IN và OUT)
+            sync_cmd = f"ADD|{uid}|{owner_name}|{current_plate}|{card_user_type}|active"
+            send_to_both(sync_cmd)
+
+            # Nếu có plate OCR → tạo phiên gửi xe
+            if current_plate:
+                image_path = capture_snapshot_for_event("in", base_url=_last_bridge_host)
+                push_result = backend.push_camera_log(
+                    direction="in",
+                    detected_plate=current_plate,
+                    confidence=0.95,
+                    rfid_uid=uid,
+                    owner_name=owner_name,
+                    plate=current_plate,
+                    user_type=card_user_type,
+                    image_path=image_path,
+                    metadata={
+                        "source": "staff-scan",
+                        "snapshot": bool(image_path),
+                        "isSubscriber": is_subscriber,
+                    },
+                )
+
+                # Chỉ mở barrier nếu tạo session thành công
+                if push_result.get("ok"):
+                    open_gate("in")
+                    def _auto_close_in():
+                        time.sleep(5)
+                        close_gate("in")
+                    threading.Thread(target=_auto_close_in, daemon=True).start()
+
+                    user_label = "Subscriber" if is_subscriber else "Guest"
+                    scan_message = f"{user_label}: {current_plate} — barrier opened"
+                else:
+                    scan_result = "error"
+                    scan_message = "Không tạo được phiên gửi xe. Barrier không mở."
+            else:
+                scan_message = "Chưa detect được biển số. Vui lòng chờ camera nhận biển."
+
         last_scanned_uid = uid
         scan_enabled = False
+        pending_vehicle_info = {"plate": "", "lookupDone": False, "lookupError": False, "isSubscriber": False, "ownerName": "Guest", "vehicle": None, "detectedAt": 0.0}
         send_to_both("SCAN_OFF")
         return
 
@@ -536,6 +973,15 @@ def read_from_arduino(ser, ser_out=None, direction="in"):
                     print("[BACKEND][RFID_DELETE] error:", e)
                 del_cmd = f"DEL:{uid}"
                 safe_write(arduino_in, serial_lock_in, del_cmd)
+
+            # Xe ra: mở barie, sau 5 giây tự đóng
+            if data_direction == "Out":
+                open_gate("out")
+                def _auto_close_out():
+                    time.sleep(5)
+                    close_gate("out")
+                threading.Thread(target=_auto_close_out, daemon=True).start()
+
         except Exception as e:
             print("[ERROR] Parse log failed:", e)
 
@@ -562,48 +1008,172 @@ def close_gate(gate='in'):
 
 
 # ==== CAMERA LOOP ====
+def _ocr_worker(frame_copy, plate_counter, last_plate, last_seen_time,
+                prefix, ser, lock, direction_key):
+    """Chạy OCR (YOLO+EasyOCR) trên bản copy frame — KHÔNG block camera stream.
+
+    Trả về tuple (plate_counter, last_plate, last_seen_time, detected_plate,
+    detected_snap_path) qua biến mutable results_dict.
+    """
+    global last_detected_plate_in, last_detected_plate_out
+    global last_snapshot_in, last_snapshot_out
+    global pending_vehicle_info
+    try:
+        _, pc, lp, lst, detected, detected_snap = process_frame(
+            frame_copy, plate_counter, last_plate, last_seen_time,
+            prefix, ser, lock, direction_key,
+        )
+        # Ghi kết quả ngược vào dict thread-safe (dict assignment atomic trong CPython)
+        _ocr_worker.results[direction_key] = (pc, lp, lst, detected, detected_snap)
+        if detected:
+            if direction_key == "in":
+                last_detected_plate_in = detected
+            else:
+                last_detected_plate_out = detected
+        if detected_snap:
+            if direction_key == "in":
+                last_snapshot_in = detected_snap
+            else:
+                last_snapshot_out = detected_snap
+
+        # Khi OCR confirm biển số mới (cooldown đã qua → last_plate vừa đổi),
+        # push log lên backend để SSE phát tới /staff-desk ngay lập tức.
+        # detected != "" chứng tỏ plate vừa được accept (cooldown + count đủ).
+        if detected and detected != last_plate:
+            snap_path = detected_snap or ""
+            conf_val = 0.0
+            # Lấy confidence từ YOLO boxes nếu có
+            boxes = last_boxes_in if direction_key == "in" else last_boxes_out
+            if boxes:
+                conf_val = float(boxes[0][4]) if len(boxes[0]) > 4 else 0.0
+            def _push_ocr_log(plate=detected, direction=direction_key,
+                              snap=snap_path, conf=conf_val):
+                try:
+                    backend.push_camera_log(
+                        direction=direction,
+                        detected_plate=plate,
+                        confidence=conf,
+                        plate=plate,
+                        user_type="guest",
+                        image_path=snap,
+                        metadata={"source": "camera-ocr"},
+                    )
+                    print(f"[OCR][PUSH] direction={direction} plate={plate} conf={conf:.2f}")
+                except Exception as push_err:
+                    print(f"[OCR][PUSH][ERROR] {push_err}")
+            threading.Thread(target=_push_ocr_log, daemon=True).start()
+
+            # ②③④ Bước 2: OCR detect biển số IN → lookup subscriber ngay
+            # Lưu kết quả vào pending_vehicle_info để staff quét thẻ dùng luôn.
+            if direction_key == "in":
+                def _lookup_vehicle_info(plate=detected, direction=direction_key,
+                                         snap=snap_path, conf=conf_val):
+                    global pending_vehicle_info
+                    try:
+                        info = backend.rfid_lookup_plate(plate)
+                        is_sub = info.get("isSubscriber", False)
+                        vehicle = info.get("vehicle") or {}
+                        owner = vehicle.get("ownerName") or "Guest"
+                        pending_vehicle_info = {
+                            "plate": plate,
+                            "lookupDone": True,
+                            "isSubscriber": is_sub,
+                            "ownerName": owner,
+                            "vehicle": vehicle,
+                            "detectedAt": time.time(),
+                        }
+                        label = "Subscriber" if is_sub else "Guest"
+                        print(f"[OCR][LOOKUP] {plate} → {label} (owner={owner})")
+                        # Nếu là subscriber → push update lên backend để UI cập nhật loại xe
+                        if is_sub:
+                            backend.push_camera_log(
+                                direction=direction,
+                                detected_plate=plate,
+                                confidence=conf,
+                                plate=plate,
+                                user_type="resident",
+                                image_path=snap,
+                                metadata={"source": "camera-ocr", "lookupResult": "subscriber"},
+                            )
+                            print(f"[OCR][PUSH-UPDATE] {plate} → resident")
+                    except Exception as e:
+                        print(f"[OCR][LOOKUP][ERROR] {e}")
+                        # Fail-safe: KHÔNG cho phép scan nếu lookup lỗi
+                        # → tránh ghi nhầm subscriber thành guest
+                        pending_vehicle_info = {
+                            "plate": plate,
+                            "lookupDone": True,
+                            "lookupError": True,
+                            "isSubscriber": False,
+                            "ownerName": "Guest",
+                            "vehicle": None,
+                            "detectedAt": time.time(),
+                        }
+                # Đánh dấu đang lookup (lookupDone=False) để scan handler biết phải chờ
+                pending_vehicle_info = {
+                    "plate": detected,
+                    "lookupDone": False,
+                    "isSubscriber": False,
+                    "ownerName": "Guest",
+                    "vehicle": None,
+                    "detectedAt": time.time(),
+                }
+                threading.Thread(target=_lookup_vehicle_info, daemon=True).start()
+
+    except Exception as e:
+        print(f"[OCR][WORKER][ERROR] {direction_key}: {type(e).__name__}: {e}")
+        _ocr_worker.results[direction_key] = (
+            plate_counter, last_plate, last_seen_time, "", ""
+        )
+
+_ocr_worker.results = {}
+
+
 def camera_loop():
     global plate_counter_in, last_plate_in, last_seen_time_in
     global plate_counter_out, last_plate_out, last_seen_time_out
     global last_frame_in, last_frame_out
     global last_preview_write_in, last_preview_write_out
     global last_detected_plate_in, last_detected_plate_out
-    # cap_in/cap_out được reassign khi reconnect — phải khai báo global
-    # để tránh UnboundLocalError ở dòng _safe_read(cap_in) bên dưới.
     global cap_in, cap_out
 
     # Thư mục đã được tạo ở boot. Reset interval để lần đầu tiên ghi ngay.
     last_preview_write_in = 0.0
     last_preview_write_out = 0.0
 
-    # Backoff state cho mỗi camera — tránh spam CPU + reconnect sau N lần fail.
+    # Backoff state cho mỗi camera
     camera_loop.fail_in = 0
     camera_loop.fail_out = 0
 
+    # Lần OCR gần nhất của từng camera
+    last_ocr_in = 0.0
+    last_ocr_out = 0.0
+
+    # Thread OCR đang chạy (1 thread mỗi hướng, tránh đè nhau)
+    ocr_thread_in = None
+    ocr_thread_out = None
+
     while True:
-        # Đọc từng camera; một camera fail không chặn camera còn lại.
-        # Nếu cap_in/cap_out là None (chưa cắm camera), _safe_read trả False
-        # và ta sleep thay vì spam retry.
+        # ===== BƯỚC 1: Đọc frame NHANH — không OCR, không chặn stream =====
         ret_in, frame_in = _safe_read(cap_in)
-        if not ret_in:
+        if ret_in:
+            camera_loop.fail_in = 0
+        else:
             camera_loop.fail_in += 1
             if cap_in is not None and camera_loop.fail_in >= 30:
-                # ~3 giây fail liên tục ở sleep 100ms — thử reconnect.
                 cap_in.release()
                 cap_in = _reconnect(CAMERA_INDEX_IN)
                 if cap_in is not None:
                     print("[CAM_IN] Reconnected after fail streak")
                 camera_loop.fail_in = 0
             elif cap_in is None and camera_loop.fail_in >= 300:
-                # Camera None — thử lại mỗi ~30 giây để bắt được khi user cắm vào.
                 cap_in = _reconnect(CAMERA_INDEX_IN)
                 camera_loop.fail_in = 0
-            time.sleep(min(0.05 * (2 ** min(camera_loop.fail_in, 5)), 1.0))
-            continue
-        camera_loop.fail_in = 0
 
         ret_out, frame_out = _safe_read(cap_out)
-        if not ret_out:
+        if ret_out:
+            camera_loop.fail_out = 0
+        else:
             camera_loop.fail_out += 1
             if cap_out is not None and camera_loop.fail_out >= 30:
                 cap_out.release()
@@ -614,39 +1184,81 @@ def camera_loop():
             elif cap_out is None and camera_loop.fail_out >= 300:
                 cap_out = _reconnect(CAMERA_INDEX_OUT)
                 camera_loop.fail_out = 0
-            time.sleep(min(0.05 * (2 ** min(camera_loop.fail_out, 5)), 1.0))
-            continue
-        camera_loop.fail_out = 0
 
-        # OCR chạy realtime (không ghi disk)
-        frame_in, plate_counter_in, last_plate_in, last_seen_time_in, detected_in = process_frame(
-            frame_in, plate_counter_in, last_plate_in, last_seen_time_in, "IN:", arduino_in, serial_lock_in, "in"
-        )
-        frame_out, plate_counter_out, last_plate_out, last_seen_time_out, detected_out = process_frame(
-            frame_out, plate_counter_out, last_plate_out, last_seen_time_out, "OUT:", arduino_out, serial_lock_out, "out"
-        )
-        if detected_in:
-            last_detected_plate_in = detected_in
-        if detected_out:
-            last_detected_plate_out = detected_out
-
-        # Cache latest frames (cho việc snapshot khi có RFID/DATA)
-        last_frame_in = frame_in
-        last_frame_out = frame_out
-
-        # Live preview ghi chậm — chỉ ghi disk mỗi LIVE_PREVIEW_INTERVAL_SEC
         now = time.time()
-        if now - last_preview_write_in >= LIVE_PREVIEW_INTERVAL_SEC:
-            _safe_imwrite(os.path.join(STATIC_DIR, "cam_in.jpg"), frame_in)
-            last_preview_write_in = now
-        if now - last_preview_write_out >= LIVE_PREVIEW_INTERVAL_SEC:
-            _safe_imwrite(os.path.join(STATIC_DIR, "cam_out.jpg"), frame_out)
-            last_preview_write_out = now
 
+        # ===== BƯỚC 2: Cập nhật last_frame NGAY sau khi đọc =====
+        # Frame sạch (chưa OCR drawings) → stream mượt, không chờ OCR.
+        if ret_in:
+            last_frame_in = frame_in
+            _stream_events["in"].set()  # báo cho MJPEG generator có frame mới
+            if now - last_preview_write_in >= LIVE_PREVIEW_INTERVAL_SEC:
+                _safe_imwrite(os.path.join(STATIC_DIR, "cam_in.jpg"), frame_in)
+                last_preview_write_in = now
+
+        if ret_out:
+            last_frame_out = frame_out
+            _stream_events["out"].set()  # báo cho MJPEG generator có frame mới
+            if now - last_preview_write_out >= LIVE_PREVIEW_INTERVAL_SEC:
+                _safe_imwrite(os.path.join(STATIC_DIR, "cam_out.jpg"), frame_out)
+                last_preview_write_out = now
+
+        # ===== BƯỚC 3: OCR chạy trên bản copy — KHÔNG block stream =====
+        if OCR_ENABLED:
+            # Cổng VÀO: chạy OCR nếu interval đủ lớn VÀ thread trước đã xong
+            if (ret_in and now - last_ocr_in >= OCR_INTERVAL_SEC
+                    and (ocr_thread_in is None or not ocr_thread_in.is_alive())):
+                last_ocr_in = now
+                frame_copy = frame_in.copy()
+                ocr_thread_in = threading.Thread(
+                    target=_ocr_worker,
+                    args=(frame_copy, dict(plate_counter_in), last_plate_in,
+                          last_seen_time_in, "IN:", arduino_in, serial_lock_in, "in"),
+                    daemon=True,
+                )
+                ocr_thread_in.start()
+
+            # Cổng RA
+            if (ret_out and now - last_ocr_out >= OCR_INTERVAL_SEC
+                    and (ocr_thread_out is None or not ocr_thread_out.is_alive())):
+                last_ocr_out = now
+                frame_copy = frame_out.copy()
+                ocr_thread_out = threading.Thread(
+                    target=_ocr_worker,
+                    args=(frame_copy, dict(plate_counter_out), last_plate_out,
+                          last_seen_time_out, "OUT:", arduino_out, serial_lock_out, "out"),
+                    daemon=True,
+                )
+                ocr_thread_out.start()
+
+            # Thu thập kết quả OCR từ worker threads
+            for key in ("in", "out"):
+                res = _ocr_worker.results.pop(key, None)
+                if res is not None:
+                    pc, lp, lst, detected, detected_snap = res
+                    if key == "in":
+                        plate_counter_in = pc
+                        last_plate_in = lp
+                        last_seen_time_in = lst
+                        if detected_snap:
+                            last_snapshot_in = detected_snap
+                    else:
+                        plate_counter_out = pc
+                        last_plate_out = lp
+                        last_seen_time_out = lst
+                        if detected_snap:
+                            last_snapshot_out = detected_snap
+
+        # Đọc serial (RFID / DATA từ ESP32)
         read_from_arduino(arduino_in, ser_out=arduino_out, direction="in")
         read_from_arduino(arduino_out, direction="out")
 
-        time.sleep(0.1)
+        # Nếu cả 2 camera fail thì backoff để không đốt CPU.
+        if not ret_in and not ret_out:
+            streak = max(camera_loop.fail_in, camera_loop.fail_out)
+            time.sleep(min(0.05 * (2 ** min(streak, 5)), 1.0))
+        else:
+            time.sleep(CAMERA_LOOP_SLEEP)
 
 
 def _safe_imwrite(path: str, frame) -> bool:
@@ -664,14 +1276,53 @@ def capture_snapshot_for_event(direction: str, base_url: str = "") -> str:
     Lưu ảnh JPEG cho 1 sự kiện xe vào/ra, trả về URL path để gửi backend.
     KHÔNG spam: chỉ gọi khi có RFID scan thành công / DATA log từ ESP32.
 
+    Ưu tiên dùng snapshot đã chụp bởi OCR (last_snapshot_in/out) — ảnh này
+    đã được YOLO detect bbox biển số và đã qua OCR, nên chắc chắn chứa
+    biển số hợp lệ. Nếu không có (OCR chưa kịp detect hoặc OCR tắt) ->
+    fallback về chụp từ last_frame (giống hành vi cũ).
+
     direction: "in" | "out"
     base_url: nếu truyền vào, trả về absolute URL để frontend backend hiển thị được.
     """
-    now = datetime.now()
+    global last_snapshot_in, last_snapshot_out, last_scanned_uid, last_detected_plate_in, last_detected_plate_out
     direction_norm = (direction or "").lower().strip()
     if direction_norm not in ("in", "out"):
         direction_norm = "in"
 
+    # ---- ƯU TIÊN 1: dùng snapshot đã chụp bởi OCR ----
+    ocr_snap_rel = last_snapshot_in if direction_norm == "in" else last_snapshot_out
+    if ocr_snap_rel:
+        # ocr_snap_rel dạng "/static/snapshots/xxx_crop.jpg" — copy sang tên
+        # mới có chứa UID để gắn với session, tránh bị 2 xe cùng lúc ghi đè.
+        ocr_snap_abs = os.path.join(_BASE_DIR, ocr_snap_rel.lstrip("/"))
+        if os.path.isfile(ocr_snap_abs):
+            try:
+                now = datetime.now()
+                ts = now.strftime("%Y%m%d_%H%M%S_%f")[:-3]
+                uid_part = (last_scanned_uid or "anon").replace(":", "").replace("|", "")[:24]
+                plate_part = (last_detected_plate_in if direction_norm == "in" else last_detected_plate_out) or ""
+                plate_norm = _normalize_plate(plate_part) or "nopl"
+                new_fname = f"{direction_norm}_{ts}_{plate_norm}_{uid_part}.jpg"
+                new_fpath = os.path.join(SNAPSHOT_DIR, new_fname)
+                os.makedirs(SNAPSHOT_DIR, exist_ok=True)
+                # Đọc từ snapshot OCR rồi ghi lại (chuyển tên có UID).
+                # Tránh shutil.copy vì cần đảm bảo JPEG re-encode chuẩn.
+                src = cv2.imread(ocr_snap_abs)
+                if src is not None and _safe_imwrite(new_fpath, src):
+                    rel = f"/static/snapshots/{new_fname}"
+                    if base_url:
+                        return f"{base_url.rstrip('/')}{rel}"
+                    return rel
+            except Exception as e:
+                print(f"[SNAPSHOT][WARN] cannot copy OCR snapshot: {e}")
+        # Nếu file đã bị xoá / lỗi -> clear cache và fallback
+        if direction_norm == "in":
+            last_snapshot_in = ""
+        else:
+            last_snapshot_out = ""
+
+    # ---- FALLBACK: chụp từ last_frame (giống hành vi cũ) ----
+    now = datetime.now()
     ts = now.strftime("%Y%m%d_%H%M%S_%f")[:-3]
     uid_part = (last_scanned_uid or "anon").replace(":", "").replace("|", "")[:24]
     plate_part = (last_detected_plate_in if direction_norm == "in" else last_detected_plate_out) or ""
@@ -811,24 +1462,101 @@ def _no_signal_jpeg() -> bytes:
 
 
 def _jpeg_bytes_from_frame(frame) -> bytes | None:
-    """Encode 1 frame numpy BGR → JPEG bytes. Trả None nếu lỗi."""
+    """Resize + encode 1 frame numpy BGR → JPEG bytes. Trả None nếu lỗi."""
     if frame is None:
         return None
     try:
-        ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+        # Resize trước khi encode để giảm CPU显著 (640px thay vì 1280px)
+        h, w = frame.shape[:2]
+        if STREAM_MAX_WIDTH > 0 and w > STREAM_MAX_WIDTH:
+            ratio = STREAM_MAX_WIDTH / w
+            frame = cv2.resize(frame, (STREAM_MAX_WIDTH, max(1, int(h * ratio))),
+                               interpolation=cv2.INTER_LINEAR)
+        ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
         return buf.tobytes() if ok else None
     except Exception:
         return None
 
 
+# Cache JPEG đã encode theo từng hướng. Nhiều tab/client cùng xem 1 camera sẽ
+# dùng chung kết quả encode thay vì mỗi client tự encode — trước đây N client
+# = N lần cv2.imencode mỗi frame, rất tốn CPU.
+_jpeg_cache: dict[str, tuple[int, bytes]] = {}
+
+
+def _draw_overlay(frame, boxes):
+    """Vẽ bbox YOLO + text OCR lên frame (in-place, trả về frame).
+
+    boxes: list of (x1, y1, x2, y2, conf, ocr_text).
+    - Bbox xanh dương = YOLO detect được biển số.
+    - Text xanh lá = OCR ra được text (chỉ dán lên bbox đầu tiên).
+    Không vẽ gì nếu boxes rỗng.
+    """
+    if frame is None or not boxes:
+        return frame
+    try:
+        for i, (x1, y1, x2, y2, conf, ocr_text) in enumerate(boxes):
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
+            label = f"YOLO {conf:.2f}"
+            cv2.putText(frame, label, (x1, max(15, y1 - 8)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+            # Chỉ hiện OCR text ở bbox đầu tiên (YOLO thường chỉ 1 bbox)
+            if i == 0 and ocr_text:
+                cv2.putText(frame, ocr_text, (x1, min(frame.shape[0] - 10, y2 + 22)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+    except Exception:
+        pass
+    return frame
+
+
+def _cached_jpeg(direction: str, frame) -> bytes | None:
+    """Encode frame nhưng tái sử dụng kết quả nếu frame chưa đổi.
+
+    Nhận diện frame bằng id() — camera_loop luôn gán object mới cho
+    last_frame_in/out mỗi lần đọc được, nên id đủ để phát hiện thay đổi.
+
+    Overlay bbox YOLO + OCR text được áp dụng lên BẢN SAO của frame (không
+    mutate frame gốc) trước khi encode, để user nhìn thấy trực tiếp trên
+    live stream khi có detection.
+    """
+    if frame is None:
+        return None
+    key = id(frame)
+    cached = _jpeg_cache.get(direction)
+    if cached is not None and cached[0] == key:
+        return cached[1]
+    # Copy nhẹ rồi vẽ overlay lên bản sao, tránh mutate last_frame gốc.
+    # boxes được _ocr_worker cập nhật vào global mỗi tick ~0.5s.
+    boxes = last_boxes_in if direction == "in" else last_boxes_out
+    out = frame
+    if boxes:
+        out = frame.copy()
+        _draw_overlay(out, boxes)
+    jpeg = _jpeg_bytes_from_frame(out)
+    if jpeg is not None:
+        _jpeg_cache[direction] = (key, jpeg)
+    return jpeg
+
+
 def _mjpeg_generator(direction: str):
-    """Yield JPEG frames liên tục theo boundary multipart. Mỗi frame ~70-150ms
-    tuỳ tốc độ camera_loop. Nếu frame chưa sẵn → phát 'no signal' placeholder."""
-    last_emit = 0.0
+    """Yield JPEG frames liên tục theo boundary multipart.
+
+    Chống giật:
+    - Dùng event-based wait thay vì time.sleep cố định: chỉ yield khi
+      camera_loop publish frame MỚI. Tránh gửi đi gửi lại cùng 1 JPEG
+      khi OCR chiếm CPU → camera_loop bị block → last_frame đứng.
+    - Có timeout max để vẫn phát frame ở FPS mục tiêu khi camera_loop
+      chạy chậm (giúp stream "sống", không đứng hình quá lâu).
+    """
     placeholder = _no_signal_jpeg()
+    frame_event = _stream_events[direction]
+    min_interval = 1.0 / MJPEG_FPS if MJPEG_FPS > 0 else 0.08
+    # Tick tối đa mỗi lần chờ — đảm bảo luôn phát frame sau khoảng này dù
+    # camera_loop chậm. 150ms ~ 6fps tối thiểu, đủ để browser không timeout.
+    max_wait = max(min_interval, 0.15)
     while True:
         frame = last_frame_in if direction == "in" else last_frame_out
-        jpeg = _jpeg_bytes_from_frame(frame) if frame is not None else None
+        jpeg = _cached_jpeg(direction, frame)
         if jpeg is None:
             jpeg = placeholder
         # multipart: mỗi frame là 1 part, browser tự ghép thành video
@@ -836,8 +1564,11 @@ def _mjpeg_generator(direction: str):
                b"Content-Type: image/jpeg\r\n"
                b"Content-Length: " + str(len(jpeg)).encode() + b"\r\n\r\n" +
                jpeg + b"\r\n")
-        # Cap ~15fps để tránh spam khi camera thật quá nhanh
-        time.sleep(0.066)
+        # Chờ frame MỚI — hoặc timeout để vẫn tick ở FPS tối thiểu
+        frame_event.wait(timeout=max_wait)
+        frame_event.clear()
+        # Rate-limit: đảm bảo không vượt quá MJPEG_FPS
+        time.sleep(min_interval)
 
 
 @app.route("/video_feed/<direction>")
@@ -877,6 +1608,11 @@ def control_gate(direction, action):
         return jsonify({"error": "Invalid command"}), 400
     if action == "open":
         open_gate(direction)
+        # Tự đóng barie sau 5 giây
+        def _auto_close(gate=direction):
+            time.sleep(5)
+            close_gate(gate)
+        threading.Thread(target=_auto_close, daemon=True).start()
     else:
         close_gate(direction)
     return jsonify({"status": f"Gate {direction} {action}ed successfully"})
@@ -998,7 +1734,11 @@ def poll_rfid_scan():
         state["scanResult"] = "timeout"
     if state["scanResult"] is None:
         return jsonify({"status": "waiting"})
-    return jsonify({"status": state["scanResult"], "uid": state["lastScannedUid"]})
+    return jsonify({
+        "status": state["scanResult"],
+        "uid": state["lastScannedUid"],
+        "message": state.get("scanMessage", ""),
+    })
 
 
 @app.route("/api/rfid/scan/cancel", methods=["POST"])
