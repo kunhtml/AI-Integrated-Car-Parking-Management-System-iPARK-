@@ -1,0 +1,201 @@
+A. Vehicle & Membership
+UC01 — Register and Maintain Vehicle Information
+Actor: Registered Member
+UC01.1  Đăng ký xe mới
+UC01.2  Cập nhật thông tin xe
+UC01.3  Upload giấy tờ xe
+UC01.4  Gửi yêu cầu xác minh xe
+UC01.5  Xem trạng thái xác minh và yêu cầu bổ sung
+UC02 — Manage Parking Packages
+Actor: Parking Manager
+UC02.1  Tạo gói gửi xe mới
+UC02.2  Cập nhật thông tin gói
+UC02.3  Xóa gói gửi xe chưa được sử dụng
+UC02.4  Cấu hình mức giá gói
+UC02.5  Cấu hình thời hạn gói
+UC02.6  Kích hoạt hoặc vô hiệu hóa gói
+UC03 — Purchase or Renew Parking Package
+Actor: Registered Member
+UC03.1  Xem danh sách gói gửi xe
+UC03.2  Chọn gói gửi xe
+UC03.3  Thanh toán gói gửi xe
+UC03.4  Kích hoạt gói mới
+UC03.5  Gia hạn gói hiện tại
+UC04 — Manage Membership Package
+Actor: Registered Member, Parking Manager
+UC04.1  Xem thông tin gói thành viên đang sử dụng
+UC04.2  Gia hạn gói thành viên
+UC04.3  Hủy gói theo chính sách
+UC04.4  Chuyển đổi gói thành viên
+UC04.5  Xem lịch sử sử dụng gói
+B. Entry, Exit & Payment
+UC05 — Create Guest Parking Session
+Actor: Guest Driver, Security Guard, Gate Devices
+UC05.1  Tiếp nhận xe khách vãng lai
+UC05.2  Kiểm tra sức chứa và Anti-Passback
+UC05.3  Gắn thẻ RFID cho xe
+UC05.4  Chụp ảnh xe vào bãi
+UC05.5  Nhập hoặc xác nhận thông tin xe
+UC05.6  Tạo phiên gửi xe trạng thái Active
+UC05.7  Mở barrier cho xe vào
+UC06 — Create Member Parking Session
+Actor: Registered Member, ANPR Camera, Gate Devices
+UC06.1  Chụp ảnh biển số xe
+UC06.2  Nhận diện biển số bằng ANPR
+UC06.3  Tìm xe đã đăng ký và được xác minh
+UC06.4  Kiểm tra quyền vào bãi, gói gửi xe và Anti-Passback
+UC06.5  Tạo phiên gửi xe thành viên trạng thái Active
+UC06.6  Mở barrier cho xe vào
+UC07 — Process Exit Parking Session
+Actor: Driver, ANPR Camera, RFID Reader, Gate Devices
+UC07.1  Chụp ảnh xe ra
+UC07.2  Nhận diện biển số hoặc đọc UID thẻ RFID
+UC07.3  Tìm phiên gửi xe Active
+UC07.4  Đối chiếu dữ liệu check-in và check-out
+UC07.5  Kiểm tra điều kiện an ninh và Anti-Passback
+UC07.6  Chuyển sang tính phí hoặc xử lý ngoại lệ
+UC08 — Pay Parking Session Fee
+Actor: Driver, Security Guard/Cashier, Payment Service
+UC08.1  Tính phí theo thời gian gửi và biểu phí hiệu lực
+UC08.2  Áp dụng quyền lợi gói, miễn giảm hoặc phụ phí
+UC08.3  Chuyển phiên sang Pending Payment nếu còn phí
+UC08.4  Cho phép chọn phương thức VIETQR hoặc CASH
+UC08.5  Với VietQR: tạo mã QR, nhận webhook và đối chiếu giao dịch
+UC08.6  Với tiền mặt: nhân viên nhận tiền, xác nhận số tiền và tạo giao dịch CASH
+UC08.7  Ghi người thụ, thời gian, ca làm việc và biên nhận đối với tiền mặt
+UC08.8  Xác nhận Paid hoặc chuyển giao dịch lỗi để xử lý
+UC09 — Complete Parking Session
+Actor: Driver, Gate Devices
+UC09.1  Xác nhận phiên đủ điều kiện hoàn tất hoặc đã Paid
+UC09.2  Ghi CheckOut Time và ảnh xe ra
+UC09.3  Chuyển phiên sang Completed
+UC09.4  Giải phóng chỗ và cập nhật sức chứa
+UC09.5  Xóa liên kết RFID khỏi phiên và đưa thẻ được thu hồi về kho
+UC09.6  Mở barrier
+UC09.7  Cập nhật dashboard, thống kê và audit log
+UC10 — Handle Exit Identification Mismatch
+Actor: Parking Manager, Security Guard, Gate Devices
+UC10.1  Phát hiện biển số hoặc RFID không khớp phiên
+UC10.2  Chuyển phiên sang Exception
+UC10.3  Giữ barrier đóng
+UC10.4  Đính kèm ảnh vào và ảnh ra
+UC10.5  Gửi cảnh báo realtime lên dashboard
+UC10.6  Cho phép nhân viên xác minh và xử lý thủ công có ghi lý do
+C. Parking Operations
+UC11 — View Parking History
+Actor: Registered Member, Parking Manager
+UC 11.1  Xem lịch sử gửi xe
+UC 11.2  Xem chi tiết phiên, thời gian, ảnh và phí
+UC 11.3  Lọc lịch sử theo thời gian
+UC11.4  Tìm kiếm theo biển số
+UC11.5  Xuất lịch sử theo quyền truy cập
+UC12 — Manage RFID Card Operations
+Actor: Parking Manager
+UC12.1  Phát hành thẻ RFID vào kho
+UC12.2  Gán thẻ cho xe hoặc phiên khách vãng lai
+UC12.3  Thu hồi thẻ sau khi xe ra
+UC12.4  Xóa thẻ bị mất khỏi hệ thống
+UC12.5  Thay thế thẻ hỏng hoặc bị mất
+UC12.6  Ghi audit log cho mọi thao tác thẻ
+UC13 — Manage Parking Capacity
+Actor: Parking Manager
+UC13.1  Cấu hình sức chứa bãi xe
+UC13.2  Phân bổ khu vực đỗ xe
+UC13.3  Cấu hình chỗ ưu tiên
+UC13.4  Thiết lập quota thành viên
+UC13.5  Theo dõi tỷ lệ lấp đầy
+UC13.6  Cảnh báo gần đầy hoặc đầy bãi
+UC14 — Manage Active and Exception Parking Sessions
+Actor: Parking Manager
+UC14.1  Xem danh sách phiên Active và Exception
+UC14.2  Tìm kiếm phiên theo biển số
+UC14.3  Lọc theo IdentifierType: RFID hoặc PLATE
+UC14.4  Xem chi tiết phiên
+UC14.5  Đóng phiên thủ công theo quyền
+UC14.6  Xử lý phiên ngoại lệ và ghi lý do
+UC14.7  Xuất danh sách phiên
+UC15 — Manage Lost Card Procedure
+Actor: Guest Driver, Security Guard, Parking Manager
+UC15.1  Tiếp nhận báo mất thẻ tại cổng
+UC15.2  Tra cứu phiên Active theo biển số
+UC15.3  Xác minh phương tiện bằng biển số, ảnh vào và thông tin liên quan
+UC15.4  Xóa liên kết RFID cũ khỏi phiên
+UC15.5  Xóa thẻ RFID bị mất khỏi hệ thống
+UC15.6  Phát hành và gán thẻ mới cho phiên Active
+UC15.7  Ghi audit log UID cũ, UID mới, người thực hiện và lý do
+UC15.8  Thu phí mất thẻ nếu chính sách áp dụng
+D. Administration & Monitoring
+UC16 — Generate Operational Reports
+Actor: Parking Manager
+UC16.1  Chọn loại báo cáo
+UC16.2  Chọn khoảng thời gian
+UC16.3  Tổng hợp doanh thu, lưu lượng, chiếm chỗ và phiên Exception
+UC16.4  Xem trước báo cáo
+UC16.5  Xuất Excel hoặc PDF
+UC17 — Review AI Recognition Results
+Actor: Parking Manager
+UC17.1  Xem kết quả nhận diện AI
+UC17.2  Xem ảnh gốc
+UC17.3  Chỉnh sửa biển số nhận diện sai
+UC17.4  Xác nhận kết quả AI
+UC17.5  Cập nhật dữ liệu hệ thống và ghi audit log
+UC18 — Manage Payment Transactions
+Actor: Parking Manager
+UC18.1  Tra cứu giao dịch VietQR và tiền mặt
+UC18.2  Lọc theo trạng thái, thời gian, phương thức và ca làm việc
+UC18.3  Xem chi tiết giao dịch
+UC18.4  Đối soát thanh toán VietQR
+UC18.5  Đối soát tiền mặt theo nhân viên và ca
+UC18.6  Xử lý giao dịch treo, thiếu, sai nội dung hoặc chênh lệch tiền mặt
+UC18.7  Xuất danh sách giao dịch và báo cáo bàn giao ca
+UC19 — Configure Parking Fee Rules
+Actor: Parking Manager
+UC19.1  Tạo biểu phí mới
+UC19.2  Cập nhật biểu phí
+UC19.3  Cấu hình khung giờ và cách làm tròn thời gian
+UC19.4  Cấu hình phụ phí hoặc miễn giảm
+UC19.5  Kích hoạt hoặc ngừng áp dụng biểu phí
+E. Dashboard, Occupancy & Support
+UC20 — Manage Parking Operations Dashboard
+Actor: Parking Manager
+UC20.1  Xem dashboard vận hành
+UC20.2  Xem cảnh báo hệ thống
+UC20.3  Drill-down vào cảnh báo
+UC20.4  Điều hướng đến phiên lỗi
+UC20.5  Cập nhật widget dashboard
+UC20.6  Lưu trạng thái dashboard
+UC21 — Review and Confirm Parking Space Occupancy
+Actor: Parking Manager
+UC21.1  Xem kết quả nhận diện ô đỗ
+UC21.2  Kiểm tra trạng thái ô đỗ
+UC21.3  Chỉnh sửa trạng thái ô đỗ
+UC21.4  Xác nhận kết quả AI
+UC21.5  Cập nhật sức chứa bãi xe
+UC22 — Submit Parking Dispute
+Actor: Guest Driver, Registered Member
+UC22.1  Tạo khiếu nại mới
+UC22.2  Chọn phiên gửi xe liên quan
+UC22.3  Đính kèm minh chứng
+UC22.4  Gửi khiếu nại
+UC22.5  Theo dõi trạng thái xử lý
+UC22.6  Nhận kết quả giải quyết
+UC23 — Manage Vehicle Verification Requests
+Actor: Parking Manager
+UC23.1  Xem danh sách yêu cầu xác minh
+UC23.2  Kiểm tra hồ sơ và giấy tờ xe
+UC23.3  Yêu cầu bổ sung giấy tờ
+UC23.4  Duyệt xác minh
+UC23.5  Từ chối xác minh
+UC23.6  Ghi lý do và thông báo kết quả
+UC24 — Manage Overstay Vehicles
+Actor: Parking Manager, Security Guard, Registered Member/Guest Driver
+UC24.1  Phát hiện phiên Active vượt thời gian cho phép
+UC24.2  Đánh dấu phiên và phương tiện là Overstay
+UC24.3  Gửi thông báo cho chủ xe nếu có thông tin liên hệ
+UC24.4  Hiển thị cảnh báo trên dashboard vận hành
+UC24.5  Kiểm tra thực tế phương tiện tại bãi
+UC24.6  Chụp ảnh và lập biên bản tình trạng xe
+UC24.7  Áp dụng phí lưu bãi quá hạn theo biểu phí
+UC24.8  Cập nhật ghi chú, kết quả xử lý và audit log
+UC24.9  Tính tổng phí khi chủ xe đến nhận xe
+UC24.10  Hoàn tất phiên sau thanh toán và xe rời bãi

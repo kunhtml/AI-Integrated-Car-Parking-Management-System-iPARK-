@@ -1,0 +1,2520 @@
+﻿ĐẶC TẢ USE CASE (UML)
+
+Hệ thống quản lý bãi đỗ xe thông minh iPARK
+
+
+Phiên bản: 1.1
+Ngày: 24/06/2026
+Số lượng Use Case: 34
+Medium UC: 28 | Simple UC: 6 | Complex UC: 0
+Mẫu: UML Use Case Specification (Cockburn / RUP) + Use Case Points (UCP)
+
+________________
+
+
+MỤC LỤC USE CASE
+Mã UC
+	Tên Use Case
+	Phân loại
+	Main
+	Alt
+	Exc
+	Tổng
+	UC01
+	Đăng ký, Đăng nhập và Xác thực tài khoản
+	Medium
+	6
+	3
+	3
+	12
+	UC02
+	Quản lý hồ sơ cá nhân và phương tiện
+	Medium
+	5
+	1
+	1
+	7
+	UC03
+	Đăng ký và quản lý phương tiện
+	Medium
+	6
+	1
+	1
+	8
+	UC04
+	Xem các gói đỗ xe và giá cả
+	Simple
+	3
+	1
+	1
+	5
+	UC05
+	Mua hoặc gia hạn gói đỗ xe
+	Medium
+	5
+	1
+	1
+	7
+	UC06
+	Kích hoạt gói thành viên
+	Medium
+	4
+	0
+	1
+	5
+	UC07
+	Quản lý gói thành viên
+	Medium
+	4
+	1
+	1
+	6
+	UC08
+	Nhận diện biển số xe bằng AI tại lối vào
+	Medium
+	6
+	2
+	2
+	10
+	UC09
+	Thực hiện xác minh chống vượt rào tại lối vào
+	Medium
+	5
+	1
+	1
+	7
+	UC10
+	Tạo phiên đỗ xe khách
+	Medium
+	5
+	1
+	1
+	7
+	UC11
+	Tạo phiên đỗ xe thành viên
+	Medium
+	5
+	1
+	1
+	7
+	UC12
+	Tự động áp dụng gói hàng ngày
+	Simple
+	3
+	0
+	1
+	4
+	UC13
+	Tạo vé điện tử QR cho khách
+	Medium
+	4
+	0
+	1
+	5
+	UC14
+	Tìm kiếm và chọn phương tiện qua cổng QR
+	Medium
+	4
+	1
+	1
+	6
+	UC15
+	Chọn gói đỗ xe sau khi nhận diện phương tiện
+	Medium
+	4
+	1
+	1
+	6
+	UC16
+	Giám sát phiên đỗ xe đang hoạt động
+	Medium
+	5
+	1
+	0
+	6
+	UC17
+	Nhận diện biển số xe bằng AI tại lối ra
+	Medium
+	6
+	1
+	1
+	8
+	UC18
+	Thực hiện xác minh chống vượt rào tại lối ra
+	Medium
+	4
+	0
+	1
+	5
+	UC19
+	Tự động tính phí đỗ xe
+	Medium
+	5
+	1
+	0
+	6
+	UC20
+	Tạo thanh toán VietQR động
+	Medium
+	5
+	0
+	1
+	6
+	UC21
+	Đồng bộ hóa kết quả thanh toán
+	Medium
+	4
+	1
+	1
+	6
+	UC22
+	Hoàn tất phiên đỗ xe và mở rào chắn
+	Medium
+	4
+	0
+	1
+	5
+	UC23
+	Xử lý biển số xe không hợp lệ / Nhận diện lỗi
+	Medium
+	4
+	1
+	0
+	5
+	UC24
+	Xem lịch sử đỗ xe và giao dịch
+	Simple
+	3
+	1
+	0
+	4
+	UC25
+	Nhận thông báo đỗ xe và thanh toán
+	Medium
+	4
+	1
+	0
+	5
+	UC26
+	Quản lý người dùng và vai trò
+	Medium
+	4
+	0
+	1
+	5
+	UC27
+	Quản lý cấu hình phí đỗ xe
+	Medium
+	4
+	0
+	1
+	5
+	UC28
+	Quản lý gói thành viên
+	Simple
+	3
+	0
+	0
+	3
+	UC29
+	Quản lý sức chứa và khu vực đỗ xe
+	Medium
+	4
+	0
+	1
+	5
+	UC30
+	Giám sát các phiên đỗ xe đang hoạt động (Admin)
+	Simple
+	3
+	0
+	0
+	3
+	UC31
+	Quản lý giao dịch thanh toán
+	Medium
+	4
+	0
+	0
+	4
+	UC32
+	Xem báo cáo hoạt động và doanh thu
+	Medium
+	4
+	0
+	1
+	5
+	UC33
+	Giám sát hiệu suất nhận diện AI
+	Simple
+	3
+	0
+	0
+	3
+	UC34
+	Giám sát nhật ký hệ thống và cảnh báo hoạt động
+	Medium
+	4
+	1
+	0
+	5
+	________________
+
+
+THỐNG KÊ PHÂN LOẠI UC & TRANSACTION (UCP)
+Transaction = một bước tương tác giữa Actor và Hệ thống trong kịch bản Use Case.
+Phân loại độ phức tạp (theo số transaction luồng chính — Main):
+• Simple UC: 1–3 transaction
+• Medium UC: 4–7 transaction
+• Complex UC: ≥8 transaction
+
+Tổng số Use Case: 34
+• Medium UC: 28 use case
+• Simple UC: 6 use case
+• Complex UC: 0 use case
+Mỗi UC có thêm: Phân loại (Simple/Medium/Complex) và số lượng Transaction (Main = luồng chính, Alt = luồng thay thế, Exc = luồng ngoại lệ, Tổng = cộng cả ba).
+Mã UC
+	Tên Use Case
+	Phân loại UC
+	Main Txn
+	Alt Txn
+	Exc Txn
+	Tổng Txn
+	Ghi chú
+	UC01
+	Đăng ký, Đăng nhập và Xác thực tài khoản
+	Medium
+	6
+	3
+	3
+	12
+	Medium UC
+	UC02
+	Quản lý hồ sơ cá nhân và phương tiện
+	Medium
+	5
+	1
+	1
+	7
+	Medium UC
+	UC03
+	Đăng ký và quản lý phương tiện
+	Medium
+	6
+	1
+	1
+	8
+	Medium UC
+	UC04
+	Xem các gói đỗ xe và giá cả
+	Simple
+	3
+	1
+	1
+	5
+	Simple UC
+	UC05
+	Mua hoặc gia hạn gói đỗ xe
+	Medium
+	5
+	1
+	1
+	7
+	Medium UC
+	UC06
+	Kích hoạt gói thành viên
+	Medium
+	4
+	0
+	1
+	5
+	Medium UC
+	UC07
+	Quản lý gói thành viên
+	Medium
+	4
+	1
+	1
+	6
+	Medium UC
+	UC08
+	Nhận diện biển số xe bằng AI tại lối vào
+	Medium
+	6
+	2
+	2
+	10
+	Medium UC
+	UC09
+	Thực hiện xác minh chống vượt rào tại lối vào
+	Medium
+	5
+	1
+	1
+	7
+	Medium UC
+	UC10
+	Tạo phiên đỗ xe khách
+	Medium
+	5
+	1
+	1
+	7
+	Medium UC
+	UC11
+	Tạo phiên đỗ xe thành viên
+	Medium
+	5
+	1
+	1
+	7
+	Medium UC
+	UC12
+	Tự động áp dụng gói hàng ngày
+	Simple
+	3
+	0
+	1
+	4
+	Simple UC
+	UC13
+	Tạo vé điện tử QR cho khách
+	Medium
+	4
+	0
+	1
+	5
+	Medium UC
+	UC14
+	Tìm kiếm và chọn phương tiện qua cổng QR
+	Medium
+	4
+	1
+	1
+	6
+	Medium UC
+	UC15
+	Chọn gói đỗ xe sau khi nhận diện phương tiện
+	Medium
+	4
+	1
+	1
+	6
+	Medium UC
+	UC16
+	Giám sát phiên đỗ xe đang hoạt động
+	Medium
+	5
+	1
+	0
+	6
+	Medium UC
+	UC17
+	Nhận diện biển số xe bằng AI tại lối ra
+	Medium
+	6
+	1
+	1
+	8
+	Medium UC
+	UC18
+	Thực hiện xác minh chống vượt rào tại lối ra
+	Medium
+	4
+	0
+	1
+	5
+	Medium UC
+	UC19
+	Tự động tính phí đỗ xe
+	Medium
+	5
+	1
+	0
+	6
+	Medium UC
+	UC20
+	Tạo thanh toán VietQR động
+	Medium
+	5
+	0
+	1
+	6
+	Medium UC
+	UC21
+	Đồng bộ hóa kết quả thanh toán
+	Medium
+	4
+	1
+	1
+	6
+	Medium UC
+	UC22
+	Hoàn tất phiên đỗ xe và mở rào chắn
+	Medium
+	4
+	0
+	1
+	5
+	Medium UC
+	UC23
+	Xử lý biển số xe không hợp lệ / Nhận diện lỗi
+	Medium
+	4
+	1
+	0
+	5
+	Medium UC
+	UC24
+	Xem lịch sử đỗ xe và giao dịch
+	Simple
+	3
+	1
+	0
+	4
+	Simple UC
+	UC25
+	Nhận thông báo đỗ xe và thanh toán
+	Medium
+	4
+	1
+	0
+	5
+	Medium UC
+	UC26
+	Quản lý người dùng và vai trò
+	Medium
+	4
+	0
+	1
+	5
+	Medium UC
+	UC27
+	Quản lý cấu hình phí đỗ xe
+	Medium
+	4
+	0
+	1
+	5
+	Medium UC
+	UC28
+	Quản lý gói thành viên
+	Simple
+	3
+	0
+	0
+	3
+	Simple UC
+	UC29
+	Quản lý sức chứa và khu vực đỗ xe
+	Medium
+	4
+	0
+	1
+	5
+	Medium UC
+	UC30
+	Giám sát các phiên đỗ xe đang hoạt động (Admin)
+	Simple
+	3
+	0
+	0
+	3
+	Simple UC
+	UC31
+	Quản lý giao dịch thanh toán
+	Medium
+	4
+	0
+	0
+	4
+	Medium UC
+	UC32
+	Xem báo cáo hoạt động và doanh thu
+	Medium
+	4
+	0
+	1
+	5
+	Medium UC
+	UC33
+	Giám sát hiệu suất nhận diện AI
+	Simple
+	3
+	0
+	0
+	3
+	Simple UC
+	UC34
+	Giám sát nhật ký hệ thống và cảnh báo hoạt động
+	Medium
+	4
+	1
+	0
+	5
+	Medium UC
+	________________
+
+
+HƯỚNG DẪN ĐỌC TÀI LIỆU
+Tài liệu tuân theo mẫu đặc tả Use Case UML chuẩn (Alister Cockburn / IBM RUP), gồm các trường: Tác nhân, Mô tả, Điều kiện tiên quyết/hậu, Trigger, Luồng chính (Main Success Scenario), Luồng thay thế (Extensions), Luồng ngoại lệ (Exceptions), Yêu cầu đặc biệt và Use Case liên quan.
+
+Mỗi UC có thêm: Phân loại (Simple/Medium/Complex) và số lượng Transaction (Main = luồng chính, Alt = luồng thay thế, Exc = luồng ngoại lệ, Tổng = cộng cả ba).
+
+Ký hiệu luồng thay thế/ngoại lệ: «bước»a. mô tả — ví dụ 3a. là nhánh tại bước 3 của luồng chính.
+________________
+
+
+UC01: Đăng ký, Đăng nhập và Xác thực tài khoản
+Mã Use Case
+	UC01
+	Tên Use Case
+	Đăng ký, Đăng nhập và Xác thực tài khoản
+	Phân loại UC
+(Use Case Complexity)
+	Medium UC (4–7 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 6 | Luồng thay thế (Alt): 3 | Luồng ngoại lệ (Exc): 3 | Tổng cộng: 12
+	Tác nhân chính
+(Primary Actor)
+	Người dùng (Khách hàng, Nhân viên, Quản trị viên)
+	Tác nhân phụ
+(Secondary Actors)
+	Hệ thống Email (OTP), Google OAuth
+	Mô tả tóm tắt
+(Brief Description)
+	Cho phép người dùng tạo tài khoản, đăng nhập, đăng xuất, khôi phục mật khẩu và bảo mật phiên làm việc.
+	Điều kiện tiên quyết
+(Preconditions)
+	Người dùng có kết nối Internet; hệ thống và cơ sở dữ liệu đang hoạt động.
+	Điều kiện hậu
+(Postconditions)
+	Phiên đăng nhập được tạo (cookie JWT) hoặc tài khoản mới được lưu trong MongoDB.
+	Kích hoạt
+(Trigger)
+	Người dùng truy cập /auth và chọn Đăng nhập hoặc Đăng ký.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	Cookie httpOnly, sameSite=lax; mật khẩu hash bcrypt; hỗ trợ 2FA cho admin.
+	Use Case liên quan
+(Related Use Cases)
+	UC02, UC26
+	Trạng thái triển khai
+(iPARK Project)
+	Đã triển khai: đăng ký/đăng nhập/đăng xuất/2FA. OTP email phụ thuộc cấu hình SMTP.
+	
+
+Chi tiết transaction: 6 bước luồng chính + 3 nhánh thay thế + 3 nhánh ngoại lệ = 12 transaction tổng. Đây là Medium UC (4–7 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 6 transaction
+1. Người dùng mở trang /auth.
+2. Người dùng nhập email và mật khẩu (hoặc thông tin đăng ký).
+3. Hệ thống gửi yêu cầu tới API /api/auth/login hoặc /api/auth/register.
+4. Hệ thống xác thực thông tin với cơ sở dữ liệu User.
+5. Hệ thống tạo JWT và thiết lập cookie parking_session.
+6. Hệ thống chuyển hướng người dùng tới dashboard theo vai trò.
+Luồng thay thế (Alternative Flows) — 3 transaction
+7. 3a. Admin bật 2FA: Hệ thống yêu cầu mã TOTP; người dùng nhập mã; hệ thống xác minh rồi tiếp tục bước 5.
+8. 2a. Quên mật khẩu: Người dùng nhập email → nhận OTP → xác thực OTP → đặt mật khẩu mới.
+9. 2b. Đăng nhập Google: Người dùng chọn Google OAuth → chuyển hướng Google → callback → tạo/cập nhật User.
+Luồng ngoại lệ (Exception Flows) — 3 transaction
+10. 4a. Email hoặc mật khẩu sai: Hệ thống trả 401 và hiển thị thông báo lỗi.
+11. 4b. Email đã tồn tại khi đăng ký: Hệ thống trả 409.
+12. 4c. Tài khoản bị khóa: Hệ thống từ chối đăng nhập với thông báo phù hợp.
+
+
+________________
+
+
+UC02: Quản lý hồ sơ cá nhân và phương tiện
+Mã Use Case
+	UC02
+	Tên Use Case
+	Quản lý hồ sơ cá nhân và phương tiện
+	Phân loại UC
+(Use Case Complexity)
+	Medium UC (4–7 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 5 | Luồng thay thế (Alt): 1 | Luồng ngoại lệ (Exc): 1 | Tổng cộng: 7
+	Tác nhân chính
+(Primary Actor)
+	Khách hàng
+	Tác nhân phụ
+(Secondary Actors)
+	Hệ thống thanh toán
+	Mô tả tóm tắt
+(Brief Description)
+	Khách hàng xem thông tin cá nhân, trạng thái thành viên, số dư ví và giao dịch gần nhất.
+	Điều kiện tiên quyết
+(Preconditions)
+	Người dùng đã đăng nhập với vai trò customer.
+	Điều kiện hậu
+(Postconditions)
+	Thông tin hồ sơ được hiển thị chính xác theo dữ liệu hệ thống.
+	Kích hoạt
+(Trigger)
+	Khách hàng truy cập /dashboard/profile.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	Chỉ hiển thị dữ liệu thuộc user hiện tại.
+	Use Case liên quan
+(Related Use Cases)
+	UC01, UC03, UC24
+	Trạng thái triển khai
+(iPARK Project)
+	Xem hồ sơ: đã có. Cập nhật hồ sơ: chưa có API.
+	
+
+Chi tiết transaction: 5 bước luồng chính + 1 nhánh thay thế + 1 nhánh ngoại lệ = 7 transaction tổng. Đây là Medium UC (4–7 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 5 transaction
+13. Khách hàng mở trang Hồ sơ.
+14. Hệ thống gọi GET /api/auth/me lấy thông tin user.
+15. Hệ thống gọi GET /api/transactions lấy giao dịch của user.
+16. Hệ thống hiển thị họ tên, email, vai trò, ví, trạng thái thành viên.
+17. Hệ thống hiển thị giao dịch thanh toán gần nhất.
+Luồng thay thế (Alternative Flows) — 1 transaction
+18. 3a. Không có giao dịch: Hiển thị danh sách trống hoặc dữ liệu demo.
+Luồng ngoại lệ (Exception Flows) — 1 transaction
+19. 2a. Phiên hết hạn: Chuyển hướng về /auth.
+
+
+________________
+
+
+UC03: Đăng ký và quản lý phương tiện
+Mã Use Case
+	UC03
+	Tên Use Case
+	Đăng ký và quản lý phương tiện
+	Phân loại UC
+(Use Case Complexity)
+	Medium UC (4–7 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 6 | Luồng thay thế (Alt): 1 | Luồng ngoại lệ (Exc): 1 | Tổng cộng: 8
+	Tác nhân chính
+(Primary Actor)
+	Khách hàng
+	Tác nhân phụ
+(Secondary Actors)
+	Nhân viên, Quản trị viên
+	Mô tả tóm tắt
+(Brief Description)
+	Đăng ký biển số xe, duyệt phương tiện và theo dõi trạng thái realtime trong bãi.
+	Điều kiện tiên quyết
+(Preconditions)
+	Khách hàng đã đăng nhập; biển số chưa trùng trong hệ thống.
+	Điều kiện hậu
+(Postconditions)
+	Vehicle được lưu với trạng thái Chờ duyệt hoặc Đã duyệt.
+	Kích hoạt
+(Trigger)
+	Khách đăng ký xe mới hoặc admin mở /dashboard/vehicles.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	Biển số chuẩn hóa uppercase; liên kết ownerUserId.
+	Use Case liên quan
+(Related Use Cases)
+	UC02, UC08, UC11, UC16
+	Trạng thái triển khai
+(iPARK Project)
+	Danh sách và duyệt: đã có. Form đăng ký khách: một phần.
+	
+
+Chi tiết transaction: 6 bước luồng chính + 1 nhánh thay thế + 1 nhánh ngoại lệ = 8 transaction tổng. Đây là Medium UC (4–7 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 6 transaction
+20. Người dùng nhập biển số và loại phương tiện.
+21. Hệ thống gọi POST /api/vehicles.
+22. Hệ thống lưu Vehicle gắn userId, status = Chờ duyệt.
+23. Nhân viên/Admin xem danh sách và bấm Duyệt.
+24. Hệ thống cập nhật PATCH /api/vehicles → status = Đã duyệt.
+25. Hệ thống ghép với phiên đang gửi để hiển thị trạng thái realtime.
+Luồng thay thế (Alternative Flows) — 1 transaction
+26. 4a. Admin từ chối: Cập nhật trạng thái từ chối kèm lý do.
+Luồng ngoại lệ (Exception Flows) — 1 transaction
+27. 2a. Biển số trùng: Hệ thống báo lỗi và không tạo bản ghi.
+
+
+________________
+
+
+UC04: Xem các gói đỗ xe và giá cả
+Mã Use Case
+	UC04
+	Tên Use Case
+	Xem các gói đỗ xe và giá cả
+	Phân loại UC
+(Use Case Complexity)
+	Simple UC (1–3 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 3 | Luồng thay thế (Alt): 1 | Luồng ngoại lệ (Exc): 1 | Tổng cộng: 5
+	Tác nhân chính
+(Primary Actor)
+	Khách hàng
+	Tác nhân phụ
+(Secondary Actors)
+	Quản trị viên
+	Mô tả tóm tắt
+(Brief Description)
+	Xem bảng giá công khai: phí theo giờ, qua đêm, vé ngày, gói tháng, gói thành viên.
+	Điều kiện tiên quyết
+(Preconditions)
+	Cấu hình PricingConfig tồn tại trong hệ thống.
+	Điều kiện hậu
+(Postconditions)
+	Người dùng nắm được mức phí trước khi vào bãi hoặc mua gói.
+	Kích hoạt
+(Trigger)
+	Truy cập trang chủ hoặc /dashboard/pricing (admin).
+	Yêu cầu đặc biệt
+(Special Requirements)
+	Giá công khai và giá vận hành dùng chung nguồn cấu hình.
+	Use Case liên quan
+(Related Use Cases)
+	UC05, UC15, UC19, UC27
+	Trạng thái triển khai
+(iPARK Project)
+	Đã triển khai xem và cấu hình admin.
+	
+
+Chi tiết transaction: 3 bước luồng chính + 1 nhánh thay thế + 1 nhánh ngoại lệ = 5 transaction tổng. Đây là Simple UC (1–3 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 3 transaction
+28. Người dùng mở trang hiển thị giá.
+29. Hệ thống gọi API lấy PricingConfig / membership packages.
+30. Hệ thống hiển thị bảng giá theo loại gói.
+Luồng thay thế (Alternative Flows) — 1 transaction
+31. 2a. Admin chỉnh sửa: PUT /api/pricing → cập nhật cấu hình mới.
+Luồng ngoại lệ (Exception Flows) — 1 transaction
+32. 2a. API lỗi: Hiển thị thông báo không tải được giá.
+
+
+________________
+
+
+UC05: Mua hoặc gia hạn gói đỗ xe
+Mã Use Case
+	UC05
+	Tên Use Case
+	Mua hoặc gia hạn gói đỗ xe
+	Phân loại UC
+(Use Case Complexity)
+	Medium UC (4–7 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 5 | Luồng thay thế (Alt): 1 | Luồng ngoại lệ (Exc): 1 | Tổng cộng: 7
+	Tác nhân chính
+(Primary Actor)
+	Khách hàng
+	Tác nhân phụ
+(Secondary Actors)
+	Hệ thống thanh toán VietQR, Ví điện tử
+	Mô tả tóm tắt
+(Brief Description)
+	Mua gói đỗ theo tháng/quý hoặc gia hạn gói đang sử dụng.
+	Điều kiện tiên quyết
+(Preconditions)
+	Khách hàng đã đăng nhập; gói cần mua đang active trong catalog.
+	Điều kiện hậu
+(Postconditions)
+	Gói được gia hạn; giao dịch được ghi nhận.
+	Kích hoạt
+(Trigger)
+	Khách chọn Mua/Gia hạn gói tại /dashboard/wallet.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	Đồng bộ trạng thái ví và gói thành viên.
+	Use Case liên quan
+(Related Use Cases)
+	UC04, UC06, UC20, UC21
+	Trạng thái triển khai
+(iPARK Project)
+	UI demo; chưa lưu subscription vào DB.
+	
+
+Chi tiết transaction: 5 bước luồng chính + 1 nhánh thay thế + 1 nhánh ngoại lệ = 7 transaction tổng. Đây là Medium UC (4–7 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 5 transaction
+33. Khách chọn gói và xác nhận.
+34. Hệ thống kiểm tra số dư ví.
+35. Nếu đủ số dư: trừ ví và cập nhật membershipExpiresAt.
+36. Nếu không đủ: tạo VietQR (UC20) và chờ thanh toán (UC21).
+37. Hệ thống ghi Transaction và thông báo thành công (UC25).
+Luồng thay thế (Alternative Flows) — 1 transaction
+38. 3a. Thanh toán VietQR: Chuyển sang UC20 → UC21 → quay lại bước 5.
+Luồng ngoại lệ (Exception Flows) — 1 transaction
+39. 2a. Gói không tồn tại: Hủy giao dịch và báo lỗi.
+
+
+________________
+
+
+UC06: Kích hoạt gói thành viên 
+chọn gói rồi thì requets kích hoạt luôn chứ không đẻ ra
+Mã Use Case
+	UC06
+	Tên Use Case
+	Kích hoạt gói thành viên
+	Phân loại UC
+(Use Case Complexity)
+	Medium UC (4–7 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 4 | Luồng thay thế (Alt): 0 | Luồng ngoại lệ (Exc): 1 | Tổng cộng: 5
+	Tác nhân chính
+(Primary Actor)
+	Khách hàng
+	Tác nhân phụ
+(Secondary Actors)
+	—
+	Mô tả tóm tắt
+(Brief Description)
+	Kích hoạt gói thành viên sau khi thanh toán để hưởng ưu đãi.
+	Điều kiện tiên quyết
+(Preconditions)
+	Khách đã mua gói thành viên; gói chưa được kích hoạt.
+	Điều kiện hậu
+(Postconditions)
+	membershipActive = true; ngày hết hạn được thiết lập.
+	Kích hoạt
+(Trigger)
+	Khách bấm Kích hoạt thành viên tại Wallet/Profile.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	Một user chỉ một gói thành viên active tại một thời điểm.
+	Use Case liên quan
+(Related Use Cases)
+	UC05, UC07, UC11
+	Trạng thái triển khai
+(iPARK Project)
+	UI demo; chưa có API DB.
+	
+
+Chi tiết transaction: 4 bước luồng chính + 0 nhánh thay thế + 1 nhánh ngoại lệ = 5 transaction tổng. Đây là Medium UC (4–7 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 4 transaction
+40. Khách xác nhận kích hoạt.
+41. Hệ thống kiểm tra gói đã thanh toán.
+42. Hệ thống cập nhật trạng thái thành viên active.
+43. Hệ thống hiển thị xác nhận trên Profile.
+Luồng thay thế (Alternative Flows) — 0 transaction
+(Không có)
+Luồng ngoại lệ (Exception Flows) — 1 transaction
+44. 2a. Chưa thanh toán gói: Từ chối kích hoạt.
+
+
+________________
+
+
+UC07: Quản lý gói thành viên
+Mã Use Case
+	UC07
+	Tên Use Case
+	Quản lý gói thành viên
+	Phân loại UC
+(Use Case Complexity)
+	Medium UC (4–7 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 4 | Luồng thay thế (Alt): 1 | Luồng ngoại lệ (Exc): 1 | Tổng cộng: 6
+	Tác nhân chính
+(Primary Actor)
+	Quản trị viên
+	Tác nhân phụ
+(Secondary Actors)
+	—
+	Mô tả tóm tắt
+(Brief Description)
+	Admin tạo, sửa, bật/tắt các gói thành viên trên catalog.
+	Điều kiện tiên quyết
+(Preconditions)
+	Admin đã đăng nhập với quyền admin.
+	Điều kiện hậu
+(Postconditions)
+	MembershipPackage được cập nhật trong MongoDB.
+	Kích hoạt
+(Trigger)
+	Admin mở màn quản lý gói thành viên.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	Chỉ admin được thao tác.
+	Use Case liên quan
+(Related Use Cases)
+	UC04, UC05, UC28
+	Trạng thái triển khai
+(iPARK Project)
+	Đã triển khai admin CRUD.
+	
+
+Chi tiết transaction: 4 bước luồng chính + 1 nhánh thay thế + 1 nhánh ngoại lệ = 6 transaction tổng. Đây là Medium UC (4–7 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 4 transaction
+45. Admin xem danh sách GET /api/membership-packages.
+46. Admin thêm hoặc sửa gói (tên, giá, thời hạn, mô tả).
+47. Hệ thống lưu POST/PATCH membership-packages.
+48. Gói active hiển thị cho khách tại UC04/UC05.
+Luồng thay thế (Alternative Flows) — 1 transaction
+49. 2a. Vô hiệu hóa gói: Đặt isActive = false.
+Luồng ngoại lệ (Exception Flows) — 1 transaction
+50. 3a. Dữ liệu không hợp lệ: Trả lỗi validation.
+
+
+________________
+
+
+UC08: Nhận diện biển số xe bằng AI tại lối vào
+Mã Use Case
+	UC08
+	Tên Use Case
+	Nhận diện biển số xe bằng AI tại lối vào
+	Phân loại UC
+(Use Case Complexity)
+	Medium UC (4–7 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 6 | Luồng thay thế (Alt): 2 | Luồng ngoại lệ (Exc): 2 | Tổng cộng: 10
+	Tác nhân chính
+(Primary Actor)
+	Hệ thống AI / Camera
+	Tác nhân phụ
+(Secondary Actors)
+	Nhân viên
+	Mô tả tóm tắt
+(Brief Description)
+	Camera chụp ảnh xe → OCR biển số → tạo hoặc gợi ý phiên vào bãi.
+	Điều kiện tiên quyết
+(Preconditions)
+	Camera hoạt động; bãi còn chỗ trống.
+	Điều kiện hậu
+(Postconditions)
+	ParkingSession trạng thái Đang gửi được tạo (hoặc chuyển UC09).
+	Kích hoạt
+(Trigger)
+	Xe đến lối vào; camera chụp hoặc upload ảnh.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	Lưu ảnh vào, ocrConfidence, detectedPlate.
+	Use Case liên quan
+(Related Use Cases)
+	UC09, UC10, UC11, UC23
+	Trạng thái triển khai
+(iPARK Project)
+	API camera-entry đã có; OCR đơn giản; Python ai-service chưa nối.
+	
+
+Chi tiết transaction: 6 bước luồng chính + 2 nhánh thay thế + 2 nhánh ngoại lệ = 10 transaction tổng. Đây là Medium UC (4–7 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 6 transaction
+51. Camera gửi snapshot tới POST /api/parking-sessions/camera-entry.
+52. Hệ thống gọi ai.service detectVehicleImage().
+53. Hệ thống trích xuất biển số và độ tin cậy.
+54. Hệ thống tìm Vehicle và kiểm tra sức chứa.
+55. Hệ thống cấp slot và tạo ParkingSession.
+56. Hệ thống mở rào (UC22) hoặc chuyển xác minh (UC09).
+Luồng thay thế (Alternative Flows) — 2 transaction
+57. 3a. Xe thành viên đã đăng ký: Liên kết ownerUserId (UC11).
+58. 5a. Upload thủ công: POST /upload action=entry.
+Luồng ngoại lệ (Exception Flows) — 2 transaction
+59. 4a. Bãi đầy: Trả 409, không tạo phiên.
+60. 3a. Không đọc được biển: Chuyển UC23.
+
+
+________________
+
+
+UC09: Thực hiện xác minh chống vượt rào tại lối vào
+Mã Use Case
+	UC09
+	Tên Use Case
+	Thực hiện xác minh chống vượt rào tại lối vào
+	Phân loại UC
+(Use Case Complexity)
+	Medium UC (4–7 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 5 | Luồng thay thế (Alt): 1 | Luồng ngoại lệ (Exc): 1 | Tổng cộng: 7
+	Tác nhân chính
+(Primary Actor)
+	Nhân viên
+	Tác nhân phụ
+(Secondary Actors)
+	Hệ thống AI
+	Mô tả tóm tắt
+(Brief Description)
+	Xác minh thủ công khi AI không chắc chắn hoặc phát hiện bất thường tại lối vào.
+	Điều kiện tiên quyết
+(Preconditions)
+	Phiên được đánh dấu Cần xác minh sau UC08.
+	Điều kiện hậu
+(Postconditions)
+	Phiên được duyệt vào hoặc bị từ chối.
+	Kích hoạt
+(Trigger)
+	Hệ thống flag verificationStatus = pending.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	Audit trail thao tác nhân viên.
+	Use Case liên quan
+(Related Use Cases)
+	UC08, UC23, UC34
+	Trạng thái triển khai
+(iPARK Project)
+	Backend có; UI xác minh một phần.
+	
+
+Chi tiết transaction: 5 bước luồng chính + 1 nhánh thay thế + 1 nhánh ngoại lệ = 7 transaction tổng. Đây là Medium UC (4–7 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 5 transaction
+61. Nhân viên mở /dashboard/sessions, lọc phiên cần duyệt.
+62. Nhân viên đối chiếu ảnh, biển AI và biển xác minh vào bãi.
+63. Nhân viên Duyệt hoặc Từ chối.
+64. Hệ thống cập nhật phiên và ghi log.
+65. Nếu duyệt: mở rào và cho xe vào.
+Luồng thay thế (Alternative Flows) — 1 transaction
+66. 3a. Yêu cầu bổ sung: POST verification-request.
+Luồng ngoại lệ (Exception Flows) — 1 transaction
+67. 3a. Từ chối: Ghi incident (UC23) và không mở rào.
+
+
+________________
+
+
+UC10: Tạo phiên đỗ xe khách
+Mã Use Case
+	UC10
+	Tên Use Case
+	Tạo phiên đỗ xe khách
+	Phân loại UC
+(Use Case Complexity)
+	Medium UC (4–7 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 5 | Luồng thay thế (Alt): 1 | Luồng ngoại lệ (Exc): 1 | Tổng cộng: 7
+	Tác nhân chính
+(Primary Actor)
+	Nhân viên
+	Tác nhân phụ
+(Secondary Actors)
+	—
+	Mô tả tóm tắt
+(Brief Description)
+	Tạo phiên cho khách vãng lai không có gói thành viên.
+	Điều kiện tiên quyết
+(Preconditions)
+	Bãi còn chỗ; nhân viên đã đăng nhập.
+	Điều kiện hậu
+(Postconditions)
+	ParkingSession loại khách được tạo với thời gian vào.
+	Kích hoạt
+(Trigger)
+	Nhân viên tạo phiên khách thủ công tại Sessions.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	Phân biệt sessionType guest vs member.
+	Use Case liên quan
+(Related Use Cases)
+	UC08, UC13, UC15, UC19
+	Trạng thái triển khai
+(iPARK Project)
+	Đã triển khai API và UI.
+	
+
+Chi tiết transaction: 5 bước luồng chính + 1 nhánh thay thế + 1 nhánh ngoại lệ = 7 transaction tổng. Đây là Medium UC (4–7 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 5 transaction
+68. Nhân viên nhập biển số và tên chủ xe.
+69. Hệ thống gọi POST /api/parking-sessions.
+70. Hệ thống kiểm tra capacity và allocateCarSlot().
+71. Hệ thống lưu session không ownerUserId (khách).
+72. Hệ thống hiển thị phiên mới; tùy chọn tạo QR (UC13).
+Luồng thay thế (Alternative Flows) — 1 transaction
+73. 1a. AI đọc biển: Nhân viên xác nhận kết quả OCR.
+Luồng ngoại lệ (Exception Flows) — 1 transaction
+74. 3a. Bãi đầy: Không tạo phiên.
+
+
+________________
+
+
+UC11: Tạo phiên đỗ xe thành viên
+Mã Use Case
+	UC11
+	Tên Use Case
+	Tạo phiên đỗ xe thành viên
+	Phân loại UC
+(Use Case Complexity)
+	Medium UC (4–7 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 5 | Luồng thay thế (Alt): 1 | Luồng ngoại lệ (Exc): 1 | Tổng cộng: 7
+	Tác nhân chính
+(Primary Actor)
+	Hệ thống
+	Tác nhân phụ
+(Secondary Actors)
+	Nhân viên
+	Mô tả tóm tắt
+(Brief Description)
+	Tạo phiên cho xe đã đăng ký với gói thành viên active.
+	Điều kiện tiên quyết
+(Preconditions)
+	Vehicle đã duyệt; membership active (UC06).
+	Điều kiện hậu
+(Postconditions)
+	ParkingSession gắn ownerUserId, loại thành viên.
+	Kích hoạt
+(Trigger)
+	UC08 nhận diện biển thuộc Vehicle đã đăng ký.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	Ưu tiên áp dụng chính sách giá thành viên.
+	Use Case liên quan
+(Related Use Cases)
+	UC03, UC06, UC08, UC12
+	Trạng thái triển khai
+(iPARK Project)
+	Liên kết owner từ plate: có; phân loại đầy đủ: một phần.
+	
+
+Chi tiết transaction: 5 bước luồng chính + 1 nhánh thay thế + 1 nhánh ngoại lệ = 7 transaction tổng. Đây là Medium UC (4–7 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 5 transaction
+75. Hệ thống nhận diện biển số.
+76. Hệ thống tìm Vehicle và userId.
+77. Hệ thống kiểm tra membershipActive.
+78. Hệ thống tạo session với ownerUserId.
+79. Hệ thống gửi thông báo cho khách (UC25).
+Luồng thay thế (Alternative Flows) — 1 transaction
+80. 3a. Hết hạn gói: Xử lý như khách (UC10).
+Luồng ngoại lệ (Exception Flows) — 1 transaction
+81. 2a. Xe chưa duyệt: Chuyển UC09.
+
+
+________________
+
+
+UC12: Tự động áp dụng gói hàng ngày
+Mã Use Case
+	UC12
+	Tên Use Case
+	Tự động áp dụng gói hàng ngày
+	Phân loại UC
+(Use Case Complexity)
+	Simple UC (1–3 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 3 | Luồng thay thế (Alt): 0 | Luồng ngoại lệ (Exc): 1 | Tổng cộng: 4
+	Tác nhân chính
+(Primary Actor)
+	Hệ thống
+	Tác nhân phụ
+(Secondary Actors)
+	Khách hàng
+	Mô tả tóm tắt
+(Brief Description)
+	Áp dụng trần phí vé ngày thay vì tính từng giờ khi checkout.
+	Điều kiện tiên quyết
+(Preconditions)
+	Phiên được gắn pricingPackage = daily (UC15).
+	Điều kiện hậu
+(Postconditions)
+	feeBreakdown phản ánh gói ngày.
+	Kích hoạt
+(Trigger)
+	Checkout phiên có gói ngày.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	dailyCap không vượt quá giá gói ngày.
+	Use Case liên quan
+(Related Use Cases)
+	UC15, UC19
+	Trạng thái triển khai
+(iPARK Project)
+	pricing.service có logic; gắn gói khi vào: một phần.
+	
+
+Chi tiết transaction: 3 bước luồng chính + 0 nhánh thay thế + 1 nhánh ngoại lệ = 4 transaction tổng. Đây là Simple UC (1–3 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 3 transaction
+82. Hệ thống gọi calculateParkingFee() tại finalizeCheckout.
+83. Hệ thống áp dụng dailyRate / dailyCap từ PricingConfig.
+84. Hệ thống lưu fee và feeBreakdown vào session.
+Luồng thay thế (Alternative Flows) — 0 transaction
+(Không có)
+Luồng ngoại lệ (Exception Flows) — 1 transaction
+85. 2a. Không có cấu hình daily: Fallback tính theo giờ.
+
+
+________________
+
+
+UC13: Tạo vé điện tử QR cho khách
+Mã Use Case
+	UC13
+	Tên Use Case
+	Tạo vé điện tử QR cho khách
+	Phân loại UC
+(Use Case Complexity)
+	Medium UC (4–7 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 4 | Luồng thay thế (Alt): 0 | Luồng ngoại lệ (Exc): 1 | Tổng cộng: 5
+	Tác nhân chính
+(Primary Actor)
+	Hệ thống
+	Tác nhân phụ
+(Secondary Actors)
+	Khách hàng
+	Mô tả tóm tắt
+(Brief Description)
+	Sinh mã QR gắn phiên khách để quét tại cổng hoặc thanh toán.
+	Điều kiện tiên quyết
+(Preconditions)
+	Phiên khách đã được tạo (UC10).
+	Điều kiện hậu
+(Postconditions)
+	Transaction pending và QR URL được sinh.
+	Kích hoạt
+(Trigger)
+	Nhân viên/khách yêu cầu tạo QR cho phiên.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	QR chứa sessionId và số tiền (nếu có).
+	Use Case liên quan
+(Related Use Cases)
+	UC10, UC14, UC20
+	Trạng thái triển khai
+(iPARK Project)
+	VietQR transaction: đã có.
+	
+
+Chi tiết transaction: 4 bước luồng chính + 0 nhánh thay thế + 1 nhánh ngoại lệ = 5 transaction tổng. Đây là Medium UC (4–7 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 4 transaction
+86. Hệ thống gọi POST /api/transactions/session/:sessionId.
+87. transaction.service tạo Transaction pending.
+88. Hệ thống sinh VietQR URL.
+89. Hệ thống hiển thị QR tại Wallet/Sessions.
+Luồng thay thế (Alternative Flows) — 0 transaction
+(Không có)
+Luồng ngoại lệ (Exception Flows) — 1 transaction
+90. 1a. Phiên không tồn tại: Trả 404.
+
+
+________________
+
+
+UC14: Tìm kiếm và chọn phương tiện qua cổng QR
+Mã Use Case
+	UC14
+	Tên Use Case
+	Tìm kiếm và chọn phương tiện qua cổng QR
+	Phân loại UC
+(Use Case Complexity)
+	Medium UC (4–7 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 4 | Luồng thay thế (Alt): 1 | Luồng ngoại lệ (Exc): 1 | Tổng cộng: 6
+	Tác nhân chính
+(Primary Actor)
+	Khách hàng
+	Tác nhân phụ
+(Secondary Actors)
+	Cổng QR / Kiosk
+	Mô tả tóm tắt
+(Brief Description)
+	Quét QR tại cổng để tìm phương tiện/phiên và tiếp tục thủ tục vào bãi.
+	Điều kiện tiên quyết
+(Preconditions)
+	QR hợp lệ; phiên hoặc vehicle tồn tại.
+	Điều kiện hậu
+(Postconditions)
+	Thông tin xe hiển thị; sẵn sàng UC15.
+	Kích hoạt
+(Trigger)
+	Khách quét QR tại cổng vào.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	Hỗ trợ mobile/kiosk responsive.
+	Use Case liên quan
+(Related Use Cases)
+	UC13, UC15
+	Trạng thái triển khai
+(iPARK Project)
+	API tìm phiên: có; UI kiosk: chưa có.
+	
+
+Chi tiết transaction: 4 bước luồng chính + 1 nhánh thay thế + 1 nhánh ngoại lệ = 6 transaction tổng. Đây là Medium UC (4–7 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 4 transaction
+91. Cổng đọc QR → parse sessionId hoặc plate.
+92. Hệ thống tìm ParkingSession / Vehicle.
+93. Hệ thống hiển thị thông tin xe và gói.
+94. Chuyển sang UC15 chọn gói.
+Luồng thay thế (Alternative Flows) — 1 transaction
+95. 2a. Chỉ có plate: Tìm Vehicle rồi tạo phiên mới.
+Luồng ngoại lệ (Exception Flows) — 1 transaction
+96. 2a. Không tìm thấy: Chuyển nhân viên xử lý (UC23).
+
+
+________________
+
+
+UC15: Chọn gói đỗ xe sau khi nhận diện phương tiện
+Mã Use Case
+	UC15
+	Tên Use Case
+	Chọn gói đỗ xe sau khi nhận diện phương tiện
+	Phân loại UC
+(Use Case Complexity)
+	Medium UC (4–7 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 4 | Luồng thay thế (Alt): 1 | Luồng ngoại lệ (Exc): 1 | Tổng cộng: 6
+	Tác nhân chính
+(Primary Actor)
+	Khách hàng
+	Tác nhân phụ
+(Secondary Actors)
+	Nhân viên
+	Mô tả tóm tắt
+(Brief Description)
+	Chọn gói theo giờ, vé ngày hoặc thành viên sau khi nhận diện xe.
+	Điều kiện tiên quyết
+(Preconditions)
+	Xe đã được nhận diện (UC08/UC14).
+	Điều kiện hậu
+(Postconditions)
+	pricingPackage gắn vào phiên; xe được phép vào.
+	Kích hoạt
+(Trigger)
+	Hiển thị màn hình chọn gói sau nhận diện.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	Gói ngày kích hoạt UC12.
+	Use Case liên quan
+(Related Use Cases)
+	UC04, UC12, UC14
+	Trạng thái triển khai
+(iPARK Project)
+	Một phần trên wallet/sessions.
+	
+
+Chi tiết transaction: 4 bước luồng chính + 1 nhánh thay thế + 1 nhánh ngoại lệ = 6 transaction tổng. Đây là Medium UC (4–7 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 4 transaction
+97. Hệ thống hiển thị bảng giá (UC04).
+98. Khách chọn: Theo giờ / Vé ngày / Thành viên.
+99. Khách xác nhận.
+100. Hệ thống cập nhật session và mở rào (UC22).
+Luồng thay thế (Alternative Flows) — 1 transaction
+101. 2a. Thành viên active: Tự chọn gói thành viên.
+Luồng ngoại lệ (Exception Flows) — 1 transaction
+102. 3a. Khách hủy: Không tạo/không cập nhật phiên.
+
+
+________________
+
+
+UC16: Giám sát phiên đỗ xe đang hoạt động
+Mã Use Case
+	UC16
+	Tên Use Case
+	Giám sát phiên đỗ xe đang hoạt động
+	Phân loại UC
+(Use Case Complexity)
+	Medium UC (4–7 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 5 | Luồng thay thế (Alt): 1 | Luồng ngoại lệ (Exc): 0 | Tổng cộng: 6
+	Tác nhân chính
+(Primary Actor)
+	Khách hàng
+	Tác nhân phụ
+(Secondary Actors)
+	Nhân viên, Quản trị viên
+	Mô tả tóm tắt
+(Brief Description)
+	Theo dõi realtime phiên đang gửi: biển số, chỗ đỗ, giờ vào, phí tạm tính.
+	Điều kiện tiên quyết
+(Preconditions)
+	Có ít nhất một phiên status = Đang gửi.
+	Điều kiện hậu
+(Postconditions)
+	Người dùng thấy trạng thái phiên cập nhật.
+	Kích hoạt
+(Trigger)
+	Truy cập /dashboard/sessions.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	Phân quyền theo role.
+	Use Case liên quan
+(Related Use Cases)
+	UC30
+	Trạng thái triển khai
+(iPARK Project)
+	Đã triển khai đầy đủ UI khách và staff.
+	
+
+Chi tiết transaction: 5 bước luồng chính + 1 nhánh thay thế + 0 nhánh ngoại lệ = 6 transaction tổng. Đây là Medium UC (4–7 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 5 transaction
+103. Hệ thống gọi GET /api/parking-sessions.
+104. Customer: lọc ownerUserId; Staff/Admin: toàn bộ.
+105. Lọc status = Đang gửi.
+106. Hiển thị panel Giám sát phiên đang hoạt động.
+107. Refresh định kỳ cập nhật thời gian đỗ.
+Luồng thay thế (Alternative Flows) — 1 transaction
+108. 4a. Tìm kiếm theo biển số.
+Luồng ngoại lệ (Exception Flows) — 0 transaction
+(Không có)
+
+
+________________
+
+
+UC17: Nhận diện biển số xe bằng AI tại lối ra
+Mã Use Case
+	UC17
+	Tên Use Case
+	Nhận diện biển số xe bằng AI tại lối ra
+	Phân loại UC
+(Use Case Complexity)
+	Medium UC (4–7 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 6 | Luồng thay thế (Alt): 1 | Luồng ngoại lệ (Exc): 1 | Tổng cộng: 8
+	Tác nhân chính
+(Primary Actor)
+	Hệ thống AI / Camera
+	Tác nhân phụ
+(Secondary Actors)
+	Nhân viên
+	Mô tả tóm tắt
+(Brief Description)
+	Camera lối ra OCR biển số → tìm phiên đang gửi → bắt đầu checkout.
+	Điều kiện tiên quyết
+(Preconditions)
+	Xe có phiên Đang gửi trong bãi.
+	Điều kiện hậu
+(Postconditions)
+	Checkout được khởi tạo hoặc chuyển UC18.
+	Kích hoạt
+(Trigger)
+	Xe đến lối ra; camera chụp ảnh.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	Lưu ảnh ra, matchScore.
+	Use Case liên quan
+(Related Use Cases)
+	UC18, UC19, UC23
+	Trạng thái triển khai
+(iPARK Project)
+	camera-exit API: đã có.
+	
+
+Chi tiết transaction: 6 bước luồng chính + 1 nhánh thay thế + 1 nhánh ngoại lệ = 8 transaction tổng. Đây là Medium UC (4–7 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 6 transaction
+109. POST /api/parking-sessions/camera-exit.
+110. OCR đọc biển số lối ra.
+111. Tìm session Đang gửi theo plate.
+112. So sánh ảnh vào/ra (imageHashSimilarity).
+113. Nếu khớp: finalizeCheckout → UC19.
+114. Nếu không khớp: UC18.
+Luồng thay thế (Alternative Flows) — 1 transaction
+115. 5a. Upload ảnh thủ công action=exit.
+Luồng ngoại lệ (Exception Flows) — 1 transaction
+116. 3a. Không tìm thấy phiên: UC23.
+
+
+________________
+
+
+UC18: Thực hiện xác minh chống vượt rào tại lối ra
+Mã Use Case
+	UC18
+	Tên Use Case
+	Thực hiện xác minh chống vượt rào tại lối ra
+	Phân loại UC
+(Use Case Complexity)
+	Medium UC (4–7 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 4 | Luồng thay thế (Alt): 0 | Luồng ngoại lệ (Exc): 1 | Tổng cộng: 5
+	Tác nhân chính
+(Primary Actor)
+	Nhân viên
+	Tác nhân phụ
+(Secondary Actors)
+	Hệ thống AI
+	Mô tả tóm tắt
+(Brief Description)
+	Xác minh thủ công khi biển/ảnh ra không khớp vào.
+	Điều kiện tiên quyết
+(Preconditions)
+	UC17 trả matchScore thấp hoặc cần duyệt.
+	Điều kiện hậu
+(Postconditions)
+	Checkout được duyệt hoặc từ chối.
+	Kích hoạt
+(Trigger)
+	verificationStatus pending tại lối ra.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	Bắt buộc trước khi mở rào nếu nghi ngờ gian lận.
+	Use Case liên quan
+(Related Use Cases)
+	UC17, UC19, UC22, UC23
+	Trạng thái triển khai
+(iPARK Project)
+	approve-checkout: có; UI: có.
+	
+
+Chi tiết transaction: 4 bước luồng chính + 0 nhánh thay thế + 1 nhánh ngoại lệ = 5 transaction tổng. Đây là Medium UC (4–7 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 4 transaction
+117. Nhân viên mở phiên cần xác minh.
+118. Đối chiếu ảnh vào/ra và biển số.
+119. Duyệt: POST approve-checkout hoặc PATCH session.
+120. Tiếp UC19 → UC20 → UC22.
+Luồng thay thế (Alternative Flows) — 0 transaction
+(Không có)
+Luồng ngoại lệ (Exception Flows) — 1 transaction
+121. 3a. Từ chối: Ghi incident UC23.
+
+
+________________
+
+
+UC19: Tự động tính phí đỗ xe
+Mã Use Case
+	UC19
+	Tên Use Case
+	Tự động tính phí đỗ xe
+	Phân loại UC
+(Use Case Complexity)
+	Medium UC (4–7 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 5 | Luồng thay thế (Alt): 1 | Luồng ngoại lệ (Exc): 0 | Tổng cộng: 6
+	Tác nhân chính
+(Primary Actor)
+	Hệ thống
+	Tác nhân phụ
+(Secondary Actors)
+	—
+	Mô tả tóm tắt
+(Brief Description)
+	Tự động tính phí theo thời gian đỗ và cấu hình giá khi kết thúc phiên.
+	Điều kiện tiên quyết
+(Preconditions)
+	Phiên có checkInAt và checkOutAt.
+	Điều kiện hậu
+(Postconditions)
+	session.fee và feeBreakdown được lưu.
+	Kích hoạt
+(Trigger)
+	finalizeCheckout() khi xe ra.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	Công thức minh bạch trong feeBreakdown.
+	Use Case liên quan
+(Related Use Cases)
+	UC12, UC20, UC27
+	Trạng thái triển khai
+(iPARK Project)
+	pricing.service: đã triển khai.
+	
+
+Chi tiết transaction: 5 bước luồng chính + 1 nhánh thay thế + 0 nhánh ngoại lệ = 6 transaction tổng. Đây là Medium UC (4–7 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 5 transaction
+122. Lấy PricingConfig active.
+123. calculateParkingFee(checkIn, checkOut, config).
+124. Áp dụng hourlyRate, overnight, dailyCap, gói UC12.
+125. Lưu fee vào ParkingSession.
+126. Tạo transaction pending UC20.
+Luồng thay thế (Alternative Flows) — 1 transaction
+127. 3a. Thành viên miễn/giảm phí: Áp dụng rule membership.
+Luồng ngoại lệ (Exception Flows) — 0 transaction
+(Không có)
+
+
+________________
+
+
+UC20: Tạo thanh toán VietQR động
+Mã Use Case
+	UC20
+	Tên Use Case
+	Tạo thanh toán VietQR động
+	Phân loại UC
+(Use Case Complexity)
+	Medium UC (4–7 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 5 | Luồng thay thế (Alt): 0 | Luồng ngoại lệ (Exc): 1 | Tổng cộng: 6
+	Tác nhân chính
+(Primary Actor)
+	Hệ thống
+	Tác nhân phụ
+(Secondary Actors)
+	Khách hàng
+	Mô tả tóm tắt
+(Brief Description)
+	Sinh mã VietQR động theo số tiền phiên và cấu hình ngân hàng.
+	Điều kiện tiên quyết
+(Preconditions)
+	Phiên đã có fee; PaymentConfig đã cấu hình.
+	Điều kiện hậu
+(Postconditions)
+	Transaction Chờ thanh toán và QR URL.
+	Kích hoạt
+(Trigger)
+	Checkout hoàn tất hoặc khách yêu cầu thanh toán.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	VietQR chuẩn Napas.
+	Use Case liên quan
+(Related Use Cases)
+	UC19, UC21, UC31
+	Trạng thái triển khai
+(iPARK Project)
+	Đã triển khai.
+	
+
+Chi tiết transaction: 5 bước luồng chính + 0 nhánh thay thế + 1 nhánh ngoại lệ = 6 transaction tổng. Đây là Medium UC (4–7 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 5 transaction
+128. createPendingTransactionForSession().
+129. Đọc PaymentConfig (BIN, STK, nội dung CK).
+130. Build VietQR URL với amount.
+131. Hiển thị QR tại /dashboard/wallet.
+132. Khách quét bằng app ngân hàng.
+Luồng thay thế (Alternative Flows) — 0 transaction
+(Không có)
+Luồng ngoại lệ (Exception Flows) — 1 transaction
+133. 2a. Chưa cấu hình bank: Báo lỗi cấu hình.
+
+
+________________
+
+
+UC21: Đồng bộ hóa kết quả thanh toán
+Mã Use Case
+	UC21
+	Tên Use Case
+	Đồng bộ hóa kết quả thanh toán
+	Phân loại UC
+(Use Case Complexity)
+	Medium UC (4–7 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 4 | Luồng thay thế (Alt): 1 | Luồng ngoại lệ (Exc): 1 | Tổng cộng: 6
+	Tác nhân chính
+(Primary Actor)
+	Hệ thống
+	Tác nhân phụ
+(Secondary Actors)
+	Quản trị viên, Ngân hàng
+	Mô tả tóm tắt
+(Brief Description)
+	Cập nhật trạng thái giao dịch sau khi khách chuyển khoản.
+	Điều kiện tiên quyết
+(Preconditions)
+	Transaction ở trạng thái Chờ thanh toán.
+	Điều kiện hậu
+(Postconditions)
+	Transaction = Đã thanh toán; kích hoạt UC22.
+	Kích hoạt
+(Trigger)
+	Webhook ngân hàng hoặc admin xác nhận.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	Idempotent confirm; chống double-spend.
+	Use Case liên quan
+(Related Use Cases)
+	UC20, UC22, UC31
+	Trạng thái triển khai
+(iPARK Project)
+	Xác nhận thủ công: có; webhook: chưa.
+	
+
+Chi tiết transaction: 4 bước luồng chính + 1 nhánh thay thế + 1 nhánh ngoại lệ = 6 transaction tổng. Đây là Medium UC (4–7 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 4 transaction
+134. Nhận tín hiệu thanh toán thành công.
+135. POST /api/transactions/:id/confirm.
+136. Cập nhật Transaction.status.
+137. Thông báo UC25; hoàn tất phiên UC22.
+Luồng thay thế (Alternative Flows) — 1 transaction
+138. 1a. Xác nhận thủ công bởi admin tại Wallet.
+Luồng ngoại lệ (Exception Flows) — 1 transaction
+139. 1a. Số tiền không khớp: Giữ pending, cảnh báo.
+
+
+________________
+
+
+UC22: Hoàn tất phiên đỗ xe và mở rào chắn
+Mã Use Case
+	UC22
+	Tên Use Case
+	Hoàn tất phiên đỗ xe và mở rào chắn
+	Phân loại UC
+(Use Case Complexity)
+	Medium UC (4–7 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 4 | Luồng thay thế (Alt): 0 | Luồng ngoại lệ (Exc): 1 | Tổng cộng: 5
+	Tác nhân chính
+(Primary Actor)
+	Hệ thống
+	Tác nhân phụ
+(Secondary Actors)
+	Thiết bị IoT (Barrier)
+	Mô tả tóm tắt
+(Brief Description)
+	Đóng phiên sau thanh toán và mở barrier lối ra.
+	Điều kiện tiên quyết
+(Preconditions)
+	Thanh toán thành công hoặc miễn phí thành viên.
+	Điều kiện hậu
+(Postconditions)
+	Session = Đã hoàn thành; barrier mở.
+	Kích hoạt
+(Trigger)
+	UC21 xác nhận thanh toán.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	Tích hợp relay/barrier API.
+	Use Case liên quan
+(Related Use Cases)
+	UC21, UC25, UC34
+	Trạng thái triển khai
+(iPARK Project)
+	Đóng phiên DB: có; điều khiển rào: chưa.
+	
+
+Chi tiết transaction: 4 bước luồng chính + 0 nhánh thay thế + 1 nhánh ngoại lệ = 5 transaction tổng. Đây là Medium UC (4–7 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 4 transaction
+140. Cập nhật status = Đã hoàn thành, checkOutAt.
+141. Gửi lệnh mở rào tới controller (nếu tích hợp).
+142. Gửi thông báo UC25.
+143. Xe ra khỏi bãi.
+Luồng thay thế (Alternative Flows) — 0 transaction
+(Không có)
+Luồng ngoại lệ (Exception Flows) — 1 transaction
+144. 2a. Barrier lỗi: Cảnh báo UC34, nhân viên mở thủ công.
+
+
+________________
+
+
+UC23: Xử lý biển số xe không hợp lệ / Nhận diện lỗi
+Mã Use Case
+	UC23
+	Tên Use Case
+	Xử lý biển số xe không hợp lệ / Nhận diện lỗi
+	Phân loại UC
+(Use Case Complexity)
+	Medium UC (4–7 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 4 | Luồng thay thế (Alt): 1 | Luồng ngoại lệ (Exc): 0 | Tổng cộng: 5
+	Tác nhân chính
+(Primary Actor)
+	Nhân viên
+	Tác nhân phụ
+(Secondary Actors)
+	Hệ thống AI
+	Mô tả tóm tắt
+(Brief Description)
+	Xử lý khi OCR thất bại, biển không hợp lệ hoặc không khớp phiên.
+	Điều kiện tiên quyết
+(Preconditions)
+	UC08/UC17 trả lỗi hoặc confidence thấp.
+	Điều kiện hậu
+(Postconditions)
+	Incident được ghi; phiên được sửa hoặc từ chối.
+	Kích hoạt
+(Trigger)
+	AI không đọc được biển hoặc không tìm thấy phiên.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	Liên kết ảnh OCR với incident.
+	Use Case liên quan
+(Related Use Cases)
+	UC08, UC09, UC17, UC18, UC34
+	Trạng thái triển khai
+(iPARK Project)
+	UI có; lưu incidents: in-memory stub.
+	
+
+Chi tiết transaction: 4 bước luồng chính + 1 nhánh thay thế + 0 nhánh ngoại lệ = 5 transaction tổng. Đây là Medium UC (4–7 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 4 transaction
+145. Hệ thống ghi log OCR và ảnh lỗi.
+146. Tạo incident tại /dashboard/incidents.
+147. Nhân viên nhập biển thủ công hoặc escort xe.
+148. POST /api/incidents → resolve khi xong.
+Luồng thay thế (Alternative Flows) — 1 transaction
+149. 3a. Tạo phiên thủ công sau khi xác minh.
+Luồng ngoại lệ (Exception Flows) — 0 transaction
+(Không có)
+
+
+________________
+
+
+UC24: Xem lịch sử đỗ xe và giao dịch
+Mã Use Case
+	UC24
+	Tên Use Case
+	Xem lịch sử đỗ xe và giao dịch
+	Phân loại UC
+(Use Case Complexity)
+	Simple UC (1–3 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 3 | Luồng thay thế (Alt): 1 | Luồng ngoại lệ (Exc): 0 | Tổng cộng: 4
+	Tác nhân chính
+(Primary Actor)
+	Khách hàng
+	Tác nhân phụ
+(Secondary Actors)
+	Quản trị viên
+	Mô tả tóm tắt
+(Brief Description)
+	Xem lịch sử phiên hoàn thành và giao dịch thanh toán.
+	Điều kiện tiên quyết
+(Preconditions)
+	Người dùng đã đăng nhập.
+	Điều kiện hậu
+(Postconditions)
+	Danh sách lịch sử hiển thị theo quyền.
+	Kích hoạt
+(Trigger)
+	Truy cập Wallet, Profile hoặc Sessions (lọc Đã hoàn thành).
+	Yêu cầu đặc biệt
+(Special Requirements)
+	Phân trang nếu dữ liệu lớn.
+	Use Case liên quan
+(Related Use Cases)
+	UC02, UC31, UC32
+	Trạng thái triển khai
+(iPARK Project)
+	Đã triển khai.
+	
+
+Chi tiết transaction: 3 bước luồng chính + 1 nhánh thay thế + 0 nhánh ngoại lệ = 4 transaction tổng. Đây là Simple UC (1–3 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 3 transaction
+150. GET /api/transactions và/hoặc /api/parking-sessions.
+151. Lọc theo user (customer) hoặc toàn bộ (admin).
+152. Hiển thị bảng: vào/ra, phí, trạng thái TT.
+Luồng thay thế (Alternative Flows) — 1 transaction
+153. 2a. Lọc theo ngày, biển số.
+Luồng ngoại lệ (Exception Flows) — 0 transaction
+(Không có)
+
+
+________________
+
+
+UC25: Nhận thông báo đỗ xe và thanh toán
+Mã Use Case
+	UC25
+	Tên Use Case
+	Nhận thông báo đỗ xe và thanh toán
+	Phân loại UC
+(Use Case Complexity)
+	Medium UC (4–7 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 4 | Luồng thay thế (Alt): 1 | Luồng ngoại lệ (Exc): 0 | Tổng cộng: 5
+	Tác nhân chính
+(Primary Actor)
+	Khách hàng
+	Tác nhân phụ
+(Secondary Actors)
+	Hệ thống
+	Mô tả tóm tắt
+(Brief Description)
+	Thông báo khi xe vào/ra, thanh toán, cần xác minh.
+	Điều kiện tiên quyết
+(Preconditions)
+	User có tài khoản; sự kiện nghiệp vụ xảy ra.
+	Điều kiện hậu
+(Postconditions)
+	Notification được tạo và/hoặc đẩy tới user.
+	Kích hoạt
+(Trigger)
+	Sự kiện: vào bãi, checkout, thanh toán, cảnh báo.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	Realtime hoặc polling chấp nhận được.
+	Use Case liên quan
+(Related Use Cases)
+	UC11, UC21, UC22
+	Trạng thái triển khai
+(iPARK Project)
+	UI có; lưu DB/push: stub.
+	
+
+Chi tiết transaction: 4 bước luồng chính + 1 nhánh thay thế + 0 nhánh ngoại lệ = 5 transaction tổng. Đây là Medium UC (4–7 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 4 transaction
+154. createNotification() khi có sự kiện.
+155. Lưu thông báo.
+156. User mở /dashboard/notifications.
+157. Đánh dấu đã đọc POST /notifications/:id/read.
+Luồng thay thế (Alternative Flows) — 1 transaction
+158. 2a. Push notification mobile (mở rộng).
+Luồng ngoại lệ (Exception Flows) — 0 transaction
+(Không có)
+
+
+________________
+
+
+UC26: Quản lý người dùng và vai trò
+Mã Use Case
+	UC26
+	Tên Use Case
+	Quản lý người dùng và vai trò
+	Phân loại UC
+(Use Case Complexity)
+	Medium UC (4–7 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 4 | Luồng thay thế (Alt): 0 | Luồng ngoại lệ (Exc): 1 | Tổng cộng: 5
+	Tác nhân chính
+(Primary Actor)
+	Quản trị viên
+	Tác nhân phụ
+(Secondary Actors)
+	—
+	Mô tả tóm tắt
+(Brief Description)
+	Xem, khóa, gán vai trò admin/staff/customer.
+	Điều kiện tiên quyết
+(Preconditions)
+	Admin đã đăng nhập.
+	Điều kiện hậu
+(Postconditions)
+	User được cập nhật trong MongoDB.
+	Kích hoạt
+(Trigger)
+	Admin mở /dashboard/users.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	Không cho phép tự hạ quyền admin cuối.
+	Use Case liên quan
+(Related Use Cases)
+	UC01
+	Trạng thái triển khai
+(iPARK Project)
+	Đã triển khai.
+	
+
+Chi tiết transaction: 4 bước luồng chính + 0 nhánh thay thế + 1 nhánh ngoại lệ = 5 transaction tổng. Đây là Medium UC (4–7 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 4 transaction
+159. GET /api/users.
+160. Hiển thị bảng người dùng.
+161. PATCH role/status khi cần.
+162. RoleGuard cập nhật menu frontend.
+Luồng thay thế (Alternative Flows) — 0 transaction
+(Không có)
+Luồng ngoại lệ (Exception Flows) — 1 transaction
+163. 3a. Không đủ quyền: 403.
+
+
+________________
+
+
+UC27: Quản lý cấu hình phí đỗ xe
+Mã Use Case
+	UC27
+	Tên Use Case
+	Quản lý cấu hình phí đỗ xe
+	Phân loại UC
+(Use Case Complexity)
+	Medium UC (4–7 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 4 | Luồng thay thế (Alt): 0 | Luồng ngoại lệ (Exc): 1 | Tổng cộng: 5
+	Tác nhân chính
+(Primary Actor)
+	Quản trị viên
+	Tác nhân phụ
+(Secondary Actors)
+	—
+	Mô tả tóm tắt
+(Brief Description)
+	Thiết lập giá theo giờ, qua đêm, vé ngày, grace period.
+	Điều kiện tiên quyết
+(Preconditions)
+	Admin đã đăng nhập.
+	Điều kiện hậu
+(Postconditions)
+	PricingConfig được cập nhật.
+	Kích hoạt
+(Trigger)
+	Admin mở /dashboard/pricing.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	Versioning hoặc audit khi đổi giá.
+	Use Case liên quan
+(Related Use Cases)
+	UC04, UC19
+	Trạng thái triển khai
+(iPARK Project)
+	Đã triển khai.
+	
+
+Chi tiết transaction: 4 bước luồng chính + 0 nhánh thay thế + 1 nhánh ngoại lệ = 5 transaction tổng. Đây là Medium UC (4–7 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 4 transaction
+164. GET /api/pricing-config.
+165. Admin chỉnh form cấu hình.
+166. PUT /api/pricing.
+167. UC19 dùng config mới.
+Luồng thay thế (Alternative Flows) — 0 transaction
+(Không có)
+Luồng ngoại lệ (Exception Flows) — 1 transaction
+168. 3a. Validation lỗi: Không lưu.
+
+
+________________
+
+
+UC28: Quản lý gói thành viên
+Mã Use Case
+	UC28
+	Tên Use Case
+	Quản lý gói thành viên
+	Phân loại UC
+(Use Case Complexity)
+	Simple UC (1–3 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 3 | Luồng thay thế (Alt): 0 | Luồng ngoại lệ (Exc): 0 | Tổng cộng: 3
+	Tác nhân chính
+(Primary Actor)
+	Quản trị viên
+	Tác nhân phụ
+(Secondary Actors)
+	—
+	Mô tả tóm tắt
+(Brief Description)
+	CRUD danh mục gói thành viên (tương tự UC07, góc admin catalog).
+	Điều kiện tiên quyết
+(Preconditions)
+	Admin đã đăng nhập.
+	Điều kiện hậu
+(Postconditions)
+	MembershipPackage cập nhật.
+	Kích hoạt
+(Trigger)
+	Admin mở membership-packages.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	Đồng bộ với UC07.
+	Use Case liên quan
+(Related Use Cases)
+	UC05, UC06, UC07
+	Trạng thái triển khai
+(iPARK Project)
+	Đã triển khai admin.
+	
+
+Chi tiết transaction: 3 bước luồng chính + 0 nhánh thay thế + 0 nhánh ngoại lệ = 3 transaction tổng. Đây là Simple UC (1–3 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 3 transaction
+169. GET/POST/PATCH /api/membership-packages.
+170. Bật/tắt gói trên catalog.
+171. Khách thấy tại UC04/UC05.
+Luồng thay thế (Alternative Flows) — 0 transaction
+(Không có)
+Luồng ngoại lệ (Exception Flows) — 0 transaction
+(Không có)
+
+
+________________
+
+
+UC29: Quản lý sức chứa và khu vực đỗ xe
+Mã Use Case
+	UC29
+	Tên Use Case
+	Quản lý sức chứa và khu vực đỗ xe
+	Phân loại UC
+(Use Case Complexity)
+	Medium UC (4–7 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 4 | Luồng thay thế (Alt): 0 | Luồng ngoại lệ (Exc): 1 | Tổng cộng: 5
+	Tác nhân chính
+(Primary Actor)
+	Quản trị viên
+	Tác nhân phụ
+(Secondary Actors)
+	Nhân viên
+	Mô tả tóm tắt
+(Brief Description)
+	Định nghĩa zone, số chỗ, theo dõi occupancy.
+	Điều kiện tiên quyết
+(Preconditions)
+	Admin/staff đã đăng nhập.
+	Điều kiện hậu
+(Postconditions)
+	Zone được tạo/sửa/xóa trong DB.
+	Kích hoạt
+(Trigger)
+	Admin mở /dashboard/zones.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	allocateCarSlot() theo zone.
+	Use Case liên quan
+(Related Use Cases)
+	UC08, UC10, UC30
+	Trạng thái triển khai
+(iPARK Project)
+	Zones CRUD: đã có.
+	
+
+Chi tiết transaction: 4 bước luồng chính + 0 nhánh thay thế + 1 nhánh ngoại lệ = 5 transaction tổng. Đây là Medium UC (4–7 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 4 transaction
+172. GET /api/zones.
+173. POST/PUT/DELETE zones.
+174. Khi tạo phiên: kiểm tra capacity.
+175. Overview hiển thị % lấp đầy.
+Luồng thay thế (Alternative Flows) — 0 transaction
+(Không có)
+Luồng ngoại lệ (Exception Flows) — 1 transaction
+176. 3a. Vượt capacity: Từ chối tạo phiên.
+
+
+________________
+
+
+UC30: Giám sát các phiên đỗ xe đang hoạt động (Admin)
+Mã Use Case
+	UC30
+	Tên Use Case
+	Giám sát các phiên đỗ xe đang hoạt động (Admin)
+	Phân loại UC
+(Use Case Complexity)
+	Simple UC (1–3 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 3 | Luồng thay thế (Alt): 0 | Luồng ngoại lệ (Exc): 0 | Tổng cộng: 3
+	Tác nhân chính
+(Primary Actor)
+	Quản trị viên
+	Tác nhân phụ
+(Secondary Actors)
+	Nhân viên
+	Mô tả tóm tắt
+(Brief Description)
+	Giám sát vận hành tổng thể: phiên active, KPI, dashboard.
+	Điều kiện tiên quyết
+(Preconditions)
+	Staff/Admin đã đăng nhập.
+	Điều kiện hậu
+(Postconditions)
+	Dashboard hiển thị số liệu realtime.
+	Kích hoạt
+(Trigger)
+	Truy cập /dashboard/overview và /dashboard/sessions.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	Refresh định kỳ hoặc WebSocket (mở rộng).
+	Use Case liên quan
+(Related Use Cases)
+	UC16, UC32
+	Trạng thái triển khai
+(iPARK Project)
+	Overview + sessions admin: đã có.
+	
+
+Chi tiết transaction: 3 bước luồng chính + 0 nhánh thay thế + 0 nhánh ngoại lệ = 3 transaction tổng. Đây là Simple UC (1–3 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 3 transaction
+177. GET /api/dashboard/overview.
+178. Aggregate: xe đang gửi, doanh thu hôm nay.
+179. Sessions: toàn bộ phiên active, search.
+Luồng thay thế (Alternative Flows) — 0 transaction
+(Không có)
+Luồng ngoại lệ (Exception Flows) — 0 transaction
+(Không có)
+
+
+________________
+
+
+UC31: Quản lý giao dịch thanh toán
+Mã Use Case
+	UC31
+	Tên Use Case
+	Quản lý giao dịch thanh toán
+	Phân loại UC
+(Use Case Complexity)
+	Medium UC (4–7 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 4 | Luồng thay thế (Alt): 0 | Luồng ngoại lệ (Exc): 0 | Tổng cộng: 4
+	Tác nhân chính
+(Primary Actor)
+	Quản trị viên
+	Tác nhân phụ
+(Secondary Actors)
+	Nhân viên
+	Mô tả tóm tắt
+(Brief Description)
+	Xem tất cả giao dịch, xác nhận thủ công, liên kết session.
+	Điều kiện tiên quyết
+(Preconditions)
+	Admin/staff đã đăng nhập.
+	Điều kiện hậu
+(Postconditions)
+	Transaction cập nhật trạng thái.
+	Kích hoạt
+(Trigger)
+	Admin mở Wallet/transactions.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	Audit ai xác nhận giao dịch.
+	Use Case liên quan
+(Related Use Cases)
+	UC20, UC21, UC24
+	Trạng thái triển khai
+(iPARK Project)
+	List + confirm: đã có.
+	
+
+Chi tiết transaction: 4 bước luồng chính + 0 nhánh thay thế + 0 nhánh ngoại lệ = 4 transaction tổng. Đây là Medium UC (4–7 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 4 transaction
+180. GET /api/transactions.
+181. Lọc Chờ thanh toán / Đã thanh toán.
+182. POST confirm → UC21.
+183. Cập nhật session UC22.
+Luồng thay thế (Alternative Flows) — 0 transaction
+(Không có)
+Luồng ngoại lệ (Exception Flows) — 0 transaction
+(Không có)
+
+
+________________
+
+
+UC32: Xem báo cáo hoạt động và doanh thu
+Mã Use Case
+	UC32
+	Tên Use Case
+	Xem báo cáo hoạt động và doanh thu
+	Phân loại UC
+(Use Case Complexity)
+	Medium UC (4–7 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 4 | Luồng thay thế (Alt): 0 | Luồng ngoại lệ (Exc): 1 | Tổng cộng: 5
+	Tác nhân chính
+(Primary Actor)
+	Quản trị viên
+	Tác nhân phụ
+(Secondary Actors)
+	—
+	Mô tả tóm tắt
+(Brief Description)
+	Báo cáo theo khoảng thời gian; biểu đồ; export Excel/PDF.
+	Điều kiện tiên quyết
+(Preconditions)
+	Admin đã đăng nhập; có dữ liệu phiên/giao dịch.
+	Điều kiện hậu
+(Postconditions)
+	Báo cáo hiển thị hoặc file export.
+	Kích hoạt
+(Trigger)
+	Admin mở /dashboard/reports.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	Export Excel/PDF chuẩn báo cáo.
+	Use Case liên quan
+(Related Use Cases)
+	UC24, UC30
+	Trạng thái triển khai
+(iPARK Project)
+	Revenue reports admin: có; ops export: một phần.
+	
+
+Chi tiết transaction: 4 bước luồng chính + 0 nhánh thay thế + 1 nhánh ngoại lệ = 5 transaction tổng. Đây là Medium UC (4–7 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 4 transaction
+184. Chọn khoảng ngày.
+185. GET /api/reports/revenue hoặc /reports/summary.
+186. Hiển thị chart + bảng.
+187. POST /reports/revenue/exports để xuất file.
+Luồng thay thế (Alternative Flows) — 0 transaction
+(Không có)
+Luồng ngoại lệ (Exception Flows) — 1 transaction
+188. 2a. API stub: Hiển thị zeros hoặc fallback UI.
+
+
+________________
+
+
+UC33: Giám sát hiệu suất nhận diện AI
+Mã Use Case
+	UC33
+	Tên Use Case
+	Giám sát hiệu suất nhận diện AI
+	Phân loại UC
+(Use Case Complexity)
+	Simple UC (1–3 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 3 | Luồng thay thế (Alt): 0 | Luồng ngoại lệ (Exc): 0 | Tổng cộng: 3
+	Tác nhân chính
+(Primary Actor)
+	Quản trị viên
+	Tác nhân phụ
+(Secondary Actors)
+	Hệ thống AI
+	Mô tả tóm tắt
+(Brief Description)
+	Theo dõi độ chính xác OCR, lỗi nhận diện, thời gian xử lý.
+	Điều kiện tiên quyết
+(Preconditions)
+	Có log OCR trên ParkingSession.
+	Điều kiện hậu
+(Postconditions)
+	Dashboard AI hiển thị metrics.
+	Kích hoạt
+(Trigger)
+	Admin mở /dashboard/ai.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	Tích hợp ai-service Python khi có.
+	Use Case liên quan
+(Related Use Cases)
+	UC08, UC17, UC23
+	Trạng thái triển khai
+(iPARK Project)
+	AI page: demo; fields session: có.
+	
+
+Chi tiết transaction: 3 bước luồng chính + 0 nhánh thay thế + 0 nhánh ngoại lệ = 3 transaction tổng. Đây là Simple UC (1–3 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 3 transaction
+189. Aggregate ocrConfidence, detectedPlate từ sessions.
+190. Hiển thị tỷ lệ lỗi, confidence TB.
+191. Drill-down phiên lỗi.
+Luồng thay thế (Alternative Flows) — 0 transaction
+(Không có)
+Luồng ngoại lệ (Exception Flows) — 0 transaction
+(Không có)
+
+
+________________
+
+
+UC34: Giám sát nhật ký hệ thống và cảnh báo hoạt động
+Mã Use Case
+	UC34
+	Tên Use Case
+	Giám sát nhật ký hệ thống và cảnh báo hoạt động
+	Phân loại UC
+(Use Case Complexity)
+	Medium UC (4–7 transaction luồng chính)
+	Số Transaction
+(Transactions)
+	Luồng chính (Main): 4 | Luồng thay thế (Alt): 1 | Luồng ngoại lệ (Exc): 0 | Tổng cộng: 5
+	Tác nhân chính
+(Primary Actor)
+	Quản trị viên
+	Tác nhân phụ
+(Secondary Actors)
+	Hệ thống
+	Mô tả tóm tắt
+(Brief Description)
+	Audit log, cảnh báo thiết bị offline, sự cố, ca làm việc.
+	Điều kiện tiên quyết
+(Preconditions)
+	Hệ thống ghi sự kiện vận hành.
+	Điều kiện hậu
+(Postconditions)
+	Log/alert được lưu và hiển thị.
+	Kích hoạt
+(Trigger)
+	Sự kiện critical hoặc admin mở monitoring.
+	Yêu cầu đặc biệt
+(Special Requirements)
+	Centralized audit log module.
+	Use Case liên quan
+(Related Use Cases)
+	UC09, UC23, UC22
+	Trạng thái triển khai
+(iPARK Project)
+	Shifts/incidents UI: có; audit log tập trung: chưa.
+	
+
+Chi tiết transaction: 4 bước luồng chính + 1 nhánh thay thế + 0 nhánh ngoại lệ = 5 transaction tổng. Đây là Medium UC (4–7 transaction luồng chính).
+
+
+Luồng chính (Main Success Scenario) — 4 transaction
+192. Ghi audit log thao tác quan trọng.
+193. Cảnh báo: camera offline, bãi đầy, OCR fail.
+194. Hiển thị tại /dashboard/shifts, /dashboard/incidents.
+195. Admin xử lý và resolve.
+Luồng thay thế (Alternative Flows) — 1 transaction
+196. 2a. Critical → tạo incident ngay.
+Luồng ngoại lệ (Exception Flows) — 0 transaction
+(Không có)
+
+
+________________
