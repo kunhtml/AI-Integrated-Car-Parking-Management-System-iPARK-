@@ -69,24 +69,27 @@ export async function deletePlanHandler(request: Request, response: Response) {
 // --- Subscriptions ---
 
 async function findSubsPopulated(query: Record<string, unknown>) {
-  return Subscription.find(query)
-    .sort({ createdAt: -1 })
-    .populate({
-      path: "primaryVehicleId",
-      model: "Vehicle",
-      select: "plate ownerName brand model color year engineNo chassisNo status",
-    });
+  return Subscription.find(query).sort({ createdAt: -1 }).populate({
+    path: "primaryVehicleId",
+    model: "Vehicle",
+    select:
+      "plate ownerName brand model color year engineNo chassisNo status rejectionReason imageUrl",
+  });
 }
 
 async function populateSub(sub: any) {
   return Subscription.findById(sub._id).populate({
     path: "primaryVehicleId",
     model: "Vehicle",
-    select: "plate ownerName brand model color year engineNo chassisNo status",
+    select:
+      "plate ownerName brand model color year engineNo chassisNo status rejectionReason imageUrl",
   });
 }
 
-export async function listSubscriptionsHandler(request: Request, response: Response) {
+export async function listSubscriptionsHandler(
+  request: Request,
+  response: Response,
+) {
   const subs = await findSubsPopulated({});
 
   if (request.user?.role === "admin") {
@@ -94,7 +97,10 @@ export async function listSubscriptionsHandler(request: Request, response: Respo
     const users = await User.find({ _id: { $in: userIds } });
     const userMap = new Map(users.map((u) => [u._id.toString(), u]));
     const enriched = subs.map((s) =>
-      serializeSubscriptionForAdmin(s, userMap.get(s.userId.toString()) ?? null),
+      serializeSubscriptionForAdmin(
+        s,
+        userMap.get(s.userId.toString()) ?? null,
+      ),
     );
     response.json({ subscriptions: enriched });
     return;
@@ -103,7 +109,10 @@ export async function listSubscriptionsHandler(request: Request, response: Respo
   response.json({ subscriptions: subs.map(serializeSubscription) });
 }
 
-export async function mySubscriptionsHandler(request: Request, response: Response) {
+export async function mySubscriptionsHandler(
+  request: Request,
+  response: Response,
+) {
   const subs = await findSubsPopulated({ userId: request.user!.id });
   response.json({ subscriptions: subs.map(serializeSubscription) });
 }
@@ -116,7 +125,8 @@ export async function purchaseHandler(request: Request, response: Response) {
     })
     .parse(request.body);
 
-  const baseUrl = process.env.API_URL || process.env.BASE_URL || "http://localhost:4000";
+  const baseUrl =
+    process.env.API_URL || process.env.BASE_URL || "http://localhost:4000";
   const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
   const { subscription, payos } = await purchaseSubscription({
     userId: request.user!.id,
@@ -127,14 +137,20 @@ export async function purchaseHandler(request: Request, response: Response) {
   });
   const populated = await populateSub(subscription);
   const user = await User.findById(subscription.userId);
-  const serializer = request.user!.role === "admin" ? serializeSubscriptionForAdmin : serializeSubscription;
+  const serializer =
+    request.user!.role === "admin"
+      ? serializeSubscriptionForAdmin
+      : serializeSubscription;
   response.status(201).json({
     subscription: serializer(populated ?? subscription, user ?? null),
     payos,
   });
 }
 
-export async function verifyMemberCodeHandler(request: Request, response: Response) {
+export async function verifyMemberCodeHandler(
+  request: Request,
+  response: Response,
+) {
   const body = z
     .object({ memberCode: z.string().min(3), plate: z.string().optional() })
     .parse(request.body);
@@ -142,7 +158,10 @@ export async function verifyMemberCodeHandler(request: Request, response: Respon
   response.json(result);
 }
 
-export async function subscriptionPaymentStatusHandler(request: Request, response: Response) {
+export async function subscriptionPaymentStatusHandler(
+  request: Request,
+  response: Response,
+) {
   const sub = await reconcileSubscriptionPayment(String(request.params.id));
   if (!sub) {
     response.status(404).json({ message: "Không tìm thấy gói." });
@@ -158,16 +177,25 @@ export async function subscriptionPaymentStatusHandler(request: Request, respons
 }
 
 export async function renewHandler(request: Request, response: Response) {
-  const baseUrl = process.env.API_URL || process.env.BASE_URL || "http://localhost:4000";
+  const baseUrl =
+    process.env.API_URL || process.env.BASE_URL || "http://localhost:4000";
   const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
-  const { subscription, payos } = await renewSubscription(String(request.params.id), { baseUrl, frontendUrl });
+  const { subscription, payos } = await renewSubscription(
+    String(request.params.id),
+    { baseUrl, frontendUrl },
+  );
   const populated = await populateSub(subscription);
   const user = await User.findById(subscription.userId);
-  const serializer = request.user!.role === "admin" ? serializeSubscriptionForAdmin : serializeSubscription;
+  const serializer =
+    request.user!.role === "admin"
+      ? serializeSubscriptionForAdmin
+      : serializeSubscription;
   response.json({
     subscription: serializer(populated ?? subscription, user ?? null),
     payos,
-    message: payos ? "Quét mã QR để thanh toán và gia hạn gói." : "Đã gia hạn gói.",
+    message: payos
+      ? "Quét mã QR để thanh toán và gia hạn gói."
+      : "Đã gia hạn gói.",
   });
 }
 
@@ -175,36 +203,60 @@ export async function cancelHandler(request: Request, response: Response) {
   const sub = await cancelSubscription(String(request.params.id));
 
   if (!sub) {
-    response.json({ subscription: null, message: "Đã xóa gói đăng ký chưa thanh toán." });
+    response.json({
+      subscription: null,
+      message: "Đã xóa gói đăng ký chưa thanh toán.",
+    });
     return;
   }
 
   const populated = await populateSub(sub);
   const user = await User.findById(sub.userId);
-  const serializer = request.user!.role === "admin" ? serializeSubscriptionForAdmin : serializeSubscription;
-  response.json({ subscription: serializer(populated ?? sub, user ?? null), message: "Đã hủy gói." });
+  const serializer =
+    request.user!.role === "admin"
+      ? serializeSubscriptionForAdmin
+      : serializeSubscription;
+  response.json({
+    subscription: serializer(populated ?? sub, user ?? null),
+    message: "Đã hủy gói.",
+  });
 }
 
-export async function getPaymentInfoHandler(request: Request, response: Response) {
+export async function getPaymentInfoHandler(
+  request: Request,
+  response: Response,
+) {
   response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   response.setHeader("Pragma", "no-cache");
   response.setHeader("Expires", "0");
 
-  const sub = await Subscription.findById(String(request.params.id)).select("userId");
+  const sub = await Subscription.findById(String(request.params.id)).select(
+    "userId",
+  );
   if (!sub) {
     response.status(404).json({ message: "Không tìm thấy gói đăng ký." });
     return;
   }
-  if (request.user?.role !== "admin" && sub.userId.toString() !== request.user!.id) {
-    response.status(403).json({ message: "Bạn không có quyền truy cập vé này." });
+  if (
+    request.user?.role !== "admin" &&
+    sub.userId.toString() !== request.user!.id
+  ) {
+    response
+      .status(403)
+      .json({ message: "Bạn không có quyền truy cập vé này." });
     return;
   }
 
-  const paymentInfo = await getSubscriptionPaymentInfo(String(request.params.id));
+  const paymentInfo = await getSubscriptionPaymentInfo(
+    String(request.params.id),
+  );
   response.json(paymentInfo);
 }
 
-export async function deleteSubscriptionHandler(request: Request, response: Response) {
+export async function deleteSubscriptionHandler(
+  request: Request,
+  response: Response,
+) {
   const sub = await Subscription.findById(request.params.id);
   if (!sub) {
     response.status(404).json({ message: "Không tìm thấy gói đăng ký." });
@@ -219,6 +271,11 @@ export async function deleteSubscriptionHandler(request: Request, response: Resp
   }
 
   await Subscription.findByIdAndDelete(sub._id);
-  console.log("[deleteSubscription] Deleted subscription:", sub._id, "status was", sub.status);
+  console.log(
+    "[deleteSubscription] Deleted subscription:",
+    sub._id,
+    "status was",
+    sub.status,
+  );
   response.json({ message: "Đã xóa gói đăng ký." });
 }

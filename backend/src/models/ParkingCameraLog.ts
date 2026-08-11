@@ -29,7 +29,14 @@ const parkingCameraLogSchema = new Schema<ParkingCameraLogDocument>(
       required: true,
       index: true,
     },
-    detectedPlate: { type: String, required: true, trim: true, uppercase: true, index: true },
+    detectedPlate: {
+      type: String,
+      required: false,
+      default: "",
+      trim: true,
+      uppercase: true,
+      index: true,
+    },
     confidence: { type: Number, min: 0, max: 1 },
     rfidUid: { type: String, trim: true, index: true },
     ownerName: { type: String, trim: true },
@@ -41,7 +48,11 @@ const parkingCameraLogSchema = new Schema<ParkingCameraLogDocument>(
     },
     imagePath: { type: String },
     barrierOpened: { type: Boolean, default: false },
-    sessionId: { type: Schema.Types.ObjectId, ref: "ParkingSession", index: true },
+    sessionId: {
+      type: Schema.Types.ObjectId,
+      ref: "ParkingSession",
+      index: true,
+    },
     vehicleId: { type: Schema.Types.ObjectId, ref: "Vehicle", index: true },
     rfidCardId: { type: Schema.Types.ObjectId, ref: "RfidCard", index: true },
     metadata: { type: Schema.Types.Mixed },
@@ -53,8 +64,7 @@ parkingCameraLogSchema.index({ createdAt: -1 });
 
 export const ParkingCameraLog: Model<ParkingCameraLogDocument> =
   mongoose.models.ParkingCameraLog ||
-<<<<<<< Updated upstream
-  mongoose.model<ParkingCameraLogDocument>("ParkingCameraLog", parkingCameraLogSchema);
-=======
-  mongoose.model<ParkingCameraLogDocument>("ParkingCameraLog", parkingCameraLogSchema);
->>>>>>> Stashed changes
+  mongoose.model<ParkingCameraLogDocument>(
+    "ParkingCameraLog",
+    parkingCameraLogSchema,
+  );

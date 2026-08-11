@@ -48,8 +48,6 @@ export type ParkingAppState = {
   shiftList: ShiftItem[];
   shiftScheduleList: ShiftScheduleItem[];
   incidentList: IncidentItem[];
-  zoneList: Zone[];
-  twoFactorQr: string;
   reportFrom: string;
   reportTo: string;
   reportSummary: ReportSummary | null;
@@ -90,8 +88,6 @@ export function createInitialState(): ParkingAppState {
     shiftList: [],
     shiftScheduleList: [],
     incidentList: [],
-    zoneList: [],
-    twoFactorQr: "",
     reportFrom: todayInputValue(),
     reportTo: todayInputValue(),
     reportSummary: null,

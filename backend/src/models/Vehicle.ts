@@ -9,6 +9,7 @@ export type VehicleDocument = {
   ownerAddress?: string;
   vehicleType: "Ô tô";
   status: "Đã đăng ký" | "Cần duyệt" | "Blacklist";
+  rejectionReason?: string;
   userId?: mongoose.Types.ObjectId;
   brand?: string;
   model?: string;
@@ -24,13 +25,24 @@ export type VehicleDocument = {
 
 const vehicleSchema = new Schema<VehicleDocument>(
   {
-    plate: { type: String, required: true, trim: true, uppercase: true, unique: true },
+    plate: {
+      type: String,
+      required: true,
+      trim: true,
+      uppercase: true,
+      unique: true,
+    },
     ownerName: { type: String, required: true, trim: true },
     ownerEmail: { type: String, trim: true, lowercase: true },
     ownerPhone: { type: String, trim: true },
     ownerAddress: { type: String, trim: true },
     vehicleType: { type: String, enum: ["Ô tô"], required: true },
-    status: { type: String, enum: ["Đã đăng ký", "Cần duyệt", "Blacklist"], default: "Cần duyệt" },
+    status: {
+      type: String,
+      enum: ["Đã đăng ký", "Cần duyệt", "Blacklist"],
+      default: "Cần duyệt",
+    },
+    rejectionReason: { type: String, trim: true },
     userId: { type: Schema.Types.ObjectId, ref: "User" },
     brand: { type: String, trim: true },
     model: { type: String, trim: true },
@@ -48,4 +60,5 @@ vehicleSchema.index({ userId: 1 });
 vehicleSchema.index({ status: 1 });
 
 export const Vehicle: Model<VehicleDocument> =
-  mongoose.models.Vehicle || mongoose.model<VehicleDocument>("Vehicle", vehicleSchema);
+  mongoose.models.Vehicle ||
+  mongoose.model<VehicleDocument>("Vehicle", vehicleSchema);

@@ -4,7 +4,6 @@ import {
   confirmTransaction,
   createSessionTransaction,
   listTransactions,
-  topUpWallet,
 } from "../controllers/transactions.controller.js";
 import { requireAuth, requireRole } from "../middlewares/auth.middleware.js";
 import { asyncHandler } from "../utils/asyncHandler.js";

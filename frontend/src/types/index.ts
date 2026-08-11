@@ -6,11 +6,6 @@ export type View =
   | "users"
   | "pricing"
   | "reports"
-  | "membershipPackages"
-  | "parkingFeeRules"
-  | "revenueReports"
-  | "staffAccounts"
-  | "changePassword"
   | "profile"
   | "wallet"
   | "vehicles"
@@ -28,7 +23,10 @@ export type View =
   | "rfid"
   | "camera-logs"
   | "cameras"
-  | "capacity-config";
+  | "staff-desk"
+  | "disputes"
+  | "capacity-config"
+  | "staff-applications";
 
 export type DemoUser = {
   id: number | string;
@@ -115,11 +113,6 @@ export type ParkingSession = {
   transactionId?: string;
   ownerEmail?: string;
   feeBreakdown?: FeeBreakdown;
-  ownerEmail?: string;
-  paidAmount?: number;
-  checkInDate?: string;
-  cancelReason?: string;
-  cancelledAt?: string;
 };
 
 export type RegisteredVehicle = {
@@ -136,6 +129,7 @@ export type RegisteredVehicle = {
   engineNo?: string | null;
   chassisNo?: string | null;
   status: "Đã đăng ký" | "Cần duyệt" | "Blacklist" | string;
+  rejectionReason?: string | null;
   userId?: string | null;
   isCompanyVehicle?: boolean;
   user?: {
@@ -165,6 +159,7 @@ export type VehicleRequest = {
     year?: number;
     engineNo?: string;
     chassisNo?: string;
+    status?: string;
   };
   reason?: string;
   adminNote?: string;
@@ -255,8 +250,6 @@ export type NotificationItem = {
   content: string;
   read: boolean;
   createdAt: string;
-  type?: string;
-  targetRole?: string;
 };
 
 export type DeviceItem = {
@@ -264,18 +257,8 @@ export type DeviceItem = {
   name: string;
   gate: "entry" | "exit";
   rtspUrl: string;
-  httpUrl?: string;
   username?: string;
-  deviceType?: "rtsp" | "http" | "onvif" | "usb";
   roiNote?: string;
-  roi?: {
-    x?: number;
-    y?: number;
-    width?: number;
-    height?: number;
-    label?: string;
-  } | null;
-  streamPath?: string;
   status: "online" | "offline" | "unknown";
   lastSnapshotUrl?: string;
   healthCheckEnabled?: boolean;
@@ -285,29 +268,6 @@ export type DeviceItem = {
     lastMaintenanceAt?: string;
     nextMaintenanceAt?: string;
   };
-};
-
-export type RecognitionLogItem = {
-  id: string;
-  action: "entry" | "exit" | "camera-entry" | "camera-exit" | "manual";
-  source: "upload" | "camera";
-  status: "success" | "failed" | "mismatch" | "pending-verification";
-  plate?: string;
-  detectedPlate?: string;
-  confidence?: number;
-  rawText?: string;
-  imageHash?: string;
-  imageUrl?: string;
-  vehicleType?: string;
-  sessionId?: string;
-  deviceId?: string;
-  deviceName?: string;
-  matched?: boolean;
-  matchStatus?: "Chưa checkout" | "Khớp" | "Không khớp";
-  vehicleMatchScore?: number;
-  message?: string;
-  createdBy?: string;
-  createdAt: string;
 };
 
 export type ShiftItem = {
@@ -360,15 +320,74 @@ export type IncidentItem = {
   type: string;
   note: string;
   plate?: string;
+  sessionId?: string;
+  disputeId?: string;
   status: "Mới" | "Đang xử lý" | "Đã xử lý";
   createdAt: string;
-  reportedBy?: string;
-  resolvedBy?: string;
-  resolvedAt?: string;
-  resolution?: string;
 };
 
-export type AuthMode = "login" | "register" | "forgot";
+export type DisputeStatus = "Mới" | "Đang xử lý" | "Đã xử lý" | "Từ chối";
+
+export type DisputeMessage = {
+  id: string;
+  senderId: string;
+  senderRole: "customer" | "admin" | "staff";
+  senderName: string;
+  content: string;
+  createdAt: string;
+};
+
+export type DisputeItem = {
+  id: string;
+  code: string;
+  userId?: string;
+  sessionId?: string;
+  transactionId?: string;
+  plate?: string;
+  reason: string;
+  content: string;
+  contactName: string;
+  contactPhone: string;
+  contactEmail?: string;
+  attachments: string[];
+  status: DisputeStatus;
+  incidentId?: string;
+  resolutionNote?: string;
+  handledBy?: string;
+  handledAt?: string | null;
+  messages: DisputeMessage[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DisputeSessionRef = {
+  id: string;
+  plate: string;
+  slot: string;
+  status: string;
+  fee: number;
+  checkInAt: string;
+  checkOutAt: string | null;
+};
+
+export type DisputeTransactionRef = {
+  id: string;
+  sessionId?: string;
+  plate?: string;
+  method: string;
+  amount: number;
+  status: string;
+  createdAt: string;
+};
+
+export type AuthMode =
+  | "login"
+  | "register"
+  | "forgot"
+  | "verify-register"
+  | "verify-login"
+  | "verify-forgot"
+  | "verify-2fa";
 
 export type ZoneStats = {
   total: number;
@@ -447,6 +466,8 @@ export type SubscriptionVehicle = {
   chassisNo?: string | null;
   year?: number | null;
   status?: string | null;
+  rejectionReason?: string | null;
+  imageUrl?: string | null;
 };
 
 export type Subscription = {
@@ -558,7 +579,11 @@ export type CapacityChangeLog = {
   zoneName?: string | null;
   before: Record<string, unknown>;
   after: Record<string, unknown>;
-  changedBy?: { id: string | null; name: string | null; email: string | null } | null;
+  changedBy?: {
+    id: string | null;
+    name: string | null;
+    email: string | null;
+  } | null;
   changedAt: string;
   reason?: string | null;
 };
@@ -632,4 +657,82 @@ export type ZoneSlotsResponse = {
   };
   floors: ZoneFloorSummary[];
   slots: ZoneSlotItem[];
+};
+
+// ─── Staff Application (đăng ký làm nhân viên) ────────────────────
+export type StaffApplicationStatus =
+  | "draft"
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "cancelled";
+
+export type StaffApplicationHistoryAction =
+  | "DRAFT_CREATED"
+  | "SUBMITTED"
+  | "EDITED"
+  | "REJECTED"
+  | "RESUBMITTED"
+  | "APPROVED"
+  | "CANCELLED"
+  | "MIGRATED";
+
+export type StaffApplicationHistory = {
+  id: string;
+  applicationId: string;
+  userId: string;
+  action: StaffApplicationHistoryAction;
+  oldStatus?: StaffApplicationStatus | null;
+  newStatus: StaffApplicationStatus;
+  performedBy?: string | null;
+  performedRole?: "customer" | "admin" | "staff" | null;
+  note?: string | null;
+  changedFields: string[];
+  before: Partial<StaffApplication>;
+  after: Partial<StaffApplication>;
+  sequence: number;
+  createdAt: string;
+};
+
+export type StaffApplicationShift =
+  | "morning"
+  | "afternoon"
+  | "night"
+  | "flexible";
+
+export type StaffApplication = {
+  id: string;
+  userId: string;
+  phone: string;
+  idCardNumber: string;
+  address: string;
+  experience?: string | null;
+  reason: string;
+  preferredShift: StaffApplicationShift;
+  status: StaffApplicationStatus;
+  reviewNote?: string | null;
+  reviewedBy?: string | null;
+  reviewedByName?: string | null;
+  reviewedAt?: string | null;
+  approvedBy?: string | null;
+  approvedAt?: string | null;
+  submittedAt?: string | null;
+  resubmittedAt?: string | null;
+  resubmitCount?: number;
+  createdAt: string;
+  updatedAt?: string;
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+    phone?: string | null;
+    avatarUrl?: string | null;
+  } | null;
+};
+
+export type StaffApplicationListResponse = {
+  applications: StaffApplication[];
+  total: number;
+  page: number;
+  limit: number;
 };

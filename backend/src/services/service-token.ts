@@ -1,4 +1,3 @@
-<<<<<<< Updated upstream
 import crypto from "node:crypto";
 import { env } from "../config/env.js";
 
@@ -18,18 +17,3 @@ export function constantTimeEqual(a: string, b: string): boolean {
   if (aBuf.length !== bBuf.length) return false;
   return crypto.timingSafeEqual(aBuf, bBuf);
 }
-=======
-import { env } from "../config/env.js";
-import crypto from "crypto";
-
-export function getServiceToken(): string | undefined {
-  return env.bridgeServiceToken;
-}
-
-export function constantTimeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) {
-    return false;
-  }
-  return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
-}
->>>>>>> Stashed changes

@@ -64,7 +64,6 @@ export async function listTransactions(request: Request, response: Response) {
 }
 
 export async function createSessionTransaction(request: Request, response: Response) {
-  console.log("[Transactions] createSessionTransaction called for session:", request.params.sessionId);
   const session = await ParkingSession.findById(request.params.sessionId);
   if (!session) {
     response.status(404).json({ message: "Không tìm thấy phiên đỗ xe." });

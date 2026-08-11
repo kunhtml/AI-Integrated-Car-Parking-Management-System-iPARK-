@@ -7,7 +7,6 @@ import {
   downloadSessionReceiptHandler,
   getSessionReceiptHandler,
   listParkingSessions,
-  rejectVerification,
   requestVerification,
   scanOverdueHandler,
   waivePenaltyHandler,

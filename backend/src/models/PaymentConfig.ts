@@ -8,9 +8,6 @@ export type PaymentConfigDocument = {
   payosApiKey?: string;
   payosWebhookUrl?: string;
   updatedBy?: mongoose.Types.ObjectId;
-  payosClientId?: string;
-  payosApiKey?: string;
-  payosEnabled?: boolean;
   createdAt: Date;
   updatedAt: Date;
 };

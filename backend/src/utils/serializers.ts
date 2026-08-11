@@ -9,11 +9,14 @@ import { SubscriptionPlanDocument } from "../models/SubscriptionPlan.js";
 import { UserDocument } from "../models/User.js";
 import { VehicleDocument } from "../models/Vehicle.js";
 import { DeviceDocument } from "../models/Device.js";
+import { DisputeDocument } from "../models/Dispute.js";
 import { IncidentDocument } from "../models/Incident.js";
 import { NotificationDocument } from "../models/Notification.js";
 import { PaymentConfigDocument } from "../models/PaymentConfig.js";
 import { ShiftDocument } from "../models/Shift.js";
 import { ShiftScheduleDocument } from "../models/ShiftSchedule.js";
+import { StaffApplicationDocument } from "../models/StaffApplication.js";
+import { StaffApplicationHistoryDocument } from "../models/StaffApplicationHistory.js";
 import { TransactionDocument } from "../models/Transaction.js";
 import { ZoneDocument } from "../models/Zone.js";
 import type { ZoneStats } from "../services/zone.service.js";
@@ -42,17 +45,43 @@ export function serializeParkingSession(session: ParkingSessionDocument) {
     plate: session.plate,
     owner: session.ownerName,
     vehicleType: session.vehicleType,
-    checkIn: session.checkInAt.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
-    checkInDate: session.checkInAt.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" }),
+    checkIn: session.checkInAt.toLocaleTimeString("vi-VN", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+    checkInDate: session.checkInAt.toLocaleDateString("vi-VN", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }),
     checkInAt: session.checkInAt.toISOString(),
-    checkOut: session.checkOutAt?.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
-    checkOutDate: session.checkOutAt?.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" }),
-    expectedCheckOut: session.expectedCheckOutAt?.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
-    expectedCheckOutDate: session.expectedCheckOutAt?.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" }),
+    checkOut: session.checkOutAt?.toLocaleTimeString("vi-VN", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+    checkOutDate: session.checkOutAt?.toLocaleDateString("vi-VN", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }),
+    expectedCheckOut: session.expectedCheckOutAt?.toLocaleTimeString("vi-VN", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+    expectedCheckOutDate: session.expectedCheckOutAt?.toLocaleDateString(
+      "vi-VN",
+      { day: "2-digit", month: "2-digit", year: "numeric" },
+    ),
     expectedCheckOutAt: session.expectedCheckOutAt?.toISOString(),
     prepaidCheckoutAt: session.prepaidCheckoutAt?.toISOString(),
-    prepaidCheckoutTime: session.prepaidCheckoutAt?.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
-    prepaidCheckoutDate: session.prepaidCheckoutAt?.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" }),
+    prepaidCheckoutTime: session.prepaidCheckoutAt?.toLocaleTimeString(
+      "vi-VN",
+      { hour: "2-digit", minute: "2-digit" },
+    ),
+    prepaidCheckoutDate: session.prepaidCheckoutAt?.toLocaleDateString(
+      "vi-VN",
+      { day: "2-digit", month: "2-digit", year: "numeric" },
+    ),
     slot: session.slot,
     slotId: session.slotId?.toString(),
     status: session.status,
@@ -79,7 +108,11 @@ export function serializeParkingSession(session: ParkingSessionDocument) {
 
 export function serializeVehicle(
   vehicle: VehicleDocument,
-  populatedUser?: { name?: string; email?: string; phone?: string | null } | null,
+  populatedUser?: {
+    name?: string;
+    email?: string;
+    phone?: string | null;
+  } | null,
 ) {
   return {
     id: vehicle._id.toString(),
@@ -96,14 +129,17 @@ export function serializeVehicle(
     engineNo: vehicle.engineNo ?? null,
     chassisNo: vehicle.chassisNo ?? null,
     status: vehicle.status,
+    rejectionReason: vehicle.rejectionReason ?? null,
     userId: vehicle.userId?.toString() ?? null,
     isCompanyVehicle: vehicle.isCompanyVehicle,
     imageUrl: vehicle.imageUrl ?? null,
-    user: populatedUser ? {
-      name: populatedUser.name,
-      email: populatedUser.email,
-      phone: populatedUser.phone ?? null,
-    } : null,
+    user: populatedUser
+      ? {
+          name: populatedUser.name,
+          email: populatedUser.email,
+          phone: populatedUser.phone ?? null,
+        }
+      : null,
     createdAt: vehicle.createdAt.toISOString(),
     updatedAt: vehicle.updatedAt.toISOString(),
   };
@@ -118,7 +154,10 @@ export function serializePaymentConfig(config: PaymentConfigDocument) {
   };
 }
 
-export function serializeTransaction(transaction: TransactionDocument, session?: ParkingSessionDocument | null) {
+export function serializeTransaction(
+  transaction: TransactionDocument,
+  session?: ParkingSessionDocument | null,
+) {
   return {
     id: transaction._id.toString(),
     sessionId: transaction.sessionId?.toString(),
@@ -135,6 +174,8 @@ export function serializeTransaction(transaction: TransactionDocument, session?:
     payosQrCode: transaction.payosQrCode,
     payosCheckoutUrl: transaction.payosCheckoutUrl,
     payosPaymentLinkId: transaction.payosPaymentLinkId,
+    createdAt: transaction.createdAt,
+    updatedAt: transaction.updatedAt,
     // Session info
     plate: session?.plate,
     ownerName: session?.ownerName,
@@ -160,14 +201,19 @@ export function serializeDevice(device: DeviceDocument) {
   };
 }
 
-export function serializeNotification(notification: NotificationDocument, userId?: string) {
+export function serializeNotification(
+  notification: NotificationDocument,
+  userId?: string,
+) {
   return {
     id: notification._id.toString(),
     title: notification.title,
     content: notification.content,
     targetRole: notification.targetRole,
     userId: notification.userId?.toString(),
-    read: userId ? notification.readBy.some((id) => id.toString() === userId) : false,
+    read: userId
+      ? notification.readBy.some((id) => id.toString() === userId)
+      : false,
     createdAt: notification.createdAt,
   };
 }
@@ -185,13 +231,37 @@ export function serializeShift(shift: ShiftDocument) {
 }
 
 export function serializeShiftSchedule(
-  schedule: (ShiftScheduleDocument | (ShiftScheduleDocument & {
-    staffId?: string | { _id?: { toString(): string }; name?: string; email?: string; phone?: string | null; avatarUrl?: string | null };
-    assignedBy?: string | { _id?: { toString(): string }; name?: string; email?: string };
-  })),
+  schedule:
+    | ShiftScheduleDocument
+    | (ShiftScheduleDocument & {
+        staffId?:
+          | string
+          | {
+              _id?: { toString(): string };
+              name?: string;
+              email?: string;
+              phone?: string | null;
+              avatarUrl?: string | null;
+            };
+        assignedBy?:
+          | string
+          | { _id?: { toString(): string }; name?: string; email?: string };
+      }),
 ) {
-  const staff = schedule.staffId as { _id?: { toString: () => string }; name?: string; email?: string; phone?: string | null; avatarUrl?: string | null } | string | undefined;
-  const assigned = schedule.assignedBy as { _id?: { toString: () => string }; name?: string; email?: string } | string | undefined;
+  const staff = schedule.staffId as
+    | {
+        _id?: { toString: () => string };
+        name?: string;
+        email?: string;
+        phone?: string | null;
+        avatarUrl?: string | null;
+      }
+    | string
+    | undefined;
+  const assigned = schedule.assignedBy as
+    | { _id?: { toString: () => string }; name?: string; email?: string }
+    | string
+    | undefined;
 
   let staffId = "";
   let staffName = "";
@@ -224,11 +294,12 @@ export function serializeShiftSchedule(
   }
 
   // Handle date - it could be Date object or string
-  const dateValue = schedule.date instanceof Date
-    ? schedule.date.toISOString()
-    : typeof schedule.date === "string"
-      ? schedule.date
-      : new Date(schedule.date as unknown as string).toISOString();
+  const dateValue =
+    schedule.date instanceof Date
+      ? schedule.date.toISOString()
+      : typeof schedule.date === "string"
+        ? schedule.date
+        : new Date(schedule.date as unknown as string).toISOString();
 
   return {
     id: schedule._id.toString(),
@@ -247,8 +318,14 @@ export function serializeShiftSchedule(
     note: schedule.note,
     location: schedule.location,
     deviceId: schedule.deviceId?.toString(),
-    createdAt: schedule.createdAt instanceof Date ? schedule.createdAt.toISOString() : schedule.createdAt,
-    updatedAt: schedule.updatedAt instanceof Date ? schedule.updatedAt.toISOString() : schedule.updatedAt,
+    createdAt:
+      schedule.createdAt instanceof Date
+        ? schedule.createdAt.toISOString()
+        : schedule.createdAt,
+    updatedAt:
+      schedule.updatedAt instanceof Date
+        ? schedule.updatedAt.toISOString()
+        : schedule.updatedAt,
   };
 }
 
@@ -259,6 +336,7 @@ export function serializeIncident(incident: IncidentDocument) {
     note: incident.note,
     plate: incident.plate,
     sessionId: incident.sessionId?.toString(),
+    disputeId: incident.disputeId?.toString(),
     status: incident.status,
     createdBy: incident.createdBy?.toString(),
     handledBy: incident.handledBy?.toString(),
@@ -267,6 +345,120 @@ export function serializeIncident(incident: IncidentDocument) {
     createdAt: incident.createdAt.toISOString(),
   };
 }
+
+export function serializeDispute(dispute: DisputeDocument) {
+  return {
+    id: dispute._id.toString(),
+    code: dispute.code,
+    userId: dispute.userId.toString(),
+    sessionId: dispute.sessionId?.toString(),
+    transactionId: dispute.transactionId?.toString(),
+    plate: dispute.plate,
+    reason: dispute.reason,
+    content: dispute.content,
+    contactName: dispute.contactName,
+    contactPhone: dispute.contactPhone,
+    contactEmail: dispute.contactEmail,
+    attachments: dispute.attachments ?? [],
+    status: dispute.status,
+    incidentId: dispute.incidentId?.toString(),
+    resolutionNote: dispute.resolutionNote,
+    handledBy: dispute.handledBy?.toString(),
+    handledAt: dispute.handledAt ? dispute.handledAt.toISOString() : null,
+    messages: (dispute.messages ?? []).map((m) => ({
+      id: m._id.toString(),
+      senderId: m.senderId.toString(),
+      senderRole: m.senderRole,
+      senderName: m.senderName,
+      content: m.content,
+      createdAt: (m as any).createdAt
+        ? (m as any).createdAt.toISOString()
+        : new Date().toISOString(),
+    })),
+    createdAt: dispute.createdAt.toISOString(),
+    updatedAt: dispute.updatedAt.toISOString(),
+  };
+}
+
+function maskIdCard(idCard: string) {
+  if (idCard.length <= 4) return idCard;
+  return `${"*".repeat(idCard.length - 4)}${idCard.slice(-4)}`;
+}
+
+type StaffApplicationWithPopulatedUsers = StaffApplicationDocument & {
+  userId?: StaffApplicationDocument["userId"] | {
+    _id: { toString(): string };
+    name?: string;
+    email?: string;
+    phone?: string;
+    avatarUrl?: string;
+  };
+  reviewedBy?: StaffApplicationDocument["reviewedBy"] | {
+    _id: { toString(): string };
+    name?: string;
+  };
+};
+
+export function serializeStaffApplication(
+  application: StaffApplicationWithPopulatedUsers,
+  options: { maskIdCard?: boolean } = {},
+) {
+  const user =
+    application.userId && typeof application.userId === "object" && "name" in application.userId
+      ? application.userId
+      : null;
+  const reviewer =
+    application.reviewedBy &&
+    typeof application.reviewedBy === "object" &&
+    "name" in application.reviewedBy
+      ? application.reviewedBy
+      : null;
+  const userId = application.userId
+    ? "_id" in (application.userId as object)
+      ? application.userId._id.toString()
+      : application.userId.toString()
+    : "";
+  const reviewedBy = application.reviewedBy
+    ? "_id" in (application.reviewedBy as object)
+      ? application.reviewedBy._id.toString()
+      : application.reviewedBy.toString()
+    : null;
+
+  return {
+    id: application._id.toString(),
+    userId,
+    phone: application.phone,
+    idCardNumber: options.maskIdCard
+      ? maskIdCard(application.idCardNumber ?? "")
+      : application.idCardNumber ?? "",
+    address: application.address,
+    experience: application.experience ?? null,
+    reason: application.reason,
+    preferredShift: application.preferredShift,
+    status: application.status,
+    reviewNote: application.reviewNote ?? null,
+    reviewedBy,
+    reviewedByName: reviewer?.name ?? null,
+    reviewedAt: application.reviewedAt?.toISOString() ?? null,
+    approvedBy: application.approvedBy?.toString() ?? null,
+    approvedAt: application.approvedAt?.toISOString() ?? null,
+    submittedAt: application.submittedAt?.toISOString() ?? null,
+    resubmittedAt: application.resubmittedAt?.toISOString() ?? null,
+    resubmitCount: application.resubmitCount ?? 0,
+    createdAt: application.createdAt.toISOString(),
+    updatedAt: application.updatedAt.toISOString(),
+    user: user
+      ? {
+          id: user._id.toString(),
+          name: user.name ?? "",
+          email: user.email ?? "",
+          phone: user.phone ?? null,
+          avatarUrl: user.avatarUrl ?? null,
+        }
+      : null,
+  };
+}
+
 
 export function serializeZone(zone: ZoneDocument, stats?: ZoneStats) {
   return {
@@ -357,6 +549,8 @@ export function serializeSubscription(sub: SubscriptionDocument) {
         chassisNo: v.chassisNo ?? null,
         year: v.year ?? null,
         status: v.status ?? null,
+        rejectionReason: (v as any).rejectionReason ?? null,
+        imageUrl: (v as any).imageUrl ?? null,
       };
     } else {
       primaryVehicleId = String(ref);
@@ -444,11 +638,18 @@ export function serializeCapacityChangeLog(log: CapacityChangeLogPopulated) {
     | { _id?: unknown; name?: string; email?: string }
     | null
     | undefined;
-  const zoneRaw = log.zoneId as unknown as { _id?: unknown; name?: string } | null | undefined;
+  const zoneRaw = log.zoneId as unknown as
+    | { _id?: unknown; name?: string }
+    | null
+    | undefined;
   return {
     id: log._id.toString(),
     entityType: log.entityType,
-    zoneId: zoneRaw ? (zoneRaw._id ? String(zoneRaw._id) : null) : log.zoneId?.toString() ?? null,
+    zoneId: zoneRaw
+      ? zoneRaw._id
+        ? String(zoneRaw._id)
+        : null
+      : (log.zoneId?.toString() ?? null),
     zoneName: zoneRaw?.name ?? null,
     before: log.before,
     after: log.after,

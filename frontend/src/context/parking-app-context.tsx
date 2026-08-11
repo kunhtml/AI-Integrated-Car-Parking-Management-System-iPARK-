@@ -1,6 +1,14 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 
 import { createInitialState } from "@/context/parking-app-state";
 import { createAnalyticsActions } from "@/hooks/actions/use-analytics-actions";
@@ -17,7 +25,10 @@ import { createSessionActions } from "@/hooks/actions/use-session-actions";
 import { createSlotActions } from "@/hooks/actions/use-slot-actions";
 import { createSubscriptionActions } from "@/hooks/actions/use-subscription-actions";
 import { createShiftScheduleActions } from "@/hooks/actions/use-shift-schedule-actions";
-import { createUserActions, type UserUpdatePayload } from "@/hooks/actions/use-user-actions";
+import {
+  createUserActions,
+  type UserUpdatePayload,
+} from "@/hooks/actions/use-user-actions";
 import { createZoneActions } from "@/hooks/actions/use-zone-actions";
 import { useOperationalData } from "@/hooks/use-operational-data";
 import { useSessionLoader } from "@/hooks/use-session-loader";
@@ -63,11 +74,21 @@ type ParkingAppContextValue = {
   currentUser: DemoUser | null;
   setCurrentUser: (user: DemoUser | null) => void;
   sessions: ParkingSession[];
-  setSessions: (sessions: ParkingSession[] | ((items: ParkingSession[]) => ParkingSession[])) => void;
+  setSessions: (
+    sessions:
+      | ParkingSession[]
+      | ((items: ParkingSession[]) => ParkingSession[]),
+  ) => void;
   registeredVehicles: RegisteredVehicle[];
-  setRegisteredVehicles: (vehicles: RegisteredVehicle[] | ((prev: RegisteredVehicle[]) => RegisteredVehicle[])) => void;
+  setRegisteredVehicles: (
+    vehicles:
+      | RegisteredVehicle[]
+      | ((prev: RegisteredVehicle[]) => RegisteredVehicle[]),
+  ) => void;
   vehicleRequests: VehicleRequest[];
-  setVehicleRequests: (requests: VehicleRequest[] | ((prev: VehicleRequest[]) => VehicleRequest[])) => void;
+  setVehicleRequests: (
+    requests: VehicleRequest[] | ((prev: VehicleRequest[]) => VehicleRequest[]),
+  ) => void;
   userList: DemoUser[];
   createUser: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   updateUser: (id: string, updates: UserUpdatePayload) => Promise<void>;
@@ -78,19 +99,19 @@ type ParkingAppContextValue = {
   mobileNavOpen: boolean;
   setMobileNavOpen: (open: boolean) => void;
   actionLog: string;
+  setActionLog: (message: string) => void;
   exitSessionId: string;
   setExitSessionId: (id: string) => void;
   pricingConfigState: PricingConfig;
   transactionList: TransactionItem[];
-  setTransactionList: (items: TransactionItem[] | ((prev: TransactionItem[]) => TransactionItem[])) => void;
+  setTransactionList: (
+    items: TransactionItem[] | ((prev: TransactionItem[]) => TransactionItem[]),
+  ) => void;
   notificationList: NotificationItem[];
   deviceList: DeviceItem[];
   shiftList: ShiftItem[];
   shiftScheduleList: ShiftScheduleItem[];
   incidentList: IncidentItem[];
-  zoneList: Zone[];
-  setZoneList: (zones: Zone[] | ((items: Zone[]) => Zone[])) => void;
-  twoFactorQr: string;
   reportFrom: string;
   setReportFrom: (from: string) => void;
   reportTo: string;
@@ -104,13 +125,17 @@ type ParkingAppContextValue = {
     completion: number;
   };
   filteredSessions: ParkingSession[];
-  formErrors: Record<string, string>;
-  setFormErrors: Dispatch<SetStateAction<Record<string, string>>>;
-  handleLogin: (event: FormEvent<HTMLFormElement>) => Promise<DemoUser | null>;
-  handleRegister: (
+  handleLogin: (event: FormEvent<HTMLFormElement>) => Promise<unknown>;
+  handleRegister: (event: FormEvent<HTMLFormElement>) => Promise<unknown>;
+  handleRequestForgotOtp: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  handleResetPassword: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  handleVerifyRegister?: (
+    event: FormEvent<HTMLFormElement>,
+  ) => Promise<unknown>;
+  handleResendVerificationOtp?: (email: string) => Promise<void>;
+  handleVerifyLoginTwoFactor: (
     event: FormEvent<HTMLFormElement>,
   ) => Promise<DemoUser | null>;
-  handleForgotPassword: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   logout: () => Promise<void>;
   setupTwoFactor: () => Promise<void>;
   verifyTwoFactor: (event: FormEvent<HTMLFormElement>) => Promise<void>;
@@ -121,12 +146,11 @@ type ParkingAppContextValue = {
   approveCheckout: (id: string, plate: string) => Promise<void>;
   cameraEntry: (deviceId: string) => Promise<void>;
   cameraExit: (deviceId: string) => Promise<void>;
-  updatePricing: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  updatePricing: (form: FormData) => Promise<boolean>;
   confirmTransaction: (id: string) => Promise<void>;
   createPaymentForSession: (id: string) => Promise<void>;
   saveDevice: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   snapshotDevice: (id: string) => Promise<void>;
-  deleteDevice: (id: string) => Promise<void>;
   loadReportSummary: (from: string, to: string) => Promise<void>;
   downloadReport: (
     type: "sessions" | "revenue",
@@ -140,9 +164,20 @@ type ParkingAppContextValue = {
   resolveIncident: (id: string) => Promise<void>;
   approveVehicle: (vehicle: RegisteredVehicle) => Promise<void>;
   fetchVehicleDetail: (id: string) => Promise<RegisteredVehicle | null>;
-  createEditRequest: (vehicleId: string, subscriptionId: string, changes: Partial<RegisteredVehicle>) => Promise<void>;
-  createDeleteRequest: (vehicleId: string, subscriptionId: string) => Promise<void>;
-  resolveRequest: (requestId: string, action: "approved" | "rejected", adminNote?: string) => Promise<void>;
+  createEditRequest: (
+    vehicleId: string,
+    subscriptionId: string,
+    changes: Partial<RegisteredVehicle>,
+  ) => Promise<void>;
+  createDeleteRequest: (
+    vehicleId: string,
+    subscriptionId: string,
+  ) => Promise<void>;
+  resolveRequest: (
+    requestId: string,
+    action: "approved" | "rejected",
+    adminNote?: string,
+  ) => Promise<void>;
   loadVehicleRequests: () => Promise<void>;
   loadVehicles: () => Promise<void>;
   addVehicle: (data: {
@@ -158,20 +193,23 @@ type ParkingAppContextValue = {
     chassisNo?: string;
     imageUrl?: string;
   }) => Promise<void>;
-  editVehicle: (id: string, data: {
-    plate?: string;
-    ownerName?: string;
-    ownerPhone?: string;
-    ownerAddress?: string;
-    brand?: string;
-    model?: string;
-    color?: string;
-    year?: number;
-    engineNo?: string;
-    chassisNo?: string;
-    status?: string;
-    imageUrl?: string;
-  }) => Promise<void>;
+  editVehicle: (
+    id: string,
+    data: {
+      plate?: string;
+      ownerName?: string;
+      ownerPhone?: string;
+      ownerAddress?: string;
+      brand?: string;
+      model?: string;
+      color?: string;
+      year?: number;
+      engineNo?: string;
+      chassisNo?: string;
+      status?: string;
+      imageUrl?: string;
+    },
+  ) => Promise<void>;
   removeVehicle: (id: string) => Promise<void>;
   zoneList: Zone[];
   slotList: ParkingSlot[];
@@ -180,13 +218,22 @@ type ParkingAppContextValue = {
   deleteZone: (id: string) => Promise<void>;
   createSlot: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   bulkCreateSlots: (event: FormEvent<HTMLFormElement>) => Promise<void>;
-  updateSlotStatus: (id: string, status: SlotStatus, notes?: string) => Promise<void>;
+  updateSlotStatus: (
+    id: string,
+    status: SlotStatus,
+    notes?: string,
+  ) => Promise<void>;
   deleteSlot: (id: string) => Promise<void>;
-  updateSlotAccessPolicy: (id: string, accessPolicy: SlotAccessPolicy) => Promise<void>;
+  updateSlotAccessPolicy: (
+    id: string,
+    accessPolicy: SlotAccessPolicy,
+  ) => Promise<void>;
   reloadSlots: () => Promise<void>;
   planList: SubscriptionPlan[];
   subscriptionList: Subscription[];
-  setSubscriptionList: (items: Subscription[] | ((prev: Subscription[]) => Subscription[])) => void;
+  setSubscriptionList: (
+    items: Subscription[] | ((prev: Subscription[]) => Subscription[]),
+  ) => void;
   createPlan: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   updatePlan: (
     planId: string,
@@ -199,8 +246,13 @@ type ParkingAppContextValue = {
     },
   ) => Promise<SubscriptionPlan | null>;
   deletePlan: (planId: string) => Promise<void>;
-  purchaseSubscription: (planId: string, vehicleId: string) => Promise<{ subscription: Subscription; payos?: Record<string, unknown> }>;
-  renewSubscription: (id: string) => Promise<{ subscription: Subscription; payos?: Record<string, unknown> }>;
+  purchaseSubscription: (
+    planId: string,
+    vehicleId: string,
+  ) => Promise<{ subscription: Subscription; payos?: Record<string, unknown> }>;
+  renewSubscription: (
+    id: string,
+  ) => Promise<{ subscription: Subscription; payos?: Record<string, unknown> }>;
   cancelSubscription: (id: string) => Promise<void>;
   createVehicle: (data: {
     plate: string;
@@ -215,7 +267,11 @@ type ParkingAppContextValue = {
   occupancyData: OccupancyHourPoint[];
   topCustomers: TopCustomer[];
   peakHours: PeakHourPoint[];
-  loadRevenueChart: (from: string, to: string, groupBy?: string) => Promise<void>;
+  loadRevenueChart: (
+    from: string,
+    to: string,
+    groupBy?: string,
+  ) => Promise<void>;
   loadOccupancyHourly: (from: string, to: string) => Promise<void>;
   loadTopCustomers: (from: string, to: string, limit?: number) => Promise<void>;
   loadPeakHours: (from: string, to: string) => Promise<void>;
@@ -228,11 +284,26 @@ type ParkingAppContextValue = {
     zones: CapacityZoneSummary[];
   } | null>;
   loadCapacityUsage: () => Promise<CapacityUsage | null>;
-  loadCapacityHistory: (params?: { entityType?: "global" | "zone"; zoneId?: string; limit?: number }) => Promise<CapacityChangeLog[]>;
+  loadCapacityHistory: (params?: {
+    entityType?: "global" | "zone";
+    zoneId?: string;
+    limit?: number;
+  }) => Promise<CapacityChangeLog[]>;
   loadZoneSlots: (zoneId: string) => Promise<ZoneSlotsResponse | null>;
   zoneSlots: Record<string, ZoneSlotsResponse>;
-  updateGlobalCapacity: (payload: { globalCapacity: number; reason?: string }) => Promise<boolean>;
-  updateZoneCapacity: (zoneId: string, payload: { capacity: number; walkInQuota: number; subscriberQuota: number; reason?: string }) => Promise<boolean>;
+  updateGlobalCapacity: (payload: {
+    globalCapacity: number;
+    reason?: string;
+  }) => Promise<boolean>;
+  updateZoneCapacity: (
+    zoneId: string,
+    payload: {
+      capacity: number;
+      walkInQuota: number;
+      subscriberQuota: number;
+      reason?: string;
+    },
+  ) => Promise<boolean>;
 };
 
 const ParkingAppContext = createContext<ParkingAppContextValue | null>(null);
@@ -261,25 +332,65 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       })),
     [],
   );
+  const setRegisteredVehicles = useCallback(
+    (
+      registeredVehicles:
+        | RegisteredVehicle[]
+        | ((items: RegisteredVehicle[]) => RegisteredVehicle[]),
+    ) =>
+      setState((s) => ({
+        ...s,
+        registeredVehicles:
+          typeof registeredVehicles === "function"
+            ? registeredVehicles(s.registeredVehicles)
+            : registeredVehicles,
+      })),
+    [],
+  );
   const setVehicleRequests = useCallback(
-    (vehicleRequests: VehicleRequest[] | ((prev: VehicleRequest[]) => VehicleRequest[])) =>
+    (
+      vehicleRequests:
+        | VehicleRequest[]
+        | ((prev: VehicleRequest[]) => VehicleRequest[]),
+    ) =>
       setState((s) => ({
         ...s,
         vehicleRequests:
-          typeof vehicleRequests === "function" ? vehicleRequests(s.vehicleRequests) : vehicleRequests,
+          typeof vehicleRequests === "function"
+            ? vehicleRequests(s.vehicleRequests)
+            : vehicleRequests,
       })),
     [],
   );
   const setUserList = useCallback(
     (userList: DemoUser[] | ((items: DemoUser[]) => DemoUser[])) =>
-      setState((s) => ({ ...s, userList: typeof userList === "function" ? userList(s.userList) : userList })),
+      setState((s) => ({
+        ...s,
+        userList:
+          typeof userList === "function" ? userList(s.userList) : userList,
+      })),
     [],
   );
-  const setSearchText = useCallback((searchText: string) => setState((s) => ({ ...s, searchText })), []);
-  const setAuthError = useCallback((authError: string) => setState((s) => ({ ...s, authError })), []);
-  const setMobileNavOpen = useCallback((mobileNavOpen: boolean) => setState((s) => ({ ...s, mobileNavOpen })), []);
-  const setActionLog = useCallback((actionLog: string) => setState((s) => ({ ...s, actionLog })), []);
-  const setExitSessionId = useCallback((exitSessionId: string) => setState((s) => ({ ...s, exitSessionId })), []);
+  const setSearchText = useCallback(
+    (searchText: string) => setState((s) => ({ ...s, searchText })),
+    [],
+  );
+  const setAuthError = useCallback(
+    (authError: string) => setState((s) => ({ ...s, authError })),
+    [],
+  );
+  const setMobileNavOpen = useCallback(
+    (mobileNavOpen: boolean) => setState((s) => ({ ...s, mobileNavOpen })),
+    [],
+  );
+  const setActionLog = useCallback(
+    (actionLog: string) => setState((s) => ({ ...s, actionLog })),
+    [],
+  );
+  const setExitSessionId = useCallback(
+    (exitSessionId: string) => setState((s) => ({ ...s, exitSessionId })),
+    [],
+  );
   const setPricingConfigState = useCallback(
     (pricingConfigState: PricingConfig) =>
       setState((s) => ({ ...s, pricingConfigState })),
@@ -336,10 +447,17 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
     [],
   );
   const setShiftScheduleList = useCallback(
-    (shiftScheduleList: ShiftScheduleItem[] | ((items: ShiftScheduleItem[]) => ShiftScheduleItem[])) =>
+    (
+      shiftScheduleList:
+        | ShiftScheduleItem[]
+        | ((items: ShiftScheduleItem[]) => ShiftScheduleItem[]),
+    ) =>
       setState((s) => ({
         ...s,
-        shiftScheduleList: typeof shiftScheduleList === "function" ? shiftScheduleList(s.shiftScheduleList) : shiftScheduleList,
+        shiftScheduleList:
+          typeof shiftScheduleList === "function"
+            ? shiftScheduleList(s.shiftScheduleList)
+            : shiftScheduleList,
       })),
     [],
   );
@@ -359,31 +477,54 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
     [],
   );
   const setCapacityConfig = useCallback(
-    (capacityConfig: CapacityConfig | null) => setState((s) => ({ ...s, capacityConfig })),
+    (capacityConfig: CapacityConfig | null) =>
+      setState((s) => ({ ...s, capacityConfig })),
     [],
   );
   const setCapacityZones = useCallback(
-    (capacityZones: CapacityZoneSummary[] | ((items: CapacityZoneSummary[]) => CapacityZoneSummary[])) =>
+    (
+      capacityZones:
+        | CapacityZoneSummary[]
+        | ((items: CapacityZoneSummary[]) => CapacityZoneSummary[]),
+    ) =>
       setState((s) => ({
         ...s,
-        capacityZones: typeof capacityZones === "function" ? capacityZones(s.capacityZones) : capacityZones,
+        capacityZones:
+          typeof capacityZones === "function"
+            ? capacityZones(s.capacityZones)
+            : capacityZones,
       })),
     [],
   );
   const setCapacityUsage = useCallback(
-    (capacityUsage: CapacityUsage | null) => setState((s) => ({ ...s, capacityUsage })),
+    (capacityUsage: CapacityUsage | null) =>
+      setState((s) => ({ ...s, capacityUsage })),
     [],
   );
   const setCapacityHistory = useCallback(
-    (capacityHistory: CapacityChangeLog[] | ((items: CapacityChangeLog[]) => CapacityChangeLog[])) =>
+    (
+      capacityHistory:
+        | CapacityChangeLog[]
+        | ((items: CapacityChangeLog[]) => CapacityChangeLog[]),
+    ) =>
       setState((s) => ({
         ...s,
-        capacityHistory: typeof capacityHistory === "function" ? capacityHistory(s.capacityHistory) : capacityHistory,
+        capacityHistory:
+          typeof capacityHistory === "function"
+            ? capacityHistory(s.capacityHistory)
+            : capacityHistory,
       })),
     [],
   );
   const setZoneSlots = useCallback(
-    (zoneIdOrUpdater: string | ((prev: Record<string, ZoneSlotsResponse>) => Record<string, ZoneSlotsResponse>), data?: ZoneSlotsResponse | null) => {
+    (
+      zoneIdOrUpdater:
+        | string
+        | ((
+            prev: Record<string, ZoneSlotsResponse>,
+          ) => Record<string, ZoneSlotsResponse>),
+      data?: ZoneSlotsResponse | null,
+    ) => {
       if (typeof zoneIdOrUpdater === "function") {
         setState((s) => ({
           ...s,
@@ -400,9 +541,14 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
-  const setTwoFactorQr = useCallback((twoFactorQr: string) => setState((s) => ({ ...s, twoFactorQr })), []);
-  const setReportFrom = useCallback((reportFrom: string) => setState((s) => ({ ...s, reportFrom })), []);
-  const setReportTo = useCallback((reportTo: string) => setState((s) => ({ ...s, reportTo })), []);
+  const setReportFrom = useCallback(
+    (reportFrom: string) => setState((s) => ({ ...s, reportFrom })),
+    [],
+  );
+  const setReportTo = useCallback(
+    (reportTo: string) => setState((s) => ({ ...s, reportTo })),
+    [],
+  );
   const setReportSummary = useCallback(
     (reportSummary: ReportSummary | null) =>
       setState((s) => ({ ...s, reportSummary })),
@@ -415,13 +561,21 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
 
   const setZoneList = useCallback(
     (zoneList: Zone[] | ((items: Zone[]) => Zone[])) =>
-      setState((s) => ({ ...s, zoneList: typeof zoneList === "function" ? zoneList(s.zoneList) : zoneList })),
+      setState((s) => ({
+        ...s,
+        zoneList:
+          typeof zoneList === "function" ? zoneList(s.zoneList) : zoneList,
+      })),
     [],
   );
 
   const setSlotList = useCallback(
     (slotList: ParkingSlot[] | ((items: ParkingSlot[]) => ParkingSlot[])) =>
-      setState((s) => ({ ...s, slotList: typeof slotList === "function" ? slotList(s.slotList) : slotList })),
+      setState((s) => ({
+        ...s,
+        slotList:
+          typeof slotList === "function" ? slotList(s.slotList) : slotList,
+      })),
     [],
   );
 
@@ -443,40 +597,71 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
   }, [setSlotList]);
 
   const setPlanList = useCallback(
-    (planList: SubscriptionPlan[] | ((items: SubscriptionPlan[]) => SubscriptionPlan[])) =>
-      setState((s) => ({ ...s, planList: typeof planList === "function" ? planList(s.planList) : planList })),
+    (
+      planList:
+        | SubscriptionPlan[]
+        | ((items: SubscriptionPlan[]) => SubscriptionPlan[]),
+    ) =>
+      setState((s) => ({
+        ...s,
+        planList:
+          typeof planList === "function" ? planList(s.planList) : planList,
+      })),
     [],
   );
 
   const setSubscriptionList = useCallback(
-    (subscriptionList: Subscription[] | ((items: Subscription[]) => Subscription[])) =>
-      setState((s) => ({ ...s, subscriptionList: typeof subscriptionList === "function" ? subscriptionList(s.subscriptionList) : subscriptionList })),
+    (
+      subscriptionList:
+        | Subscription[]
+        | ((items: Subscription[]) => Subscription[]),
+    ) =>
+      setState((s) => ({
+        ...s,
+        subscriptionList:
+          typeof subscriptionList === "function"
+            ? subscriptionList(s.subscriptionList)
+            : subscriptionList,
+      })),
     [],
   );
 
   const setMaintenanceLogList = useCallback(
-    (maintenanceLogList: DeviceMaintenanceLog[] | ((items: DeviceMaintenanceLog[]) => DeviceMaintenanceLog[])) =>
-      setState((s) => ({ ...s, maintenanceLogList: typeof maintenanceLogList === "function" ? maintenanceLogList(s.maintenanceLogList) : maintenanceLogList })),
+    (
+      maintenanceLogList:
+        | DeviceMaintenanceLog[]
+        | ((items: DeviceMaintenanceLog[]) => DeviceMaintenanceLog[]),
+    ) =>
+      setState((s) => ({
+        ...s,
+        maintenanceLogList:
+          typeof maintenanceLogList === "function"
+            ? maintenanceLogList(s.maintenanceLogList)
+            : maintenanceLogList,
+      })),
     [],
   );
 
-  const setRevenueChart = useCallback((revenueChart: RevenueChartPoint[]) => setState((s) => ({ ...s, revenueChart })), []);
-  const setOccupancyData = useCallback((occupancyData: OccupancyHourPoint[]) => setState((s) => ({ ...s, occupancyData })), []);
-  const setTopCustomers = useCallback((topCustomers: TopCustomer[]) => setState((s) => ({ ...s, topCustomers })), []);
-  const setPeakHours = useCallback((peakHours: PeakHourPoint[]) => setState((s) => ({ ...s, peakHours })), []);
+  const setRevenueChart = useCallback(
+    (revenueChart: RevenueChartPoint[]) =>
+      setState((s) => ({ ...s, revenueChart })),
+    [],
+  );
+  const setOccupancyData = useCallback(
+    (occupancyData: OccupancyHourPoint[]) =>
+      setState((s) => ({ ...s, occupancyData })),
+    [],
+  );
+  const setTopCustomers = useCallback(
+    (topCustomers: TopCustomer[]) => setState((s) => ({ ...s, topCustomers })),
+    [],
+  );
+  const setPeakHours = useCallback(
+    (peakHours: PeakHourPoint[]) => setState((s) => ({ ...s, peakHours })),
+    [],
+  );
 
   useSessionLoader({ setCurrentUser, setActionLog, setSessionLoading });
-
-  useEffect(() => {
-    if (state.currentUser) {
-      window.localStorage.setItem(
-        "ipark_current_user",
-        JSON.stringify(state.currentUser),
-      );
-    } else {
-      window.localStorage.removeItem("ipark_current_user");
-    }
-  }, [state.currentUser]);
 
   useOperationalData({
     currentUser: state.currentUser,
@@ -512,9 +697,8 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
         setCurrentUser,
         setAuthError,
         setActionLog,
-        setTwoFactorQr,
       }),
-    [setMode, setCurrentUser, setAuthError, setActionLog, setTwoFactorQr],
+    [setMode, setCurrentUser, setAuthError, setActionLog],
   );
 
   const sessionActions = useMemo(
@@ -526,7 +710,13 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
         setActionLog,
         reloadSlots,
       }),
-    [state.exitSessionId, setSessions, setExitSessionId, setActionLog, reloadSlots],
+    [
+      state.exitSessionId,
+      setSessions,
+      setExitSessionId,
+      setActionLog,
+      reloadSlots,
+    ],
   );
 
   const paymentActions = useMemo(
@@ -603,13 +793,32 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
   }, [state.currentUser, reloadSlots]);
 
   const subscriptionActions = useMemo(
-    () => createSubscriptionActions({ setPlanList, setSubscriptionList, setRegisteredVehicles, setActionLog }),
+    () =>
+      createSubscriptionActions({
+        setPlanList,
+        setSubscriptionList,
+        setRegisteredVehicles,
+        setActionLog,
+      }),
     [setPlanList, setSubscriptionList, setRegisteredVehicles, setActionLog],
   );
 
   const analyticsActions = useMemo(
-    () => createAnalyticsActions({ setRevenueChart, setOccupancyData, setTopCustomers, setPeakHours, setActionLog }),
-    [setRevenueChart, setOccupancyData, setTopCustomers, setPeakHours, setActionLog],
+    () =>
+      createAnalyticsActions({
+        setRevenueChart,
+        setOccupancyData,
+        setTopCustomers,
+        setPeakHours,
+        setActionLog,
+      }),
+    [
+      setRevenueChart,
+      setOccupancyData,
+      setTopCustomers,
+      setPeakHours,
+      setActionLog,
+    ],
   );
 
   const userActions = useMemo(
@@ -618,7 +827,11 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
   );
 
   const shiftScheduleActions = useMemo(
-    () => createShiftScheduleActions({ setScheduleList: setShiftScheduleList, setActionLog }),
+    () =>
+      createShiftScheduleActions({
+        setScheduleList: setShiftScheduleList,
+        setActionLog,
+      }),
     [setShiftScheduleList, setActionLog],
   );
 
@@ -631,24 +844,23 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
         setZoneSlots,
         setActionLog,
       }),
-    [setCapacityConfig, setCapacityUsage, setCapacityHistory, setZoneSlots, setActionLog],
+    [
+      setCapacityConfig,
+      setCapacityUsage,
+      setCapacityHistory,
+      setZoneSlots,
+      setActionLog,
+    ],
   );
-
-  const zoneActions = useMemo(
-    () =>
-      createZoneActions({
-        setZoneList,
-        setActionLog,
-        onServerError: setFormErrors,
-      }),
-    [setZoneList, setActionLog, setFormErrors],
-  );
-
 
   const stats = useMemo(() => {
-    const active = state.sessions.filter((item) => item.status === "Đang gửi").length;
+    const active = state.sessions.filter(
+      (item) => item.status === "Đang gửi",
+    ).length;
     const totalSlots = state.slotList.length || 30;
-    const emptySlots = state.slotList.filter((s) => s.status === "empty").length;
+    const emptySlots = state.slotList.filter(
+      (s) => s.status === "empty",
+    ).length;
     const revenue = state.sessions.reduce((sum, item) => sum + item.fee, 0);
     return {
       active,
@@ -698,9 +910,6 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       shiftList: state.shiftList,
       shiftScheduleList: state.shiftScheduleList,
       incidentList: state.incidentList,
-      zoneList: state.zoneList,
-      setZoneList,
-      twoFactorQr: state.twoFactorQr,
       reportFrom: state.reportFrom,
       setReportFrom,
       reportTo: state.reportTo,
@@ -709,8 +918,6 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       sessionLoading: state.sessionLoading,
       stats,
       filteredSessions,
-      formErrors,
-      setFormErrors,
       ...authActions,
       ...sessionActions,
       ...paymentActions,

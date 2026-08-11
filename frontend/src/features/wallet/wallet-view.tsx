@@ -1,13 +1,31 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { CreditCard, ExternalLink, Eye, Loader2, RefreshCw, Wallet, X } from "lucide-react";
+import { CreditCard, ExternalLink, Eye, Loader2, RefreshCw, Search, Wallet, X } from "lucide-react";
 
 import { DataTable } from "@/components/ui/data-table";
 import { useParkingApp } from "@/context/parking-app-context";
 import { apiFetch } from "@/lib/client-api";
 import { currency } from "@/lib/constants";
-import type { TransactionItem } from "@/types";
+
+function parseTransactionDate(value?: string) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatTransactionDate(value?: string) {
+  const date = parseTransactionDate(value);
+  return date
+    ? date.toLocaleString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "—";
+}
 
 function StatusBadge({
   status,
@@ -61,6 +79,11 @@ export function WalletView() {
 
   const [checkingSessionId, setCheckingSessionId] = useState<string | null>(null);
   const [sessionCheckResult, setSessionCheckResult] = useState<{ id: string; status: string } | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [methodFilter, setMethodFilter] = useState("all");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
 
   // Modal chi tiết giao dịch
   const [detailTransaction, setDetailTransaction] = useState<(typeof transactionList)[0] | null>(null);
@@ -125,20 +148,36 @@ export function WalletView() {
 
   if (!currentUser) return null;
 
-  const rows = transactionList.map((item) => {
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const from = fromDate ? new Date(`${fromDate}T00:00:00`) : null;
+  const to = toDate ? new Date(`${toDate}T23:59:59.999`) : null;
+  const filteredTransactions = transactionList.filter((item) => {
+    const effectiveStatus = item.sessionPaymentStatus || item.status;
+    const createdAt = parseTransactionDate(item.createdAt);
+    const matchesQuery =
+      !normalizedQuery ||
+      [item.plate, item.ownerName, item.ownerEmail, item.slot, item.id]
+        .some((value) => value?.toLowerCase().includes(normalizedQuery));
+
+    if (!matchesQuery) return false;
+    if (statusFilter !== "all" && effectiveStatus !== statusFilter) return false;
+    if (methodFilter !== "all" && item.method !== methodFilter) return false;
+    if (from && (!createdAt || createdAt < from)) return false;
+    if (to && (!createdAt || createdAt > to)) return false;
+    return true;
+  });
+
+  const filtersActive =
+    searchQuery !== "" || statusFilter !== "all" || methodFilter !== "all" || fromDate !== "" || toDate !== "";
+
+  const rows = filteredTransactions.map((item) => {
     const isTopUp = item.content?.startsWith("TOPUP") ?? false;
     const hasPayOSLink = !!item.payosCheckoutUrl;
 
     return [
       // Thời gian
       <span key={`${item.id}-t`} className="muted-cell" style={{ fontSize: "0.8rem" }}>
-        {new Date(item.createdAt).toLocaleString("vi-VN", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        })}
+        {formatTransactionDate(item.createdAt)}
       </span>,
 
       // Biển số
@@ -348,8 +387,58 @@ export function WalletView() {
           </div>
           <CreditCard size={22} />
         </div>
+        <div className="filter-bar">
+          <div className="search-box">
+            <Search size={16} />
+            <input
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Tìm biển số, chủ xe, email, slot…"
+              value={searchQuery}
+            />
+            {searchQuery && (
+              <button className="search-clear" onClick={() => setSearchQuery("")} title="Xóa tìm kiếm" type="button">
+                <X size={14} />
+              </button>
+            )}
+          </div>
+          <select className="filter-select" onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}>
+            <option value="all">Tất cả trạng thái</option>
+            <option value="pending">Chờ thanh toán</option>
+            <option value="paid">Đã thanh toán</option>
+            <option value="fully_paid">Đã thanh toán đủ</option>
+            <option value="partial_paid">Thanh toán một phần</option>
+            <option value="unpaid">Chưa thanh toán</option>
+            <option value="failed">Thất bại</option>
+            <option value="cancelled">Đã hủy</option>
+          </select>
+          <select className="filter-select" onChange={(event) => setMethodFilter(event.target.value)} value={methodFilter}>
+            <option value="all">Tất cả phương thức</option>
+            <option value="payos">PayOS</option>
+            <option value="cash">Tiền mặt</option>
+          </select>
+          <input aria-label="Từ ngày" className="filter-select" onChange={(event) => setFromDate(event.target.value)} title="Từ ngày" type="date" value={fromDate} />
+          <input aria-label="Đến ngày" className="filter-select" min={fromDate || undefined} onChange={(event) => setToDate(event.target.value)} title="Đến ngày" type="date" value={toDate} />
+          {filtersActive && (
+            <button
+              className="small-button"
+              onClick={() => {
+                setSearchQuery("");
+                setStatusFilter("all");
+                setMethodFilter("all");
+                setFromDate("");
+                setToDate("");
+              }}
+              type="button"
+            >
+              <X size={14} /> Xóa lọc
+            </button>
+          )}
+          <span className="filter-count">{filteredTransactions.length} / {transactionList.length} giao dịch</span>
+        </div>
         {rows.length === 0 ? (
-          <p className="muted-cell" style={{ padding: "1rem 0" }}>Chưa có giao dịch nào.</p>
+          <p className="muted-cell" style={{ padding: "1rem 0" }}>
+            {transactionList.length === 0 ? "Chưa có giao dịch nào." : "Không có giao dịch phù hợp bộ lọc."}
+          </p>
         ) : (
           <DataTable
             headers={["Thời gian", "Biển số", "Chủ xe", "Email", "Slot", "Số tiền", "PT", "Trạng thái", "Thao tác"]}
@@ -389,8 +478,8 @@ export function WalletView() {
               <DetailRow label="Số tiền" value={currency.format(detailTransaction.amount)} />
               <DetailRow label="Phương thức" value={detailTransaction.method === "payos" ? "PayOS" : detailTransaction.method === "cash" ? "Tiền mặt" : detailTransaction.method} />
               <DetailRow label="Trạng thái" value={detailTransaction.status} />
-              <DetailRow label="Thời gian" value={detailTransaction.createdAt ? new Date(detailTransaction.createdAt).toLocaleString("vi-VN") : "—"} />
-              {detailTransaction.paidAt && <DetailRow label="Thanh toán lúc" value={new Date(detailTransaction.paidAt).toLocaleString("vi-VN")} />}
+              <DetailRow label="Thời gian" value={formatTransactionDate(detailTransaction.createdAt)} />
+              {detailTransaction.paidAt && <DetailRow label="Thanh toán lúc" value={formatTransactionDate(detailTransaction.paidAt)} />}
               {detailTransaction.payosOrderCode && <DetailRow label="Mã PayOS" value={detailTransaction.payosOrderCode} />}
               {detailTransaction.content && <DetailRow label="Nội dung" value={detailTransaction.content} />}
             </div>

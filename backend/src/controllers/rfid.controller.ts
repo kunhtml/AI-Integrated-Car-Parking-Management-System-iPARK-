@@ -6,7 +6,10 @@ import { Subscription } from "../models/Subscription.js";
 import { User } from "../models/User.js";
 
 function normalizePlate(plate: string): string {
-  return (plate || "").trim().toUpperCase().replace(/[\s-]+/g, "");
+  return (plate || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, "");
 }
 
 function serializeCard(card: RfidCardDocument) {
@@ -33,7 +36,10 @@ export async function listRfidCards(_request: Request, response: Response) {
  * mà xe của họ CHƯA được gán vào thẻ RFID active nào.
  * Dùng cho form Thêm / Sửa thẻ RFID để admin/staff chọn và tự điền biển số.
  */
-export async function listUnassignedResidents(_request: Request, response: Response) {
+export async function listUnassignedResidents(
+  _request: Request,
+  response: Response,
+) {
   const now = new Date();
 
   // Lấy danh sách biển số đã có thẻ active → loại trừ khỏi kết quả
@@ -84,16 +90,23 @@ export async function listUnassignedResidents(_request: Request, response: Respo
 export async function getRfidCard(request: Request, response: Response) {
   const card = await RfidCard.findById(request.params.id);
   if (!card) {
-    response.status(404).json({ ok: false, message: "Không tìm thấy thẻ RFID." });
+    response
+      .status(404)
+      .json({ ok: false, message: "Không tìm thấy thẻ RFID." });
     return;
   }
   response.json({ card: serializeCard(card) });
 }
 
-export async function lookupRfidCardByUid(request: Request, response: Response) {
+export async function lookupRfidCardByUid(
+  request: Request,
+  response: Response,
+) {
   const uid = String(request.params.uid || "").trim();
   if (!uid) {
-    response.status(400).json({ ok: false, message: "UID không được để trống." });
+    response
+      .status(400)
+      .json({ ok: false, message: "UID không được để trống." });
     return;
   }
   const card = await RfidCard.findOne({ uid });
@@ -149,7 +162,9 @@ export async function updateRfidCard(request: Request, response: Response) {
 
   const card = await RfidCard.findById(request.params.id);
   if (!card) {
-    response.status(404).json({ ok: false, message: "Không tìm thấy thẻ RFID." });
+    response
+      .status(404)
+      .json({ ok: false, message: "Không tìm thấy thẻ RFID." });
     return;
   }
 
@@ -163,18 +178,30 @@ export async function updateRfidCard(request: Request, response: Response) {
 }
 
 export async function deleteRfidCard(request: Request, response: Response) {
-  const card = await RfidCard.findByIdAndDelete(request.params.id);
+  const card = await RfidCard.findByIdAndUpdate(
+    request.params.id,
+    { $set: { status: "inactive" } },
+    { new: true },
+  );
   if (!card) {
-    response.status(404).json({ ok: false, message: "Không tìm thấy thẻ RFID." });
+    response
+      .status(404)
+      .json({ ok: false, message: "Không tìm thấy thẻ RFID." });
     return;
   }
-  response.json({ ok: true, message: `Đã xóa thẻ ${card.uid}`, uid: card.uid });
+  response.json({
+    ok: true,
+    message: `Đã vô hiệu hóa thẻ ${card.uid}`,
+    uid: card.uid,
+  });
 }
 
 export async function setRfidCardStatus(request: Request, response: Response) {
-  const body = z.object({
-    status: z.enum(["active", "inactive"]),
-  }).parse(request.body);
+  const body = z
+    .object({
+      status: z.enum(["active", "inactive"]),
+    })
+    .parse(request.body);
 
   const card = await RfidCard.findByIdAndUpdate(
     request.params.id,
@@ -182,7 +209,9 @@ export async function setRfidCardStatus(request: Request, response: Response) {
     { new: true },
   );
   if (!card) {
-    response.status(404).json({ ok: false, message: "Không tìm thấy thẻ RFID." });
+    response
+      .status(404)
+      .json({ ok: false, message: "Không tìm thấy thẻ RFID." });
     return;
   }
   response.json({ ok: true, card: serializeCard(card) });
@@ -193,18 +222,31 @@ export async function setRfidCardStatus(request: Request, response: Response) {
  * - Nếu UID chưa có: tạo mới (active, guest)
  * - Nếu đã có: trả về thông tin hiện tại
  */
-export async function registerScannedCard(request: Request, response: Response) {
-  const body = z.object({
-    uid: z.string().trim().min(1),
-    ownerName: z.string().trim().optional(),
-    plate: z.string().trim().optional(),
-    userType: z.enum(["resident", "guest"]).default("guest"),
-  }).parse(request.body);
+export async function registerScannedCard(
+  request: Request,
+  response: Response,
+) {
+  const body = z
+    .object({
+      uid: z.string().trim().min(1),
+      ownerName: z.string().trim().optional(),
+      plate: z.string().trim().optional(),
+      userType: z.enum(["resident", "guest"]).default("guest"),
+    })
+    .parse(request.body);
 
   const uid = body.uid.trim();
   let card = await RfidCard.findOne({ uid });
 
   if (card) {
+    if (card.status === "inactive") {
+      response.status(403).json({
+        ok: false,
+        code: "CARD_INACTIVE",
+        message: "Thẻ RFID đã bị vô hiệu hóa, không thể sử dụng.",
+      });
+      return;
+    }
     response.json({
       ok: true,
       created: false,
@@ -232,7 +274,9 @@ export async function registerScannedCard(request: Request, response: Response) 
  * Đồng bộ: trả về toàn bộ thẻ active để Python đẩy xuống ESP32.
  */
 export async function exportAllCards(_request: Request, response: Response) {
-  const cards = await RfidCard.find({ status: "active" }).sort({ createdAt: 1 });
+  const cards = await RfidCard.find({ status: "active" }).sort({
+    createdAt: 1,
+  });
   response.json({
     ok: true,
     cards: cards.map(serializeCard),
@@ -249,14 +293,34 @@ export async function lookupByPlate(request: Request, response: Response) {
     return;
   }
   const card = await RfidCard.findOne({ plate, status: "active" });
+
+  // Check xem biển số có thuộc subscriber (gói active) hay không
+  const now = new Date();
+  const vehicle = await Vehicle.findOne({ plate });
+  const subscription = vehicle
+    ? await Subscription.findOne({
+        primaryVehicleId: vehicle._id,
+        status: "active",
+        endDate: { $gt: now },
+      })
+    : null;
+  const isSubscriber = !!subscription;
+
   if (card) {
-    response.json({ ok: true, card: serializeCard(card) });
+    response.json({
+      ok: true,
+      isSubscriber,
+      card: serializeCard(card),
+      vehicle: vehicle
+        ? { id: vehicle._id.toString(), ownerName: vehicle.ownerName }
+        : null,
+    });
     return;
   }
   // Fallback: tra trong Vehicle
-  const vehicle = await Vehicle.findOne({ plate });
   response.json({
     ok: true,
+    isSubscriber,
     card: null,
     vehicle: vehicle
       ? {
@@ -281,7 +345,9 @@ export async function listMyRfidCards(request: Request, response: Response) {
     return;
   }
   const vehicles = await Vehicle.find({ userId }).select("plate").lean();
-  const plates = new Set(vehicles.map((v) => (v.plate || "").trim().toUpperCase()));
+  const plates = new Set(
+    vehicles.map((v) => (v.plate || "").trim().toUpperCase()),
+  );
   if (plates.size === 0) {
     response.json({ cards: [] });
     return;

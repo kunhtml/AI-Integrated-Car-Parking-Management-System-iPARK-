@@ -1,20 +1,19 @@
-import { FormEvent } from "react";
-
 import { apiFetch } from "@/lib/client-api";
 import type { ParkingSession, PricingConfig, TransactionItem } from "@/types";
 
 type PaymentActionsParams = {
-  setSessions: (sessions: ParkingSession[] | ((items: ParkingSession[]) => ParkingSession[])) => void;
+  setSessions: (
+    sessions:
+      | ParkingSession[]
+      | ((items: ParkingSession[]) => ParkingSession[]),
+  ) => void;
   setPricingConfigState: (config: PricingConfig) => void;
-  setTransactionList: (transactions: TransactionItem[] | ((items: TransactionItem[]) => TransactionItem[])) => void;
+  setTransactionList: (
+    transactions:
+      | TransactionItem[]
+      | ((items: TransactionItem[]) => TransactionItem[]),
+  ) => void;
   setActionLog: (log: string) => void;
-  currentUser?: DemoUser | null;
-  setCurrentUser?: (user: DemoUser | null) => void;
-  setPaymentConfigState?: (config: PaymentConfig) => void;
-  pricingConfigState?: PricingConfig;
-  transactionList?: TransactionItem[];
-  setMembershipActive?: (active: boolean) => void;
-  setMembershipExpiresAt?: (expiresAt: string) => void;
 };
 
 export function createPaymentActions({
@@ -23,9 +22,7 @@ export function createPaymentActions({
   setTransactionList,
   setActionLog,
 }: PaymentActionsParams) {
-  async function updatePricing(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
+  async function updatePricing(form: FormData) {
     const payload = {
       dayRate: Number(form.get("dayRate") || 0),
       nightRate: Number(form.get("nightRate") || 0),
@@ -42,13 +39,15 @@ export function createPaymentActions({
       const data = await response.json();
       if (!response.ok) {
         setActionLog(data.message || "Không lưu được bảng giá.");
-        return;
+        return false;
       }
 
       setPricingConfigState(data.pricingConfig);
       setActionLog("Đã cập nhật bảng giá trong MongoDB.");
+      return true;
     } catch {
       setActionLog("Không kết nối được API cấu hình giá.");
+      return false;
     }
   }
 
@@ -63,12 +62,16 @@ export function createPaymentActions({
       setActionLog(data.message || "Không xác nhận được giao dịch.");
       return;
     }
-    setTransactionList((items) => items.map((item) => (item.id === id ? data.transaction : item)));
+    setTransactionList((items) =>
+      items.map((item) => (item.id === id ? data.transaction : item)),
+    );
     setActionLog("Đã xác nhận thanh toán.");
   }
 
   async function createPaymentForSession(id: string) {
-    const response = await apiFetch(`/transactions/session/${id}`, { method: "POST" });
+    const response = await apiFetch(`/transactions/session/${id}`, {
+      method: "POST",
+    });
     const data = await response.json();
     if (!response.ok) {
       setActionLog(data.message || "Không tạo được giao dịch.");
@@ -97,27 +100,39 @@ export function createPaymentActions({
     }
   }
 
-  async function pollPaymentStatus(sessionId: string, orderCode: number | string) {
+  async function pollPaymentStatus(
+    sessionId: string,
+    orderCode: number | string,
+  ) {
     const MAX_ATTEMPTS = 60; // poll for up to 3 minutes (3s interval)
     let attempts = 0;
 
     const intervalId = setInterval(async () => {
       attempts++;
       try {
-        const res = await apiFetch(`/public/session/${sessionId}/payment-status`);
+        const res = await apiFetch(
+          `/public/session/${sessionId}/payment-status`,
+        );
         if (res.ok) {
           const status = await res.json();
-          if (status.paymentStatus === "fully_paid" || status.paymentStatus === "partial_paid") {
+          if (
+            status.paymentStatus === "fully_paid" ||
+            status.paymentStatus === "partial_paid"
+          ) {
             clearInterval(intervalId);
             await reloadSessions();
-            setActionLog(`Thanh toán thành công cho phiên ${sessionId.slice(-6)}.`);
+            setActionLog(
+              `Thanh toán thành công cho phiên ${sessionId.slice(-6)}.`,
+            );
             return;
           }
         }
         if (status?.transaction?.status === "paid") {
           clearInterval(intervalId);
           await reloadSessions();
-          setActionLog(`Thanh toán thành công cho phiên ${sessionId.slice(-6)}.`);
+          setActionLog(
+            `Thanh toán thành công cho phiên ${sessionId.slice(-6)}.`,
+          );
           return;
         }
       } catch {
@@ -125,24 +140,11 @@ export function createPaymentActions({
       }
       if (attempts >= MAX_ATTEMPTS) {
         clearInterval(intervalId);
-        setActionLog(`Hết thời gian chờ thanh toán cho phiên ${sessionId.slice(-6)}.`);
+        setActionLog(
+          `Hết thời gian chờ thanh toán cho phiên ${sessionId.slice(-6)}.`,
+        );
       }
     }, 3000);
-  }
-
-  function paymentStatusLabel(status: TransactionItem["status"]) {
-    switch (status) {
-      case "paid":
-        return "Đã thanh toán";
-      case "pending":
-        return "Chờ thanh toán";
-      case "failed":
-        return "Thất bại";
-      case "cancelled":
-        return "Đã hủy";
-      default:
-        return "Không rõ";
-    }
   }
 
   return {

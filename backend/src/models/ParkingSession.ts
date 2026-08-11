@@ -47,6 +47,15 @@ export type ParkingSessionDocument = {
   vehicleId?: mongoose.Types.ObjectId;
   entryImageUrl?: string;
   exitImageUrl?: string;
+  exitState?:
+    | "waiting_rfid"
+    | "rfid_verified"
+    | "payment_pending"
+    | "gate_authorizing"
+    | "gate_opened";
+  exitDetectedAt?: Date;
+  exitRfidUid?: string;
+  exitRfidVerifiedAt?: Date;
   entryDetectedPlate?: string;
   exitDetectedPlate?: string;
   entryConfidence?: number;
@@ -85,7 +94,7 @@ const parkingSessionSchema = new Schema<ParkingSessionDocument>(
   {
     plate: { type: String, required: true, trim: true, uppercase: true },
     ownerName: { type: String, required: true, trim: true },
-    vehicleType: { type: String, enum: ["Ô tô"], default: "Ô tô", required: true },
+    vehicleType: { type: String, enum: ["Ô tô"], required: true },
     checkInAt: { type: Date, default: Date.now },
     checkOutAt: { type: Date },
     expectedCheckOutAt: { type: Date },
@@ -120,18 +129,34 @@ const parkingSessionSchema = new Schema<ParkingSessionDocument>(
       parkingFee: { type: Number },
       overdueFine: { type: Number },
       totalFee: { type: Number },
-      dailyBreakdown: [{
-        dayIndex: { type: Number },
-        date: { type: String },
-        rateType: { type: String, enum: ["day", "night"] },
-        fee: { type: Number },
-        checkOutHour: { type: Number },
-      }],
+      dailyBreakdown: [
+        {
+          dayIndex: { type: Number },
+          date: { type: String },
+          rateType: { type: String, enum: ["day", "night"] },
+          fee: { type: Number },
+          checkOutHour: { type: Number },
+        },
+      ],
       subscriptionDiscount: { type: Number },
       subscriptionWarn: { type: String },
     },
     entryImageUrl: { type: String },
     exitImageUrl: { type: String },
+    exitState: {
+      type: String,
+      enum: [
+        "waiting_rfid",
+        "rfid_verified",
+        "payment_pending",
+        "gate_authorizing",
+        "gate_opened",
+      ],
+      index: true,
+    },
+    exitDetectedAt: { type: Date },
+    exitRfidUid: { type: String },
+    exitRfidVerifiedAt: { type: Date },
     entryDetectedPlate: { type: String },
     exitDetectedPlate: { type: String },
     entryConfidence: { type: Number },
@@ -184,4 +209,7 @@ parkingSessionSchema.index({ checkOutAt: 1 }, { sparse: true });
 
 export const ParkingSession: Model<ParkingSessionDocument> =
   mongoose.models.ParkingSession ||
-  mongoose.model<ParkingSessionDocument>("ParkingSession", parkingSessionSchema);
+  mongoose.model<ParkingSessionDocument>(
+    "ParkingSession",
+    parkingSessionSchema,
+  );

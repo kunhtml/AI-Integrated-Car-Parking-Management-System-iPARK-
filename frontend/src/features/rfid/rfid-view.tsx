@@ -448,7 +448,35 @@ export function RfidCardsView() {
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setMsg(`Đã thêm thẻ ${uid}`);
+        // Đẩy thẻ xuống ESP32 qua Python bridge (port 5050) để dsThe[] biết UID này.
+        // Nếu chỉ lưu backend mà không push xuống ESP32, thẻ sẽ bị ESP32 báo
+        // "The khong hop le" khi quét thật tại cổng.
+        try {
+          const params = new URLSearchParams({
+            uid: body.uid,
+            owner_name: body.ownerName,
+            plate: body.plate,
+            user_type: body.userType,
+          });
+          const pushRes = await bridgeFetch("/api/rfid/add", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: params.toString(),
+          });
+          if (!pushRes.ok) {
+            const pushData = await pushRes.json().catch(() => ({}));
+            setMsg(
+              `Đã lưu backend, nhưng đẩy xuống ESP32 lỗi: ${pushData.message || pushRes.status}. Khởi động lại ai-service nếu cần.`
+            );
+            return;
+          }
+        } catch (pushErr) {
+          setMsg(
+            `Đã lưu backend, nhưng không kết nối được bridge (port 5050) để đẩy thẻ xuống ESP32.`
+          );
+          return;
+        }
+        setMsg(`Đã thêm thẻ ${uid} và đẩy xuống ESP32.`);
         setShowAddForm(false);
         await loadCards();
       } else {
@@ -636,6 +664,29 @@ export function RfidCardsView() {
 
             <button className="small-button" onClick={loadCards} disabled={loading} type="button">
               <RefreshCcw size={13} className={loading ? "spin" : ""} /> Tải lại
+            </button>
+
+            <button
+              className="small-button"
+              onClick={async () => {
+                if (!confirm("Đồng bộ TẤT CẢ thẻ active từ backend xuống 2 ESP32? Thẻ cũ trong ESP32 sẽ bị reset.")) return;
+                setMsg("Đang đồng bộ...");
+                try {
+                  const r = await bridgeFetch("/api/rfid/sync", { method: "POST" });
+                  const data = await r.json().catch(() => ({}));
+                  if (r.ok) {
+                    setMsg(`Đã đồng bộ: IN=${data.sent_in}, OUT=${data.sent_out} thẻ xuống ESP32.`);
+                  } else {
+                    setMsg(`Đồng bộ lỗi: ${data.message || r.status}`);
+                  }
+                } catch (e) {
+                  setMsg(`Không kết nối được bridge (port 5050): ${e instanceof Error ? e.message : e}`);
+                }
+              }}
+              type="button"
+              title="Đẩy toàn bộ thẻ active từ DB xuống 2 ESP32 (cổng vào + cổng ra)"
+            >
+              <RefreshCcw size={13} /> Đồng bộ ESP32
             </button>
 
             <button

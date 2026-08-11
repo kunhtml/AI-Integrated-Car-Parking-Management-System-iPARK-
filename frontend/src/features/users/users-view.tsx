@@ -73,14 +73,6 @@ function Modal({ isOpen, onClose, title, children }: ModalProps) {
           {children}
         </div>
       </div>
-
-      {!loading && filteredUsers.length === 0 && (
-        <p className="py-12 text-center text-sm text-slate-400">
-          {searchTerm ? "Không tìm thấy tài khoản phù hợp." : "Chưa có dữ liệu người dùng."}
-        </p>
-      )}
-
-      {loading && <p className="py-12 text-center text-sm text-slate-400">Đang tải danh sách tài khoản...</p>}
     </div>
   );
 }

@@ -20,27 +20,17 @@ import type {
 
 type OperationalDataParams = {
   currentUser: DemoUser | null;
-  setSessions: (
-    sessions:
-      | ParkingSession[]
-      | ((items: ParkingSession[]) => ParkingSession[]),
-  ) => void;
+  setSessions: (sessions: ParkingSession[] | ((items: ParkingSession[]) => ParkingSession[])) => void;
   setRegisteredVehicles: (
-    vehicles:
-      | RegisteredVehicle[]
-      | ((items: RegisteredVehicle[]) => RegisteredVehicle[]),
+    vehicles: RegisteredVehicle[] | ((items: RegisteredVehicle[]) => RegisteredVehicle[]),
   ) => void;
   setUserList: (users: DemoUser[] | ((items: DemoUser[]) => DemoUser[])) => void;
   setPricingConfigState: (config: PricingConfig) => void;
   setTransactionList: (
-    transactions:
-      | TransactionItem[]
-      | ((items: TransactionItem[]) => TransactionItem[]),
+    transactions: TransactionItem[] | ((items: TransactionItem[]) => TransactionItem[]),
   ) => void;
   setNotificationList: (
-    notifications:
-      | NotificationItem[]
-      | ((items: NotificationItem[]) => NotificationItem[]),
+    notifications: NotificationItem[] | ((items: NotificationItem[]) => NotificationItem[]),
   ) => void;
   setDeviceList: (devices: DeviceItem[] | ((items: DeviceItem[]) => DeviceItem[])) => void;
   setShiftList: (shifts: ShiftItem[] | ((items: ShiftItem[]) => ShiftItem[])) => void;

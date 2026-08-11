@@ -19,7 +19,7 @@ export const demoUsers: DemoUser[] = [
   },
   {
     id: 2,
-    name: "Nhân viên cổng vào",
+    name: "Nhân viên cổng 1",
     email: "nv.1@ipark.vn",
     password: "123456",
     role: "staff",
@@ -27,7 +27,7 @@ export const demoUsers: DemoUser[] = [
   },
   {
     id: 3,
-    name: "Nhân viên cổng ra",
+    name: "Nhân viên cổng 2",
     email: "nv.2@ipark.vn",
     password: "123456",
     role: "staff",

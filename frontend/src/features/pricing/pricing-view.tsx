@@ -1,7 +1,21 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Bell, Pencil, ReceiptText, Settings, Trash2, X, DollarSign, Moon, Sun, Clock, AlertTriangle, Save, Plus } from "lucide-react";
+import {
+  Bell,
+  Pencil,
+  ReceiptText,
+  Settings,
+  Trash2,
+  X,
+  DollarSign,
+  Moon,
+  Sun,
+  Clock,
+  AlertTriangle,
+  Save,
+  Plus,
+} from "lucide-react";
 
 import { useParkingApp } from "@/context/parking-app-context";
 import { apiFetch } from "@/lib/client-api";
@@ -43,13 +57,15 @@ function Modal({ isOpen, onClose, title, children }: ModalProps) {
       <div className="pricing-modal" onClick={(e) => e.stopPropagation()}>
         <div className="pricing-modal-header">
           <h3>{title}</h3>
-          <button className="pricing-modal-close" onClick={onClose} type="button">
+          <button
+            className="pricing-modal-close"
+            onClick={onClose}
+            type="button"
+          >
             <X size={20} />
           </button>
         </div>
-        <div className="pricing-modal-content">
-          {children}
-        </div>
+        <div className="pricing-modal-content">{children}</div>
       </div>
     </div>
   );
@@ -63,7 +79,13 @@ interface PricingCardProps {
   onEdit: () => void;
 }
 
-function PricingCard({ title, description, icon, children, onEdit }: PricingCardProps) {
+function PricingCard({
+  title,
+  description,
+  icon,
+  children,
+  onEdit,
+}: PricingCardProps) {
   return (
     <div className="pricing-card">
       <div className="pricing-card-header">
@@ -77,31 +99,26 @@ function PricingCard({ title, description, icon, children, onEdit }: PricingCard
           <span>Chỉnh sửa</span>
         </button>
       </div>
-      <div className="pricing-card-body">
-        {children}
-      </div>
+      <div className="pricing-card-body">{children}</div>
     </div>
   );
 }
 
 export function PricingView() {
   const { pricingConfigState, updatePricing } = useParkingApp();
-  const [activeTab, setActiveTab] = useState<"pricing" | "penalty" | "templates">("pricing");
+  const [activeTab, setActiveTab] = useState<"pricing" | "templates">(
+    "pricing",
+  );
   const [templates, setTemplates] = useState<NotifTemplate[]>([]);
   const [templatesLoaded, setTemplatesLoaded] = useState(false);
   const [tplMsg, setTplMsg] = useState("");
 
-  // Penalty config
-  const [penaltyAmount, setPenaltyAmount] = useState<number>(0);
-  const [penaltyLoaded, setPenaltyLoaded] = useState(false);
-  const [penaltyMsg, setPenaltyMsg] = useState("");
-
   // Modals
   const [pricingModalOpen, setPricingModalOpen] = useState(false);
-  const [penaltyModalOpen, setPenaltyModalOpen] = useState(false);
   const [createTplModalOpen, setCreateTplModalOpen] = useState(false);
   const [editTplModalOpen, setEditTplModalOpen] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState<NotifTemplate | null>(null);
+  const [selectedTemplate, setSelectedTemplate] =
+    useState<NotifTemplate | null>(null);
 
   // Form states
   const [pricingForm, setPricingForm] = useState({
@@ -110,7 +127,6 @@ export function PricingView() {
     dayStartHour: 6,
     nightStartHour: 18,
   });
-  const [penaltyForm, setPenaltyForm] = useState({ amount: 0 });
   const [tplForm, setTplForm] = useState({
     name: "",
     triggerType: "custom",
@@ -129,48 +145,15 @@ export function PricingView() {
     }
   }, [pricingConfigState]);
 
-  async function loadPenaltyConfig() {
-    const response = await apiFetch("/penalties/config");
-    if (response.ok) {
-      const data = await response.json();
-      const overLine = (data.configs ?? []).find(
-        (c: { violationType: string; amount: number }) => c.violationType === "over_line",
-      );
-      setPenaltyAmount(overLine?.amount ?? 0);
-      setPenaltyForm({ amount: overLine?.amount ?? 0 });
-      setPenaltyLoaded(true);
-    }
-  }
-
   async function handleSavePricing(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
     const formData = new FormData(form);
-    
+
     const success = await updatePricing(formData);
     if (success) {
       setPricingModalOpen(false);
     }
-  }
-
-  async function handleSavePenalty(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    const amount = Number(form.get("amount") || 0);
-    
-    const response = await apiFetch("/penalties/config", {
-      method: "PUT",
-      body: JSON.stringify({ violationType: "over_line", label: "Đỗ lấn vạch", amount }),
-    });
-    const data = await response.json();
-    if (response.ok) {
-      setPenaltyAmount(amount);
-      setPenaltyMsg("Đã lưu giá phạt.");
-      setTimeout(() => setPenaltyMsg(""), 3000);
-    } else {
-      setPenaltyMsg(data.message || "Lỗi.");
-    }
-    setPenaltyModalOpen(false);
   }
 
   async function loadTemplates() {
@@ -209,7 +192,7 @@ export function PricingView() {
   async function updateTemplate(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!selectedTemplate) return;
-    
+
     const form = new FormData(e.currentTarget);
     const body = {
       name: String(form.get("name") || ""),
@@ -217,13 +200,18 @@ export function PricingView() {
       title: String(form.get("title") || ""),
       content: String(form.get("content") || ""),
     };
-    const response = await apiFetch(`/notification-templates/${selectedTemplate.id}`, {
-      method: "PUT",
-      body: JSON.stringify(body),
-    });
+    const response = await apiFetch(
+      `/notification-templates/${selectedTemplate.id}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(body),
+      },
+    );
     const data = await response.json();
     if (response.ok) {
-      setTemplates((prev) => prev.map((t) => (t.id === selectedTemplate.id ? data.template : t)));
+      setTemplates((prev) =>
+        prev.map((t) => (t.id === selectedTemplate.id ? data.template : t)),
+      );
       setTplMsg("Đã cập nhật mẫu thông báo.");
       setEditTplModalOpen(false);
     } else {
@@ -232,7 +220,9 @@ export function PricingView() {
   }
 
   async function deleteTemplate(id: string) {
-    const response = await apiFetch(`/notification-templates/${id}`, { method: "DELETE" });
+    const response = await apiFetch(`/notification-templates/${id}`, {
+      method: "DELETE",
+    });
     if (response.ok) {
       setTemplates((prev) => prev.filter((t) => t.id !== id));
       setTplMsg("Đã xóa mẫu.");
@@ -276,17 +266,6 @@ export function PricingView() {
           <span>Bảng giá</span>
         </button>
         <button
-          className={`pricing-tab ${activeTab === "penalty" ? "active" : ""}`}
-          onClick={() => {
-            setActiveTab("penalty");
-            if (!penaltyLoaded) loadPenaltyConfig();
-          }}
-          type="button"
-        >
-          <AlertTriangle size={18} />
-          <span>Giá phạt</span>
-        </button>
-        <button
           className={`pricing-tab ${activeTab === "templates" ? "active" : ""}`}
           onClick={() => {
             setActiveTab("templates");
@@ -311,12 +290,17 @@ export function PricingView() {
               onEdit={() => setPricingModalOpen(true)}
             >
               <div className="pricing-value-display">
-                <span className="pricing-currency">{currency.format(pricingConfigState.dayRate || 0)}</span>
+                <span className="pricing-currency">
+                  {currency.format(pricingConfigState.dayRate || 0)}
+                </span>
                 <span className="pricing-unit">/ ngày</span>
               </div>
               <div className="pricing-time-range">
                 <Clock size={14} />
-                <span>{pricingConfigState.dayStartHour}:00 - {pricingConfigState.nightStartHour}:00</span>
+                <span>
+                  {pricingConfigState.dayStartHour}:00 -{" "}
+                  {pricingConfigState.nightStartHour}:00
+                </span>
               </div>
             </PricingCard>
 
@@ -328,63 +312,54 @@ export function PricingView() {
               onEdit={() => setPricingModalOpen(true)}
             >
               <div className="pricing-value-display">
-                <span className="pricing-currency">{currency.format(pricingConfigState.nightRate || 0)}</span>
+                <span className="pricing-currency">
+                  {currency.format(pricingConfigState.nightRate || 0)}
+                </span>
                 <span className="pricing-unit">/ ngày</span>
               </div>
               <div className="pricing-time-range">
                 <Clock size={14} />
-                <span>{pricingConfigState.nightStartHour}:00 - {pricingConfigState.dayStartHour}:00 (ngày hôm sau)</span>
+                <span>
+                  {pricingConfigState.nightStartHour}:00 -{" "}
+                  {pricingConfigState.dayStartHour}:00 (ngày hôm sau)
+                </span>
               </div>
             </PricingCard>
           </div>
 
           {/* Quick Info */}
           <div className="pricing-info-card">
-            <h4><Settings size={18} /> Thông tin bảng giá</h4>
+            <h4>
+              <Settings size={18} /> Thông tin bảng giá
+            </h4>
             <div className="pricing-info-grid">
               <div className="pricing-info-item">
                 <span className="pricing-info-label">Khung giờ ngày</span>
-                <span className="pricing-info-value">{pricingConfigState.dayStartHour}:00 - {pricingConfigState.nightStartHour}:00</span>
+                <span className="pricing-info-value">
+                  {pricingConfigState.dayStartHour}:00 -{" "}
+                  {pricingConfigState.nightStartHour}:00
+                </span>
               </div>
               <div className="pricing-info-item">
                 <span className="pricing-info-label">Khung giờ đêm</span>
-                <span className="pricing-info-value">{pricingConfigState.nightStartHour}:00 - {pricingConfigState.dayStartHour}:00</span>
+                <span className="pricing-info-value">
+                  {pricingConfigState.nightStartHour}:00 -{" "}
+                  {pricingConfigState.dayStartHour}:00
+                </span>
               </div>
               <div className="pricing-info-item">
                 <span className="pricing-info-label">Giá ngày</span>
-                <span className="pricing-info-value">{currency.format(pricingConfigState.dayRate || 0)}</span>
+                <span className="pricing-info-value">
+                  {currency.format(pricingConfigState.dayRate || 0)}
+                </span>
               </div>
               <div className="pricing-info-item">
                 <span className="pricing-info-label">Giá đêm</span>
-                <span className="pricing-info-value">{currency.format(pricingConfigState.nightRate || 0)}</span>
+                <span className="pricing-info-value">
+                  {currency.format(pricingConfigState.nightRate || 0)}
+                </span>
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Penalty Tab */}
-      {activeTab === "penalty" && (
-        <div className="pricing-content">
-          <div className="penalty-card">
-            <div className="penalty-header">
-              <div className="penalty-icon">
-                <AlertTriangle size={32} />
-              </div>
-              <div className="penalty-info">
-                <h3>Phạt đỗ lấn vạch</h3>
-                <p>Áp dụng khi phát hiện xe đỗ lấn sang vị trí khác</p>
-              </div>
-              <button className="pricing-edit-btn" onClick={() => setPenaltyModalOpen(true)} type="button">
-                <Pencil size={16} />
-                <span>Chỉnh sửa</span>
-              </button>
-            </div>
-            <div className="penalty-value">
-              <span className="penalty-amount">{currency.format(penaltyAmount)}</span>
-              <span className="penalty-label">Mức phạt</span>
-            </div>
-            {penaltyMsg && <div className="penalty-message">{penaltyMsg}</div>}
           </div>
         </div>
       )}
@@ -394,7 +369,11 @@ export function PricingView() {
         <div className="pricing-content">
           <div className="templates-header">
             <h3>Mẫu thông báo</h3>
-            <button className="create-template-btn" onClick={() => setCreateTplModalOpen(true)} type="button">
+            <button
+              className="create-template-btn"
+              onClick={() => setCreateTplModalOpen(true)}
+              type="button"
+            >
               <Plus size={18} />
               <span>Tạo mẫu mới</span>
             </button>
@@ -408,21 +387,35 @@ export function PricingView() {
                 <div className="template-card-header">
                   <div className="template-trigger">
                     <Bell size={14} />
-                    <span>{TRIGGER_LABELS[tpl.triggerType] || tpl.triggerType}</span>
+                    <span>
+                      {TRIGGER_LABELS[tpl.triggerType] || tpl.triggerType}
+                    </span>
                   </div>
-                  <span className={`template-status ${tpl.isActive ? "active" : ""}`}>
+                  <span
+                    className={`template-status ${tpl.isActive ? "active" : ""}`}
+                  >
                     {tpl.isActive ? "Bật" : "Tắt"}
                   </span>
                 </div>
                 <h4 className="template-name">{tpl.name}</h4>
                 <p className="template-title">{tpl.title}</p>
-                <p className="template-content">{tpl.content.slice(0, 100)}...</p>
+                <p className="template-content">
+                  {tpl.content.slice(0, 100)}...
+                </p>
                 <div className="template-actions">
-                  <button className="template-edit-btn" onClick={() => openEditTemplate(tpl)} type="button">
+                  <button
+                    className="template-edit-btn"
+                    onClick={() => openEditTemplate(tpl)}
+                    type="button"
+                  >
                     <Pencil size={14} />
                     <span>Sửa</span>
                   </button>
-                  <button className="template-delete-btn" onClick={() => deleteTemplate(tpl.id)} type="button">
+                  <button
+                    className="template-delete-btn"
+                    onClick={() => deleteTemplate(tpl.id)}
+                    type="button"
+                  >
                     <Trash2 size={14} />
                   </button>
                 </div>
@@ -440,19 +433,30 @@ export function PricingView() {
       )}
 
       {/* Pricing Edit Modal */}
-      <Modal isOpen={pricingModalOpen} onClose={() => setPricingModalOpen(false)} title="Chỉnh sửa bảng giá">
+      <Modal
+        isOpen={pricingModalOpen}
+        onClose={() => setPricingModalOpen(false)}
+        title="Chỉnh sửa bảng giá"
+      >
         <form className="pricing-edit-form" onSubmit={handleSavePricing}>
           <div className="form-section">
-            <h4><Sun size={18} /> Giá ban ngày</h4>
+            <h4>
+              <Sun size={18} /> Giá ban ngày
+            </h4>
             <div className="form-row">
               <label className="form-label">
                 <span>Giá (VND/ngày)</span>
                 <input
                   name="dayRate"
                   type="number"
-                  min={0}
+                  min={1}
                   value={pricingForm.dayRate}
-                  onChange={(e) => setPricingForm({ ...pricingForm, dayRate: Number(e.target.value) })}
+                  onChange={(e) =>
+                    setPricingForm({
+                      ...pricingForm,
+                      dayRate: Number(e.target.value),
+                    })
+                  }
                   required
                 />
               </label>
@@ -464,7 +468,12 @@ export function PricingView() {
                   min={0}
                   max={23}
                   value={pricingForm.dayStartHour}
-                  onChange={(e) => setPricingForm({ ...pricingForm, dayStartHour: Number(e.target.value) })}
+                  onChange={(e) =>
+                    setPricingForm({
+                      ...pricingForm,
+                      dayStartHour: Number(e.target.value),
+                    })
+                  }
                   required
                 />
               </label>
@@ -472,16 +481,23 @@ export function PricingView() {
           </div>
 
           <div className="form-section">
-            <h4><Moon size={18} /> Giá ban đêm</h4>
+            <h4>
+              <Moon size={18} /> Giá ban đêm
+            </h4>
             <div className="form-row">
               <label className="form-label">
                 <span>Giá (VND/ngày)</span>
                 <input
                   name="nightRate"
                   type="number"
-                  min={0}
+                  min={1}
                   value={pricingForm.nightRate}
-                  onChange={(e) => setPricingForm({ ...pricingForm, nightRate: Number(e.target.value) })}
+                  onChange={(e) =>
+                    setPricingForm({
+                      ...pricingForm,
+                      nightRate: Number(e.target.value),
+                    })
+                  }
                   required
                 />
               </label>
@@ -493,7 +509,12 @@ export function PricingView() {
                   min={0}
                   max={23}
                   value={pricingForm.nightStartHour}
-                  onChange={(e) => setPricingForm({ ...pricingForm, nightStartHour: Number(e.target.value) })}
+                  onChange={(e) =>
+                    setPricingForm({
+                      ...pricingForm,
+                      nightStartHour: Number(e.target.value),
+                    })
+                  }
                   required
                 />
               </label>
@@ -501,41 +522,11 @@ export function PricingView() {
           </div>
 
           <div className="form-actions">
-            <button className="cancel-btn" type="button" onClick={() => setPricingModalOpen(false)}>
-              Hủy
-            </button>
-            <button className="save-btn" type="submit">
-              <Save size={16} />
-              <span>Lưu thay đổi</span>
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Penalty Edit Modal */}
-      <Modal isOpen={penaltyModalOpen} onClose={() => setPenaltyModalOpen(false)} title="Chỉnh sửa giá phạt">
-        <form className="pricing-edit-form" onSubmit={handleSavePenalty}>
-          <div className="penalty-form-section">
-            <div className="penalty-form-icon">
-              <AlertTriangle size={48} />
-            </div>
-            <h4>Phạt đỗ lấn vạch</h4>
-            <p>Tiền phạt khi xe đỗ lấn sang vị trí khác</p>
-            <label className="form-label full">
-              <span>Mức phạt (VND)</span>
-              <input
-                name="amount"
-                type="number"
-                min={0}
-                step={1000}
-                defaultValue={penaltyForm.amount}
-                required
-              />
-            </label>
-          </div>
-
-          <div className="form-actions">
-            <button className="cancel-btn" type="button" onClick={() => setPenaltyModalOpen(false)}>
+            <button
+              className="cancel-btn"
+              type="button"
+              onClick={() => setPricingModalOpen(false)}
+            >
               Hủy
             </button>
             <button className="save-btn" type="submit">
@@ -547,7 +538,11 @@ export function PricingView() {
       </Modal>
 
       {/* Create Template Modal */}
-      <Modal isOpen={createTplModalOpen} onClose={() => setCreateTplModalOpen(false)} title="Tạo mẫu thông báo mới">
+      <Modal
+        isOpen={createTplModalOpen}
+        onClose={() => setCreateTplModalOpen(false)}
+        title="Tạo mẫu thông báo mới"
+      >
         <form className="pricing-edit-form" onSubmit={handleCreateTemplate}>
           <label className="form-label">
             <span>Tên mẫu</span>
@@ -557,7 +552,9 @@ export function PricingView() {
             <span>Loại trigger</span>
             <select name="triggerType" required>
               {Object.entries(TRIGGER_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
+                <option key={value} value={value}>
+                  {label}
+                </option>
               ))}
             </select>
           </label>
@@ -576,7 +573,11 @@ export function PricingView() {
           </label>
 
           <div className="form-actions">
-            <button className="cancel-btn" type="button" onClick={() => setCreateTplModalOpen(false)}>
+            <button
+              className="cancel-btn"
+              type="button"
+              onClick={() => setCreateTplModalOpen(false)}
+            >
               Hủy
             </button>
             <button className="save-btn" type="submit">
@@ -588,7 +589,11 @@ export function PricingView() {
       </Modal>
 
       {/* Edit Template Modal */}
-      <Modal isOpen={editTplModalOpen} onClose={() => setEditTplModalOpen(false)} title="Sửa mẫu thông báo">
+      <Modal
+        isOpen={editTplModalOpen}
+        onClose={() => setEditTplModalOpen(false)}
+        title="Sửa mẫu thông báo"
+      >
         <form className="pricing-edit-form" onSubmit={updateTemplate}>
           <label className="form-label">
             <span>Tên mẫu</span>
@@ -596,15 +601,25 @@ export function PricingView() {
           </label>
           <label className="form-label">
             <span>Loại trigger</span>
-            <select name="triggerType" defaultValue={selectedTemplate?.triggerType} required>
+            <select
+              name="triggerType"
+              defaultValue={selectedTemplate?.triggerType}
+              required
+            >
               {Object.entries(TRIGGER_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
+                <option key={value} value={value}>
+                  {label}
+                </option>
               ))}
             </select>
           </label>
           <label className="form-label">
             <span>Tiêu đề</span>
-            <input name="title" defaultValue={selectedTemplate?.title} required />
+            <input
+              name="title"
+              defaultValue={selectedTemplate?.title}
+              required
+            />
           </label>
           <label className="form-label full">
             <span>Nội dung</span>
@@ -617,7 +632,11 @@ export function PricingView() {
           </label>
 
           <div className="form-actions">
-            <button className="cancel-btn" type="button" onClick={() => setEditTplModalOpen(false)}>
+            <button
+              className="cancel-btn"
+              type="button"
+              onClick={() => setEditTplModalOpen(false)}
+            >
               Hủy
             </button>
             <button className="save-btn" type="submit">

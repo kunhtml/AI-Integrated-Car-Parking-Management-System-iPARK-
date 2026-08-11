@@ -2,8 +2,8 @@
 
 # dependencies
 node_modules/
-.venv/
-.pnp
+/.venv
+/.pnp
 .pnp.*
 .yarn/*
 !.yarn/patches
@@ -15,22 +15,37 @@ node_modules/
 /coverage
 
 # next.js
-.next/
+/.next/
+/frontend/.next/
 /frontend/out/
 /out/
 
 # production
 /build
 /backend/dist
-**/uploads/
-!**/uploads/.gitkeep
+/backend/uploads
+/public/uploads
+/frontend/public/uploads
 __pycache__/
 *.pyc
 
 # misc
 .DS_Store
 *.pem
-*.log
+
+# scripts & batch files
+scripts/
+backend/scripts/
+*.bat
+
+# images
+*.jpg
+
+# docs
+docs/
+
+# claude
+.claude/
 
 # debug
 npm-debug.log*
