@@ -528,10 +528,11 @@ _last_bridge_host = ""
 
 scan_enabled = False
 scan_start_time = 0
-scan_timeout = 15
+scan_timeout = None
 last_scanned_uid = None
 scan_result = None
 scan_message = ""
+scan_direction = "in"
 
 
 # ==== RFID SCAN POLLING STATE (cho Flask UI) ====
@@ -546,13 +547,14 @@ def poll_rfid_scan_state():
     }
 
 
-def set_rfid_scan_enabled(value: bool):
-    global scan_enabled, scan_start_time, scan_result, last_scanned_uid, scan_message
+def set_rfid_scan_enabled(value: bool, direction: str = "in"):
+    global scan_enabled, scan_start_time, scan_result, last_scanned_uid, scan_message, scan_direction
     scan_enabled = value
     scan_start_time = time.time() if value else 0
     scan_result = None
     scan_message = ""
     last_scanned_uid = None
+    scan_direction = direction if direction in ("in", "out") else "in"
     if value:
         send_to_both("SCAN_ON")
     else:
@@ -812,6 +814,14 @@ def read_from_arduino(ser, ser_out=None, direction="in"):
         if not uid:
             return
 
+        if scan_direction == "out":
+            scan_result = "success"
+            scan_message = ""
+            last_scanned_uid = uid
+            scan_enabled = False
+            send_to_both("SCAN_OFF")
+            return
+
         # Kiểm tra lookup đã hoàn tất chưa (background thread có thể chưa xong)
         if not pending_vehicle_info.get("lookupDone"):
             waited = 0.0
@@ -905,7 +915,7 @@ def read_from_arduino(ser, ser_out=None, direction="in"):
                         close_gate("in")
                     threading.Thread(target=_auto_close_in, daemon=True).start()
 
-                    user_label = "Subscriber" if is_subscriber else "Guest"
+                    user_label = "Resident" if is_subscriber else "Guest"
                     scan_message = f"{user_label}: {current_plate} — barrier opened"
                 else:
                     scan_result = "error"
@@ -1071,7 +1081,7 @@ def _ocr_worker(frame_copy, plate_counter, last_plate, last_seen_time,
                     global pending_vehicle_info
                     try:
                         info = backend.rfid_lookup_plate(plate)
-                        is_sub = info.get("isSubscriber", False)
+                        is_sub = info.get("isResident", info.get("isSubscriber", False))
                         vehicle = info.get("vehicle") or {}
                         owner = vehicle.get("ownerName") or "Guest"
                         pending_vehicle_info = {
@@ -1082,9 +1092,9 @@ def _ocr_worker(frame_copy, plate_counter, last_plate, last_seen_time,
                             "vehicle": vehicle,
                             "detectedAt": time.time(),
                         }
-                        label = "Subscriber" if is_sub else "Guest"
+                        label = "Resident" if is_sub else "Guest"
                         print(f"[OCR][LOOKUP] {plate} → {label} (owner={owner})")
-                        # Nếu là subscriber → push update lên backend để UI cập nhật loại xe
+                        # Nếu là xe đã đăng ký hoặc có subscription → push update để UI cập nhật loại xe
                         if is_sub:
                             backend.push_camera_log(
                                 direction=direction,
@@ -1093,7 +1103,7 @@ def _ocr_worker(frame_copy, plate_counter, last_plate, last_seen_time,
                                 plate=plate,
                                 user_type="resident",
                                 image_path=snap,
-                                metadata={"source": "camera-ocr", "lookupResult": "subscriber"},
+                                metadata={"source": "camera-ocr", "lookupResult": "registered-or-subscriber"},
                             )
                             print(f"[OCR][PUSH-UPDATE] {plate} → resident")
                     except Exception as e:
@@ -1720,7 +1730,8 @@ def rfid_update(uid):
 
 @app.route("/api/rfid/scan/start", methods=["POST"])
 def start_rfid_scan():
-    set_rfid_scan_enabled(True)
+    body = request.get_json(silent=True) or {}
+    set_rfid_scan_enabled(True, body.get("direction", "in"))
     return jsonify({"ok": True})
 
 
@@ -1729,7 +1740,7 @@ def poll_rfid_scan():
     state = poll_rfid_scan_state()
     if not state["scanEnabled"] and state["scanResult"] is None:
         return jsonify({"status": "idle"})
-    if state["scanEnabled"] and time.time() - state["scanStartTime"] > scan_timeout:
+    if state["scanEnabled"] and scan_timeout is not None and time.time() - state["scanStartTime"] > scan_timeout:
         set_rfid_scan_enabled(False)
         state["scanResult"] = "timeout"
     if state["scanResult"] is None:
