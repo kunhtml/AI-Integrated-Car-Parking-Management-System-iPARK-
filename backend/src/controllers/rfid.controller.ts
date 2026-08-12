@@ -273,7 +273,7 @@ export async function registerScannedCard(
 /**
  * Synchronization: return active cards for the ESP32 device.
  */export async function exportAllCards(_request: Request, response: Response) {
-  const cards = await RfidCard.find({ status: "active" }).sort({
+  const cards = await RfidCard.find({ status: { $in: ["active", "in-use"] } }).sort({
     createdAt: 1,
   });
   response.json({

@@ -78,28 +78,55 @@ export function SubscriptionsView() {
   const [myCardsLoading, setMyCardsLoading] = useState(false);
   const [rfidBuyingVehicleId, setRfidBuyingVehicleId] = useState<string | null>(null);
   const [rfidNotice, setRfidNotice] = useState<string | null>(null);
+  const [pendingRfidTransactionId, setPendingRfidTransactionId] = useState<string | null>(null);
+
+  async function refreshMyRfidCards() {
+    try {
+      const r = await apiFetch("/rfid/mine");
+      const d = await r.json().catch(() => ({}));
+      if (r.ok && Array.isArray(d.cards)) setMyCards(d.cards);
+    } catch {
+      /* silent */
+    }
+  }
 
   useEffect(() => {
     if (!isCustomer) return;
     let cancelled = false;
     setMyCardsLoading(true);
-    (async () => {
+    void refreshMyRfidCards().finally(() => {
+      if (!cancelled) setMyCardsLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [isCustomer]);
+
+  useEffect(() => {
+    if (!isCustomer || !pendingRfidTransactionId) return;
+    let cancelled = false;
+    let attempts = 0;
+    const timer = window.setInterval(async () => {
+      if (cancelled || attempts++ >= 20) {
+        window.clearInterval(timer);
+        if (!cancelled) setPendingRfidTransactionId(null);
+        return;
+      }
       try {
-        const r = await apiFetch("/rfid/mine");
-        const d = await r.json().catch(() => ({}));
-        if (!cancelled && r.ok && Array.isArray(d.cards)) {
-          setMyCards(d.cards);
+        const r = await apiFetch(`/rfid/my-sales/${pendingRfidTransactionId}/reconcile`, { method: "POST" });
+        const data = await r.json().catch(() => ({}));
+        if (r.ok && data.transaction?.status === "paid" && data.card?.status === "active") {
+          window.clearInterval(timer);
+          await refreshMyRfidCards();
+          if (!cancelled) {
+            setPendingRfidTransactionId(null);
+            setRfidNotice("Thanh toán thành công. Thẻ RFID Member đã được kích hoạt.");
+          }
         }
       } catch {
-        /* silent */
-      } finally {
-        if (!cancelled) setMyCardsLoading(false);
+        /* retry */
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [isCustomer]);
+    }, 3000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [isCustomer, pendingRfidTransactionId]);
 
   async function handleBuyRfid(vehicle: RegisteredVehicle) {
     if (rfidBuyingVehicleId) return;
@@ -109,6 +136,7 @@ export function SubscriptionsView() {
       const r = await apiFetch("/rfid/my-sales", { method: "POST", body: JSON.stringify({ vehicleId: vehicle.id }) });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data.message || "Không thể tạo đơn mua thẻ RFID.");
+      if (data.transaction?.id) setPendingRfidTransactionId(data.transaction.id);
       const checkoutUrl = data.payos?.checkoutUrl || data.transaction?.payosCheckoutUrl;
       if (checkoutUrl) {
         window.open(checkoutUrl, "_blank", "noopener,noreferrer");
@@ -163,17 +191,18 @@ export function SubscriptionsView() {
       const result = await purchaseSubscription(planId, vehicle.id);
       const base = subscriptionList.find((s) => s.id === result.subscription.id);
       const baseEnd = base ? new Date(base.endDate).getTime() : 0;
-      if (result.payos?.qrCode) {
+      const payos = result.payos as any;
+      if (payos?.qrCode) {
         setPayment({
           subId: result.subscription.id,
           payos: {
-            qrCode: result.payos.qrCode,
-            checkoutUrl: result.payos.checkoutUrl ?? "",
-            orderCode: String(result.payos.orderCode ?? ""),
-            amount: Number(result.payos.amount ?? 0),
-            accountNumber: result.payos.accountNumber,
-            accountName: result.payos.accountName,
-            bin: result.payos.bin,
+            qrCode: payos.qrCode,
+            checkoutUrl: payos.checkoutUrl ?? "",
+            orderCode: String(payos.orderCode ?? ""),
+            amount: Number(payos.amount ?? 0),
+            accountNumber: payos.accountNumber,
+            accountName: payos.accountName,
+            bin: payos.bin,
           },
           renewMode: false,
           renewBaseEnd: baseEnd,
@@ -339,6 +368,16 @@ export function SubscriptionsView() {
   async function onPaymentPaid() {
     setFeedback({ type: "success", text: payment?.renewMode ? "Gia hạn thành công!" : "Thanh toán thành công!" });
     await refreshSubscriptionList();
+    await refreshMyRfidCards();
+    if (pendingRfidTransactionId) {
+      const response = await apiFetch(`/rfid/my-sales/${pendingRfidTransactionId}/reconcile`, { method: "POST" });
+      const data = await response.json().catch(() => ({}));
+      if (response.ok && data.card?.status === "active") {
+        setRfidNotice("Thanh toán thành công. Thẻ RFID Member đã được kích hoạt.");
+        await refreshMyRfidCards();
+        setPendingRfidTransactionId(null);
+      }
+    }
   }
 
   function activeSubForVehicle(vehicleId: string): Subscription | null {

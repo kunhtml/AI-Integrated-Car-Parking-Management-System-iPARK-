@@ -212,13 +212,27 @@ int getid() {
 
 // ===== Mở cửa =====
 // Không còn IR vật cản: giữ barrier mở 3 giây rồi tự đóng.
+// Việc xác thực RFID thuộc backend; ESP32 không tự mở theo danh sách cục bộ.
 void mo_cua() {
+  return;
+}
+
+void mo_cua_remote() {
+  cua_vao.write(90);
+  LCD_TRUE();
+  coiCanhBao(2, 100);
+  delay(5000);
+  cua_vao.write(0);
+}
+
+/*
   cua_vao.write(90);
   LCD_TRUE();
   coiCanhBao(2, 100);
 
   delay(5000);
   cua_vao.write(0);
+  */
 }
 
 // ===== Xử lý quét thẻ =====
@@ -461,9 +475,9 @@ void docBienSoTuPython() {
           Serial.println("ERR|NOT_FOUND");
         }
       }
-      else if (buffer.equals("OPEN_GATE")) {
+      else if (buffer.equals("OPEN_GATE") || buffer.equals("OPEN_IN")) {
         Serial.println("Nhận lệnh mở barie thủ công từ Python!");
-        cua_vao.write(100);
+        mo_cua_remote();
         digitalWrite(PIN_BUZZER, HIGH);
         delay(100);
         digitalWrite(PIN_BUZZER, LOW);

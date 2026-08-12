@@ -94,6 +94,7 @@ export function PaymentModal({ payos, subscriptionId, renewMode, renewBaseEnd, p
   const [checking, setChecking] = useState(false);
   const [pollTick, setPollTick] = useState(0);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [successCountdown, setSuccessCountdown] = useState(5);
 
   useEffect(() => {
     let cancelled = false;
@@ -142,6 +143,22 @@ export function PaymentModal({ payos, subscriptionId, renewMode, renewBaseEnd, p
       setTimeout(() => setChecking(false), 400);
     }
   }
+
+  useEffect(() => {
+    if (status !== "paid") return;
+    setSuccessCountdown(5);
+    const timer = window.setInterval(() => {
+      setSuccessCountdown((current) => {
+        if (current <= 1) {
+          window.clearInterval(timer);
+          onClose();
+          return 0;
+        }
+        return current - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [status, onClose]);
 
   async function copy(text: string, key: string) {
     try {
@@ -204,6 +221,7 @@ export function PaymentModal({ payos, subscriptionId, renewMode, renewBaseEnd, p
             </div>
             <h3>{renewMode ? "Gia hạn thành công!" : "Đăng ký thành công!"}</h3>
             <p>Cảm ơn bạn. Đang cập nhật trạng thái gói…</p>
+            <p className="pay-modal-countdown">Tự đóng sau <strong>{successCountdown}</strong> giây</p>
           </div>
         ) : (
           <>

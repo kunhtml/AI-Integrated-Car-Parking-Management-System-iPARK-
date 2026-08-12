@@ -273,6 +273,13 @@ export async function createParkingSession(
       ownerUserId = card.userId;
       plateCheck = { warn: undefined, discount: 0 };
     } else {
+      const memberSubscription = await findActiveSubscriptionByPlate(normalizeRfidPlate(body.plate));
+      if (memberSubscription) {
+        response.status(409).json({
+          message: "Xe này đã đăng ký gói thành viên. Vui lòng dùng đúng RFID Member đã liên kết với xe.",
+        });
+        return;
+      }
       if (!["available", "active"].includes(card.status)) {
         response.status(409).json({
           message: "RFID Guest ch\u01B0a s\u1EB5n s\u00E0ng \u0111\u1EC3 c\u1EA5p phi\u00EAn g\u1EEDi xe.",

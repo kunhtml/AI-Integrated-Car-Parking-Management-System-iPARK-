@@ -180,6 +180,26 @@ export async function finalizePaidRfidTransaction(transactionId: string) {
   return { transaction, card };
 }
 
+export async function reconcileCustomerRfidSale(transactionId: string, userId: string) {
+  const { checkPayOSPaymentStatus } = await import("./payos.service.js");
+  const transaction = await Transaction.findOne({
+    _id: transactionId,
+    userId: objectId(userId),
+    transactionType: { $in: ["rfid_sale", "rfid_replacement"] },
+  });
+  if (!transaction) throw new AppError("Không tìm thấy giao dịch mua thẻ RFID.", 404);
+  if (transaction.status === "pending" && transaction.payosOrderCode) {
+    const result = await checkPayOSPaymentStatus(String(transaction.payosOrderCode));
+    if (String(result.status).toLowerCase() === "paid") {
+      transaction.status = "paid";
+      transaction.paidAt = new Date();
+      await transaction.save();
+      await finalizePaidRfidTransaction(transaction._id.toString());
+    }
+  }
+  return { transaction: await Transaction.findById(transaction._id), card: transaction.rfidCardId ? await RfidCard.findById(transaction.rfidCardId) : null };
+}
+
 export async function reconcilePendingRfidSales() {
   const { checkPayOSPaymentStatus } = await import("./payos.service.js");
   const pending = await Transaction.find({
@@ -208,6 +228,17 @@ export async function confirmRfidSale(transactionId: string, actorId?: string) {
   if (actorId) transaction.createdBy = objectId(actorId);
   const card = await finalizeSale(transaction);
   return { transaction, card };
+}
+
+export async function getRfidCardDetails(cardId: string) {
+  const card = await RfidCard.findById(cardId)
+    .populate("userId", "name email phone")
+    .populate("vehicleId", "plate ownerName brand model color status");
+  if (!card) throw new AppError("Không tìm thấy thẻ RFID.", 404);
+  const history = await Transaction.find({ rfidCardId: card._id })
+    .sort({ createdAt: -1 })
+    .limit(50);
+  return { card, history };
 }
 
 export async function listRfidInventory(filters: { status?: RfidCardStatus; search?: string; page?: number; limit?: number }) {

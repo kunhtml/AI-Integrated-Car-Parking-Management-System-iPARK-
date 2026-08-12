@@ -8,7 +8,8 @@ import { EventEmitter } from "node:events";
  *   render popup và cập nhật danh sách.
  * - `subscribe(listener)`: trả về hàm `unsubscribe` để đóng listener.
  *
- * Sử dụng `node:events` (đã có sẵn trong Node) — KHÔNG cần thêm dependency.
+ * Sử dụng 
+ode:events` (đã có sẵn trong Node) — KHÔNG cần thêm dependency.
  */
 export type CameraIngestEvent = {
   id: string;
@@ -29,6 +30,8 @@ export type CameraIngestEvent = {
   fee?: number | null;
   action?: string | null;
   createdAt: string;
+  metadata?: Record<string, unknown>;
+  duplicateSession?: boolean;
 };
 
 class CameraEventBus extends EventEmitter {

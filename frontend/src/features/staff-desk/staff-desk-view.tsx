@@ -326,7 +326,7 @@ export function StaffDeskView() {
           );
           return;
         }
-        setBarrierMsg("Đã gửi lệnh mở barie cổng vào.");
+        setBarrierMsg("Thẻ RFID hợp lệ — đã mở barie cổng vào.");
         setPhase("done");
       } catch {
         setPhase("error");
@@ -358,24 +358,9 @@ export function StaffDeskView() {
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          // 409 = session đã được AI service tạo → coi như thành công, chỉ cần mở barie
-          if (res.status === 409) {
-            setCreateMsg("Phiên đã được tạo bởi AI service.");
-            setPhase("opening");
-            const openRes = await bridgeFetch("/gate/in/open", {
-              method: "POST",
-            });
-            if (!openRes.ok) {
-              setPhase("error");
-              setBarrierMsg(
-                `Tạo phiên OK nhưng mở barie thất bại (${openRes.status}). Bấm mở tay.`,
-              );
-              return;
-            }
-            setBarrierMsg("Đã gửi lệnh mở barie cổng vào.");
-            setPhase("done");
-            return;
-          }
+          // Không được mở barie khi API không tạo/xác nhận phiên.
+          // 409 cũng được dùng cho RFID Member sai biển số, thẻ không hợp lệ
+          // hoặc bãi hết chỗ; mọi nhánh lỗi phải dừng tại đây.
           setPhase("error");
           setCreateMsg(data.message || `Tạo phiên thất bại (${res.status}).`);
           return;
@@ -402,7 +387,7 @@ export function StaffDeskView() {
           );
           return;
         }
-        setBarrierMsg("Đã gửi lệnh mở barie cổng vào.");
+        setBarrierMsg("Thẻ RFID hợp lệ — đã mở barie cổng vào.");
         setPhase("done");
       } catch (e) {
         setPhase("error");
@@ -438,7 +423,11 @@ export function StaffDeskView() {
   }, []);
 
   const openExitBarrier = useCallback(async () => {
-    if (!activeExit?.sessionId) return;
+    if (!activeExit?.sessionId || activeExit.action === "no_session") {
+      setExitScanError("Chưa tìm thấy phiên đang gửi cho biển số này.");
+      setExitScanPhase("error");
+      return;
+    }
     try {
       const res = await apiFetch("/exit/open-gate", {
         method: "POST",
@@ -446,6 +435,8 @@ export function StaffDeskView() {
       });
       const data = await res.json().catch(() => ({}));
       if (data.ok) {
+        setExitScanPhase("success");
+        setExitScanError("");
         setActiveExit((current) =>
           current ? { ...current, barrierOpened: true } : current,
         );
@@ -469,7 +460,11 @@ export function StaffDeskView() {
 
   // ====== Exit RFID scan & verify ======
   const startExitScan = useCallback(async () => {
-    if (!activeExit?.sessionId) return;
+    if (!activeExit?.sessionId || activeExit.action === "no_session") {
+      setExitScanError("Chưa tìm thấy phiên đang gửi cho biển số này.");
+      setExitScanPhase("error");
+      return;
+    }
     setExitScanError("");
     setExitScanUid("");
     setExitScanPhase("starting");
@@ -573,7 +568,11 @@ export function StaffDeskView() {
   // Verify exit RFID with backend
   const verifyExitRfid = useCallback(
     async (uid: string) => {
-      if (!activeExit?.sessionId) return;
+      if (!activeExit?.sessionId || activeExit.action === "no_session") {
+      setExitScanError("Chưa tìm thấy phiên đang gửi cho biển số này.");
+      setExitScanPhase("error");
+      return;
+    }
       try {
         const res = await apiFetch("/exit/verify", {
           method: "POST",
@@ -589,6 +588,8 @@ export function StaffDeskView() {
           });
           if (data.amountDue > 0) {
             await createExitPayment(data.amountDue);
+          } else if (data.canOpenGate) {
+            await openExitBarrier();
           }
         } else {
           setExitScanPhase("error");
@@ -599,13 +600,17 @@ export function StaffDeskView() {
         setExitScanError("Lỗi kết nối server");
       }
     },
-    [activeExit?.sessionId],
+    [activeExit?.sessionId, openExitBarrier],
   );
 
   // Create PayOS payment for exit
   const createExitPayment = useCallback(
     async (amount: number) => {
-      if (!activeExit?.sessionId) return;
+      if (!activeExit?.sessionId || activeExit.action === "no_session") {
+      setExitScanError("Chưa tìm thấy phiên đang gửi cho biển số này.");
+      setExitScanPhase("error");
+      return;
+    }
       const sessionId = activeExit.sessionId;
       try {
         const res = await apiFetch(`/transactions/session/${sessionId}`, {
@@ -1054,6 +1059,9 @@ function IngestCard(props: {
 }) {
   const { event } = props;
   const imgUrl = resolveBridgeImageUrl(event.imagePath);
+  const expectedRfidUid = typeof event.metadata?.expectedRfidUid === "string" ? event.metadata.expectedRfidUid : "";
+  const displayUserType = event.userType === "resident" || Boolean(event.metadata?.isSubscriber) ? "resident" : event.userType;
+  const duplicateSession = event.duplicateSession === true || event.action === "duplicate";
   const eventIsStale =
     event.action !== "created" &&
     (event.sessionStatus === "Đang gửi" ||
@@ -1099,9 +1107,9 @@ function IngestCard(props: {
           icon={<Radio size={14} />}
           label="Loại xe"
           value={
-            event.userType === "resident"
+            displayUserType === "resident"
               ? "Cư dân"
-              : event.userType === "guest"
+              : displayUserType === "guest"
                 ? "Khách vãng lai"
                 : "Chưa rõ"
           }
@@ -1111,27 +1119,20 @@ function IngestCard(props: {
           label="Thời gian"
           value={formatTime(event.createdAt)}
         />
-        {event.ownerName && (
+        {expectedRfidUid && (
+          <MetaRow icon={<Nfc size={14} />} label="RFID Member dự kiến" value={expectedRfidUid} />
+        )}
+        {(event.ownerName || displayUserType === "resident") && (
           <MetaRow
             icon={<CreditCard size={14} />}
             label="Chủ xe"
-            value={event.ownerName}
+            value={event.ownerName || "Chưa xác định"}
           />
         )}
       </div>
 
-      {eventIsStale && (
-        <div className="staff-desk__alert staff-desk__alert--warn">
-          <ShieldAlert size={16} />
-          <span>
-            Biển này đã có phiên <strong>{event.sessionStatus}</strong>. Bỏ qua
-            hoặc kiểm tra lại.
-          </span>
-        </div>
-      )}
-
       {/* Khu vực quét thẻ + xác nhận */}
-      {!eventIsStale && (
+      {!eventIsStale && !duplicateSession && (
         <div className="staff-desk__action">
           {props.scanPhase === "waiting" || props.scanPhase === "starting" ? (
             <div className="staff-desk__scan-active">
@@ -1255,11 +1256,15 @@ function ExitCard({
 }) {
   const imgUrl = resolveBridgeImageUrl(event.imagePath);
   const didCheckout = event.sessionStatus === "Đã hoàn thành";
+  const noSession = event.action === "no_session";
   const hasPaymentData = paymentData && paymentData.amount > 0;
 
   // Calculate amount due from verify data or default to 0
   const amountDue = exitVerifyData?.amountDue ?? 0;
   const isSubscriber = exitVerifyData?.isSubscriber ?? false;
+  const customerType = event.metadata?.customerType === "member" || event.userType === "resident" ? "member" : "guest";
+  const displayOwnerName = event.ownerName || "Chưa xác định";
+  const expectedRfidUid = typeof event.metadata?.expectedRfidUid === "string" ? event.metadata.expectedRfidUid : "";
 
   return (
     <div className="staff-desk__ingest">
@@ -1272,7 +1277,9 @@ function ExitCard({
           <p className="staff-desk__plate-sub">
             {didCheckout
               ? "Phiên đã checkout từ camera."
-              : "Đang chờ xác minh RFID"}
+              : noSession
+                ? "Không tìm thấy phiên đang gửi cho biển số này."
+                : "Đang chờ xác minh RFID"}
           </p>
         </div>
         <button
@@ -1312,6 +1319,23 @@ function ExitCard({
           label="Thời gian ra"
           value={formatDateTime(event.createdAt)}
         />
+'        <MetaRow
+          icon={<CreditCard size={14} />}
+          label="Chủ xe"
+          value={displayOwnerName}
+        />
+        <MetaRow
+          icon={<Radio size={14} />}
+          label="Loại xe"
+          value={customerType === "member" ? "Thành viên" : "Khách vãng lai"}
+        />
+        {expectedRfidUid && (
+          <MetaRow
+            icon={<Nfc size={14} />}
+            label="RFID Member của biển xe này"
+            value={expectedRfidUid}
+          />
+        )}
         <MetaRow
           icon={<CreditCard size={14} />}
           label="Phí phiên"
@@ -1338,7 +1362,7 @@ function ExitCard({
         <div className="staff-desk__alert staff-desk__alert--success">
           <CheckCircle2 size={18} />
           <span>
-            <strong>Thanh toán thành công</strong>
+            <strong>RFID khớp thành công</strong>
             <br />
             Barie đã mở
           </span>
@@ -1393,7 +1417,7 @@ function ExitCard({
           <button
             className="btn btn-primary btn-lg"
             onClick={onScanRfid}
-            disabled={didCheckout || event.barrierOpened}
+            disabled={noSession || didCheckout || event.barrierOpened}
           >
             <Nfc size={18} /> Quét thẻ RFID
           </button>
@@ -1439,7 +1463,14 @@ function ExitCard({
           </button>
         )}
 
-        {!didCheckout && !hasPaymentData && (
+        {exitVerifyData && !isSubscriber && amountDue > 0 && !hasPaymentData && !didCheckout && (
+        <div className="staff-desk__alert staff-desk__alert--success">
+          <CheckCircle2 size={18} />
+          <span>Đã quét xác thực thành công. Vui lòng thanh toán phí.</span>
+        </div>
+      )}
+
+      {!didCheckout && !hasPaymentData && (
           <p className="staff-desk__hint staff-desk__hint--warn">
             {scanPhase === "starting" || scanPhase === "waiting"
               ? "Đang chờ quét thẻ RFID..."

@@ -17946,3 +17946,25 @@ textarea.form-input {
 @media(max-width:760px){.quota-pool-overview{grid-template-columns:minmax(0,1fr)!important}}
 @media(max-width:480px){.quota-pool-card{padding:18px 16px 16px 24px!important}.quota-pool-card-head{grid-template-columns:36px minmax(0,1fr)!important}.quota-pool-icon{width:36px!important;height:36px!important}.quota-slot-metric{padding-inline:5px!important}.quota-slot-metric span{font-size:9px!important}}
 
+
+
+/* RFID detail modal layout */
+.rfid-sales-modal:has(.rfid-detail-grid) { width: min(900px, calc(100vw - 32px)); }
+.rfid-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 22px; padding: 8px 0 18px; border-bottom: 1px solid #e5ebf2; }
+.rfid-detail-item { display: grid; grid-template-columns: 135px minmax(0, 1fr); align-items: start; gap: 10px; min-width: 0; line-height: 1.45; }
+.rfid-detail-item strong { color: #263b54; white-space: nowrap; }
+.rfid-detail-item span, .rfid-detail-item small { min-width: 0; overflow-wrap: anywhere; color: #40566f; }
+.rfid-detail-item small { grid-column: 2; margin-top: -6px; color: #7890aa; }
+.rfid-detail-grid + h4 { margin: 20px 0 10px; color: #263b54; }
+.rfid-sales-modal .table-wrap { overflow-x: auto; }
+.rfid-sales-modal .table-wrap table { width: 100%; min-width: 0; table-layout: fixed; }
+.rfid-sales-modal .table-wrap th, .rfid-sales-modal .table-wrap td { padding: 12px 14px; white-space: normal; overflow-wrap: anywhere; }
+.rfid-sales-modal .table-wrap th:nth-child(1), .rfid-sales-modal .table-wrap td:nth-child(1) { width: 34%; }
+.rfid-sales-modal .table-wrap th:nth-child(2), .rfid-sales-modal .table-wrap td:nth-child(2) { width: 20%; }
+.rfid-sales-modal .table-wrap th:nth-child(3), .rfid-sales-modal .table-wrap td:nth-child(3) { width: 22%; }
+.rfid-sales-modal .table-wrap th:nth-child(4), .rfid-sales-modal .table-wrap td:nth-child(4) { width: 24%; }
+@media (max-width: 640px) {
+  .rfid-sales-modal:has(.rfid-detail-grid) { width: min(100%, calc(100vw - 20px)); }
+  .rfid-detail-grid { grid-template-columns: 1fr; gap: 12px; }
+  .rfid-detail-item { grid-template-columns: 120px minmax(0, 1fr); }
+}

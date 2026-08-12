@@ -6,6 +6,7 @@ import { checkOfflineDevices } from "./deviceMaintenance.service.js";
 import { scanAndFlagOverdueSessions } from "./overdue.service.js";
 import { sendExpiryReminders, sendPrepaidReminders } from "./reminder.service.js";
 import { reconcileStaleSlots } from "./parkingSlot.service.js";
+import { reconcilePendingRfidSales } from "./rfidSales.service.js";
 
 /**
  * Initialize all background scheduled tasks.
@@ -55,6 +56,18 @@ export function initScheduler() {
       }
     } catch (err) {
       console.error("[Scheduler] Subscription job error:", err);
+    }
+  });
+
+  // Every minute: reconcile paid RFID sales when PayOS webhook cannot reach localhost.
+  new Cron("* * * * *", { protect: true, unref: true }, async () => {
+    try {
+      const result = await reconcilePendingRfidSales();
+      if (result.updated > 0) {
+        console.log(`[Scheduler] Activated ${result.updated} paid RFID sales (checked=${result.checked})`);
+      }
+    } catch (err) {
+      console.error("[Scheduler] RFID payment reconciliation error:", err);
     }
   });
 

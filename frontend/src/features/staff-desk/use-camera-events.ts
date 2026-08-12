@@ -23,6 +23,8 @@ export type CameraIngestEvent = {
   fee?: number | null;
   action?: string | null;
   createdAt: string;
+  metadata?: Record<string, unknown>;
+  duplicateSession?: boolean;
 };
 
 export type CameraStreamStatus = "connecting" | "open" | "error" | "closed";

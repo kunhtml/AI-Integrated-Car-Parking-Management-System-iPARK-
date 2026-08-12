@@ -3,7 +3,7 @@ import { z } from "zod";
 import { AppError } from "../utils/AppError.js";
 import { getActivePricingConfig } from "../services/pricing.service.js";
 import { RfidCardStatus } from "../models/RfidCard.js";
-import { changeRfidCardStatus, confirmRfidSale, listRfidInventory, listRfidTransactions, replaceRfidCard, returnRfidCard, sellRfidCard, sellRfidCardForCustomer, reconcilePendingRfidSales } from "../services/rfidSales.service.js";
+import { changeRfidCardStatus, confirmRfidSale, getRfidCardDetails, listRfidInventory, listRfidTransactions, replaceRfidCard, returnRfidCard, sellRfidCard, sellRfidCardForCustomer, reconcilePendingRfidSales, reconcileCustomerRfidSale } from "../services/rfidSales.service.js";
 
 function actor(request: Request) { return request.user?.id; }
 function serializeCard(card: any) { return card ? { id: card._id?.toString?.() ?? card.id, uid: card.uid, cardId: card.cardId, status: card.status, cardType: card.cardType, userId: card.userId?.toString?.(), vehicleId: card.vehicleId?.toString?.(), plate: card.plate, ownerName: card.ownerName, salePrice: card.salePrice ?? 0, depositAmount: card.depositAmount ?? 0, assignedAt: card.assignedAt, soldAt: card.soldAt, returnedAt: card.returnedAt, lostAt: card.lostAt, damagedAt: card.damagedAt, blockedAt: card.blockedAt, createdAt: card.createdAt, updatedAt: card.updatedAt } : null; }
@@ -34,4 +34,23 @@ export async function sellForCustomer(request: Request, response: Response) {
 
 export async function reconcilePending(request: Request, response: Response) {
   response.json(await reconcilePendingRfidSales());
+}
+
+
+export async function reconcileCustomerSale(request: Request, response: Response) {
+  const userId = actor(request);
+  if (!userId) throw new AppError("Chưa đăng nhập.", 401);
+  const result = await reconcileCustomerRfidSale(String(request.params.transactionId), userId);
+  response.json({ transaction: serializeTransaction(result.transaction), card: serializeCard(result.card) });
+}
+
+
+export async function cardDetails(request: Request, response: Response) {
+  const result = await getRfidCardDetails(String(request.params.id));
+  response.json({
+    card: serializeCard(result.card),
+    owner: result.card.userId && typeof result.card.userId === "object" ? result.card.userId : null,
+    vehicle: result.card.vehicleId && typeof result.card.vehicleId === "object" ? result.card.vehicleId : null,
+    history: result.history.map(serializeTransaction),
+  });
 }

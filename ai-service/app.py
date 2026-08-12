@@ -264,11 +264,15 @@ class BackendClient:
             payload = {k: v for k, v in payload.items() if v is not None and v != ""}
             r = self.session.post(self._url("/api/bridge/log"), json=payload, timeout=10)
             data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
-            return {
+            result = {
                 "ok": r.ok,
                 "status_code": r.status_code,
                 "data": data,
+                "message": data.get("message", "") or data.get("error", ""),
             }
+            if not r.ok:
+                print(f"[BACKEND][CAMERA][PUSH] rejected status={r.status_code} response={data}")
+            return result
         except Exception as e:
             print("[BACKEND][CAMERA][ERROR]", e)
             return {"ok": False, "status_code": 0, "data": {"message": str(e)}}
@@ -355,7 +359,8 @@ def sync_all_rfid_cards_to_esp32_with_stats():
             owner = card.get("ownerName", "")
             plate = _normalize_plate(card.get("plate", ""))
             user_type = card.get("userType", "guest")
-            status = card.get("status", "active")
+            raw_status = str(card.get("status", "active")).lower()
+            status = "active" if raw_status in ("active", "in-use") else raw_status
             cmd = f"ADD|{uid}|{owner}|{plate}|{user_type}|{status}"
             if safe_write(arduino_in, serial_lock_in, cmd):
                 sent_in += 1
@@ -880,12 +885,22 @@ def read_from_arduino(ser, ser_out=None, direction="in"):
         owner_name = pending_vehicle_info.get("ownerName") or "Guest"
         card_user_type = "resident" if is_subscriber else "guest"
         result = backend.rfid_scan_register(uid, owner_name=owner_name, plate=current_plate, user_type=card_user_type)
-        if not result.get("ok"):
+        scanned_card = result.get("card") or {}
+        scanned_card_type = str(scanned_card.get("cardType") or "guest").lower()
+        if is_subscriber and scanned_card_type != "member":
             scan_result_by_direction[direction] = "error"
-            scan_message_by_direction[direction] = result.get("message") or f"Backend từ chối thẻ (HTTP {result.get('status_code', 0)})."
+            scan_message_by_direction[direction] = "Xe thành viên phải dùng đúng RFID Member đã liên kết với biển số này."
+        elif not result.get("ok"):
+            scan_result_by_direction[direction] = "error"
+            scan_message_by_direction[direction] = (
+                result.get("message")
+                or ("Thẻ Member không khớp với biển số xe camera phát hiện. Vui lòng dùng đúng RFID Member liên kết."
+                    if is_subscriber
+                    else "Thẻ Guest không hợp lệ hoặc chưa sẵn sàng. Vui lòng thử lại.")
+            )
         else:
             sync_cmd = f"ADD|{uid}|{owner_name}|{current_plate}|{card_user_type}|active"
-            send_to_both(sync_cmd)
+            safe_write(arduino_in, serial_lock_in, sync_cmd)
             if current_plate:
                 image_path = capture_snapshot_for_event("in", base_url=_last_bridge_host)
                 push_result = backend.push_camera_log(direction="in", detected_plate=current_plate, confidence=0.95, rfid_uid=uid, owner_name=owner_name, plate=current_plate, user_type=card_user_type, image_path=image_path, metadata={"source": "staff-scan", "snapshot": bool(image_path), "isSubscriber": is_subscriber})
@@ -899,7 +914,12 @@ def read_from_arduino(ser, ser_out=None, direction="in"):
                     scan_message_by_direction[direction] = f"{user_label}: {current_plate} — barrier opened"
                 else:
                     scan_result_by_direction[direction] = "error"
-                    scan_message_by_direction[direction] = "Không tạo được phiên gửi xe. Barrier không mở."
+                    push_data = push_result.get("data") or {}
+                    scan_message_by_direction[direction] = (
+                        push_result.get("message")
+                        or push_data.get("message")
+                        or "Không thể tạo phiên cho thẻ Guest. Vui lòng thử lại."
+                    )
             else:
                 scan_message_by_direction[direction] = "Chưa detect được biển số. Vui lòng chờ camera nhận biển."
 

@@ -68,6 +68,7 @@ type InventoryForm = {
   uid: string;
   notes: string;
 };
+type RfidDetails = { card: RfidInventoryItem; owner?: { name?: string; email?: string; phone?: string }; vehicle?: { plate?: string; ownerName?: string; brand?: string; model?: string; color?: string; status?: string }; history: RfidTransaction[] };
 
 const EMPTY_INVENTORY_FORM: InventoryForm = { uid: "", notes: "" };
 
@@ -182,6 +183,8 @@ export function RfidSalesPanel() {
   const [payosPayment, setPayosPayment] = useState<{ transaction: RfidTransaction; checkoutUrl: string } | null>(null);
   const [inventoryForm, setInventoryForm] = useState<InventoryForm | null>(null);
   const [inventoryScanLoading, setInventoryScanLoading] = useState(false);
+  const [rfidDetails, setRfidDetails] = useState<RfidDetails | null>(null);
+  const [rfidDetailsLoading, setRfidDetailsLoading] = useState(false);
   const [vehicleSuggestions, setVehicleSuggestions] = useState<Array<{ id: string; plate: string; ownerName?: string; userId?: string; email?: string }>>([]);
   const [userSuggestions, setUserSuggestions] = useState<Array<{ id: string; email: string; name?: string }>>([]);
   const [rfidPrice, setRfidPrice] = useState(50000);
@@ -426,6 +429,21 @@ export function RfidSalesPanel() {
     }
   }
 
+  async function openRfidDetails(transaction: RfidTransaction) {
+    if (!transaction.rfidCardId || rfidDetailsLoading) return;
+    setRfidDetailsLoading(true);
+    try {
+      const response = await apiFetch(`/rfid/${transaction.rfidCardId}/details`);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || "Không tải được thông tin thẻ RFID.");
+      setRfidDetails(data);
+    } catch (error) {
+      setNotice({ tone: "error", text: error instanceof Error ? error.message : "Không tải được thông tin thẻ RFID." });
+    } finally {
+      setRfidDetailsLoading(false);
+    }
+  }
+
   async function reconcilePayments() {
     if (submitting) return;
     setSubmitting(true);
@@ -445,7 +463,7 @@ export function RfidSalesPanel() {
     setSubmitting(true);
     try {
       await confirmRfidSale(transaction.id);
-      setNotice({ tone: "success", text: "Đã xác nhận giao dịch và kích hoạt thẻ RFID." });
+      setNotice({ tone: "success", text: "Đã kiểm tra thanh toán và kích hoạt thẻ RFID." });
       await loadData();
     } catch (error) {
       setNotice({ tone: "error", text: error instanceof Error ? error.message : "Không thể xác nhận giao dịch." });
@@ -591,13 +609,13 @@ export function RfidSalesPanel() {
             <DataTable
               headers={["Loại giao dịch", "Thẻ / UID", "Số tiền", "Thanh toán", "Thời gian", "Thao tác"]}
               rows={transactions.map((transaction) => [
-                <span key="type" className="rfid-transaction-type">{TRANSACTION_LABEL[transaction.transactionType]}</span>,
-                <span key="uid" className="uid-pill">{transaction.uid || "—"}</span>,
+                <button key="type" type="button" className="rfid-transaction-type rfid-transaction-clickable" onClick={() => void openRfidDetails(transaction)}>{TRANSACTION_LABEL[transaction.transactionType]}</button>,
+                <button key="uid" type="button" className="uid-pill rfid-transaction-clickable" onClick={() => void openRfidDetails(transaction)}>{transaction.uid || "—"}</button>,
                 <div key="amount" className="rfid-card-money"><strong>{money(transaction.amount)}</strong><span>Giá: {money(transaction.salePrice)}</span></div>,
                 <div key="method" className="rfid-method"><strong>{transaction.method === "payos" ? "PayOS" : transaction.method === "cash" ? "Tiền mặt" : "Ví điện tử"}</strong><span className={transaction.status === "paid" ? "rfid-life-badge success" : transaction.status === "pending" ? "rfid-life-badge warning" : "rfid-life-badge danger"}>{transaction.status === "paid" ? "Đã thanh toán" : transaction.status === "pending" ? "Chờ thanh toán" : "Không thành công"}</span></div>,
                 <span key="time" className="cell-muted-tiny">{dateTime(transaction.paidAt || transaction.createdAt)}</span>,
                 <div key="confirm" className="rfid-sales-actions">
-                  {transaction.status === "pending" ? <button type="button" className="small-button success" disabled={submitting} onClick={() => void confirmPendingSale(transaction)}><CheckCircle2 size={13} /> Xác nhận</button> : <span className="cell-muted-tiny">—</span>}
+                  {transaction.status === "pending" ? <button type="button" className="small-button success" disabled={submitting} onClick={() => void confirmPendingSale(transaction)}><CheckCircle2 size={13} /> Kiểm tra lại</button> : <span className="cell-muted-tiny">—</span>}
                 </div>,
               ])}
             />
@@ -613,6 +631,22 @@ export function RfidSalesPanel() {
             </Field>
             <div className="modal-actions"><button type="button" className="small-button" onClick={() => setRfidPriceOpen(false)} disabled={submitting}>Hủy</button><button type="submit" className="small-button primary" disabled={submitting}>{submitting ? "Đang lưu…" : "Lưu giá thẻ"}</button></div>
           </form>
+        </Modal>
+      )}
+
+      {rfidDetails && (
+        <Modal title={`Chi tiết thẻ RFID · ${rfidDetails.card.uid}`} description="Thông tin sở hữu, xe liên kết và lịch sử giao dịch của thẻ." onClose={() => setRfidDetails(null)}>
+          <div className="rfid-sales-form">
+            <div className="rfid-detail-grid">
+              <div className="rfid-detail-item"><strong>Trạng thái</strong><span>{STATUS_LABEL[rfidDetails.card.status]}</span></div>
+              <div className="rfid-detail-item"><strong>Loại thẻ</strong><span>{rfidDetails.card.cardType === "member" ? "RFID Member" : "RFID Guest"}</span></div>
+              <div className="rfid-detail-item"><strong>Chủ sở hữu</strong><span>{rfidDetails.owner?.name || rfidDetails.card.ownerName || "Chưa gán"}</span><small>{rfidDetails.owner?.email || "—"}</small></div>
+              <div className="rfid-detail-item"><strong>Xe đang sử dụng</strong><span>{rfidDetails.vehicle?.plate || rfidDetails.card.plate || "Chưa gắn xe"}</span><small>{[rfidDetails.vehicle?.brand, rfidDetails.vehicle?.model, rfidDetails.vehicle?.color].filter(Boolean).join(" · ") || "—"}</small></div>
+            </div>
+            <h4>Lịch sử giao dịch</h4>
+            {rfidDetails.history.length === 0 ? <p className="muted-cell">Chưa có giao dịch.</p> : <div className="table-wrap"><table><thead><tr><th>Loại</th><th>Số tiền</th><th>Trạng thái</th><th>Thời gian</th></tr></thead><tbody>{rfidDetails.history.map((item) => <tr key={item.id}><td>{TRANSACTION_LABEL[item.transactionType]}</td><td>{money(item.amount)}</td><td>{item.status === "paid" ? "Đã thanh toán" : item.status === "pending" ? "Chờ thanh toán" : "Không thành công"}</td><td>{dateTime(item.paidAt || item.createdAt)}</td></tr>)}</tbody></table></div>}
+            <div className="modal-actions"><button type="button" className="small-button" onClick={() => setRfidDetails(null)}>Đóng</button></div>
+          </div>
         </Modal>
       )}
 
@@ -708,4 +742,5 @@ function SaleFields({ form, setForm, availableCards, vehicleSuggestions, userSug
     </div>
   );
 }
+
 
