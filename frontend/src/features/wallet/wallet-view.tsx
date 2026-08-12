@@ -1,12 +1,26 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { CreditCard, ExternalLink, Eye, Loader2, RefreshCw, Search, Wallet, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  Banknote,
+  Calendar,
+  ChevronDown,
+  CreditCard,
+  ExternalLink,
+  Printer,
+  Loader2,
+  RefreshCw,
+  Search,
+  Wallet,
+  X,
+} from "lucide-react";
 
-import { DataTable } from "@/components/ui/data-table";
 import { useParkingApp } from "@/context/parking-app-context";
+import type { TransactionItem } from "@/types";
 import { apiFetch } from "@/lib/client-api";
 import { currency } from "@/lib/constants";
+
+const PAGE_SIZE = 9;
 
 function parseTransactionDate(value?: string) {
   if (!value) return null;
@@ -58,11 +72,131 @@ function StatusBadge({
   return <span className="badge">{status}</span>;
 }
 
-function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+
+function getInitials(name?: string): string {
+  if (!name || !name.trim()) return "K";
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const first = parts[0]?.[0] ?? "";
+  const last = parts.length > 1 ? parts[parts.length - 1][0] : "";
+  return (first + last).toUpperCase();
+}
+
+const AVATAR_GRADIENTS = [
+  "linear-gradient(135deg,#2563eb,#7c3aed)",
+  "linear-gradient(135deg,#0ea5e9,#2563eb)",
+  "linear-gradient(135deg,#10b981,#059669)",
+  "linear-gradient(135deg,#f59e0b,#ea580c)",
+  "linear-gradient(135deg,#ef4444,#db2777)",
+];
+
+function avatarGradient(seed: string) {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+  }
+  return AVATAR_GRADIENTS[hash % AVATAR_GRADIENTS.length];
+}
+
+function methodLabel(method: string) {
+  if (method === "payos") return "PayOS";
+  if (method === "cash") return "Tiền mặt";
+  return method || "—";
+}
+
+type TransactionCardProps = {
+  item: TransactionItem;
+  isCustomer: boolean;
+  isAdmin: boolean;
+  onView: (item: TransactionItem) => void;
+  onCancel: (item: TransactionItem) => void;
+  onConfirm: (id: string) => void;
+};
+
+function TransactionCard({ item, isCustomer, isAdmin, onView, onCancel, onConfirm }: TransactionCardProps) {
+  const isTopUp = item.content?.startsWith("TOPUP") ?? false;
+  const hasPayOSLink = !!item.payosCheckoutUrl;
+  const status = item.sessionPaymentStatus || item.status;
+  const invoiceNo = item.payosOrderCode ? String(item.payosOrderCode) : item.id.slice(-8).toUpperCase();
+  const title = isTopUp
+    ? "Nạp tiền vào ví"
+    : item.plate
+      ? `Gửi xe ${item.plate}${item.slot ? ` · ${item.slot}` : ""}`
+      : "Thanh toán đỗ xe";
+
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", paddingBottom: "8px", borderBottom: "1px solid var(--border, #eee)" }}>
-      <span style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>{label}</span>
-      <span style={{ fontWeight: 500, fontSize: "0.9rem", textAlign: "right", wordBreak: "break-all" }}>{value}</span>
+    <div
+      className="wallet-card"
+      onClick={() => onView(item)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onView(item);
+        }
+      }}
+      role="button"
+      tabIndex={0}
+    >
+      <div className="wallet-card-top">
+        <div className="wallet-avatar" style={{ background: avatarGradient(item.ownerName || item.id) }}>
+          {getInitials(item.ownerName)}
+        </div>
+        <div className="wallet-customer">
+          <span className="wallet-customer-name">{item.ownerName || (isTopUp ? "Khách nạp ví" : "Khách vãng lai")}</span>
+          <span className="wallet-customer-handle">
+            {item.ownerEmail || (isTopUp ? "Nạp tiền" : "Khách vãng lai")}
+          </span>
+        </div>
+        <StatusBadge status={status} received={item.sessionPaidAmount} total={item.sessionFee} />
+      </div>
+
+      <div className="wallet-card-divider" />
+
+      <div className="wallet-card-meta">
+        <div>
+          <span className="wallet-card-invoice">#{invoiceNo}</span>
+          {item.plate && <span className="wallet-card-plate"> · {item.plate}</span>}
+        </div>
+        <h5 className="wallet-card-title">{title}</h5>
+      </div>
+
+      <div className="wallet-card-bottom">
+        <span className="wallet-amount">
+          <Banknote size={16} />
+          {currency.format(item.amount)}
+        </span>
+        <span className="wallet-date">
+          <Calendar size={13} />
+          {formatTransactionDate(item.createdAt)}
+        </span>
+      </div>
+
+      <div className="wallet-card-actions" onClick={(e) => e.stopPropagation()}>
+        {item.status === "pending" && hasPayOSLink && (
+          <a
+            className="small-button"
+            href={item.payosCheckoutUrl}
+            rel="noreferrer"
+            target="_blank"
+          >
+            <ExternalLink size={14} /> Mở link
+          </a>
+        )}
+        {item.status === "pending" && isAdmin && (
+          <>
+            <button className="small-button" onClick={() => onCancel(item)} style={{ color: "#ef4444" }} type="button">
+              <X size={14} /> Hủy
+            </button>
+            {!isTopUp && (
+              <button className="small-button" onClick={() => onConfirm(item.id)} type="button">
+                Xác nhận
+              </button>
+            )}
+          </>
+        )}
+        {item.status === "paid" && !isCustomer && (
+          <span style={{ color: "var(--success, #22c55e)", fontWeight: 600 }}>✓ Đã thanh toán</span>
+        )}
+      </div>
     </div>
   );
 }
@@ -80,6 +214,7 @@ export function WalletView() {
 
   // Dùng viewAs để xác định chế độ hiển thị
   const isCustomer = currentUser?.role === "staff" ? viewAs === "customer" : currentUser?.role === "customer";
+  const isAdmin = currentUser?.role === "admin";
 
   const [checkingSessionId, setCheckingSessionId] = useState<string | null>(null);
   const [sessionCheckResult, setSessionCheckResult] = useState<{ id: string; status: string } | null>(null);
@@ -88,9 +223,15 @@ export function WalletView() {
   const [methodFilter, setMethodFilter] = useState("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   // Modal chi tiết giao dịch
-  const [detailTransaction, setDetailTransaction] = useState<(typeof transactionList)[0] | null>(null);
+  const [detailTransaction, setDetailTransaction] = useState<TransactionItem | null>(null);
+
+  // Reset phân trang khi bộ lọc thay đổi
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [searchQuery, statusFilter, methodFilter, fromDate, toDate, transactionList]);
 
   // Lấy phiên chưa thanh toán của user hiện tại
   const unpaidSession = sessions.find(
@@ -150,6 +291,18 @@ export function WalletView() {
     return () => clearInterval(interval);
   }, [currentUser, setSessions]);
 
+  async function handleCancelTransaction(item: TransactionItem) {
+    if (!window.confirm("Hủy giao dịch này? Giao dịch sẽ bị xóa hoàn toàn.")) return;
+    try {
+      await apiFetch(`/transactions/${item.id}/cancel`, { method: "POST" });
+      const r = await apiFetch("/transactions");
+      if (r.ok) {
+        const d = await r.json();
+        setTransactionList(d.transactions ?? []);
+      }
+    } catch { /* silent */ }
+  }
+
   if (!currentUser) return null;
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -158,10 +311,18 @@ export function WalletView() {
   const filteredTransactions = transactionList.filter((item) => {
     const effectiveStatus = item.sessionPaymentStatus || item.status;
     const createdAt = parseTransactionDate(item.createdAt);
+    const searchableValues = [
+      item.plate,
+      item.ownerName,
+      item.ownerEmail,
+      item.slot,
+      item.id,
+      item.payosOrderCode,
+      item.content,
+    ];
     const matchesQuery =
       !normalizedQuery ||
-      [item.plate, item.ownerName, item.ownerEmail, item.slot, item.id]
-        .some((value) => value?.toLowerCase().includes(normalizedQuery));
+      searchableValues.some((value) => String(value ?? "").toLowerCase().includes(normalizedQuery));
 
     if (!matchesQuery) return false;
     if (statusFilter !== "all" && effectiveStatus !== statusFilter) return false;
@@ -174,141 +335,7 @@ export function WalletView() {
   const filtersActive =
     searchQuery !== "" || statusFilter !== "all" || methodFilter !== "all" || fromDate !== "" || toDate !== "";
 
-  const rows = filteredTransactions.map((item) => {
-    const isTopUp = item.content?.startsWith("TOPUP") ?? false;
-    const hasPayOSLink = !!item.payosCheckoutUrl;
-
-    return [
-      // Thời gian
-      <span key={`${item.id}-t`} className="muted-cell" style={{ fontSize: "0.8rem" }}>
-        {formatTransactionDate(item.createdAt)}
-      </span>,
-
-      // Biển số
-      <span key={`${item.id}-p`} style={{ fontWeight: 600 }}>
-        {item.plate || (isTopUp ? "—" : "—")}
-      </span>,
-
-      // Chủ xe
-      item.ownerName || "—",
-
-      // Email
-      <span key={`${item.id}-e`} className="muted-cell" style={{ fontSize: "0.8rem" }}>
-        {item.ownerEmail || "—"}
-      </span>,
-
-      // Slot
-      <span key={`${item.id}-s`} className="muted-cell" style={{ fontSize: "0.8rem" }}>
-        {item.slot || "—"}
-      </span>,
-
-      // Số tiền
-      currency.format(item.amount),
-
-      // Phương thức
-      <span key={`${item.id}-m`} className="muted-cell" style={{ fontSize: "0.8rem" }}>
-        {item.method === "payos" ? "PayOS" : item.method === "cash" ? "Tiền mặt" : item.method}
-      </span>,
-
-      // Trạng thái giao dịch
-      <StatusBadge
-        key={`${item.id}-st`}
-        status={item.sessionPaymentStatus || item.status}
-        received={item.sessionPaidAmount}
-        total={item.sessionFee}
-      />,
-
-      // Thao tác
-      (() => {
-        if (item.status === "pending") {
-          return (
-            <div className="inline-actions" key={item.id}>
-              {hasPayOSLink && (
-                <a
-                  className="small-button"
-                  href={item.payosCheckoutUrl}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  <ExternalLink size={14} /> Mở link
-                </a>
-              )}
-              {isCustomer && (
-                <button
-                  className="small-button"
-                  onClick={() => setDetailTransaction(item)}
-                  type="button"
-                >
-                  <Eye size={14} />
-                </button>
-              )}
-              {currentUser.role === "admin" && (
-                <button
-                  className="small-button"
-                  onClick={async () => {
-                    if (window.confirm("Hủy giao dịch này? Giao dịch sẽ bị xóa hoàn toàn.")) {
-                      try {
-                        await apiFetch(`/transactions/${item.id}/cancel`, { method: "POST" });
-                        // Reload transactions
-                        const r = await apiFetch("/transactions");
-                        if (r.ok) {
-                          const d = await r.json();
-                          setTransactionList(d.transactions ?? []);
-                        }
-                      } catch { /* silent */ }
-                    }
-                  }}
-                  style={{ color: "#ef4444" }}
-                  type="button"
-                >
-                  <X size={14} /> Hủy
-                </button>
-              )}
-              {currentUser.role === "admin" && !isTopUp && (
-                <button
-                  className="small-button"
-                  onClick={() => confirmTransaction(item.id)}
-                  type="button"
-                >
-                  Xác nhận
-                </button>
-              )}
-            </div>
-          );
-        }
-        if (item.status === "paid") {
-          return (
-            <div className="inline-actions" key={item.id}>
-              <span style={{ color: "var(--color-success)" }}>✓</span>
-              {isCustomer && (
-                <button
-                  className="small-button"
-                  onClick={() => setDetailTransaction(item)}
-                  type="button"
-                >
-                  <Eye size={14} />
-                </button>
-              )}
-            </div>
-          );
-        }
-        return (
-          <div className="inline-actions" key={item.id}>
-            {isCustomer && (
-              <button
-                className="small-button"
-                onClick={() => setDetailTransaction(item)}
-                type="button"
-              >
-                <Eye size={14} />
-              </button>
-            )}
-            {currentUser.role !== "customer" && "—"}
-          </div>
-        );
-      })(),
-    ];
-  });
+  const visibleTransactions = filteredTransactions.slice(0, visibleCount);
 
   return (
     <section className="content-grid">
@@ -439,63 +466,134 @@ export function WalletView() {
           )}
           <span className="filter-count">{filteredTransactions.length} / {transactionList.length} giao dịch</span>
         </div>
-        {rows.length === 0 ? (
+
+        {visibleTransactions.length === 0 ? (
           <p className="muted-cell" style={{ padding: "1rem 0" }}>
             {transactionList.length === 0 ? "Chưa có giao dịch nào." : "Không có giao dịch phù hợp bộ lọc."}
           </p>
         ) : (
-          <DataTable
-            headers={["Thời gian", "Biển số", "Chủ xe", "Email", "Slot", "Số tiền", "PT", "Trạng thái", "Thao tác"]}
-            rows={rows}
-          />
+          <>
+            <div className="wallet-card-grid">
+              {visibleTransactions.map((item) => (
+                <TransactionCard
+                  isAdmin={isAdmin}
+                  isCustomer={isCustomer}
+                  item={item}
+                  key={item.id}
+                  onCancel={handleCancelTransaction}
+                  onConfirm={confirmTransaction}
+                  onView={setDetailTransaction}
+                />
+              ))}
+            </div>
+            {filteredTransactions.length > visibleCount && (
+              <div className="wallet-load-more">
+                <button onClick={() => setVisibleCount((count) => count + PAGE_SIZE)} type="button">
+                  <ChevronDown size={16} />
+                  Tải thêm ({filteredTransactions.length - visibleCount} còn lại)
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
 
-      {/* Modal chi tiết giao dịch */}
+      {/* Modal chi tiết hóa đơn */}
       {detailTransaction && (
-        <div
-          onClick={() => setDetailTransaction(null)}
-          style={{
-            position: "fixed", inset: 0, background: "rgba(255,255,255,0.85)",
-            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000,
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: "var(--bg-primary, #fff)", borderRadius: "16px", padding: "24px",
-              width: "min(420px, 92vw)", maxHeight: "90vh", overflowY: "auto", textAlign: "left",
-              boxShadow: "0 12px 40px rgba(0,0,0,0.3)",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-              <h3 style={{ margin: 0, fontSize: "1.1rem" }}>Chi tiết giao dịch</h3>
-              <button onClick={() => setDetailTransaction(null)} type="button" style={{ background: "none", border: "none", fontSize: "1.4rem", cursor: "pointer", color: "var(--text-muted)", lineHeight: 1 }}>✕</button>
+        <div className="wallet-modal-overlay" onClick={() => setDetailTransaction(null)}>
+          <div className="wallet-invoice-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="wallet-invoice-head">
+              <div className="wallet-invoice-brand">
+                <strong>iPARK</strong>
+                <span>Hóa đơn thanh toán</span>
+              </div>
+              <div className="wallet-invoice-order">
+                <strong>Hóa đơn # {detailTransaction.payosOrderCode ? String(detailTransaction.payosOrderCode) : detailTransaction.id.slice(-8).toUpperCase()}</strong>
+                <StatusBadge
+                  status={detailTransaction.sessionPaymentStatus || detailTransaction.status}
+                  received={detailTransaction.sessionPaidAmount}
+                  total={detailTransaction.sessionFee}
+                />
+              </div>
+              <button
+                aria-label="Đóng"
+                className="wallet-invoice-close"
+                onClick={() => setDetailTransaction(null)}
+                type="button"
+              >
+                ✕
+              </button>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <DetailRow label="Mã giao dịch" value={detailTransaction.id} />
-              <DetailRow label="Biển số" value={detailTransaction.plate} />
-              <DetailRow label="Chủ xe" value={detailTransaction.ownerName || "—"} />
-              <DetailRow label="Email" value={detailTransaction.ownerEmail || "—"} />
-              <DetailRow label="Slot" value={detailTransaction.slot || "—"} />
-              <DetailRow label="Số tiền" value={currency.format(detailTransaction.amount)} />
-              <DetailRow label="Phương thức" value={detailTransaction.method === "payos" ? "PayOS" : detailTransaction.method === "cash" ? "Tiền mặt" : detailTransaction.method} />
-              <DetailRow label="Trạng thái" value={detailTransaction.status} />
-              <DetailRow label="Thời gian" value={formatTransactionDate(detailTransaction.createdAt)} />
-              {detailTransaction.paidAt && <DetailRow label="Thanh toán lúc" value={formatTransactionDate(detailTransaction.paidAt)} />}
-              {detailTransaction.payosOrderCode && <DetailRow label="Mã PayOS" value={detailTransaction.payosOrderCode} />}
-              {detailTransaction.content && <DetailRow label="Nội dung" value={detailTransaction.content} />}
+            <div className="wallet-invoice-divider" />
+
+            <div className="wallet-invoice-grid">
+              <div className="wallet-invoice-block">
+                <strong>Khách hàng</strong>
+                <span>{detailTransaction.ownerName || "—"}</span>
+                <span>{detailTransaction.ownerEmail || "—"}</span>
+              </div>
+              <div className="wallet-invoice-block">
+                <strong>Thông tin xe</strong>
+                <span>Biển số: {detailTransaction.plate || "—"}</span>
+                <span>Vị trí: {detailTransaction.slot || "—"}</span>
+              </div>
+              <div className="wallet-invoice-block">
+                <strong>Phương thức thanh toán</strong>
+                <span>{methodLabel(detailTransaction.method)}</span>
+                {detailTransaction.payosOrderCode && <span>Mã PayOS: {detailTransaction.payosOrderCode}</span>}
+              </div>
+              <div className="wallet-invoice-block">
+                <strong>Thời gian</strong>
+                <span>Tạo: {formatTransactionDate(detailTransaction.createdAt)}</span>
+                {detailTransaction.paidAt && <span>Thanh toán: {formatTransactionDate(detailTransaction.paidAt)}</span>}
+              </div>
             </div>
 
-            <button
-              onClick={() => setDetailTransaction(null)}
-              type="button"
-              className="small-button"
-              style={{ marginTop: "20px", width: "100%" }}
-            >
-              Đóng
-            </button>
+            <div className="wallet-invoice-summary">
+              <h3>Chi tiết đơn hàng</h3>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th style={{ width: 60 }}>STT</th>
+                      <th>Nội dung</th>
+                      <th className="right">Số tiền</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>01</td>
+                      <td>
+                        {detailTransaction.content?.startsWith("TOPUP")
+                          ? "Nạp tiền vào ví"
+                          : detailTransaction.plate
+                            ? `Gửi xe ${detailTransaction.plate}${detailTransaction.slot ? ` · ${detailTransaction.slot}` : ""}`
+                            : "Thanh toán đỗ xe"}
+                      </td>
+                      <td className="right"><strong>{currency.format(detailTransaction.amount)}</strong></td>
+                    </tr>
+                    <tr>
+                      <td className="right" colSpan={2}>Tạm tính</td>
+                      <td className="right">{currency.format(detailTransaction.amount)}</td>
+                    </tr>
+                    <tr className="wallet-invoice-total">
+                      <td className="right" colSpan={2}>Tổng cộng</td>
+                      <td className="right"><strong>{currency.format(detailTransaction.amount)}</strong></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="wallet-invoice-actions">
+              <button className="small-button" onClick={() => window.print()} type="button">
+                <Printer size={14} /> In hóa đơn
+              </button>
+              <button className="small-button" onClick={() => setDetailTransaction(null)} type="button">
+                Đóng
+              </button>
+            </div>
           </div>
         </div>
       )}

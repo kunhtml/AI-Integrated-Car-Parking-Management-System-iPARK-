@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { createRfidCard, deleteRfidCard, exportAllCards, getRfidCard, listMyRfidCards, listRfidCards, listUnassignedResidents, lookupByPlate, lookupRfidCardByUid, registerScannedCard, setRfidCardStatus, updateRfidCard } from "../controllers/rfid.controller.js";
-import { confirmSale, inventory, replaceCard, returnCard, sell, transactions, updateStatus } from "../controllers/rfidSales.controller.js";
+import { confirmSale, inventory, replaceCard, returnCard, sell, sellForCustomer, reconcilePending, transactions, updateStatus } from "../controllers/rfidSales.controller.js";
 import { requireAuth, requireRole } from "../middlewares/auth.middleware.js";
 import { requireServiceToken } from "../middlewares/service-auth.middleware.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -11,7 +11,9 @@ rfidRoutes.get("/mine", asyncHandler(listMyRfidCards));
 rfidRoutes.get("/inventory", requireRole("admin", "staff"), asyncHandler(inventory));
 rfidRoutes.get("/transactions", requireRole("admin", "staff"), asyncHandler(transactions));
 rfidRoutes.post("/sales", requireRole("admin", "staff"), asyncHandler(sell));
+rfidRoutes.post("/my-sales", asyncHandler(sellForCustomer));
 rfidRoutes.post("/sales/:transactionId/confirm", requireRole("admin", "staff"), asyncHandler(confirmSale));
+rfidRoutes.post("/sales/reconcile-pending", requireRole("admin", "staff"), asyncHandler(reconcilePending));
 rfidRoutes.post("/:id/return", requireRole("admin", "staff"), asyncHandler(returnCard));
 rfidRoutes.post("/:id/replace", requireRole("admin", "staff"), asyncHandler(replaceCard));
 rfidRoutes.get("/", requireRole("admin", "staff"), asyncHandler(listRfidCards));

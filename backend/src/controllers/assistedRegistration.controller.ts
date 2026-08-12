@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { z } from "zod";
-import { allocateCarSlot, canEnterParking, parkingConfig } from "../config/parking.js";
+import { allocateSlot, occupySlot } from "../services/parkingSlot.service.js";
+import { classifyVehicleByPlate } from "../services/parkingQuota.service.js";
 import { ParkingSession } from "../models/ParkingSession.js";
 import { Vehicle } from "../models/Vehicle.js";
 import { createNotification } from "../services/notification.service.js";
@@ -60,17 +61,11 @@ export async function assistedRegisterSession(request: Request, response: Respon
     });
   }
 
-  // Kiểm tra sức chứa bãi xe
-  const activeCount = await ParkingSession.countDocuments({ status: "Đang gửi" });
-  const isMember = !!vehicle.userId;
-  const check = await canEnterParking(isMember, activeCount);
-
-  if (!check.allowed) {
-    response.status(409).json({
-      message: check.reason || "Bãi xe đã đầy.",
-      remaining: parkingConfig.totalCapacity - activeCount,
-      isMemberOnly: check.mode === "dynamic" && !isMember,
-    });
+  // Phân loại theo subscription active và cấp slot đúng quota.
+  const quotaAccess = await classifyVehicleByPlate(plate);
+  const slotDoc = await allocateSlot(body.vehicleType, undefined, { quotaType: quotaAccess.quotaType });
+  if (!slotDoc) {
+    response.status(409).json({ message: "Không còn slot phù hợp với quota.", quotaType: quotaAccess.quotaType });
     return;
   }
 
@@ -79,11 +74,18 @@ export async function assistedRegisterSession(request: Request, response: Respon
     plate,
     ownerName: body.ownerName,
     vehicleType: body.vehicleType,
-    slot: allocateCarSlot(activeCount),
+     slot: slotDoc.slotCode,
+     slotId: slotDoc._id,
+     customerType: quotaAccess.customerType,
+     quotaType: quotaAccess.quotaType,
     ownerUserId: vehicle.userId,
     createdBy: objectId(request.user?.id),
-    priorityType: isMember ? "member" : "walkin",
+    ...(quotaAccess.customerType === "member"
+      ? { paymentStatus: "fully_paid", paymentMethod: "subscription", fee: 0, paidAmount: 0 }
+      : {}),
   });
+
+  await occupySlot(slotDoc._id, session._id);
 
   // Ghi log nhận diện
   await safeCreateRecognitionLog({
@@ -103,7 +105,6 @@ export async function assistedRegisterSession(request: Request, response: Respon
     title: "Phiên gửi xe tạo tại quầy",
     content: `Nhân viên ${request.user?.email || request.user?.id} đã tạo phiên gửi xe cho ${plate} (${body.ownerName})${body.notes ? ` - ${body.notes}` : ""}.`,
     targetRole: "admin",
-    relatedSessionId: session._id.toString(),
   });
 
   response.status(201).json({ session: serializeParkingSession(session) });

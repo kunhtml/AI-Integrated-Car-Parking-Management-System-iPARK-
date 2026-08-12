@@ -344,8 +344,8 @@ export async function addDisputeMessage(request: Request, response: Response) {
     "name firstName lastName",
   );
   const senderName =
-    user_doc?.firstName && user_doc?.lastName
-      ? `${user_doc.firstName} ${user_doc.lastName}`
+    user_doc?.name && ""
+      ? user_doc.name
       : (user_doc?.name ?? user.id);
 
   dispute.messages.push({

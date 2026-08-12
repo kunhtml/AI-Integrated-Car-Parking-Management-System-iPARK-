@@ -133,6 +133,10 @@ export async function createRfidSale(input: RfidSaleInput) {
   }));
 }
 
+export async function reconcilePendingRfidSales() {
+  return parseResponse<{ checked: number; updated: number }>(await apiFetch("/rfid/sales/reconcile-pending", { method: "POST" }));
+}
+
 export async function confirmRfidSale(transactionId: string) {
   return parseResponse<SaleResponse>(await apiFetch(`/rfid/sales/${transactionId}/confirm`, { method: "POST" }));
 }

@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   Save,
   Plus,
+  CreditCard,
 } from "lucide-react";
 
 import { useParkingApp } from "@/context/parking-app-context";
@@ -123,6 +124,7 @@ export function PricingView() {
   // Form states
   const [pricingForm, setPricingForm] = useState({
     dayRate: 0,
+    rfidCardSalePrice: 50000,
     nightRate: 0,
     dayStartHour: 6,
     nightStartHour: 18,
@@ -139,6 +141,7 @@ export function PricingView() {
     if (pricingConfigState) {
       setPricingForm({
         dayRate: pricingConfigState.dayRate || 0,
+        rfidCardSalePrice: pricingConfigState.rfidCardSalePrice ?? 50000,
         nightRate: pricingConfigState.nightRate || 0,
         dayStartHour: pricingConfigState.dayStartHour || 6,
         nightStartHour: pricingConfigState.nightStartHour || 18,
@@ -448,6 +451,14 @@ export function PricingView() {
       >
         <form className="pricing-edit-form" onSubmit={handleSavePricing}>
           <div className="form-section">
+            <h4><CreditCard size={18} /> Giá thẻ RFID Member</h4>
+            <label className="form-label">
+              <span>Giá bán thẻ (VND)</span>
+              <input name="rfidCardSalePrice" type="number" min={0} step={1000} value={pricingForm.rfidCardSalePrice} onChange={(e) => setPricingForm({ ...pricingForm, rfidCardSalePrice: Number(e.target.value) })} required />
+            </label>
+            <p className="pricing-form-hint">Giá này được dùng khi khách mua thẻ RFID Member trực tiếp trên website.</p>
+          </div>
+          <div className="form-section">
             <h4>
               <Sun size={18} /> Giá ban ngày
             </h4>
@@ -679,3 +690,5 @@ export function PricingView() {
     </section>
   );
 }
+
+

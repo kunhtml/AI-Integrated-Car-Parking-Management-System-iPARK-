@@ -180,6 +180,7 @@ export type VehicleRequest = {
 export type PricingConfig = {
   id: string;
   dayRate: number;
+  rfidCardSalePrice?: number;
   nightRate: number;
   dayStartHour: number;
   nightStartHour: number;
@@ -434,6 +435,7 @@ export type ParkingSlot = {
   floor: number;
   notes?: string;
   accessPolicy: SlotAccessPolicy;
+  quotaType?: "member" | "walk_in";
   aiPolygon?: [number, number][];
   updatedAt?: string;
 };

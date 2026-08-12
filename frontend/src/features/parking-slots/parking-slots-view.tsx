@@ -1,573 +1,170 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { ParkingSquare, Wrench, RotateCcw, Trash2, Plus, Car, CheckCircle, Clock, Search, Filter, Home, Users, Layers } from "lucide-react";
+import { useMemo, useState } from "react";
+import {
+  Car,
+  CheckCircle2,
+  CircleDot,
+  Filter,
+  LayoutGrid,
+  ParkingSquare,
+  Plus,
+  Search,
+  Trash2,
+  UserRound,
+  UsersRound,
+  Wrench,
+  RotateCcw,
+} from "lucide-react";
 import { useParkingApp } from "@/context/parking-app-context";
 import type { ParkingSlot, SlotAccessPolicy, SlotStatus } from "@/types";
 
-const STATUS_CONFIG: Record<SlotStatus, { label: string; bg: string; text: string; border: string; icon: React.ReactNode }> = {
-  empty: {
-    label: "Trống",
-    bg: "linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)",
-    text: "#059669",
-    border: "#6ee7b7",
-    icon: <CheckCircle size={16} />,
-  },
-  occupied: {
-    label: "Có xe",
-    bg: "linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)",
-    text: "#d97706",
-    border: "#fcd34d",
-    icon: <Car size={16} />,
-  },
-  reserved: {
-    label: "Đặt trước",
-    bg: "linear-gradient(135deg, #eff6ff 0%, #bfdbfe 100%)",
-    text: "#2563eb",
-    border: "#93c5fd",
-    icon: <Clock size={16} />,
-  },
-  maintenance: {
-    label: "Bảo trì",
-    bg: "linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)",
-    text: "#6b7280",
-    border: "#d1d5db",
-    icon: <Wrench size={16} />,
-  },
-};
+type QuotaType = "member" | "walk_in";
+type SlotWithQuota = ParkingSlot & { quotaType?: QuotaType };
 
-function getStatusConfig(status: SlotStatus) {
-  return STATUS_CONFIG[status] ?? STATUS_CONFIG.empty;
-}
-
-const ACCESS_POLICY_OPTIONS: {
-  value: SlotAccessPolicy;
+type PoolConfig = {
+  key: QuotaType;
   label: string;
   shortLabel: string;
-  color: string;
-  activeBg: string;
-  activeText: string;
-  hint: string;
-}[] = [
+  description: string;
+  icon: typeof UsersRound;
+};
+
+const POOLS: PoolConfig[] = [
   {
-    value: "resident",
-    label: "Cư dân",
-    shortLabel: "Cư dân",
-    color: "#2563eb",
-    activeBg: "#dbeafe",
-    activeText: "#1d4ed8",
-    hint: "Chỉ cư dân có gói active được đậu",
+    key: "member",
+    label: "Khu ưu tiên thành viên",
+    shortLabel: "Thành viên",
+    description: "Chỉ cấp cho xe có gói đăng ký đang hiệu lực. Không dùng chung quota với khách vãng lai.",
+    icon: UsersRound,
   },
   {
-    value: "shared",
-    label: "Chung",
-    shortLabel: "Chung",
-    color: "#7c3aed",
-    activeBg: "#ede9fe",
-    activeText: "#6d28d9",
-    hint: "Ưu tiên cư dân, khi rảnh khách vẫn đậu được",
-  },
-  {
-    value: "guest",
-    label: "Vãng lai",
-    shortLabel: "Khách",
-    color: "#ea580c",
-    activeBg: "#ffedd5",
-    activeText: "#c2410c",
-    hint: "Chỉ dành cho khách vãng lai",
+    key: "walk_in",
+    label: "Khu khách vãng lai",
+    shortLabel: "Vãng lai",
+    description: "Dành cho xe không có gói đăng ký. Hệ thống chỉ cấp slot trong quota vãng lai.",
+    icon: UserRound,
   },
 ];
 
-function SlotCard({ slot, onMaintenance, onFree, onDelete, onChangeAccessPolicy, isAdmin }: {
-  slot: ParkingSlot;
-  onMaintenance: (id: string) => void;
-  onFree: (id: string) => void;
-  onDelete: (id: string) => void;
-  onChangeAccessPolicy: (id: string, policy: SlotAccessPolicy) => void;
-  isAdmin: boolean;
-}) {
-  const statusConfig = getStatusConfig(slot.status);
-  const policy = (slot.accessPolicy ?? "shared") as SlotAccessPolicy;
-  const [hovered, setHovered] = useState(false);
+const statusLabel: Record<SlotStatus, string> = {
+  empty: "Sẵn sàng cấp",
+  occupied: "Đang sử dụng",
+  reserved: "Đã giữ chỗ",
+  maintenance: "Bảo trì",
+};
 
+function slotQuota(slot: SlotWithQuota): QuotaType {
+  if (slot.quotaType === "member" || slot.accessPolicy === "resident") return "member";
+  return "walk_in";
+}
+
+function poolSlots(slots: ParkingSlot[], pool: QuotaType) {
+  return slots.filter((slot) => slotQuota(slot as SlotWithQuota) === pool);
+}
+
+function PoolMetric({ label, value, tone }: { label: string; value: number; tone?: "default" | "success" | "warning" }) {
   return (
-    <div
-      className={`parking-slot-card ${slot.status} ${hovered ? "hovered" : ""}`}
-      style={{
-        "--slot-bg": statusConfig.bg,
-        "--slot-text": statusConfig.text,
-        "--slot-border": statusConfig.border,
-      } as React.CSSProperties}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      <div className="slot-header">
-        <div className="slot-code">{slot.slotCode}</div>
-        <div className="slot-parking-icon">
-          <ParkingSquare size={14} />
-        </div>
-      </div>
-
-      <div className="slot-vehicle-area">
-        {slot.status === "empty" && (
-          <div className="slot-empty-visual">
-            <div className="slot-outline">
-              <Car size={32} strokeWidth={1.5} />
-            </div>
-            <span className="slot-empty-text">Chỗ trống</span>
-          </div>
-        )}
-        {slot.status === "occupied" && (
-          <div className="slot-occupied-visual">
-            <div className="car-3d">
-              <div className="car-body"></div>
-              <div className="car-window"></div>
-              <div className="car-wheel car-wheel-1"></div>
-              <div className="car-wheel car-wheel-2"></div>
-            </div>
-            <div className="vehicle-info">
-              <span className="vehicle-plate">{slot.currentPlate || "—"}</span>
-            </div>
-          </div>
-        )}
-        {slot.status === "reserved" && (
-          <div className="slot-reserved-visual">
-            <div className="reserved-icon">
-              <Clock size={28} strokeWidth={1.5} />
-            </div>
-            <span className="reserved-text">Đặt trước</span>
-          </div>
-        )}
-        {slot.status === "maintenance" && (
-          <div className="slot-maintenance-visual">
-            <div className="maintenance-gear">
-              <Wrench size={28} />
-            </div>
-            <span className="maintenance-text">Đang bảo trì</span>
-          </div>
-        )}
-      </div>
-
-      <div className="slot-status-area">
-        <div className="slot-status-badge" style={{ background: statusConfig.bg, color: statusConfig.text, borderColor: statusConfig.border }}>
-          {statusConfig.icon}
-          <span>{statusConfig.label}</span>
-        </div>
-      </div>
-
-      {/* Phân loại cư dân / vãng lai / chung — chỉ hiển thị khi admin.
-          Có thể đổi trực tiếp từ các nút radio inline. */}
-      {isAdmin && (
-        <div className="slot-access-policy" role="radiogroup" aria-label="Phân loại chỗ đỗ">
-          {ACCESS_POLICY_OPTIONS.map((opt) => {
-            const active = policy === opt.value;
-            return (
-              <button
-                aria-checked={active}
-                className={`slot-policy-pill ${active ? "active" : ""}`}
-                key={opt.value}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (active) return;
-                  onChangeAccessPolicy(slot.id, opt.value);
-                }}
-                role="radio"
-                style={
-                  active
-                    ? { background: opt.activeBg, color: opt.activeText, borderColor: opt.color }
-                    : undefined
-                }
-                title={opt.hint}
-                type="button"
-              >
-                <span>{opt.shortLabel}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {isAdmin && slot.status !== "occupied" && slot.status !== "reserved" && (
-        <div className="slot-actions">
-          {slot.status !== "maintenance" ? (
-            <button
-              className="slot-action-btn maintenance"
-              onClick={() => onMaintenance(slot.id)}
-              title="Đặt bảo trì"
-              type="button"
-            >
-              <Wrench size={14} />
-            </button>
-          ) : (
-            <button
-              className="slot-action-btn free"
-              onClick={() => onFree(slot.id)}
-              title="Mở lại"
-              type="button"
-            >
-              <RotateCcw size={14} />
-            </button>
-          )}
-          <button
-            className="slot-action-btn delete"
-            onClick={() => onDelete(slot.id)}
-            title="Xóa slot"
-            type="button"
-          >
-            <Trash2 size={14} />
-          </button>
-        </div>
-      )}
+    <div className={`quota-slot-metric ${tone ?? "default"}`}>
+      <strong>{value}</strong>
+      <span>{label}</span>
     </div>
   );
 }
 
+function SlotTile({ slot, zoneName, isAdmin, onUpdateStatus, onDelete, onPolicy }: {
+  slot: ParkingSlot;
+  zoneName: string;
+  isAdmin: boolean;
+  onUpdateStatus: (id: string, status: SlotStatus) => void;
+  onDelete: (id: string) => void;
+  onPolicy: (id: string, policy: SlotAccessPolicy) => void;
+}) {
+  const quota = slotQuota(slot as SlotWithQuota);
+  const canManage = isAdmin && slot.status !== "occupied" && slot.status !== "reserved";
+  return (
+    <article className={`quota-slot-tile ${quota} ${slot.status}`}>
+      <div className="quota-slot-tile-head">
+        <div>
+          <span className="quota-slot-code">{slot.slotCode}</span>
+          <span className="quota-slot-zone">{zoneName}</span>
+        </div>
+        <span className={`quota-status ${slot.status}`}>{slot.status === "occupied" ? <Car size={13} /> : slot.status === "empty" ? <CheckCircle2 size={13} /> : <CircleDot size={13} />}{statusLabel[slot.status]}</span>
+      </div>
+      <div className="quota-slot-tile-body">
+        {slot.status === "occupied" ? <><Car size={24} /><strong>{slot.currentPlate || "Đang có xe"}</strong></> : slot.status === "maintenance" ? <><Wrench size={24} /><span>Không cấp phát</span></> : <><ParkingSquare size={24} /><span>{slot.status === "reserved" ? "Chờ xe vào" : "Có thể cấp phát"}</span></>}
+      </div>
+      {isAdmin && (
+        <div className="quota-slot-tile-foot">
+          <select aria-label={`Phân nhóm ${slot.slotCode}`} value={quota === "member" ? "resident" : "guest"} onChange={(event) => onPolicy(slot.id, event.target.value as SlotAccessPolicy)} disabled={slot.status === "occupied"}>
+            <option value="resident">Thành viên</option>
+            <option value="guest">Vãng lai</option>
+          </select>
+          {canManage && <div className="quota-slot-actions">
+            <button type="button" title={slot.status === "maintenance" ? "Mở lại" : "Đặt bảo trì"} onClick={() => onUpdateStatus(slot.id, slot.status === "maintenance" ? "empty" : "maintenance")}>{slot.status === "maintenance" ? <RotateCcw size={14} /> : <Wrench size={14} />}</button>
+            <button type="button" title="Xóa slot" className="danger" onClick={() => onDelete(slot.id)}><Trash2 size={14} /></button>
+          </div>}
+        </div>
+      )}
+    </article>
+  );
+}
+
 export function ParkingSlotsView() {
-  const {
-    currentUser,
-    zoneList,
-    slotList,
-    createSlot,
-    bulkCreateSlots,
-    updateSlotStatus,
-    deleteSlot,
-    updateSlotAccessPolicy,
-  } = useParkingApp();
+  const { currentUser, zoneList, slotList, createSlot, updateSlotStatus, deleteSlot, updateSlotAccessPolicy } = useParkingApp();
+  const [activePool, setActivePool] = useState<QuotaType | "all">("all");
+  const [selectedZone, setSelectedZone] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState<SlotStatus | "">("");
+  const [query, setQuery] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+  const isAdmin = currentUser?.role === "admin";
 
-  const [activeTab, setActiveTab] = useState<"map" | "list" | "create" | "bulk">("map");
-  const [filterZone, setFilterZone] = useState("");
-  const [filterStatus, setFilterStatus] = useState<SlotStatus | "">("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [isSimulating, setIsSimulating] = useState(false);
+  const summary = useMemo(() => {
+    return POOLS.map((pool) => {
+      const slots = poolSlots(slotList, pool.key);
+      const available = slots.filter((slot) => slot.status === "empty").length;
+      const active = slots.filter((slot) => slot.status === "occupied" || slot.status === "reserved").length;
+      return { ...pool, slots, total: slots.length, available, active, unavailable: slots.length - available - active };
+    });
+  }, [slotList]);
 
-  const triggerSimulation = useCallback(() => {
-    setIsSimulating(true);
-    setTimeout(() => setIsSimulating(false), 500);
-  }, []);
+  const visibleSlots = useMemo(() => slotList.filter((slot) => {
+    const quota = slotQuota(slot as SlotWithQuota);
+    if (activePool !== "all" && quota !== activePool) return false;
+    if (selectedZone && slot.zoneId !== selectedZone) return false;
+    if (selectedStatus && slot.status !== selectedStatus) return false;
+    return !query || `${slot.slotCode} ${slot.currentPlate ?? ""}`.toLowerCase().includes(query.toLowerCase());
+  }), [slotList, activePool, selectedZone, selectedStatus, query]);
 
-  if (!currentUser) return null;
-  const isAdmin = currentUser.role === "admin";
-
-  const filteredSlots = slotList.filter((s) => {
-    if (filterZone && s.zoneId !== filterZone) return false;
-    if (filterStatus && s.status !== filterStatus) return false;
-    if (searchQuery && !s.slotCode.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    return true;
-  });
-
-  const stats = {
-    total: slotList.length,
-    empty: slotList.filter((s) => s.status === "empty").length,
-    occupied: slotList.filter((s) => s.status === "occupied").length,
-    reserved: slotList.filter((s) => s.status === "reserved").length,
-  };
-
-  const slotsByZone = zoneList.map((zone) => ({
-    zone,
-    slots: slotList.filter((s) => s.zoneId === zone.id),
-  }));
+  const filteredSlots = visibleSlots;
 
   return (
-    <section className="parking-slots-page">
-      <div className="parking-slots-header">
-        <div className="header-left">
-          <div className="header-icon">
-            <ParkingSquare size={24} />
-          </div>
-          <div className="header-text">
-            <h1>Quản lý bãi đỗ xe ô tô</h1>
-            <p>Bãi đỗ xe thông minh</p>
-          </div>
-        </div>
-        {isAdmin && (
-          <div className="header-actions">
-            <button
-              className={`simulate-btn ${isSimulating ? "simulating" : ""}`}
-              onClick={triggerSimulation}
-              type="button"
-            >
-              <RotateCcw size={16} />
-              <span>Giả lập</span>
-            </button>
-          </div>
-        )}
+    <section className="quota-slots-page">
+      <header className="quota-slots-hero">
+        <div className="quota-slots-hero-copy"><div className="quota-slots-eyebrow"><ParkingSquare size={15} /> Vận hành bãi đỗ</div><h1>Quản lý quota chỗ đỗ</h1><p>Hai pool độc lập giúp xe thành viên và xe vãng lai luôn được cấp đúng khu vực, không lấy chéo quota.</p></div>
+        {isAdmin && <button type="button" className="quota-create-button" onClick={() => setShowCreate((value) => !value)}><Plus size={17} /> {showCreate ? "Đóng tạo slot" : "Tạo slot mới"}</button>}
+      </header>
+
+      <div className="quota-pool-overview">
+        {summary.map((pool) => { const Icon = pool.icon; const active = activePool === pool.key; return <button key={pool.key} type="button" onClick={() => setActivePool(active ? "all" : pool.key)} className={`quota-pool-card ${pool.key} ${active ? "selected" : ""}`}><div className="quota-pool-card-head"><span className="quota-pool-icon"><Icon size={20} /></span><div><strong>{pool.label}</strong><small>{pool.description}</small></div></div><div className="quota-metrics"><PoolMetric label="tổng slot" value={pool.total} /><PoolMetric label="còn cấp được" value={pool.available} tone="success" /><PoolMetric label="đang dùng/giữ" value={pool.active} tone="warning" /></div><div className="quota-capacity"><span style={{ width: `${pool.total ? Math.round((pool.available / pool.total) * 100) : 0}%` }} /></div></button>; })}
       </div>
 
-      <div className="parking-stats-grid">
-        <div className="stat-card total">
-          <div className="stat-icon"><ParkingSquare size={20} /></div>
-          <div className="stat-content">
-            <span className="stat-value">{stats.total}</span>
-            <span className="stat-label">Tổng chỗ</span>
-          </div>
-        </div>
-        <div className="stat-card empty">
-          <div className="stat-icon"><CheckCircle size={20} /></div>
-          <div className="stat-content">
-            <span className="stat-value">{stats.empty}</span>
-            <span className="stat-label">Còn trống</span>
-          </div>
-          <div className="stat-bar">
-            <div className="stat-bar-fill" style={{ width: `${(stats.empty / stats.total) * 100 || 0}%` }}></div>
-          </div>
-        </div>
-        <div className="stat-card occupied">
-          <div className="stat-icon"><Car size={20} /></div>
-          <div className="stat-content">
-            <span className="stat-value">{stats.occupied}</span>
-            <span className="stat-label">Có xe đỗ</span>
-          </div>
-          <div className="stat-bar">
-            <div className="stat-bar-fill occupied" style={{ width: `${(stats.occupied / stats.total) * 100 || 0}%` }}></div>
-          </div>
-        </div>
-        <div className="stat-card reserved">
-          <div className="stat-icon"><Clock size={20} /></div>
-          <div className="stat-content">
-            <span className="stat-value">{stats.reserved}</span>
-            <span className="stat-label">Đặt trước</span>
-          </div>
-        </div>
-      </div>
+      {showCreate && isAdmin && <form className="quota-create-form" onSubmit={(event) => { void createSlot(event); setShowCreate(false); }}><div><h2>Thêm slot vào quota</h2><p>Chọn đúng nhóm để slot mới được đưa vào pool cấp phát tương ứng.</p></div><label>Mã slot<input required name="slotCode" placeholder="Ví dụ: M-A01 hoặc W-B01" /></label><label>Khu vực<select required name="zoneId" defaultValue=""><option value="" disabled>Chọn khu vực</option>{zoneList.map((zone) => <option key={zone.id} value={zone.id}>{zone.name}</option>)}</select></label><label>Nhóm quota<select name="accessPolicy" defaultValue="guest"><option value="resident">Thành viên</option><option value="guest">Vãng lai</option></select></label><label>Ghi chú<input name="notes" placeholder="Tùy chọn" /></label><button type="submit"><Plus size={16} /> Tạo slot</button></form>}
 
-      <div className="parking-tabs">
-        {(["map", "list", ...(isAdmin ? ["create", "bulk"] : [])] as const).map((tab) => (
-          <button
-            className={`parking-tab ${activeTab === tab ? "active" : ""}`}
-            key={tab}
-            onClick={() => setActiveTab(tab as typeof activeTab)}
-            type="button"
-          >
-            {tab === "map" && <ParkingSquare size={16} />}
-            {tab === "list" && <Search size={16} />}
-            {tab === "create" && <Plus size={16} />}
-            {tab === "bulk" && <Plus size={16} />}
-            <span>{tab === "map" ? "Sơ đồ" : tab === "list" ? "Danh sách" : tab === "create" ? "1 chỗ" : "Nhiều chỗ"}</span>
-          </button>
-        ))}
-      </div>
+      <div className="quota-control-bar"><div className="quota-pool-tabs"><button type="button" onClick={() => setActivePool("all")} className={activePool === "all" ? "active" : ""}>Tất cả slot</button>{POOLS.map((pool) => <button type="button" key={pool.key} onClick={() => setActivePool(pool.key)} className={activePool === pool.key ? "active" : ""}>{pool.shortLabel}</button>)}</div><div className="quota-filters"><label className="quota-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm mã slot hoặc biển số" /></label><label><Filter size={15} /><select value={selectedZone} onChange={(event) => setSelectedZone(event.target.value)}><option value="">Tất cả khu</option>{zoneList.map((zone) => <option key={zone.id} value={zone.id}>{zone.name}</option>)}</select></label><select aria-label="Lọc trạng thái" value={selectedStatus} onChange={(event) => setSelectedStatus(event.target.value as SlotStatus | "")}><option value="">Mọi trạng thái</option><option value="empty">Sẵn sàng cấp</option><option value="occupied">Đang sử dụng</option><option value="reserved">Đã giữ chỗ</option><option value="maintenance">Bảo trì</option></select></div></div>
 
-      {activeTab === "map" && (
-        <div className="slot-map-container">
-          {slotsByZone.map(({ zone, slots }) => {
-            const zoneStats = {
-              total: slots.length,
-              empty: slots.filter((s) => s.status === "empty").length,
-              occupied: slots.filter((s) => s.status === "occupied").length,
-            };
-            const occupancyRate = zoneStats.total > 0 ? Math.round((zoneStats.occupied / zoneStats.total) * 100) : 0;
-            
-            return (
-              <div className="zone-section" key={zone.id}>
-                <div className="zone-header">
-                  <div className="zone-title">
-                    <div className="zone-icon">
-                      <ParkingSquare size={18} />
-                    </div>
-                    <div>
-                      <h3>Khu {zone.name}</h3>
-                      <span className="zone-desc">{zone.description || "Khu vực đỗ xe"}</span>
-                    </div>
-                  </div>
-                  <div className="zone-stats">
-                    <div className="zone-stat">
-                      <span className="zone-stat-value">{zoneStats.empty}</span>
-                      <span className="zone-stat-label">trống</span>
-                    </div>
-                    <div className="zone-stat-divider">/</div>
-                    <div className="zone-stat">
-                      <span className="zone-stat-value">{zoneStats.total}</span>
-                      <span className="zone-stat-label">tổng</span>
-                    </div>
-                    <div className="zone-occupancy">
-                      <div className="occupancy-ring">
-                        <svg viewBox="0 0 36 36">
-                          <path
-                            className="ring-bg"
-                            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                          />
-                          <path
-                            className="ring-fill"
-                            strokeDasharray={`${occupancyRate}, 100`}
-                            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                          />
-                        </svg>
-                        <span className="occupancy-text">{occupancyRate}%</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="slot-grid">
-                  {slots.map((slot) => (
-                    <SlotCard
-                      isAdmin={isAdmin}
-                      key={slot.id}
-                      onChangeAccessPolicy={updateSlotAccessPolicy}
-                      onDelete={deleteSlot}
-                      onFree={(id) => updateSlotStatus(id, "empty")}
-                      onMaintenance={(id) => updateSlotStatus(id, "maintenance")}
-                      slot={slot}
-                    />
-                  ))}
-                  {slots.length === 0 && (
-                    <div className="empty-zone">
-                      <ParkingSquare size={40} strokeWidth={1} />
-                      <span>Chưa có chỗ đỗ</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-          {zoneList.length === 0 && (
-            <div className="empty-state">
-              <ParkingSquare size={60} strokeWidth={1} />
-              <h3>Chưa có khu vực</h3>
-              <p>Hãy tạo khu vực trước để quản lý chỗ đỗ xe.</p>
-            </div>
-          )}
+      <div className="quota-legend"><span><i className="member" /> Slot thành viên</span><span><i className="walk-in" /> Slot vãng lai</span><span><CheckCircle2 size={14} /> Sẵn sàng cấp</span><span><Car size={14} /> Có xe đỗ</span></div>
+      <section className="quota-slot-unified">
+        <header className="quota-slot-unified-head">
+          <div><span className="quota-group-icon"><LayoutGrid size={18} /></span><div><h2>Tất cả slot</h2><p>Danh sách slot quản lý chung; loại quota hiển thị ngay trên từng thẻ.</p></div></div>
+          <span>{filteredSlots.length} slot hiển thị</span>
+        </header>
+        <div className="quota-slot-grid">
+          {filteredSlots.map((slot) => <SlotTile key={slot.id} slot={slot} zoneName={zoneList.find((zone) => zone.id === slot.zoneId)?.name ?? slot.zoneName ?? "Chưa gán khu"} isAdmin={Boolean(isAdmin)} onUpdateStatus={(id, status) => void updateSlotStatus(id, status)} onDelete={(id) => void deleteSlot(id)} onPolicy={(id, policy) => void updateSlotAccessPolicy(id, policy)} />)}
+          {filteredSlots.length === 0 && <div className="quota-empty"><LayoutGrid size={30} /><span>Chưa có slot phù hợp với bộ lọc.</span></div>}
         </div>
-      )}
-
-      {activeTab === "list" && (
-        <div className="list-view-container">
-          <div className="filter-bar">
-            <div className="search-box">
-              <Search size={18} />
-              <input
-                type="text"
-                placeholder="Tìm mã chỗ đỗ..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-            <div className="filter-group">
-              <Filter size={16} />
-              <select onChange={(e) => setFilterZone(e.target.value)} value={filterZone}>
-                <option value="">Tất cả khu</option>
-                {zoneList.map((z) => (
-                  <option key={z.id} value={z.id}>Khu {z.name}</option>
-                ))}
-              </select>
-            </div>
-            <select className="filter-select" onChange={(e) => setFilterStatus(e.target.value as SlotStatus | "")} value={filterStatus}>
-              <option value="">Tất cả</option>
-              <option value="empty">Trống</option>
-              <option value="occupied">Có xe</option>
-              <option value="reserved">Đặt trước</option>
-              <option value="maintenance">Bảo trì</option>
-            </select>
-            <span className="filter-count">{filteredSlots.length} chỗ</span>
-          </div>
-
-          <div className="list-grid">
-            {filteredSlots.map((slot) => {
-              const statusConfig = getStatusConfig(slot.status);
-              const zone = zoneList.find((z) => z.id === slot.zoneId);
-              
-              return (
-                <div key={slot.id} className="list-slot-card" style={{ "--status-color": statusConfig.border } as React.CSSProperties}>
-                  <div className="list-slot-header">
-                    <span className="list-slot-code">{slot.slotCode}</span>
-                  </div>
-                  <div className="list-slot-zone">
-                    {zone ? `Khu ${zone.name}` : "Không xác định"}
-                  </div>
-                  <div className="list-slot-status" style={{ background: statusConfig.bg, color: statusConfig.text }}>
-                    {statusConfig.icon}
-                    <span>{statusConfig.label}</span>
-                  </div>
-                  {isAdmin && slot.status !== "occupied" && slot.status !== "reserved" && (
-                    <div className="list-slot-actions">
-                      {slot.status !== "maintenance" ? (
-                        <button onClick={() => updateSlotStatus(slot.id, "maintenance")} title="Bảo trì" type="button">
-                          <Wrench size={14} />
-                        </button>
-                      ) : (
-                        <button onClick={() => updateSlotStatus(slot.id, "empty")} title="Mở lại" type="button">
-                          <RotateCcw size={14} />
-                        </button>
-                      )}
-                      <button onClick={() => deleteSlot(slot.id)} title="Xóa" type="button">
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {filteredSlots.length === 0 && (
-            <div className="empty-list">
-              <Search size={40} strokeWidth={1} />
-              <span>Không tìm thấy chỗ đỗ nào</span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {activeTab === "create" && isAdmin && (
-        <div className="create-form-container">
-          <h3><Plus size={20} /> Tạo chỗ đỗ mới</h3>
-          <form className="parking-form" onSubmit={createSlot}>
-            <div className="form-row">
-              <label className="form-label">
-                <span>Mã chỗ đỗ</span>
-                <input name="slotCode" placeholder="VD: A-01, B-02..." required />
-              </label>
-              <label className="form-label">
-                <span>Khu vực</span>
-                <select name="zoneId" required>
-                  <option value="">Chọn khu</option>
-                  {zoneList.map((z) => (
-                    <option key={z.id} value={z.id}>Khu {z.name}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <label className="form-label full">
-              <span>Ghi chú</span>
-              <input name="notes" placeholder="Ghi chú..." />
-            </label>
-            <button className="submit-btn" type="submit">
-              <ParkingSquare size={18} />
-              Tạo chỗ đỗ
-            </button>
-          </form>
-        </div>
-      )}
-
-      {activeTab === "bulk" && isAdmin && (
-        <div className="create-form-container">
-          <h3><Plus size={20} /> Tạo nhiều chỗ đỗ</h3>
-          <form className="parking-form" onSubmit={bulkCreateSlots}>
-            <div className="form-row">
-              <label className="form-label">
-                <span>Khu vực</span>
-                <select name="zoneId" required>
-                  <option value="">Chọn khu</option>
-                  {zoneList.map((z) => (
-                    <option key={z.id} value={z.id}>Khu {z.name}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="form-label">
-                <span>Số lượng</span>
-                <input defaultValue={5} max={100} min={1} name="count" required type="number" />
-              </label>
-            </div>
-            <label className="form-label full">
-              <span>Ghi chú</span>
-              <input name="notes" placeholder="Ghi chú..." />
-            </label>
-            <button className="submit-btn" type="submit">
-              <ParkingSquare size={18} />
-              Tạo nhiều chỗ đỗ
-            </button>
-          </form>
-        </div>
-      )}
+      </section>
     </section>
   );
 }
+

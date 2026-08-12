@@ -5,6 +5,7 @@ export type SlotType = "regular" | "VIP" | "electric" | "handicap";
 // "resident" = chỉ dành cho cư dân. "guest" = chỉ dành cho khách vãng lai.
 // "shared" = ưu tiên cư dân, khi rảnh khách vãng lai vẫn đậu được.
 export type SlotAccessPolicy = "resident" | "guest" | "shared";
+export type QuotaType = "member" | "walk_in";
 
 export type ParkingSlotDocument = {
   _id: mongoose.Types.ObjectId;
@@ -19,6 +20,8 @@ export type ParkingSlotDocument = {
   notes?: string;
   // Chính sách truy cập: cư dân / khách / chung
   accessPolicy: SlotAccessPolicy;
+  // Phân vùng quota động: member hoặc walk_in.
+  quotaType?: QuotaType;
   // Polygon vùng ô đỗ trên ảnh camera, toạ độ CHUẨN HOÁ 0..1 theo (width,height).
   aiPolygon?: [number, number][];
   createdAt: Date;
@@ -51,6 +54,12 @@ const parkingSlotSchema = new Schema<ParkingSlotDocument>(
       default: "shared",
       index: true,
     },
+    quotaType: {
+      type: String,
+      enum: ["member", "walk_in"],
+      default: "walk_in",
+      index: true,
+    },
     aiPolygon: { type: [[Number]], default: undefined },
   },
   { timestamps: true },
@@ -59,6 +68,7 @@ const parkingSlotSchema = new Schema<ParkingSlotDocument>(
 parkingSlotSchema.index({ zoneId: 1, status: 1 });
 parkingSlotSchema.index({ status: 1, slotType: 1 });
 parkingSlotSchema.index({ accessPolicy: 1, status: 1 });
+parkingSlotSchema.index({ quotaType: 1, status: 1 });
 
 export const ParkingSlot: Model<ParkingSlotDocument> =
   mongoose.models.ParkingSlot ||

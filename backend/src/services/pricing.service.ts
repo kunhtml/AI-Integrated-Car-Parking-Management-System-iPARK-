@@ -4,6 +4,7 @@ import { Zone } from "../models/Zone.js";
 
 export const defaultPricingConfig = {
   dayRate: 5000,
+  rfidCardSalePrice: 50000,
   nightRate: 10000,
   dayStartHour: 6,
   nightStartHour: 22,

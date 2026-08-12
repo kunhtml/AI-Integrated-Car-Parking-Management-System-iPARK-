@@ -122,6 +122,7 @@ export async function purchaseHandler(request: Request, response: Response) {
     .object({
       planId: z.string().min(1),
       vehicleId: z.string().min(1),
+      rfidCardId: z.string().min(1).optional(),
     })
     .parse(request.body);
 
@@ -132,6 +133,7 @@ export async function purchaseHandler(request: Request, response: Response) {
     userId: request.user!.id,
     planId: body.planId,
     vehicleId: body.vehicleId,
+    rfidCardId: body.rfidCardId,
     baseUrl,
     frontendUrl,
   });

@@ -69,3 +69,7 @@ next-env.d.ts
 *.md
 !README.md
 !Tài liệu dev.md
+
+# log files
+*.log
+*.log.*

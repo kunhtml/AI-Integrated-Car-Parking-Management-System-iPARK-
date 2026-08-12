@@ -11,6 +11,7 @@ function serializePricingConfig(
   return {
     id: config._id.toString(),
     dayRate: config.dayRate,
+    rfidCardSalePrice: config.rfidCardSalePrice ?? 50000,
     nightRate: config.nightRate,
     dayStartHour: config.dayStartHour,
     nightStartHour: config.nightStartHour,
@@ -24,6 +25,7 @@ function serializePricingConfig(
 const pricingConfigSchema = z
   .object({
     dayRate: z.coerce.number().int().min(1, "Giá ban ngày phải lớn hơn 0."),
+    rfidCardSalePrice: z.coerce.number().int().min(0, "Giá thẻ RFID không được âm."),
     nightRate: z.coerce.number().int().min(1, "Giá ban đêm phải lớn hơn 0."),
     dayStartHour: z.coerce.number().int().min(0).max(23),
     nightStartHour: z.coerce.number().int().min(0).max(23),

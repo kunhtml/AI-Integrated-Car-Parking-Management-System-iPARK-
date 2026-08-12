@@ -5,6 +5,7 @@ import { SubscriptionPlan, SubscriptionPlanDocument } from "../models/Subscripti
 import { Transaction } from "../models/Transaction.js";
 import { User } from "../models/User.js";
 import { Vehicle, VehicleDocument } from "../models/Vehicle.js";
+import { RfidCard } from "../models/RfidCard.js";
 
 type HydratedSubscription = HydratedDocument<SubscriptionDocument>;
 
@@ -78,6 +79,8 @@ export async function purchaseSubscription(params: {
   userId: string;
   planId: string;
   vehicleId: string;
+  /** RFID Member bán đứt của xe. Nếu không gửi, hệ thống tự tìm thẻ hợp lệ của xe. */
+  rfidCardId?: string;
   baseUrl?: string;
   frontendUrl?: string;
 }): Promise<{ subscription: HydratedSubscription; payos?: Record<string, unknown> }> {
@@ -105,6 +108,30 @@ export async function purchaseSubscription(params: {
     err.status = 403;
     throw err;
   }
+  const rfidCard = params.rfidCardId
+    ? await RfidCard.findById(params.rfidCardId)
+    : await RfidCard.findOne({
+        cardType: "member",
+        vehicleId: vehicle._id,
+        userId: vehicle.userId,
+        status: { $in: ["active", "in-use"] },
+      }).sort({ soldAt: -1 });
+  if (!rfidCard) {
+    const err = new Error("Xe chưa có RFID Member. Vui lòng mua thẻ RFID cho xe trước khi đăng ký gói.") as Error & { status: number };
+    err.status = 409;
+    throw err;
+  }
+  if (
+    rfidCard.cardType !== "member" ||
+    rfidCard.userId?.toString() !== params.userId ||
+    rfidCard.vehicleId?.toString() !== vehicle._id.toString() ||
+    !["active", "in-use"].includes(rfidCard.status)
+  ) {
+    const err = new Error("RFID Member không thuộc xe hoặc tài khoản đang mua gói.") as Error & { status: number };
+    err.status = 409;
+    throw err;
+  }
+
   if (vehicle.status === "Blacklist" || vehicle.status === "Cần duyệt") {
     const err = new Error(
       `Phương tiện đang ở trạng thái "${vehicle.status}", không thể đăng ký vé tháng.`,
@@ -137,6 +164,7 @@ export async function purchaseSubscription(params: {
       planId: plan._id,
       planName: plan.name,
       primaryVehicleId: vehicle._id,
+      rfidCardId: rfidCard._id,
       startDate: now,
       endDate,
       status: "pending_payment",
@@ -227,6 +255,27 @@ function genMemberCode(): string {
  */
 export async function activateSubscription(sub: HydratedSubscription): Promise<HydratedSubscription> {
   if (sub.status === "active") return sub;
+
+  if (!sub.rfidCardId) {
+    const err = new Error("Gói không có RFID Member liên kết. Không thể kích hoạt.") as Error & { status: number };
+    err.status = 409;
+    throw err;
+  }
+  const rfidCard = await RfidCard.findOne({
+    _id: sub.rfidCardId,
+    cardType: "member",
+    userId: sub.userId,
+    vehicleId: sub.primaryVehicleId,
+    status: { $in: ["active", "in-use"] },
+  });
+  if (!rfidCard) {
+    const err = new Error("RFID Member không còn hợp lệ hoặc không khớp với xe của gói.") as Error & { status: number };
+    err.status = 409;
+    throw err;
+  }
+  rfidCard.userType = "resident";
+  await rfidCard.save();
+
   sub.status = "active";
 
   if (!sub.memberCode) {
@@ -373,6 +422,7 @@ export async function renewSubscription(
     sub.status = "active";
     sub.renewalCount += 1;
     await sub.save();
+  await (await import("./parkingQuota.service.js")).syncDynamicMemberSlotReservation();
     return { subscription: sub };
   }
 
@@ -444,6 +494,7 @@ export async function applyPaidSubscriptionTransaction(
     sub.status = "active";
     sub.renewalCount += 1;
     await sub.save();
+  await (await import("./parkingQuota.service.js")).syncDynamicMemberSlotReservation();
   } else {
     await activateSubscription(sub);
   }
@@ -471,6 +522,7 @@ export async function cancelSubscription(subscriptionId: string): Promise<Subscr
 
   sub.status = "cancelled";
   await sub.save();
+  await (await import("./parkingQuota.service.js")).syncDynamicMemberSlotReservation();
   return sub;
 }
 
@@ -759,6 +811,7 @@ export async function expireSubscriptions(): Promise<number> {
     { status: "active", endDate: { $lt: new Date() } },
     { $set: { status: "expired" } },
   );
+  if (result.modifiedCount > 0) await (await import("./parkingQuota.service.js")).syncDynamicMemberSlotReservation();
   return result.modifiedCount;
 }
 

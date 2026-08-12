@@ -21,6 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { DataTable } from "@/components/ui/data-table";
+import { apiFetch, bridgeFetch } from "@/lib/client-api";
 import {
   addRfidInventoryCard,
   confirmRfidSale,
@@ -35,6 +36,7 @@ import {
   RfidSaleInput,
   RfidTransaction,
   updateRfidLifecycleStatus,
+  reconcilePendingRfidSales,
 } from "./rfid-sales-api";
 
 type PanelTab = "inventory" | "transactions";
@@ -43,6 +45,8 @@ type SaleForm = {
   cardId: string;
   userId: string;
   vehicleId: string;
+  vehiclePlate: string;
+  userEmail: string;
   salePrice: string;
   method: RfidPaymentMethod;
   note: string;
@@ -71,6 +75,8 @@ const EMPTY_SALE_FORM: SaleForm = {
   cardId: "",
   userId: "",
   vehicleId: "",
+  vehiclePlate: "",
+  userEmail: "",
   salePrice: "0",
   method: "cash",
   note: "",
@@ -169,11 +175,18 @@ export function RfidSalesPanel() {
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [saleForm, setSaleForm] = useState<SaleForm | null>(null);
+  const [saleFormError, setSaleFormError] = useState<string | null>(null);
   const [replaceCard, setReplaceCard] = useState<RfidInventoryItem | null>(null);
   const [returnDialog, setReturnDialog] = useState<ReturnDialog | null>(null);
   const [statusDialog, setStatusDialog] = useState<StatusDialog | null>(null);
   const [payosPayment, setPayosPayment] = useState<{ transaction: RfidTransaction; checkoutUrl: string } | null>(null);
   const [inventoryForm, setInventoryForm] = useState<InventoryForm | null>(null);
+  const [inventoryScanLoading, setInventoryScanLoading] = useState(false);
+  const [vehicleSuggestions, setVehicleSuggestions] = useState<Array<{ id: string; plate: string; ownerName?: string; userId?: string; email?: string }>>([]);
+  const [userSuggestions, setUserSuggestions] = useState<Array<{ id: string; email: string; name?: string }>>([]);
+  const [rfidPrice, setRfidPrice] = useState(50000);
+  const [rfidPriceForm, setRfidPriceForm] = useState("50000");
+  const [rfidPriceOpen, setRfidPriceOpen] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -199,6 +212,54 @@ export function RfidSalesPanel() {
     return () => window.clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    void apiFetch("/pricing-config").then(async (response) => {
+      if (!response.ok) return;
+      const data = await response.json().catch(() => ({}));
+      const value = Number(data.pricingConfig?.rfidCardSalePrice ?? 50000);
+      setRfidPrice(value);
+      setRfidPriceForm(String(value));
+    }).catch(() => undefined);
+  }, []);
+
+  async function saveRfidPrice(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const value = Number(rfidPriceForm);
+    if (!Number.isFinite(value) || value < 0) {
+      setNotice({ tone: "error", text: "Giá thẻ RFID phải là số không âm." });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const current = await apiFetch("/pricing-config");
+      const currentData = await current.json().catch(() => ({}));
+      const config = currentData.pricingConfig || {};
+      const response = await apiFetch("/pricing-config", {
+        method: "PATCH",
+        body: JSON.stringify({
+          dayRate: Number(config.dayRate ?? 5000),
+          nightRate: Number(config.nightRate ?? 10000),
+          dayStartHour: Number(config.dayStartHour ?? 6),
+          nightStartHour: Number(config.nightStartHour ?? 22),
+          gracePeriod: Number(config.gracePeriod ?? 20),
+          maxMinutes: Number(config.maxMinutes ?? 1440),
+          rfidCardSalePrice: Math.round(value),
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || "Không thể lưu giá thẻ RFID.");
+      const saved = Number(data.pricingConfig?.rfidCardSalePrice ?? value);
+      setRfidPrice(saved);
+      setRfidPriceForm(String(saved));
+      setRfidPriceOpen(false);
+      setNotice({ tone: "success", text: `Đã cập nhật giá bán RFID Member: ${money(saved)}.` });
+    } catch (error) {
+      setNotice({ tone: "error", text: error instanceof Error ? error.message : "Không thể lưu giá thẻ RFID." });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   const summaryCount = (status: RfidLifecycleStatus) => summary.find((item) => item._id === status)?.count ?? 0;
   const availableCards = useMemo(() => inventory.filter((card) => card.status === "available"), [inventory]);
   const filteredInventory = useMemo(() => {
@@ -210,12 +271,41 @@ export function RfidSalesPanel() {
     });
   }, [inventory, inventoryStatus, query]);
 
+  async function scanInventoryCard() {
+    if (!inventoryForm || inventoryScanLoading || submitting) return;
+    setInventoryScanLoading(true);
+    setInventoryForm({ ...inventoryForm, uid: "" });
+    try {
+      const start = await bridgeFetch("/api/rfid/scan/start", { method: "POST", body: JSON.stringify({ direction: "in", mode: "inventory" }) });
+      if (!start.ok) throw new Error("Không bật được đầu đọc RFID cổng vào.");
+      const deadline = Date.now() + 15000;
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => window.setTimeout(resolve, 300));
+        const poll = await bridgeFetch("/api/rfid/scan/poll?direction=in");
+        const data = await poll.json().catch(() => ({}));
+        if (data.status === "waiting") continue;
+        if (data.status === "success" && data.uid) {
+          setInventoryForm((current) => current ? { ...current, uid: data.uid } : current);
+          setNotice({ tone: "success", text: `Đã đọc UID ${data.uid}. Kiểm tra rồi bấm Nhập tồn kho.` });
+          return;
+        }
+        if (data.status === "error") throw new Error(data.message || "Không đọc được thẻ RFID.");
+      }
+      throw new Error("Hết thời gian chờ. Hãy đặt thẻ lên đầu đọc rồi thử lại.");
+    } catch (error) {
+      setNotice({ tone: "error", text: error instanceof Error ? error.message : "Không quét được thẻ RFID." });
+    } finally {
+      await bridgeFetch("/api/rfid/scan/cancel", { method: "POST", body: JSON.stringify({ direction: "in" }) }).catch(() => undefined);
+      setInventoryScanLoading(false);
+    }
+  }
+
   async function submitInventory(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!inventoryForm || submitting) return;
     const uid = inventoryForm.uid.trim();
     if (!uid) {
-      setNotice({ tone: "error", text: "Hãy nhập UID của thẻ RFID." });
+      setNotice({ tone: "error", text: "Hãy quét thẻ RFID để lấy UID trước khi nhập kho." });
       return;
     }
     setSubmitting(true);
@@ -235,7 +325,29 @@ export function RfidSalesPanel() {
     event.preventDefault();
     const form = replacementOf ? saleForm : saleForm;
     if (!form || submitting) return;
-    const payload = normalizeSaleInput(form);
+    setSaleFormError(null);
+    const normalizedPlate = form.vehiclePlate.trim().toUpperCase().replace(/[\s-]+/g, "");
+    const vehicleMatch = vehicleSuggestions.find((vehicle) => vehicle.plate.toUpperCase().replace(/[\s-]+/g, "") === normalizedPlate);
+    if (!normalizedPlate || !vehicleMatch || !vehicleMatch.id) {
+      setSaleFormError("Biển số xe không tồn tại hoặc chưa được đăng ký trong hệ thống. Hãy chọn biển số từ danh sách gợi ý.");
+      return;
+    }
+    if (form.userEmail.trim()) {
+      const emailMatch = userSuggestions.find((user) => user.email.toLowerCase() === form.userEmail.trim().toLowerCase());
+      if (!emailMatch) {
+        setSaleFormError("Email tài khoản không tồn tại trong hệ thống. Hãy chọn email từ danh sách gợi ý.");
+        return;
+      }
+      if (vehicleMatch.userId && emailMatch.id !== vehicleMatch.userId) {
+        setSaleFormError("Email không thuộc chủ sở hữu của biển số xe đã chọn. Vui lòng chọn đúng tài khoản.");
+        return;
+      }
+    }
+    if (!form.vehicleId || form.vehicleId !== vehicleMatch.id) {
+      setSaleFormError("Vui lòng chọn đúng biển số xe trong danh sách gợi ý.");
+      return;
+    }
+    const payload = normalizeSaleInput({ ...form, vehicleId: vehicleMatch.id, userId: vehicleMatch.userId || form.userId });
     if (!payload.cardId) {
       setNotice({ tone: "error", text: "Hãy chọn một thẻ RFID sẵn sàng bán." });
       return;
@@ -314,6 +426,20 @@ export function RfidSalesPanel() {
     }
   }
 
+  async function reconcilePayments() {
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      const result = await reconcilePendingRfidSales();
+      setNotice({ tone: "success", text: result.updated ? `Đã cập nhật ${result.updated} giao dịch RFID đã thanh toán.` : "Chưa có giao dịch RFID nào được PayOS xác nhận." });
+      await loadData();
+    } catch (error) {
+      setNotice({ tone: "error", text: error instanceof Error ? error.message : "Không thể đối soát thanh toán PayOS." });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function confirmPendingSale(transaction: RfidTransaction) {
     if (submitting) return;
     setSubmitting(true);
@@ -328,14 +454,30 @@ export function RfidSalesPanel() {
     }
   }
 
+  async function loadSaleSuggestions() {
+    try {
+      const [vehiclesResponse, usersResponse] = await Promise.all([apiFetch("/vehicles"), apiFetch("/users")]);
+      const vehiclesData = await vehiclesResponse.json().catch(() => ({}));
+      const usersData = await usersResponse.json().catch(() => ({}));
+      setVehicleSuggestions((vehiclesData.vehicles || []).map((vehicle: any) => ({ id: vehicle.id, plate: vehicle.plate, ownerName: vehicle.ownerName, userId: vehicle.userId, email: vehicle.user?.email || vehicle.email })));
+      setUserSuggestions((usersData.users || []).map((user: any) => ({ id: user.id, email: user.email, name: user.name })));
+    } catch {
+      setVehicleSuggestions([]);
+      setUserSuggestions([]);
+    }
+  }
+
   function openSale(card?: RfidInventoryItem) {
-    setSaleForm(blankSaleForm({ cardId: card?.id ?? "" }));
+    setSaleForm(blankSaleForm({ cardId: card?.id ?? "", salePrice: String(rfidPrice) }));
+    setSaleFormError(null);
     setReplaceCard(null);
+    setSaleFormError(null);
+    void loadSaleSuggestions();
   }
 
   function openReplace(card: RfidInventoryItem) {
     setReplaceCard(card);
-    setSaleForm(blankSaleForm({ vehicleId: String(card.vehicleId ?? ""), userId: String(card.userId ?? ""), salePrice: String(card.salePrice ?? 0) }));
+    setSaleForm(blankSaleForm({ vehicleId: String(card.vehicleId ?? ""), userId: String(card.userId ?? ""), salePrice: String(card.salePrice || rfidPrice), vehiclePlate: "", userEmail: "" }));
   }
 
   return (
@@ -349,6 +491,12 @@ export function RfidSalesPanel() {
         <div className="rfid-sales-heading-actions">
           <button className="small-button" type="button" onClick={() => void loadData()} disabled={loading}>
             <RefreshCcw size={14} className={loading ? "spin" : ""} /> Làm mới
+          </button>
+          <button className="small-button" type="button" onClick={() => { setRfidPriceForm(String(rfidPrice)); setRfidPriceOpen(true); }}>
+            <CreditCard size={14} /> Giá thẻ: {money(rfidPrice)}
+          </button>
+          <button className="small-button" type="button" onClick={() => void reconcilePayments()} disabled={submitting}>
+            <RefreshCcw size={14} /> Kiểm tra PayOS
           </button>
           <button className="small-button" type="button" onClick={() => setInventoryForm({ ...EMPTY_INVENTORY_FORM })}>
             <PackageCheck size={15} /> Nhập thẻ kho
@@ -420,7 +568,7 @@ export function RfidSalesPanel() {
               rows={filteredInventory.map((card) => [
                 <div key="card" className="rfid-card-identity"><strong>{card.cardId || card.uid}</strong><span>UID: {card.uid}</span></div>,
                 <div key="owner" className="rfid-card-owner"><strong>{card.cardType === "member" ? "RFID Member" : "RFID Guest"}</strong><span>{card.plate ? `${card.ownerName || "Chưa gán"} · ${card.plate}` : "Thẻ Guest trong kho / chưa gán xe"}</span></div>,
-                <div key="money" className="rfid-card-money"><strong>{money(card.salePrice)}</strong></div>,
+                <div key="money" className="rfid-card-money"><strong>{money(card.salePrice || (card.status === "available" ? rfidPrice : 0))}</strong></div>,
                 <span key="status" className={statusClass(card.status)}>{STATUS_LABEL[card.status]}</span>,
                 <span key="updated" className="cell-muted-tiny">{dateTime(card.updatedAt || card.soldAt || card.createdAt)}</span>,
                 <div key="actions" className="rfid-sales-actions">
@@ -457,10 +605,21 @@ export function RfidSalesPanel() {
         </>
       )}
 
+      {rfidPriceOpen && (
+        <Modal title="Cấu hình giá bán RFID Member" description="Giá này áp dụng cho giao dịch bán thẻ và khách mua thẻ trực tiếp trên website." onClose={() => !submitting && setRfidPriceOpen(false)}>
+          <form className="rfid-sales-form" onSubmit={(event) => void saveRfidPrice(event)}>
+            <Field label="Giá bán thẻ RFID (VND)" hint="Nhập 0 nếu muốn cấp miễn phí; giao dịch miễn phí vẫn cần ghi lý do ở luồng bán thẻ.">
+              <input autoFocus type="number" min={0} step={1000} required value={rfidPriceForm} onChange={(event) => setRfidPriceForm(event.target.value)} />
+            </Field>
+            <div className="modal-actions"><button type="button" className="small-button" onClick={() => setRfidPriceOpen(false)} disabled={submitting}>Hủy</button><button type="submit" className="small-button primary" disabled={submitting}>{submitting ? "Đang lưu…" : "Lưu giá thẻ"}</button></div>
+          </form>
+        </Modal>
+      )}
+
       {inventoryForm && (
         <Modal title="Nhập thẻ vào tồn kho" description="Thẻ được tạo ở trạng thái sẵn sàng bán và chưa được phép qua cổng." onClose={() => !submitting && setInventoryForm(null)}>
           <form className="rfid-sales-form" onSubmit={(event) => void submitInventory(event)}>
-            <Field label="UID thẻ RFID" hint="Quét hoặc nhập UID in trên thẻ. UID phải là duy nhất."><input autoFocus required value={inventoryForm.uid} onChange={(event) => setInventoryForm({ ...inventoryForm, uid: event.target.value })} placeholder="Ví dụ: 04A1B2C3D4" /></Field>
+            <Field label="UID thẻ RFID" hint="Đặt thẻ lên đầu đọc cổng vào rồi bấm Quét thẻ. UID phải là duy nhất."><div style={{ display: "flex", gap: 8 }}><input required readOnly value={inventoryForm.uid} placeholder="Chưa quét thẻ" /><button type="button" className="small-button" onClick={() => void scanInventoryCard()} disabled={inventoryScanLoading || submitting}>{inventoryScanLoading ? <><Loader2 size={14} className="spin" /> Đang quét…</> : "Quét thẻ"}</button></div></Field>
             <Field label="Ghi chú nhập kho"><textarea rows={3} value={inventoryForm.notes} onChange={(event) => setInventoryForm({ ...inventoryForm, notes: event.target.value })} placeholder="Ví dụ: Lô thẻ mới tháng 08/2026" /></Field>
             <div className="modal-actions"><button type="button" className="small-button" onClick={() => setInventoryForm(null)} disabled={submitting}>Hủy</button><button type="submit" className="small-button primary" disabled={submitting}>{submitting ? <><Loader2 size={14} className="spin" /> Đang nhập…</> : <><PackageCheck size={14} /> Nhập tồn kho</>}</button></div>
           </form>
@@ -470,7 +629,7 @@ export function RfidSalesPanel() {
       {saleForm && !replaceCard && (
         <Modal title="Bán / cấp thẻ RFID" description="Chọn thẻ còn trong kho, gắn với xe hoặc khách hàng, sau đó ghi nhận thanh toán." onClose={() => !submitting && setSaleForm(null)}>
           <form className="rfid-sales-form" onSubmit={(event) => void submitSale(event)}>
-            <SaleFields form={saleForm} setForm={setSaleForm} availableCards={availableCards} />
+            <SaleFields form={saleForm} setForm={(next) => { setSaleForm(next); setSaleFormError(null); }} availableCards={availableCards} vehicleSuggestions={vehicleSuggestions} userSuggestions={userSuggestions} error={saleFormError} />
             <div className="modal-actions">
               <button type="button" className="small-button" onClick={() => setSaleForm(null)} disabled={submitting}>Hủy</button>
               <button type="submit" className="small-button primary" disabled={submitting}>{submitting ? <><Loader2 size={14} className="spin" /> Đang xử lý…</> : <><BadgeDollarSign size={14} /> Tạo giao dịch</>}</button>
@@ -482,7 +641,7 @@ export function RfidSalesPanel() {
       {replaceCard && saleForm && (
         <Modal title="Cấp lại thẻ RFID" description={`Thẻ cũ ${replaceCard.cardId || replaceCard.uid} đang ở trạng thái ${STATUS_LABEL[replaceCard.status].toLowerCase()}.`} onClose={() => !submitting && (setReplaceCard(null), setSaleForm(null))}>
           <form className="rfid-sales-form" onSubmit={(event) => void submitSale(event, replaceCard)}>
-            <SaleFields form={saleForm} setForm={setSaleForm} availableCards={availableCards} replacement />
+            <SaleFields form={saleForm} setForm={(next) => { setSaleForm(next); setSaleFormError(null); }} availableCards={availableCards} vehicleSuggestions={vehicleSuggestions} userSuggestions={userSuggestions} error={saleFormError} replacement />
             <div className="modal-actions">
               <button type="button" className="small-button" onClick={() => { setReplaceCard(null); setSaleForm(null); }} disabled={submitting}>Hủy</button>
               <button type="submit" className="small-button primary" disabled={submitting}>{submitting ? <><Loader2 size={14} className="spin" /> Đang xử lý…</> : <><TicketCheck size={14} /> Cấp thẻ thay thế</>}</button>
@@ -525,26 +684,28 @@ export function RfidSalesPanel() {
   );
 }
 
-function SaleFields({ form, setForm, availableCards, replacement = false }: { form: SaleForm; setForm: (next: SaleForm) => void; availableCards: RfidInventoryItem[]; replacement?: boolean }) {
+function SaleFields({ form, setForm, availableCards, vehicleSuggestions, userSuggestions, error, replacement = false }: { form: SaleForm; setForm: (next: SaleForm) => void; availableCards: RfidInventoryItem[]; vehicleSuggestions: Array<{ id: string; plate: string; ownerName?: string; userId?: string; email?: string }>; userSuggestions: Array<{ id: string; email: string; name?: string }>; error?: string | null; replacement?: boolean }) {
   const total = Number(form.salePrice) || 0;
   const patch = (values: Partial<SaleForm>) => setForm({ ...form, ...values });
   return (
     <div className="rfid-sales-fields">
+      {error && <div className="rfid-sales-notice error" role="alert"><TriangleAlert size={16} /><span>{error}</span></div>}
       <Field label={replacement ? "Thẻ Member thay thế" : "Thẻ Member từ tồn kho"} hint={`Có ${availableCards.length} thẻ sẵn sàng bán.`}>
         <select required value={form.cardId} onChange={(event) => patch({ cardId: event.target.value })}>
           <option value="">Chọn thẻ RFID…</option>
           {availableCards.map((card) => <option key={card.id} value={card.id}>{card.cardId || card.uid} · UID {card.uid}</option>)}
         </select>
       </Field>
-      <Field label="Mã xe đã đăng ký" hint="Bắt buộc. Một RFID Member chỉ được bán đứt và gắn với một xe."><input required value={form.vehicleId} onChange={(event) => patch({ vehicleId: event.target.value })} placeholder="MongoDB ObjectId của xe" /></Field>
-      <Field label="Mã tài khoản (tùy chọn)" hint="Hệ thống sẽ tự đối chiếu chủ xe để ngăn gắn nhầm thẻ."><input value={form.userId} onChange={(event) => patch({ userId: event.target.value })} placeholder="MongoDB ObjectId" /></Field>
+      <Field label="Biển số xe đã đăng ký" hint="Nhập biển số để chọn xe đã có trong hệ thống."><input required list="rfid-vehicle-plates" value={form.vehiclePlate} onChange={(event) => { const value = event.target.value; const match = vehicleSuggestions.find((vehicle) => vehicle.plate.toUpperCase() === value.trim().toUpperCase()); patch({ vehiclePlate: value, vehicleId: match?.id || "", userId: match?.userId || form.userId, userEmail: match?.email || form.userEmail }); }} placeholder="Ví dụ: 30A12345" /><datalist id="rfid-vehicle-plates">{vehicleSuggestions.map((vehicle) => <option key={vehicle.id} value={vehicle.plate}>{vehicle.ownerName || ""}</option>)}</datalist></Field>
+      <Field label="Email tài khoản (tùy chọn)" hint="Chọn email để xác nhận đúng chủ xe."><input list="rfid-user-emails" value={form.userEmail} onChange={(event) => { const value = event.target.value; const match = userSuggestions.find((user) => user.email.toLowerCase() === value.trim().toLowerCase()); patch({ userEmail: value, userId: match?.id || form.userId }); }} placeholder="Ví dụ: khachhang@email.com" /><datalist id="rfid-user-emails">{userSuggestions.map((user) => <option key={user.id} value={user.email}>{user.name || ""}</option>)}</datalist></Field>
       <div className="rfid-sales-form-grid">
         <Field label="Giá bán thẻ (VND)"><input type="number" min="0" step="1000" required value={form.salePrice} onChange={(event) => patch({ salePrice: event.target.value })} /></Field>
 </div>
       <div className="rfid-sales-total"><span>Tổng cần thu</span><strong>{money(total)}</strong></div>
-      <Field label="Phương thức thanh toán"><select value={form.method} onChange={(event) => patch({ method: event.target.value as RfidPaymentMethod })}><option value="cash">Tiền mặt</option><option value="payos">PayOS (QR / chuyển khoản)</option><option value="wallet">Ví điện tử</option></select></Field>
+      <Field label="Phương thức thanh toán"><select value={form.method} onChange={(event) => patch({ method: event.target.value as RfidPaymentMethod })}><option value="cash">Tiền mặt</option><option value="payos">PayOS (QR / chuyển khoản)</option></select></Field>
       {total === 0 && <Field label="Lý do cấp miễn phí"><input required value={form.freeReason} onChange={(event) => patch({ freeReason: event.target.value })} placeholder="Ví dụ: Chương trình ưu đãi cư dân" /></Field>}
       <Field label="Ghi chú"><textarea rows={2} value={form.note} onChange={(event) => patch({ note: event.target.value })} placeholder="Ghi chú nội bộ (nếu có)" /></Field>
     </div>
   );
 }
+

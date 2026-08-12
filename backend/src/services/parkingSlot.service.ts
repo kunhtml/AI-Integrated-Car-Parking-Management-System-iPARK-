@@ -18,22 +18,27 @@ export type ZoneWithSlots = {
  *
  * Returns null if no slot is available (parking full).
  */
+export type SlotQuotaType = "member" | "walk_in";
+
 export async function allocateSlot(
   vehicleType: string,
   preferredZoneId?: string,
-  options: { isSubscriber?: boolean } = {},
+  options: { isSubscriber?: boolean; quotaType?: SlotQuotaType } = {},
 ): Promise<ParkingSlotDocument | null> {
-  const isSubscriber = options.isSubscriber === true;
+  const quotaType: SlotQuotaType = options.quotaType ??
+    (options.isSubscriber === true ? "member" : "walk_in");
 
-  // Build list of zone ids whose allowedVehicleTypes includes vehicleType
+  // Recompute the reserved member pool before each entry. Active packages
+  // protect their slots even when members are outside the parking lot.
+  const { syncDynamicMemberSlotReservation } = await import("./parkingQuota.service.js");
+  await syncDynamicMemberSlotReservation();
+
   const zones = await Zone.find({
     isActive: true,
     allowedVehicleTypes: vehicleType,
   }).sort({ displayOrder: 1, name: 1 });
-
   if (zones.length === 0) return null;
 
-  // Put preferred zone first
   let orderedZones = zones;
   if (preferredZoneId && mongoose.isValidObjectId(preferredZoneId)) {
     const preferred = zones.find((z) => z._id.toString() === preferredZoneId);
@@ -42,42 +47,27 @@ export async function allocateSlot(
     }
   }
 
-  // Thứ tự ưu tiên accessPolicy
-  const priority: SlotAccessPolicy[] = isSubscriber
+  const accessPolicyPriority: SlotAccessPolicy[] = quotaType === "member"
     ? ["resident", "shared", "guest"]
     : ["guest", "shared"];
-
-  // Sắp xếp theo slotCode tăng dần, có xử lý số để A-2 < A-10
   const slotSort = { slotCode: 1 } as const;
   const slotCollation = { locale: "en", numericOrdering: true } as const;
+  const quotaFilter = quotaType === "member"
+    ? { quotaType: "member" }
+    : { quotaType: { $in: ["walk_in", null] } };
 
-  console.log(
-    `[allocateSlot] vehicleType=${vehicleType} isSubscriber=${isSubscriber} candidateZones=${orderedZones.length}`,
-  );
-
-  for (const accessPolicy of priority) {
+  for (const accessPolicy of accessPolicyPriority) {
     for (const zone of orderedZones) {
-      // Atomic findOneAndUpdate để tránh race condition; lọc thêm accessPolicy
       const slot = await ParkingSlot.findOneAndUpdate(
-        { zoneId: zone._id, status: "empty", accessPolicy },
-        { $set: { status: "occupied" } },
+        { zoneId: zone._id, status: "empty", accessPolicy, ...(quotaFilter as any) },
+        { $set: { status: "occupied", quotaType } },
         { returnDocument: "after", sort: slotSort, collation: slotCollation },
       );
-      if (slot) {
-        console.log(
-          `[allocateSlot] ✅ Gán slotCode=${slot.slotCode} zone=${zone.name} policy=${accessPolicy}`,
-        );
-        return slot;
-      }
+      if (slot) return slot as unknown as ParkingSlotDocument;
     }
   }
-
-  console.warn(
-    `[allocateSlot] ❌ Hết chỗ trống. vehicleType=${vehicleType} isSubscriber=${isSubscriber}`,
-  );
   return null;
 }
-
 /**
  * Mark slot as occupied by a session. Used after session is created.
  * Note: allocateSlot already sets status="occupied" atomically.
@@ -157,6 +147,7 @@ export async function bulkCreateSlots(params: {
   features?: string[];
   floor?: number;
   accessPolicy?: SlotAccessPolicy;
+  quotaType?: SlotQuotaType;
 }): Promise<ParkingSlotDocument[]> {
   const zone = await Zone.findById(params.zoneId);
   if (!zone) {
@@ -179,6 +170,7 @@ export async function bulkCreateSlots(params: {
       status: "empty" as const,
       floor: params.floor ?? 0,
       accessPolicy: params.accessPolicy ?? "shared" as const,
+      quotaType: params.quotaType ?? "walk_in" as const,
     };
   });
 

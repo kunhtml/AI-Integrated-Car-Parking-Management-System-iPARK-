@@ -4,6 +4,7 @@ export type PricingConfigDocument = {
   _id: mongoose.Types.ObjectId;
   // Khách vãng lai: 2 khoảng giá theo giờ ra
   dayRate: number;
+  rfidCardSalePrice: number;
   nightRate: number;
   // 2 mốc giờ phân định ngày/đêm (giờ ra < nightStartHour và >= dayStartHour → day)
   dayStartHour: number;
@@ -27,6 +28,7 @@ export type PricingConfigDocument = {
 const pricingConfigSchema = new Schema<PricingConfigDocument>(
   {
     dayRate: { type: Number, required: true, min: 0, default: 5000 },
+    rfidCardSalePrice: { type: Number, required: true, min: 0, default: 50000 },
     nightRate: { type: Number, required: true, min: 0, default: 10000 },
     dayStartHour: { type: Number, required: true, min: 0, max: 23, default: 6 },
     nightStartHour: { type: Number, required: true, min: 0, max: 23, default: 22 },

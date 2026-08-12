@@ -52,7 +52,7 @@ export async function verifyExit(request: Request, response: Response) {
 
   const card = await RfidCard.findOne({ uid: uid.trim() });
 
-  if (card && card.status !== "active") {
+  if (card && !["active", "in-use"].includes(card.status)) {
     response
       .status(400)
       .json({ verified: false, reason: "Thẻ RFID không active" });
@@ -110,16 +110,15 @@ export async function verifyExit(request: Request, response: Response) {
   // Tính amountDue dựa trên subscription status
   const ownerUserId =
     session.ownerUserId || (await session.populate("ownerUserId")).ownerUserId;
-  const activeSubscription = await findActiveSubscriptionByPlate(
-    session.plate,
-    ownerUserId,
-  );
+  // Quyền lợi được chốt tại lúc vào bãi: Member không bị tính phí nếu gói hết hạn trong lúc đang gửi xe.
+  const isMemberSession = session.customerType === "member";
+  const activeSubscription = isMemberSession ? null : await findActiveSubscriptionByPlate(session.plate);
 
   let amountDue = 0;
   let isSubscriber = false;
   let paymentStatus = session.paymentStatus || "pending";
 
-  if (activeSubscription) {
+  if (isMemberSession || activeSubscription) {
     isSubscriber = true;
     amountDue = 0;
     paymentStatus = "fully_paid";
@@ -188,13 +187,11 @@ export async function openGate(request: Request, response: Response) {
 
   const ownerUserId =
     session.ownerUserId || (await session.populate("ownerUserId")).ownerUserId;
-  const activeSubscription = await findActiveSubscriptionByPlate(
-    session.plate,
-    ownerUserId,
-  );
+  const isMemberSession = session.customerType === "member";
+  const activeSubscription = isMemberSession ? null : await findActiveSubscriptionByPlate(session.plate);
 
   let amountDue = 0;
-  if (activeSubscription) {
+  if (isMemberSession || activeSubscription) {
     amountDue = 0;
   } else {
     if (session.fee == null || session.fee === 0) {
@@ -255,6 +252,22 @@ export async function openGate(request: Request, response: Response) {
     session.checkOutAt = new Date();
     session.exitState = "gate_opened";
     await session.save();
+
+    // Guest trả thẻ vào kho; Member tiếp tục sở hữu và dùng lại thẻ ở lần tiếp theo.
+    const usedCard = session.exitRfidUid
+      ? await RfidCard.findOne({ uid: session.exitRfidUid })
+      : null;
+    if (usedCard) {
+      usedCard.lastUsedAt = new Date();
+      if (usedCard.cardType === "guest") {
+        usedCard.status = "available";
+        session.rfidReturnedAt = new Date();
+        await session.save();
+      } else {
+        usedCard.status = "active";
+      }
+      await usedCard.save();
+    }
 
     // Free slot
     if (session.slotId) {

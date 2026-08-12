@@ -76,6 +76,8 @@ export function SubscriptionsView() {
 
   const [myCards, setMyCards] = useState<MyRfidCard[]>([]);
   const [myCardsLoading, setMyCardsLoading] = useState(false);
+  const [rfidBuyingVehicleId, setRfidBuyingVehicleId] = useState<string | null>(null);
+  const [rfidNotice, setRfidNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isCustomer) return;
@@ -98,6 +100,28 @@ export function SubscriptionsView() {
       cancelled = true;
     };
   }, [isCustomer]);
+
+  async function handleBuyRfid(vehicle: RegisteredVehicle) {
+    if (rfidBuyingVehicleId) return;
+    setRfidBuyingVehicleId(vehicle.id);
+    setRfidNotice(null);
+    try {
+      const r = await apiFetch("/rfid/my-sales", { method: "POST", body: JSON.stringify({ vehicleId: vehicle.id }) });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.message || "Không thể tạo đơn mua thẻ RFID.");
+      const checkoutUrl = data.payos?.checkoutUrl || data.transaction?.payosCheckoutUrl;
+      if (checkoutUrl) {
+        window.open(checkoutUrl, "_blank", "noopener,noreferrer");
+        setRfidNotice(`Đã mở trang thanh toán PayOS cho thẻ RFID của xe ${vehicle.plate}. Sau khi thanh toán, hãy tải lại trang để xem thẻ.`);
+      } else {
+        setRfidNotice(`Đã tạo đơn mua thẻ RFID cho xe ${vehicle.plate}.`);
+      }
+    } catch (error: any) {
+      setRfidNotice(error?.message || "Không thể mua thẻ RFID.");
+    } finally {
+      setRfidBuyingVehicleId(null);
+    }
+  }
 
   async function refreshSubscriptionList() {
     try {
@@ -492,6 +516,24 @@ export function SubscriptionsView() {
                 Bạn có <strong>{myActiveSubs.length} gói</strong> đang hoạt động — xem chi tiết bên dưới.
               </p>
             )}
+          </section>
+        )}
+
+        {isCustomer && (
+          <section className="customer-subs-section">
+            <h2 className="section-title"><Radio size={18} /> Mua thẻ RFID Member</h2>
+            <p className="muted-cell">Mỗi xe cần một thẻ RFID Member riêng trước khi mua gói tháng. Hệ thống tự chọn thẻ còn trong kho và tạo thanh toán online.</p>
+            {rfidNotice && <div className="feedback-banner info">{rfidNotice}</div>}
+            <div className="subs-cards-grid">
+              {registeredVehicles.filter((vehicle) => vehicle.status !== "Blacklist" && vehicle.status !== "Cần duyệt").map((vehicle) => {
+                const hasCard = myCards.some((card) => card.plate?.replace(/[\s-]/g, "").toUpperCase() === vehicle.plate.replace(/[\s-]/g, "").toUpperCase() && card.status === "active");
+                return <div className="subscription-card" key={vehicle.id}>
+                  <strong>{vehicle.plate}</strong>
+                  <span>{hasCard ? "Đã có RFID Member" : "Chưa có RFID Member"}</span>
+                  {!hasCard && <button className="small-button" type="button" disabled={!!rfidBuyingVehicleId} onClick={() => void handleBuyRfid(vehicle)}>{rfidBuyingVehicleId === vehicle.id ? "Đang tạo đơn…" : "Mua thẻ RFID"}</button>}
+                </div>;
+              })}
+            </div>
           </section>
         )}
 

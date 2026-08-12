@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Car, CheckCircle2, Loader2, Plus, X } from "lucide-react";
+import { Car, CheckCircle2, Plus, X } from "lucide-react";
 import type { RegisteredVehicle, Subscription } from "@/types";
 import { VehicleCreateModal } from "./vehicle-create-modal";
 
@@ -77,7 +77,7 @@ export function VehiclePickerModal({
         <div>
           <h2 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700 }}>Chọn xe để mua gói</h2>
           <p style={{ margin: "4px 0 0", color: "var(--muted)", fontSize: "0.88rem" }}>
-            Mỗi gói gắn với 1 xe. Nếu đã có gói, hãy đăng ký xe khác.
+            Mỗi gói gắn với một xe và RFID Member đã mua cho xe đó. Hệ thống sẽ tự liên kết thẻ; nếu xe chưa có thẻ Member, hãy mua thẻ trước.
           </p>
         </div>
 
@@ -113,7 +113,7 @@ export function VehiclePickerModal({
                 ? `Đã có vé tháng đến ${new Date(activeSub.endDate).toLocaleDateString("vi-VN")}`
                 : ineligible
                   ? `Trạng thái: ${v.status}`
-                  : "Có thể mua gói";
+                  : "Sẽ tự liên kết RFID Member của xe";
 
               return (
                 <button

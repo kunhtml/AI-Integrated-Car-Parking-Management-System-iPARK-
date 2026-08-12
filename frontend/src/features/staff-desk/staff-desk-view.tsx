@@ -155,7 +155,7 @@ export function StaffDeskView() {
     setScanPhase("idle");
     setScanError("");
     try {
-      await bridgeFetch("/api/rfid/scan/cancel", { method: "POST" });
+      await bridgeFetch("/api/rfid/scan/cancel", { method: "POST", body: JSON.stringify({ direction: "in" }) });
     } catch {
       /* ignore */
     }
@@ -165,7 +165,7 @@ export function StaffDeskView() {
   useEffect(() => {
     return () => {
       stopScanPolling();
-      bridgeFetch("/api/rfid/scan/cancel", { method: "POST" }).catch(
+      bridgeFetch("/api/rfid/scan/cancel", { method: "POST", body: JSON.stringify({ direction: "in" }) }).catch(
         () => undefined,
       );
     };
@@ -188,7 +188,7 @@ export function StaffDeskView() {
       stopScanPolling();
       scanIntervalRef.current = window.setInterval(async () => {
         try {
-          const poll = await bridgeFetch("/api/rfid/scan/poll");
+          const poll = await bridgeFetch("/api/rfid/scan/poll?direction=in");
           if (!poll.ok) {
             stopScanPolling();
             setScanPhase("error");
@@ -204,6 +204,7 @@ export function StaffDeskView() {
             setScanPhase("success");
             await bridgeFetch("/api/rfid/scan/cancel", {
               method: "POST",
+              body: JSON.stringify({ direction: "in" }),
             }).catch(() => undefined);
             return;
           }
@@ -487,7 +488,7 @@ export function StaffDeskView() {
       }
       exitScanIntervalRef.current = window.setInterval(async () => {
         try {
-          const poll = await bridgeFetch("/api/rfid/scan/poll");
+          const poll = await bridgeFetch("/api/rfid/scan/poll?direction=out");
           if (!poll.ok) {
             if (exitScanIntervalRef.current !== null) {
               window.clearInterval(exitScanIntervalRef.current);
@@ -508,6 +509,7 @@ export function StaffDeskView() {
             setExitScanPhase("success");
             await bridgeFetch("/api/rfid/scan/cancel", {
               method: "POST",
+              body: JSON.stringify({ direction: "out" }),
             }).catch(() => undefined);
             return;
           }
@@ -562,7 +564,7 @@ export function StaffDeskView() {
     setExitScanPhase("idle");
     setExitScanError("");
     try {
-      await bridgeFetch("/api/rfid/scan/cancel", { method: "POST" });
+      await bridgeFetch("/api/rfid/scan/cancel", { method: "POST", body: JSON.stringify({ direction: "out" }) });
     } catch {
       /* ignore */
     }

@@ -39,7 +39,7 @@ export async function getDashboardOverview(
     ParkingSession.countDocuments({}),
     ParkingSession.countDocuments({ status: "Đang gửi" }),
     ParkingSession.countDocuments({ status: "Đã hoàn thành" }),
-    ParkingSession.find({ status: "Đã hoàn thành", paymentStatus: "paid", updatedAt: { $gte: startOfDay } })
+    ParkingSession.find({ status: "Đã hoàn thành", paymentStatus: "fully_paid", updatedAt: { $gte: startOfDay } })
       .select("fee")
       .lean(),
     ParkingSession.find({}).sort({ createdAt: -1 }).limit(8),

@@ -12,6 +12,7 @@ import { DeviceDocument } from "../models/Device.js";
 import { DisputeDocument } from "../models/Dispute.js";
 import { IncidentDocument } from "../models/Incident.js";
 import { NotificationDocument } from "../models/Notification.js";
+import { RecognitionLogDocument } from "../models/RecognitionLog.js";
 import { PaymentConfigDocument } from "../models/PaymentConfig.js";
 import { ShiftDocument } from "../models/Shift.js";
 import { ShiftScheduleDocument } from "../models/ShiftSchedule.js";
@@ -20,6 +21,32 @@ import { StaffApplicationHistoryDocument } from "../models/StaffApplicationHisto
 import { TransactionDocument } from "../models/Transaction.js";
 import { ZoneDocument } from "../models/Zone.js";
 import type { ZoneStats } from "../services/zone.service.js";
+
+export function serializeRecognitionLog(log: RecognitionLogDocument) {
+  return {
+    id: log._id.toString(),
+    action: log.action,
+    source: log.source,
+    status: log.status,
+    plate: log.plate,
+    detectedPlate: log.detectedPlate,
+    confidence: log.confidence,
+    rawText: log.rawText,
+    imageHash: log.imageHash,
+    imageUrl: log.imageUrl,
+    vehicleType: log.vehicleType,
+    detectionMethod: log.detectionMethod,
+    sessionId: log.sessionId?.toString(),
+    deviceId: log.deviceId?.toString(),
+    deviceName: log.deviceName,
+    matched: log.matched,
+    matchStatus: log.matchStatus,
+    vehicleMatchScore: log.vehicleMatchScore,
+    message: log.message,
+    createdAt: log.createdAt?.toISOString(),
+    updatedAt: log.updatedAt?.toISOString(),
+  };
+}
 
 export function serializeUser(user: UserDocument) {
   return {
@@ -486,10 +513,12 @@ export function serializeParkingSlot(slot: ParkingSlotDocument) {
     slotType: slot.slotType,
     features: slot.features,
     status: slot.status,
+    currentPlate: (slot as any).currentPlate ?? null,
     currentSessionId: slot.currentSessionId?.toString(),
     floor: slot.floor,
     notes: slot.notes,
     accessPolicy: slot.accessPolicy ?? "shared",
+    quotaType: slot.quotaType ?? "walk_in",
     aiPolygon: slot.aiPolygon,
     updatedAt: slot.updatedAt,
   };
@@ -662,5 +691,25 @@ export function serializeCapacityChangeLog(log: CapacityChangeLogPopulated) {
       : null,
     changedAt: log.changedAt.toISOString(),
     reason: log.reason ?? null,
+  };
+}
+
+export function serializeMembershipPackage(pkg: any) {
+  return {
+    id: pkg._id?.toString?.() ?? String(pkg.id ?? ""),
+    name: pkg.name, code: pkg.code, billingCycle: pkg.billingCycle,
+    price: pkg.price, durationDays: pkg.durationDays, maxPlates: pkg.maxPlates,
+    subscriberCount: pkg.subscriberCount, renewalRate: pkg.renewalRate,
+    status: pkg.status, features: pkg.features ?? [], note: pkg.note ?? null,
+    createdAt: pkg.createdAt, updatedAt: pkg.updatedAt,
+  };
+}
+
+export function serializeReportExport(report: any) {
+  return {
+    id: report._id?.toString?.() ?? String(report.id ?? ""),
+    fileName: report.fileName, reportType: report.reportType, format: report.format,
+    period: report.period, createdBy: report.createdBy?.toString?.(),
+    status: report.status, createdAt: report.createdAt, updatedAt: report.updatedAt,
   };
 }

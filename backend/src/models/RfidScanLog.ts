@@ -3,7 +3,7 @@ import mongoose, { Model, Schema } from "mongoose";
 export type RfidScanLogDocument = {
   _id: mongoose.Types.ObjectId;
   cardId: string;
-  action: "entry" | "exit" | "assign" | "return" | "block" | "unblock" | "report-lost";
+  action: "entry" | "exit" | "assign" | "return" | "block" | "unblock" | "report-lost" | "sale" | "replace" | "lost" | "damaged" | "available";
   sessionId?: mongoose.Types.ObjectId;
   deviceId?: mongoose.Types.ObjectId;
   performedBy?: mongoose.Types.ObjectId;
@@ -19,7 +19,7 @@ const rfidScanLogSchema = new Schema<RfidScanLogDocument>(
     cardId: { type: String, required: true, trim: true, uppercase: true, index: true },
     action: {
       type: String,
-      enum: ["entry", "exit", "assign", "return", "block", "unblock", "report-lost"],
+      enum: ["entry", "exit", "assign", "return", "block", "unblock", "report-lost", "sale", "replace", "lost", "damaged", "available"],
       required: true,
     },
     sessionId: { type: Schema.Types.ObjectId, ref: "ParkingSession" },

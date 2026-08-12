@@ -71,7 +71,7 @@ export async function getRevenueReport(request: Request, response: Response) {
   const exports = await ReportExport.find({ reportType: "revenue" }).sort({ createdAt: -1 }).limit(10);
 
   const totalRevenue = sessions.reduce(
-    (sum, session) => sum + (session.paymentStatus === "paid" ? Number(session.fee || 0) : 0),
+    (sum, session) => sum + (session.paymentStatus === "fully_paid" ? Number(session.fee || 0) : 0),
     0,
   );
   const vehicleCount = sessions.length;
@@ -92,7 +92,7 @@ export async function getRevenueReport(request: Request, response: Response) {
     const key = dayKey(new Date(session.checkInAt));
     const bucket = buckets.get(key) || { label: key, revenue: 0, entries: 0, exits: 0 };
     bucket.entries += 1;
-    bucket.revenue += session.paymentStatus === "paid" ? Number(session.fee || 0) : 0;
+    bucket.revenue += session.paymentStatus === "fully_paid" ? Number(session.fee || 0) : 0;
     if (session.checkOutAt) bucket.exits += 1;
     buckets.set(key, bucket);
   }

@@ -150,12 +150,54 @@ export async function sellRfidCard(input: SellRfidCardInput, actorId?: string) {
   }
 }
 
+export async function sellRfidCardForCustomer(input: { userId: string; vehicleId: string; salePrice: number; depositAmount?: number; baseUrl?: string; frontendUrl?: string }) {
+  const target = await resolveTarget(input.userId, input.vehicleId);
+  const card = await RfidCard.findOne({ status: "available", cardType: "guest" }).sort({ createdAt: 1 });
+  if (!card) throw new AppError("Hiện không còn thẻ RFID để bán. Vui lòng thử lại sau.", 409);
+  try {
+    return await sellRfidCard({
+      cardType: "member",
+      cardId: card._id.toString(),
+      userId: input.userId,
+      vehicleId: input.vehicleId,
+      salePrice: input.salePrice,
+      depositAmount: input.depositAmount || 0,
+      method: "payos",
+      baseUrl: input.baseUrl,
+      frontendUrl: input.frontendUrl,
+    }, input.userId);
+  } catch (error) {
+    await RfidCard.findByIdAndUpdate(card._id, { $set: { status: "available" }, $unset: { pendingTransactionId: 1 } });
+    throw error;
+  }
+}
+
 export async function finalizePaidRfidTransaction(transactionId: string) {
   const transaction = await Transaction.findOne({ _id: transactionId, transactionType: { $in: ["rfid_sale", "rfid_replacement"] } as any });
   if (!transaction) throw new AppError("Không tìm thấy giao dịch RFID.", 404);
   if (transaction.status !== "paid") throw new AppError("Giao dịch RFID chưa thanh toán.", 409);
   const card = await finalizeSale(transaction);
   return { transaction, card };
+}
+
+export async function reconcilePendingRfidSales() {
+  const { checkPayOSPaymentStatus } = await import("./payos.service.js");
+  const pending = await Transaction.find({
+    transactionType: { $in: ["rfid_sale", "rfid_replacement"] },
+    status: "pending",
+    payosOrderCode: { $exists: true, $ne: null },
+  });
+  let updated = 0;
+  for (const transaction of pending) {
+    const status = await checkPayOSPaymentStatus(String(transaction.payosOrderCode));
+    if (String(status.status).toLowerCase() !== "paid") continue;
+    transaction.status = "paid";
+    transaction.paidAt = new Date();
+    await transaction.save();
+    await finalizePaidRfidTransaction(transaction._id.toString());
+    updated += 1;
+  }
+  return { checked: pending.length, updated };
 }
 
 export async function confirmRfidSale(transactionId: string, actorId?: string) {

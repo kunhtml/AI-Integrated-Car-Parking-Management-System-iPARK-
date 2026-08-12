@@ -1,6 +1,8 @@
 import mongoose, { Model, Schema } from "mongoose";
 
 export type ReservationStatus = "pending" | "active" | "completed" | "cancelled" | "expired";
+export type ReservationCustomerType = "member" | "guest";
+export type ReservationQuotaType = "member" | "walk_in";
 
 export type ReservationDocument = {
   _id: mongoose.Types.ObjectId;
@@ -9,6 +11,8 @@ export type ReservationDocument = {
   slotCode: string;
   zoneName: string;
   vehicleType: string;
+  customerType: ReservationCustomerType;
+  quotaType: ReservationQuotaType;
   plate: string;
   reservedFrom: Date;
   reservedUntil: Date;
@@ -28,6 +32,8 @@ const reservationSchema = new Schema<ReservationDocument>(
     slotCode: { type: String, required: true },
     zoneName: { type: String, required: true },
     vehicleType: { type: String, default: "Ô tô" },
+    customerType: { type: String, enum: ["member", "guest"], default: "guest", required: true },
+    quotaType: { type: String, enum: ["member", "walk_in"], default: "walk_in", required: true },
     plate: { type: String, required: true, uppercase: true, trim: true },
     reservedFrom: { type: Date, required: true },
     reservedUntil: { type: Date, required: true },

@@ -82,7 +82,7 @@ export function createSubscriptionActions({
     const data = await response.json();
     if (!response.ok) {
       const err = new Error(data.message || "Không mua được gói.") as Error & { status: number };
-      ;(err as any).status = response.status;
+      err.status = response.status;
       throw err;
     }
     setSubscriptionList((items) => [data.subscription, ...items]);
@@ -95,7 +95,7 @@ export function createSubscriptionActions({
     const data = await response.json();
     if (!response.ok) {
       const err = new Error(data.message || "Không gia hạn được.") as Error & { status: number };
-      ;(err as any).status = response.status;
+      err.status = response.status;
       throw err;
     }
     setSubscriptionList((items) => items.map((s) => (s.id === id ? data.subscription : s)));
@@ -138,7 +138,7 @@ export function createSubscriptionActions({
     const result = await response.json();
     if (!response.ok) {
       const err = new Error(result.message || "Không tạo được xe.") as Error & { status: number };
-      ;(err as any).status = response.status;
+      err.status = response.status;
       throw err;
     }
     if (result.vehicle) {

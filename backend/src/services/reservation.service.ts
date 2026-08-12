@@ -4,6 +4,7 @@ import { ParkingSlot } from "../models/ParkingSlot.js";
 import { Reservation, ReservationDocument, ReservationStatus } from "../models/Reservation.js";
 import { createNotification } from "./notification.service.js";
 import { occupySlot } from "./parkingSlot.service.js";
+import { classifyVehicleByPlate, syncDynamicMemberSlotReservation } from "./parkingQuota.service.js";
 
 export async function createReservation(params: {
   userId: string;
@@ -12,6 +13,8 @@ export async function createReservation(params: {
   reservedFrom: Date;
   reservedUntil: Date;
 }): Promise<ReservationDocument> {
+  await syncDynamicMemberSlotReservation();
+  const quotaAccess = await classifyVehicleByPlate(params.plate);
   const slot = await ParkingSlot.findById(params.slotId);
   if (!slot) {
     const err = new Error("Slot không tồn tại.") as Error & { status: number };
@@ -23,6 +26,12 @@ export async function createReservation(params: {
   if (!["VIP", "electric", "handicap"].includes(slot.slotType)) {
     const err = new Error("Chỉ có thể đặt trước slot VIP, điện hoặc khuyết tật.") as Error & { status: number };
     err.status = 400;
+    throw err;
+  }
+
+  if (slot.quotaType && slot.quotaType !== quotaAccess.quotaType) {
+    const err = new Error("Slot không thuộc quota phù hợp với loại khách.") as Error & { status: number };
+    err.status = 409;
     throw err;
   }
 
@@ -118,7 +127,8 @@ export async function confirmArrival(
     throw err;
   }
 
-  // Create parking session
+  // Create parking session; reservation remains member/walk-in consistent.
+  const quotaAccess = await classifyVehicleByPlate(reservation.plate);
   const session = await ParkingSession.create({
     plate: reservation.plate,
     ownerName: "Khách đặt trước",

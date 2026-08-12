@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import mongoose from "mongoose";
 import { z } from "zod";
 import { Vehicle } from "../models/Vehicle.js";
 import { VehicleRequest } from "../models/VehicleRequest.js";
@@ -191,6 +192,25 @@ export async function updateVehicle(request: Request, response: Response) {
   if (body.imageUrl !== undefined) existing.imageUrl = body.imageUrl;
 
   await existing.save();
+
+
+  if (body.status === "Đã đăng ký" || body.status === "Blacklist") {
+    await VehicleRequest.updateMany(
+      { vehicleId: existing._id, status: "pending" },
+      {
+$set: {
+          status: body.status === "Đã đăng ký" ? "approved" : "rejected",
+          resolvedBy: request.user?.id
+            ? new mongoose.Types.ObjectId(request.user.id)
+            : undefined,
+          resolvedAt: new Date(),
+          ...(body.status === "Blacklist"
+            ? { adminNote: body.rejectionReason || "Xe bị từ chối." }
+            : {}),
+        },
+      },
+    );
+  }
 
   const populated = await Vehicle.findById(existing._id).populate({
     path: "userId",

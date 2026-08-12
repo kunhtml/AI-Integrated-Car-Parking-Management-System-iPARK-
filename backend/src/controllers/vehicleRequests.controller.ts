@@ -299,7 +299,7 @@ export async function resolveVehicleRequest(
     // Xe mới đăng ký → chỉ cần cập nhật status
     if (
       vr.type === "edit" &&
-      vr.requestedChanges?.status === "Đã đăng ký" &&
+      (vr.requestedChanges as any)?.status === "Đã đăng ký" &&
       vehicleDoc
     ) {
       vehicleDoc.status = "Đã đăng ký";

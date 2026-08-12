@@ -152,9 +152,9 @@ export async function startShift(request: Request, response: Response) {
 
   const shift = await Shift.create({
     name: name || `Ca ${new Date().toLocaleDateString("vi-VN")}`,
-    startedBy: user?.id,
+    staffId: user?.id,
     startAt: new Date(),
-    status: "Dang mo",
+    status: "Dang mo" as any,
     note,
   });
 

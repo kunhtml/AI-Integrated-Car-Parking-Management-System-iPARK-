@@ -1,6 +1,8 @@
 import mongoose, { Model, Schema } from "mongoose";
 
 export type DailyRateType = "day" | "night";
+export type CustomerType = "member" | "guest";
+export type QuotaType = "member" | "walk_in";
 export type DailyBreakdown = {
   dayIndex: number;
   date: string;
@@ -32,6 +34,9 @@ export type ParkingSessionDocument = {
   expectedCheckOutAt?: Date;
   slot: string;
   slotId?: mongoose.Types.ObjectId;
+  // Chốt ngay lúc check-in, không thay đổi khi checkout.
+  customerType: CustomerType;
+  quotaType: QuotaType;
   zone?: string;
   floor?: number;
   slotType?: string;
@@ -56,6 +61,10 @@ export type ParkingSessionDocument = {
   exitDetectedAt?: Date;
   exitRfidUid?: string;
   exitRfidVerifiedAt?: Date;
+  rfidCardId?: string;
+  rfidAssignedAt?: Date;
+  rfidReturnedAt?: Date;
+  rfidGate?: "entry" | "exit";
   entryDetectedPlate?: string;
   exitDetectedPlate?: string;
   entryConfidence?: number;
@@ -100,6 +109,8 @@ const parkingSessionSchema = new Schema<ParkingSessionDocument>(
     expectedCheckOutAt: { type: Date },
     slot: { type: String, required: true },
     slotId: { type: Schema.Types.ObjectId, ref: "ParkingSlot" },
+    customerType: { type: String, enum: ["member", "guest"], default: "guest", required: true, index: true },
+    quotaType: { type: String, enum: ["member", "walk_in"], default: "walk_in", required: true, index: true },
     zone: { type: String },
     floor: { type: Number },
     slotType: { type: String },
@@ -157,6 +168,10 @@ const parkingSessionSchema = new Schema<ParkingSessionDocument>(
     exitDetectedAt: { type: Date },
     exitRfidUid: { type: String },
     exitRfidVerifiedAt: { type: Date },
+    rfidCardId: { type: String, index: true },
+    rfidAssignedAt: { type: Date },
+    rfidReturnedAt: { type: Date },
+    rfidGate: { type: String, enum: ["entry", "exit"] },
     entryDetectedPlate: { type: String },
     exitDetectedPlate: { type: String },
     entryConfidence: { type: Number },

@@ -8,6 +8,8 @@ export type SubscriptionDocument = {
   planId: mongoose.Types.ObjectId;
   planName: string;
   primaryVehicleId: mongoose.Types.ObjectId;
+  /** RFID Member bán đứt, gắn 1-1 với xe của gói này. */
+  rfidCardId?: mongoose.Types.ObjectId;
   memberCode: string;
   startDate: Date;
   endDate: Date;
@@ -32,6 +34,7 @@ const subscriptionSchema = new Schema<SubscriptionDocument>(
       unique: true,
       index: true,
     },
+    rfidCardId: { type: Schema.Types.ObjectId, ref: "RfidCard", index: true },
     // Mã thành viên per-sub (mỗi xe có 1 mã riêng → quét QR ở cổng = nhận diện xe).
     memberCode: {
       type: String,

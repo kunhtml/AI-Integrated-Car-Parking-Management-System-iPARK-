@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { ParkingSessionDocument } from "../models/ParkingSession.js";
 import { Transaction } from "../models/Transaction.js";
+import { PaymentConfig } from "../models/PaymentConfig.js";
 
 export async function createPendingTransactionForSession(session: ParkingSessionDocument) {
   // Nếu đã thanh toán đủ (webhook đã xử lý) → không ghi đè
@@ -59,4 +60,10 @@ export async function updateTransactionWithPayOS(
 
 export function objectId(value?: string) {
   return value && mongoose.isValidObjectId(value) ? new mongoose.Types.ObjectId(value) : undefined;
+}
+
+export async function getActivePaymentConfig() {
+  const config = await PaymentConfig.findOne({ isActive: true }).sort({ updatedAt: -1 });
+  if (!config) throw new Error("Payment configuration is not available");
+  return config;
 }

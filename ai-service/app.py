@@ -535,6 +535,7 @@ scan_timeout_by_direction = {"in": None, "out": None}
 last_scanned_uid_by_direction = {"in": None, "out": None}
 scan_result_by_direction = {"in": None, "out": None}
 scan_message_by_direction = {"in": "", "out": ""}
+scan_mode_by_direction = {"in": "gate", "out": "gate"}
 
 
 # ==== RFID SCAN POLLING STATE (cho Flask UI) ====
@@ -565,8 +566,9 @@ def poll_rfid_scan_state(direction="in"):
     }
 
 
-def set_rfid_scan_enabled(value: bool, direction: str = "in"):
+def set_rfid_scan_enabled(value: bool, direction: str = "in", mode: str = "gate"):
     direction = _normalize_scan_direction(direction)
+    scan_mode_by_direction[direction] = mode if mode in ("gate", "inventory") else "gate"
     scan_enabled_by_direction[direction] = value
     scan_start_time_by_direction[direction] = time.time() if value else 0
     scan_result_by_direction[direction] = None
@@ -829,6 +831,11 @@ def read_from_arduino(ser, ser_out=None, direction="in"):
         scan_result_by_direction[direction] = "success"
         scan_message_by_direction[direction] = ""
         last_scanned_uid_by_direction[direction] = uid
+
+        if scan_mode_by_direction[direction] == "inventory":
+            scan_message_by_direction[direction] = "Đã đọc UID thẻ, sẵn sàng nhập kho."
+            _stop_rfid_scan(direction)
+            return
 
         if direction == "out":
             _stop_rfid_scan(direction)
@@ -1704,7 +1711,7 @@ def rfid_update(uid):
 @app.route("/api/rfid/scan/start", methods=["POST"])
 def start_rfid_scan():
     body = request.get_json(silent=True) or {}
-    set_rfid_scan_enabled(True, body.get("direction", "in"))
+    set_rfid_scan_enabled(True, body.get("direction", "in"), body.get("mode", "gate"))
     return jsonify({"ok": True})
 
 

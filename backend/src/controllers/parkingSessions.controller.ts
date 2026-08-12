@@ -35,6 +35,7 @@ import {
 import { Transaction, TransactionDocument } from "../models/Transaction.js";
 import { saveUploadedImage } from "../services/upload.service.js";
 import { serializeParkingSession } from "../utils/serializers.js";
+import { classifyVehicleByPlate } from "../services/parkingQuota.service.js";
 
 async function finalizeCheckout(session: ParkingSessionDocument) {
   session.status = "Đã hoàn thành";
@@ -80,25 +81,7 @@ async function finalizeCheckout(session: ParkingSessionDocument) {
     }
   }
 
-  // Apply subscription discount if available (đã check biển số thuộc gói)
-  const subResult = await checkSubscriptionDiscountForPlate(
-    session.ownerUserId,
-    session.plate,
-  );
-  if (subResult.discount > 0 || subResult.warn) {
-    const breakdown = (session.feeBreakdown ?? ({} as any)) as Record<
-      string,
-      unknown
-    >;
-    if (subResult.discount > 0) {
-      session.fee = Math.round(session.fee * (1 - subResult.discount / 100));
-      breakdown.subscriptionDiscount = subResult.discount;
-    }
-    if (subResult.warn) {
-      breakdown.subscriptionWarn = subResult.warn;
-    }
-    session.feeBreakdown = breakdown as any;
-  }
+  // Customer/quota type is fixed at check-in; do not reclassify or discount at checkout.
 
   // Cộng vé phạt đang chờ của phiên này vào phí (khách vãng lai trả gộp khi ra).
   // Làm SAU khi đã tính phí gửi + giảm giá để phần phạt không bị ghi đè/giảm.
@@ -192,9 +175,7 @@ export async function createParkingSession(
   const body = z
     .object({
       plate: z.string().min(5),
-      vehicleType: z.literal("Ô tô").default("Ô tô"),
-      // Tuỳ chọn — dùng cho flow staff-desk: staff quét thẻ RFID
-      // rồi tạo phiên thủ công kết hợp với biển số camera vừa detect.
+      vehicleType: z.literal("\u00D4 t\u00F4").default("\u00D4 t\u00F4"),
       rfidUid: z.string().trim().optional(),
       entryDetectedPlate: z.string().trim().optional(),
       entryConfidence: z.number().min(0).max(1).optional(),
@@ -202,59 +183,142 @@ export async function createParkingSession(
     })
     .parse(request.body);
 
-  // AI-09: Duplicate plate detection
+  const normalizeRfidPlate = (value: string) =>
+    value.trim().toUpperCase().replace(/[\s-]+/g, "");
+
   if (await checkDuplicatePlate(body.plate)) {
     response.status(409).json({
-      message: `Biển số ${body.plate} đang có phiên đỗ xe chưa checkout. Không thể tạo phiên mới.`,
+      message: `Bi\u1EC3n s\u1ED1 ${body.plate} \u0111ang c\u00F3 phi\u00EAn \u0111\u1ED7 xe ch\u01B0a checkout.`,
     });
     return;
   }
 
-  // Validate thẻ RFID nếu staff cung cấp (phải tồn tại + đang active).
   let rfidCard: {
     _id: any;
     uid: string;
+    cardId?: string;
+    cardType: "guest" | "member";
     userType: "resident" | "guest";
+    userId?: any;
+    vehicleId?: any;
+    plate?: string;
+    status: string;
   } | null = null;
-  if (body.rfidUid) {
-    const card = await RfidCard.findOne({ uid: body.rfidUid.trim() });
-    if (!card) {
-      response
-        .status(404)
-        .json({ message: `Không tìm thấy thẻ RFID với UID ${body.rfidUid}.` });
-      return;
-    }
-    if (card.status !== "active") {
-      response
-        .status(409)
-        .json({
-          message: `Thẻ RFID ${body.rfidUid} đang ${card.status === "inactive" ? "bị vô hiệu" : "không hoạt động"}.`,
-        });
-      return;
-    }
-    rfidCard = { _id: card._id, uid: card.uid, userType: card.userType };
-  }
 
-  const isSubscriber = await isSubscriberByPlate(body.plate);
-  const slotDoc = await allocateSlot("Ô tô", undefined, { isSubscriber });
-  if (!slotDoc) {
-    response.status(409).json({ message: "Bãi xe đã hết chỗ trống." });
-    return;
-  }
-
-  const ownerUserId = await ownerFromPlate(body.plate);
-  const plateCheck = await checkSubscriptionDiscountForPlate(
+  let quotaAccess = await classifyVehicleByPlate(body.plate);
+  let isMember = quotaAccess.customerType === "member";
+  let ownerUserId = await ownerFromPlate(body.plate);
+  let plateCheck = await checkSubscriptionDiscountForPlate(
     ownerUserId,
     body.plate,
   );
-  const isMember = plateCheck.discount === 100;
-  const { name: ownerName, email: ownerEmail } = await getOwnerInfoFromPlate(
-    body.plate,
-  );
+
+  if (body.rfidUid) {
+    const card = await RfidCard.findOne({ uid: body.rfidUid.trim() });
+    if (!card) {
+      response.status(404).json({
+        message: `Kh\u00F4ng t\u00ECm th\u1EA5y th\u1EBB RFID v\u1EDBi UID ${body.rfidUid}.`,
+      });
+      return;
+    }
+
+    const isMemberCard = card.cardType === "member";
+    const cardPlate = normalizeRfidPlate(card.plate || "");
+    if (isMemberCard) {
+      if (
+        card.status !== "active" ||
+        !card.userId ||
+        !card.vehicleId ||
+        !cardPlate ||
+        cardPlate !== normalizeRfidPlate(body.plate)
+      ) {
+        response.status(409).json({
+          message:
+            "RFID Member ph\u1EA3i \u1EDF tr\u1EA1ng th\u00E1i active v\u00E0 g\u1EAFn \u0111\u00FAng xe/t\u00E0i kho\u1EA3n.",
+        });
+        return;
+      }
+
+      if (
+        body.entryDetectedPlate &&
+        normalizeRfidPlate(body.entryDetectedPlate) !== cardPlate
+      ) {
+        response.status(409).json({
+          message:
+            "Bi\u1EC3n s\u1ED1 camera ph\u00E1t hi\u1EC7n kh\u00F4ng kh\u1EDBp v\u1EDBi xe c\u1EE7a RFID Member.",
+        });
+        return;
+      }
+
+      const vehicle = await Vehicle.findOne({
+        _id: card.vehicleId,
+        userId: card.userId,
+        plate: cardPlate,
+      });
+      const subscription = await findActiveSubscriptionByPlate(cardPlate);
+      if (
+        !vehicle ||
+        !subscription ||
+        subscription.primaryVehicleId !== card.vehicleId.toString()
+      ) {
+        response.status(409).json({
+          message:
+            "RFID Member ch\u01B0a c\u00F3 xe ho\u1EB7c g\u00F3i th\u00E0nh vi\u00EAn c\u00F2n hi\u1EC7u l\u1EF1c.",
+        });
+        return;
+      }
+
+      quotaAccess = { customerType: "member", quotaType: "member" };
+      isMember = true;
+      ownerUserId = card.userId;
+      plateCheck = { warn: undefined, discount: 0 };
+    } else {
+      if (!["available", "active"].includes(card.status)) {
+        response.status(409).json({
+          message: "RFID Guest ch\u01B0a s\u1EB5n s\u00E0ng \u0111\u1EC3 c\u1EA5p phi\u00EAn g\u1EEDi xe.",
+        });
+        return;
+      }
+      // A guest card must never use a member slot or subscription payment.
+      quotaAccess = { customerType: "guest", quotaType: "walk_in" };
+      isMember = false;
+      ownerUserId = undefined;
+      plateCheck = { warn: undefined, discount: 0 };
+    }
+
+    rfidCard = {
+      _id: card._id,
+      uid: card.uid,
+      cardId: card.cardId,
+      cardType: card.cardType,
+      userType: card.userType,
+      userId: card.userId,
+      vehicleId: card.vehicleId,
+      plate: card.plate,
+      status: card.status,
+    };
+  }
+
+  const isSubscriber = quotaAccess.customerType === "member";
+  const slotDoc = await allocateSlot("\u00D4 t\u00F4", undefined, {
+    isSubscriber,
+    quotaType: quotaAccess.quotaType,
+  });
+  if (!slotDoc) {
+    response.status(409).json({ message: "B\u00E3i xe \u0111\u00E3 h\u1EBFt ch\u1ED7 tr\u1ED1ng." });
+    return;
+  }
+
+  const { name: ownerName, email: ownerEmail } = rfidCard
+    ? isMember
+      ? await getOwnerInfoFromPlate(body.plate)
+      : { name: "Guest RFID", email: "" }
+    : await getOwnerInfoFromPlate(body.plate);
+
   if (plateCheck.warn) {
     await createNotification({
-      title: "Biển số không thuộc gói thành viên",
-      content: `Biển số ${body.plate} vào bãi nhưng KHÔNG thuộc danh sách đăng ký của user. Đã tính phí khách vãng lai.`,
+      title: "Subscription plate mismatch",
+      content: `Plate ${body.plate} entered but is not covered by a subscription.`,
       targetRole: "staff",
     });
   }
@@ -263,14 +327,21 @@ export async function createParkingSession(
     plate: body.plate,
     ownerName,
     ownerEmail,
-    vehicleType: "Ô tô",
+    vehicleType: "\u00D4 t\u00F4",
     slot: slotDoc.slotCode,
     slotId: slotDoc._id,
-    ownerUserId,
+    customerType: quotaAccess.customerType,
+    quotaType: quotaAccess.quotaType,
+    ...(ownerUserId ? { ownerUserId } : {}),
     createdBy: request.user?.id,
-    // Audit staff tạo phiên — dùng cho báo cáo & trace.
     checkInStaff: request.user?.id,
-    // Gắn thông tin từ camera detect nếu staff cung cấp (flow staff-desk).
+    ...(rfidCard
+      ? {
+          rfidCardId: rfidCard.cardId || rfidCard.uid,
+          rfidAssignedAt: new Date(),
+          rfidGate: "entry" as const,
+        }
+      : {}),
     ...(body.entryDetectedPlate
       ? { entryDetectedPlate: body.entryDetectedPlate.toUpperCase() }
       : {}),
@@ -292,9 +363,13 @@ export async function createParkingSession(
   });
 
   await occupySlot(slotDoc._id, session._id);
+  if (rfidCard) {
+    await RfidCard.updateOne(
+      { _id: rfidCard._id },
+      { $set: { status: "in-use", lastUsedAt: new Date() } },
+    );
+  }
 
-  // Ghi ParkingCameraLog để /staff-desk reload lịch sử hiển thị được phiên vừa tạo
-  // và panel Logs ở /cameras có thể truy vết. Metadata đánh dấu nguồn "staff".
   if (body.rfidUid || body.entryImageUrl) {
     const vehicle = await Vehicle.findOne({ plate: body.plate.toUpperCase() });
     await ParkingCameraLog.create({
@@ -320,7 +395,6 @@ export async function createParkingSession(
     ...(plateCheck.warn ? { subscriptionWarn: plateCheck.warn } : {}),
   });
 }
-
 export async function completeParkingSession(
   request: Request,
   response: Response,
@@ -382,7 +456,8 @@ export async function uploadParkingImage(request: Request, response: Response) {
     }
 
     const isSubscriber = await isSubscriberByPlate(detection.plate);
-    const slotDoc = await allocateSlot("Ô tô", undefined, { isSubscriber });
+    const quotaAccess = await classifyVehicleByPlate(detection.plate);
+    const slotDoc = await allocateSlot("Ô tô", undefined, { isSubscriber, quotaType: quotaAccess.quotaType });
     if (!slotDoc) {
       response.status(409).json({ message: "Bãi xe đã hết chỗ trống." });
       return;
@@ -414,6 +489,8 @@ export async function uploadParkingImage(request: Request, response: Response) {
       vehicleType: "Ô tô",
       slot: slotDoc.slotCode,
       slotId: slotDoc._id,
+      customerType: quotaAccess.customerType,
+      quotaType: quotaAccess.quotaType,
       entryImageUrl: imageUrl,
       entryDetectedPlate: detection.plate,
       entryConfidence: detection.confidence,
@@ -583,8 +660,9 @@ export async function cameraEntry(request: Request, response: Response) {
     return;
   }
 
-  const isSubscriber = await isSubscriberByPlate(body.plate);
-  const slotDoc = await allocateSlot("Ô tô", undefined, { isSubscriber });
+  const isSubscriber = await isSubscriberByPlate(detection.plate);
+  const quotaAccess = await classifyVehicleByPlate(detection.plate);
+  const slotDoc = await allocateSlot("Ô tô", undefined, { isSubscriber: quotaAccess.customerType === "member", quotaType: quotaAccess.quotaType });
   if (!slotDoc) {
     response.status(409).json({ message: "Bãi xe đã hết chỗ trống." });
     return;
@@ -595,7 +673,7 @@ export async function cameraEntry(request: Request, response: Response) {
     ownerUserId,
     detection.plate,
   );
-  const isMember = plateCheck.discount === 100;
+  const isMember = quotaAccess.customerType === "member";
   const { name: ownerName, email: ownerEmail } = await getOwnerInfoFromPlate(
     detection.plate,
     body.email,
@@ -615,6 +693,8 @@ export async function cameraEntry(request: Request, response: Response) {
     vehicleType: "Ô tô",
     slot: slotDoc.slotCode,
     slotId: slotDoc._id,
+      customerType: quotaAccess.customerType,
+      quotaType: quotaAccess.quotaType,
     entryImageUrl: snapshot.imageUrl,
     entryDetectedPlate: detection.plate,
     entryConfidence: detection.confidence,

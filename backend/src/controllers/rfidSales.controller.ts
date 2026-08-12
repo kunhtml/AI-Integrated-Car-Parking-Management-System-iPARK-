@@ -1,8 +1,9 @@
 import { Request, Response } from "express";
 import { z } from "zod";
 import { AppError } from "../utils/AppError.js";
+import { getActivePricingConfig } from "../services/pricing.service.js";
 import { RfidCardStatus } from "../models/RfidCard.js";
-import { changeRfidCardStatus, confirmRfidSale, listRfidInventory, listRfidTransactions, replaceRfidCard, returnRfidCard, sellRfidCard } from "../services/rfidSales.service.js";
+import { changeRfidCardStatus, confirmRfidSale, listRfidInventory, listRfidTransactions, replaceRfidCard, returnRfidCard, sellRfidCard, sellRfidCardForCustomer, reconcilePendingRfidSales } from "../services/rfidSales.service.js";
 
 function actor(request: Request) { return request.user?.id; }
 function serializeCard(card: any) { return card ? { id: card._id?.toString?.() ?? card.id, uid: card.uid, cardId: card.cardId, status: card.status, cardType: card.cardType, userId: card.userId?.toString?.(), vehicleId: card.vehicleId?.toString?.(), plate: card.plate, ownerName: card.ownerName, salePrice: card.salePrice ?? 0, depositAmount: card.depositAmount ?? 0, assignedAt: card.assignedAt, soldAt: card.soldAt, returnedAt: card.returnedAt, lostAt: card.lostAt, damagedAt: card.damagedAt, blockedAt: card.blockedAt, createdAt: card.createdAt, updatedAt: card.updatedAt } : null; }
@@ -18,3 +19,19 @@ export async function confirmSale(request: Request, response: Response) { const 
 export async function updateStatus(request: Request, response: Response) { const body = statusSchema.parse(request.body); const status = String(request.params.action) as "lost" | "blocked" | "damaged"; if (!["lost", "blocked", "damaged"].includes(status)) throw new AppError("Trạng thái RFID không hợp lệ.", 400); const card = await changeRfidCardStatus(String(request.params.id), status, body.reason, actor(request)); response.json({ card: serializeCard(card) }); }
 export async function returnCard(request: Request, response: Response) { const body = z.object({ inspectionPassed: z.coerce.boolean().default(true), refundDeposit: z.coerce.boolean().default(false), refundReason: z.string().optional() }).parse(request.body); const result = await returnRfidCard(String(request.params.id), body, actor(request)); response.json({ card: serializeCard(result.card), refund: serializeTransaction(result.refund) }); }
 export async function replaceCard(request: Request, response: Response) { const input = saleSchema.parse(request.body); const result = await replaceRfidCard(String(request.params.id), input, actor(request)); response.status(201).json({ oldCard: serializeCard(result.oldCard), card: serializeCard(result.card), transaction: serializeTransaction(result.transaction) }); }
+
+
+export async function sellForCustomer(request: Request, response: Response) {
+  const userId = actor(request);
+  if (!userId) throw new AppError("Chưa đăng nhập.", 401);
+  const input = z.object({ vehicleId: z.string().min(1) }).parse(request.body);
+  const pricing = await getActivePricingConfig();
+  const salePrice = Number(pricing.rfidCardSalePrice ?? 50000);
+  const result = await sellRfidCardForCustomer({ userId, vehicleId: input.vehicleId, salePrice, depositAmount: 0, baseUrl: process.env.API_URL || `${request.protocol}://${request.get("host")}`, frontendUrl: process.env.FRONTEND_URL || `${request.protocol}://${request.get("host")}` });
+  response.status(201).json({ transaction: serializeTransaction(result.transaction), card: serializeCard(result.card), payos: (result as any).payos });
+}
+
+
+export async function reconcilePending(request: Request, response: Response) {
+  response.json(await reconcilePendingRfidSales());
+}

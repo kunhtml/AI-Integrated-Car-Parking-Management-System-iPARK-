@@ -118,6 +118,7 @@ export async function createParkingSlotHandler(request: Request, response: Respo
     floor: body.floor,
     notes: body.notes,
     accessPolicy: body.accessPolicy,
+    quotaType: body.accessPolicy === "resident" ? "member" : "walk_in",
     status: "empty",
   });
 
@@ -163,7 +164,10 @@ export async function updateParkingSlotHandler(request: Request, response: Respo
   if (body.features !== undefined) slot.features = body.features;
   if (body.floor !== undefined) slot.floor = body.floor;
   if (body.notes !== undefined) slot.notes = body.notes;
-  if (body.accessPolicy !== undefined) slot.accessPolicy = body.accessPolicy;
+  if (body.accessPolicy !== undefined) {
+    slot.accessPolicy = body.accessPolicy;
+    slot.quotaType = body.accessPolicy === "resident" ? "member" : "walk_in";
+  }
 
   await slot.save();
   response.json({ slot: serializeParkingSlot(slot) });
