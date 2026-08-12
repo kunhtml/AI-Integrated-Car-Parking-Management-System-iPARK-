@@ -104,13 +104,6 @@ export const navItems: NavItem[] = [
     roles: ["admin", "staff"],
   },
   {
-    id: "zones",
-    path: "/zones",
-    label: "Khu vực đỗ xe",
-    icon: MapPin,
-    roles: ["admin", "staff"],
-  },
-  {
     id: "parking-slots",
     path: "/parking-slots",
     label: "Vị trí đỗ xe",
