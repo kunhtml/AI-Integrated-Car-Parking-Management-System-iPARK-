@@ -14,7 +14,6 @@ export function createSlotActions({ setSlotList, setActionLog }: SlotActionsPara
     const form = new FormData(formEl);
     const body = {
       slotCode: String(form.get("slotCode") || "").toUpperCase(),
-      zoneId: String(form.get("zoneId") || ""),
       slotType: String(form.get("slotType") || "regular"),
       features: String(form.get("features") || "")
         .split(",")
@@ -22,6 +21,7 @@ export function createSlotActions({ setSlotList, setActionLog }: SlotActionsPara
         .filter(Boolean),
       floor: Number(form.get("floor") || 0),
       notes: String(form.get("notes") || "") || undefined,
+      accessPolicy: "guest",
     };
     const response = await apiFetch("/parking-slots", {
       method: "POST",
@@ -29,10 +29,10 @@ export function createSlotActions({ setSlotList, setActionLog }: SlotActionsPara
     });
     const data = await response.json();
     if (!response.ok) {
-      setActionLog(data.message || "Không tạo được slot.");
+      setActionLog(data.message || data.errors?.map((error: { message?: string }) => error.message).filter(Boolean).join("; ") || "Không tạo được slot.");
       return;
     }
-    setSlotList((items) => [...items, data.slot]);
+    setSlotList((items) => [...items, { ...data.slot, accessPolicy: "guest", quotaType: "walk_in" }]);
     setActionLog(`Đã tạo slot "${data.slot.slotCode}".`);
     formEl.reset();
   }
