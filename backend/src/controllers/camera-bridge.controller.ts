@@ -22,6 +22,7 @@ import {
 import { createNotification } from "../services/notification.service.js";
 import { createPendingTransactionForSession } from "../services/transaction.service.js";
 import { serializeParkingSession } from "../utils/serializers.js";
+import { calculateParkingFee, getActivePricingConfig } from "../services/pricing.service.js";
 
 function normalizePlate(plate: string): string {
   return (plate || "")
@@ -152,36 +153,14 @@ async function finalizeBridgeCheckout(session: ParkingSessionDocument) {
   session.checkOutAt = new Date();
 
   if (session.paymentStatus !== "fully_paid") {
-    session.fee = calcSimpleFee(session.checkInAt, session.checkOutAt);
-    session.feeBreakdown = {
-      totalMinutes: Math.max(
-        0,
-        Math.floor(
-          (session.checkOutAt.getTime() - session.checkInAt.getTime()) / 60000,
-        ),
-      ),
-      freeMinutes: 15,
-      billableMinutes: Math.max(
-        0,
-        Math.floor(
-          (session.checkOutAt.getTime() - session.checkInAt.getTime()) / 60000,
-        ) - 15,
-      ),
-      billableHours: Math.ceil(
-        Math.max(
-          0,
-          Math.floor(
-            (session.checkOutAt.getTime() - session.checkInAt.getTime()) /
-              60000,
-          ) - 15,
-        ) / 60,
-      ),
-      hourlyRate: 5000,
-      parkingFee: session.fee,
-      overdueFine: 0,
-      totalFee: session.fee,
-      dailyBreakdown: [],
-    };
+    const pricing = await getActivePricingConfig();
+    const feeBreakdown = calculateParkingFee(
+      session.checkInAt,
+      session.checkOutAt,
+      pricing,
+    );
+    session.fee = feeBreakdown.totalFee;
+    session.feeBreakdown = feeBreakdown;
     await createPendingTransactionForSession(session);
   }
 
@@ -287,36 +266,14 @@ export async function pushCameraLog(request: Request, response: Response) {
       openSession.exitDetectedAt = new Date();
       // Tính phí dự kiến (hiển thị trên UI)
       if (openSession.paymentStatus !== "fully_paid") {
-        openSession.fee = calcSimpleFee(openSession.checkInAt, new Date());
-        openSession.feeBreakdown = {
-          totalMinutes: Math.max(
-            0,
-            Math.floor(
-              (new Date().getTime() - openSession.checkInAt.getTime()) / 60000,
-            ),
-          ),
-          freeMinutes: 15,
-          billableMinutes: Math.max(
-            0,
-            Math.floor(
-              (new Date().getTime() - openSession.checkInAt.getTime()) / 60000,
-            ) - 15,
-          ),
-          billableHours: Math.ceil(
-            Math.max(
-              0,
-              Math.floor(
-                (new Date().getTime() - openSession.checkInAt.getTime()) /
-                  60000,
-              ) - 15,
-            ) / 60,
-          ),
-          hourlyRate: 5000,
-          parkingFee: openSession.fee,
-          overdueFine: 0,
-          totalFee: openSession.fee,
-          dailyBreakdown: [],
-        };
+        const pricing = await getActivePricingConfig();
+        const feeBreakdown = calculateParkingFee(
+          openSession.checkInAt,
+          new Date(),
+          pricing,
+        );
+        openSession.fee = feeBreakdown.totalFee;
+        openSession.feeBreakdown = feeBreakdown;
       }
       await openSession.save();
       sessionId = openSession._id;
@@ -357,6 +314,7 @@ export async function pushCameraLog(request: Request, response: Response) {
     imagePath: body.imagePath,
     barrierOpened: body.barrierOpened,
     sessionId: sessionId?.toString() ?? null,
+    checkInAt: openSession?.checkInAt?.toISOString() ?? null,
     sessionStatus:
       action === "created"
         ? "Đang gửi"

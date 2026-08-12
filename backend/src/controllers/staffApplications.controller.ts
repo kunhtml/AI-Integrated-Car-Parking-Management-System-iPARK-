@@ -399,55 +399,47 @@ export async function reviewStaffApplication(
     return;
   }
 
-  const session = await mongoose.startSession();
-  try {
-    await session.withTransaction(async () => {
-      const user = await User.findOne({
-        _id: application.userId,
-        role: "customer",
-        status: "Đang hoạt động",
-      }).session(session);
-      if (!user) {
-        throw Object.assign(
-          new Error("Tài khoản người đăng ký không còn đủ điều kiện."),
-          { status: 409 },
-        );
-      }
-
-      const updatedUser = await User.findOneAndUpdate(
-        {
-          _id: user._id,
-          role: "customer",
-          status: "Đang hoạt động",
-        },
-        { $set: { role: "staff" } },
-        { new: true, session },
-      );
-      if (!updatedUser) {
-        throw Object.assign(new Error("Tài khoản đã được xử lý trước đó."), {
-          status: 409,
-        });
-      }
-
-      application.status = "approved";
-      application.reviewNote = body.note;
-      application.reviewedBy = new mongoose.Types.ObjectId(request.user!.id);
-      application.approvedBy = new mongoose.Types.ObjectId(request.user!.id);
-      application.reviewedAt = new Date();
-      application.approvedAt = application.reviewedAt;
-      await application.save({ session });
-      await recordReviewHistory({
-        application,
-        oldStatus,
-        action: "APPROVED",
-        note: body.note,
-        before,
-        session,
-      });
-    });
-  } finally {
-    await session.endSession();
+  const user = await User.findOne({
+    _id: application.userId,
+    role: "customer",
+    status: "Đang hoạt động",
+  });
+  if (!user) {
+    throw Object.assign(
+      new Error("Tài khoản người đăng ký không còn đủ điều kiện."),
+      { status: 409 },
+    );
   }
+
+  const updatedUser = await User.findOneAndUpdate(
+    {
+      _id: user._id,
+      role: "customer",
+      status: "Đang hoạt động",
+    },
+    { $set: { role: "staff" } },
+    { new: true },
+  );
+  if (!updatedUser) {
+    throw Object.assign(new Error("Tài khoản đã được xử lý trước đó."), {
+      status: 409,
+    });
+  }
+
+  application.status = "approved";
+  application.reviewNote = body.note;
+  application.reviewedBy = new mongoose.Types.ObjectId(request.user!.id);
+  application.approvedBy = new mongoose.Types.ObjectId(request.user!.id);
+  application.reviewedAt = new Date();
+  application.approvedAt = application.reviewedAt;
+  await application.save();
+  await recordReviewHistory({
+    application,
+    oldStatus,
+    action: "APPROVED",
+    note: body.note,
+    before,
+  });
 
   await notifySafely({
     title: "Đơn đăng ký nhân viên đã được duyệt",

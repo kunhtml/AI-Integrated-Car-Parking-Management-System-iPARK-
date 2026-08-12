@@ -1,4 +1,5 @@
 export type Role = "admin" | "staff" | "customer";
+export type ViewAsMode = "staff" | "customer";
 
 export type View =
   | "overview"
@@ -89,6 +90,7 @@ export type ParkingSession = {
   vehicleType: "Ô tô";
   checkIn: string;
   checkInDate: string;
+  checkInAt?: string;
   checkOut?: string;
   expectedCheckOut?: string;
   prepaidCheckoutAt?: string;
@@ -544,6 +546,7 @@ export type TopCustomer = {
   userId: string;
   name: string;
   email?: string;
+  plate?: string;
   sessionCount: number;
   totalSpent: number;
 };

@@ -110,9 +110,11 @@ export function AdminDisputesView() {
               </span>,
               formatDate(d.createdAt),
             ])}
-            onRowClick={(_, idx) =>
-              router.push(`/disputes/${filtered[idx].id}`)
-            }
+            onRowClick={(idx) => {
+              if (filtered[idx]) {
+                router.push(`/disputes/${filtered[idx].id}`);
+              }
+            }}
           />
         )}
       </div>

@@ -126,6 +126,7 @@ export function PricingView() {
     nightRate: 0,
     dayStartHour: 6,
     nightStartHour: 18,
+    gracePeriod: 20,
   });
   const [tplForm, setTplForm] = useState({
     name: "",
@@ -141,6 +142,7 @@ export function PricingView() {
         nightRate: pricingConfigState.nightRate || 0,
         dayStartHour: pricingConfigState.dayStartHour || 6,
         nightStartHour: pricingConfigState.nightStartHour || 18,
+        gracePeriod: pricingConfigState.gracePeriod ?? 20,
       });
     }
   }, [pricingConfigState]);
@@ -334,6 +336,12 @@ export function PricingView() {
             </h4>
             <div className="pricing-info-grid">
               <div className="pricing-info-item">
+                <span className="pricing-info-label">Bắt đầu tính phí sau</span>
+                <span className="pricing-info-value">
+                  {pricingConfigState.gracePeriod ?? 20} phút
+                </span>
+              </div>
+              <div className="pricing-info-item">
                 <span className="pricing-info-label">Khung giờ ngày</span>
                 <span className="pricing-info-value">
                   {pricingConfigState.dayStartHour}:00 -{" "}
@@ -478,6 +486,28 @@ export function PricingView() {
                 />
               </label>
             </div>
+          </div>
+          <div className="form-section">
+            <h4>
+              <Clock size={18} /> Thời gian bắt đầu tính phí
+            </h4>
+            <label className="form-label">
+              <span>Miễn phí ban đầu (phút)</span>
+              <input
+                name="gracePeriod"
+                type="number"
+                min={0}
+                value={pricingForm.gracePeriod}
+                onChange={(e) =>
+                  setPricingForm({
+                    ...pricingForm,
+                    gracePeriod: Number(e.target.value),
+                  })
+                }
+                required
+              />
+            </label>
+            <p className="pricing-form-hint">Sau số phút này, hệ thống bắt đầu tính phí gửi xe.</p>
           </div>
 
           <div className="form-section">

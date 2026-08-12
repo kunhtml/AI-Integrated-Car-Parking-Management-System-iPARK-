@@ -3,7 +3,9 @@ import { ParkingSession } from "../models/ParkingSession.js";
 import { RfidCard } from "../models/RfidCard.js";
 import { ParkingCameraLog } from "../models/ParkingCameraLog.js";
 import { findActiveSubscriptionByPlate } from "../services/subscription.service.js";
-import { calcSimpleFee } from "../controllers/camera-bridge.controller.js";
+import { calculateParkingFee } from "../services/pricing.service.js";
+import { getActivePricingConfig } from "../services/pricing.service.js";
+import { env } from "../config/env.js";
 
 /**
  * Backend POST /api/exit/verify
@@ -50,7 +52,7 @@ export async function verifyExit(request: Request, response: Response) {
 
   const card = await RfidCard.findOne({ uid: uid.trim() });
 
-  if (card && !card.active) {
+  if (card && card.status !== "active") {
     response
       .status(400)
       .json({ verified: false, reason: "Thẻ RFID không active" });
@@ -127,7 +129,10 @@ export async function verifyExit(request: Request, response: Response) {
     if (session.fee == null || session.fee === 0) {
       const checkInAt = new Date(session.checkInAt);
       const now = new Date();
-      session.fee = calcSimpleFee(checkInAt, now);
+      const pricing = await getActivePricingConfig();
+      const feeBreakdown = calculateParkingFee(checkInAt, now, pricing);
+      session.fee = feeBreakdown.totalFee;
+      session.feeBreakdown = feeBreakdown;
       await session.save();
     }
     amountDue = (session.fee || 0) - (session.paidAmount || 0);
@@ -195,7 +200,10 @@ export async function openGate(request: Request, response: Response) {
     if (session.fee == null || session.fee === 0) {
       const checkInAt = new Date(session.checkInAt);
       const now = new Date();
-      session.fee = calcSimpleFee(checkInAt, now);
+      const pricing = await getActivePricingConfig();
+      const feeBreakdown = calculateParkingFee(checkInAt, now, pricing);
+      session.fee = feeBreakdown.totalFee;
+      session.feeBreakdown = feeBreakdown;
       await session.save();
     }
     amountDue = (session.fee || 0) - (session.paidAmount || 0);
@@ -215,9 +223,7 @@ export async function openGate(request: Request, response: Response) {
 
   try {
     // Gọi bridge mở barie (server-to-server)
-    const { BRIDGE_API_URL } = await import("../config/env.js");
-    const bridgeUrl =
-      BRIDGE_API_URL?.replace(/\/+$/, "") || "http://localhost:5000";
+    const bridgeUrl = env.bridgeServiceUrl.replace(/\/+$/, "");
 
     const bridgeResponse = await fetch(`${bridgeUrl}/gate/out/open`, {
       method: "POST",
@@ -306,6 +312,7 @@ export async function getPendingExit(request: Request, response: Response) {
       detectedPlate: session.exitDetectedPlate ?? session.plate,
       confidence: session.exitConfidence ?? null,
       sessionId: session._id.toString(),
+      checkInAt: session.checkInAt.toISOString(),
       sessionStatus: "Đang gửi",
       exitState: "waiting_rfid",
       action: "waiting_rfid",

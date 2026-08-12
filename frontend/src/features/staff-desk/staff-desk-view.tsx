@@ -11,17 +11,16 @@ import {
   Loader2,
   LogIn,
   Nfc,
-  QRCode,
   Radio,
   RefreshCcw,
   ScanLine,
   ShieldAlert,
-  Signal,
   Wifi,
   WifiOff,
   XCircle,
 } from "lucide-react";
 
+import { QRCodeSVG } from "qrcode.react";
 import { apiFetch, bridgeFetch } from "@/lib/client-api";
 import { bridgeBaseUrl } from "@/lib/constants";
 import {
@@ -34,10 +33,13 @@ import {
 type Phase = "idle" | "creating" | "opening" | "done" | "error";
 
 const SCAN_POLL_MS = 1000;
-const SCAN_TIMEOUT_MS = 60_000;
-
 const IN_STREAM_URL = `${bridgeBaseUrl}/video_feed/in`;
 const OUT_STREAM_URL = `${bridgeBaseUrl}/video_feed/out`;
+
+function formatDateTime(iso?: string | null) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("vi-VN");
+}
 
 function formatTime(iso?: string | null) {
   if (!iso) return "—";
@@ -174,7 +176,7 @@ export function StaffDeskView() {
     setScanUid("");
     setScanPhase("starting");
     try {
-      const res = await bridgeFetch("/api/rfid/scan/start", { method: "POST" });
+      const res = await bridgeFetch("/api/rfid/scan/start", { method: "POST", body: JSON.stringify({ direction: "in" }) });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         setScanPhase("error");
@@ -185,14 +187,6 @@ export function StaffDeskView() {
       setScanPhase("waiting");
       stopScanPolling();
       scanIntervalRef.current = window.setInterval(async () => {
-        if (Date.now() - scanStartRef.current > SCAN_TIMEOUT_MS) {
-          stopScanPolling();
-          setScanPhase("timeout");
-          await bridgeFetch("/api/rfid/scan/cancel", { method: "POST" }).catch(
-            () => undefined,
-          );
-          return;
-        }
         try {
           const poll = await bridgeFetch("/api/rfid/scan/poll");
           if (!poll.ok) {
@@ -479,7 +473,7 @@ export function StaffDeskView() {
     setExitScanUid("");
     setExitScanPhase("starting");
     try {
-      const res = await bridgeFetch("/api/rfid/scan/start", { method: "POST" });
+      const res = await bridgeFetch("/api/rfid/scan/start", { method: "POST", body: JSON.stringify({ direction: "out" }) });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         setExitScanPhase("error");
@@ -492,17 +486,6 @@ export function StaffDeskView() {
         window.clearInterval(exitScanIntervalRef.current);
       }
       exitScanIntervalRef.current = window.setInterval(async () => {
-        if (Date.now() - exitScanStartRef.current > SCAN_TIMEOUT_MS) {
-          if (exitScanIntervalRef.current !== null) {
-            window.clearInterval(exitScanIntervalRef.current);
-            exitScanIntervalRef.current = null;
-          }
-          setExitScanPhase("timeout");
-          await bridgeFetch("/api/rfid/scan/cancel", { method: "POST" }).catch(
-            () => undefined,
-          );
-          return;
-        }
         try {
           const poll = await bridgeFetch("/api/rfid/scan/poll");
           if (!poll.ok) {
@@ -541,10 +524,15 @@ export function StaffDeskView() {
               window.clearInterval(exitScanIntervalRef.current);
               exitScanIntervalRef.current = null;
             }
-            setExitScanPhase("error");
-            setExitScanError(
-              data.message || "Thẻ RFID không hợp lệ hoặc đã bị vô hiệu hóa.",
-            );
+            if (data.uid) {
+              setExitScanUid(data.uid);
+              setExitScanPhase("success");
+            } else {
+              setExitScanPhase("error");
+              setExitScanError(
+                data.message || "Thẻ RFID không hợp lệ hoặc đã bị vô hiệu hóa.",
+              );
+            }
             return;
           }
         } catch {
@@ -641,14 +629,14 @@ export function StaffDeskView() {
   // Poll exit payment status — nhận sessionId trực tiếp để tránh stale closure
   const startExitPaymentPoll = useCallback((sessionId: string) => {
     setExitPaymentPolling(true);
-    const poll = setInterval(async () => {
+
+    const checkPayment = async () => {
       try {
         const res = await apiFetch(
           `/public/session/${sessionId}/payment-status`,
         );
         const data = await res.json().catch(() => ({}));
-        if (data.paymentStatus === "fully_paid") {
-          clearInterval(poll);
+        if (data.paymentStatus === "fully_paid" || data.transaction?.status === "paid") {
           setExitPaymentPolling(false);
           setExitPaymentData(null);
           setExitVerifyData((prev) =>
@@ -656,22 +644,30 @@ export function StaffDeskView() {
               ? { ...prev, paymentStatus: "fully_paid", canOpenGate: true }
               : null,
           );
+          await openExitBarrier();
+          return true;
         }
       } catch {
         // Continue polling
       }
+      return false;
+    };
+
+    void checkPayment();
+    const poll = setInterval(async () => {
+      if (await checkPayment()) clearInterval(poll);
     }, 2000);
     const timeout = setTimeout(() => {
       clearInterval(poll);
       setExitPaymentPolling(false);
     }, 300000);
-    // Trả về cleanup để có thể dừng từ ngoài nếu cần
+
     return () => {
       clearInterval(poll);
       clearTimeout(timeout);
       setExitPaymentPolling(false);
     };
-  }, []);
+  }, [openExitBarrier]);
 
   // Auto-verify exit RFID when scan succeeds
   useEffect(() => {
@@ -1098,15 +1094,6 @@ function IngestCard(props: {
 
       <div className="staff-desk__meta">
         <MetaRow
-          icon={<Signal size={14} />}
-          label="Độ tin cậy"
-          value={
-            event.confidence != null
-              ? `${Math.round(event.confidence * 100)}%`
-              : "—"
-          }
-        />
-        <MetaRow
           icon={<Radio size={14} />}
           label="Loại xe"
           value={
@@ -1309,22 +1296,23 @@ function ExitCard({
 
       <div className="staff-desk__meta">
         <MetaRow
-          icon={<Signal size={14} />}
-          label="Độ tin cậy"
-          value={
-            event.confidence != null
-              ? `${Math.round(event.confidence * 100)}%`
-              : "—"
-          }
+          icon={<CreditCard size={14} />}
+          label="ID phiên"
+          value={event.sessionId || "—"}
         />
         <MetaRow
           icon={<ArrowUpFromLine size={14} />}
-          label="Thời gian"
-          value={formatTime(event.createdAt)}
+          label="Thời gian vào"
+          value={formatDateTime(event.checkInAt)}
+        />
+        <MetaRow
+          icon={<ArrowDownToLine size={14} />}
+          label="Thời gian ra"
+          value={formatDateTime(event.createdAt)}
         />
         <MetaRow
           icon={<CreditCard size={14} />}
-          label="Phiên"
+          label="Phí phiên"
           value={
             exitVerifyData
               ? isSubscriber
@@ -1344,14 +1332,23 @@ function ExitCard({
         />
       </div>
 
-      {!didCheckout && (
+      {event.barrierOpened ? (
+        <div className="staff-desk__alert staff-desk__alert--success">
+          <CheckCircle2 size={18} />
+          <span>
+            <strong>Thanh toán thành công</strong>
+            <br />
+            Barie đã mở
+          </span>
+        </div>
+      ) : !didCheckout ? (
         <div className="staff-desk__alert staff-desk__alert--warn">
           <ShieldAlert size={16} />
           <span>
             Không tự mở barie. Kiểm tra phiên và thanh toán trước khi cho xe ra.
           </span>
         </div>
-      )}
+      ) : null}
 
       <div className="staff-desk__action">
         {/* Show QR if payment is needed */}
@@ -1365,10 +1362,13 @@ function ExitCard({
             </div>
             {paymentData.qrCode && (
               <div className="staff-desk__qr-container">
-                <img
-                  src={`data:image/png;base64,${paymentData.qrCode}`}
-                  alt="QR PayOS"
+                <QRCodeSVG
+                  value={paymentData.qrCode}
+                  size={220}
+                  level="M"
+                  marginSize={2}
                   className="staff-desk__qr-code"
+                  aria-label="Mã QR thanh toán PayOS"
                 />
               </div>
             )}

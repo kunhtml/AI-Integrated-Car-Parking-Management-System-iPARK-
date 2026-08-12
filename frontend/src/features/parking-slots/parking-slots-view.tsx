@@ -36,6 +36,10 @@ const STATUS_CONFIG: Record<SlotStatus, { label: string; bg: string; text: strin
   },
 };
 
+function getStatusConfig(status: SlotStatus) {
+  return STATUS_CONFIG[status] ?? STATUS_CONFIG.empty;
+}
+
 const ACCESS_POLICY_OPTIONS: {
   value: SlotAccessPolicy;
   label: string;
@@ -82,7 +86,7 @@ function SlotCard({ slot, onMaintenance, onFree, onDelete, onChangeAccessPolicy,
   onChangeAccessPolicy: (id: string, policy: SlotAccessPolicy) => void;
   isAdmin: boolean;
 }) {
-  const statusConfig = STATUS_CONFIG[slot.status];
+  const statusConfig = getStatusConfig(slot.status);
   const policy = (slot.accessPolicy ?? "shared") as SlotAccessPolicy;
   const [hovered, setHovered] = useState(false);
 
@@ -458,7 +462,7 @@ export function ParkingSlotsView() {
 
           <div className="list-grid">
             {filteredSlots.map((slot) => {
-              const statusConfig = STATUS_CONFIG[slot.status];
+              const statusConfig = getStatusConfig(slot.status);
               const zone = zoneList.find((z) => z.id === slot.zoneId);
               
               return (

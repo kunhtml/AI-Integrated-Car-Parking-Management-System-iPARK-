@@ -9,13 +9,11 @@ import {
   Calendar,
   Car,
   CheckCircle,
-  Clock,
   Download,
   Eye,
   Flame,
   MapPin,
   ParkingCircle,
-  ShieldAlert,
   TrendingDown,
   TrendingUp,
   Users,
@@ -341,80 +339,8 @@ function RepZoneReport({ entries, exits }: RepZoneReportProps) {
   );
 }
 
-// ─── Penalty Report ────────────────────────────────────────────────────────
-interface PenaltyData {
-  summary: { totalOverdue: number; totalOverdueMinutes: number; avgOverdueMinutes: number };
-  topOverdue: Array<{ id: string; plate: string; ownerName: string; slot: string; zone: string; overdueMinutes: number; fee: number }>;
-}
-
-interface RepPenaltyReportProps {
-  data: PenaltyData | null;
-  loading: boolean;
-}
-
-function RepPenaltyReport({ data, loading }: RepPenaltyReportProps) {
-  if (loading) return <p className="rep-empty">Đang tải...</p>;
-  if (!data) return <p className="rep-empty">Chưa có dữ liệu. Nhấn "Tải dữ liệu".</p>;
-
-  return (
-    <div>
-      <div className="rep-kpi-row">
-        <KpiCard
-          icon={<ShieldAlert size={16} />}
-          label="Tổng phiên quá hạn"
-          value={String(data.summary.totalOverdue)}
-          color="red"
-        />
-        <KpiCard
-          icon={<Clock size={16} />}
-          label="Tổng phút quá hạn"
-          value={String(data.summary.totalOverdueMinutes)}
-          color="amber"
-        />
-        <KpiCard
-          icon={<Activity size={16} />}
-          label="TB phút quá hạn"
-          value={String(data.summary.avgOverdueMinutes)}
-          sub="mỗi phiên"
-          color="purple"
-        />
-      </div>
-      {data.topOverdue.length > 0 ? (
-        <div className="rep-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Biển số</th>
-                <th>Chủ xe</th>
-                <th>Slot</th>
-                <th>Zone</th>
-                <th>Quá hạn</th>
-                <th>Phí</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.topOverdue.map((item) => (
-                <tr key={item.id}>
-                  <td><strong className="rep-plate">{item.plate}</strong></td>
-                  <td>{item.ownerName}</td>
-                  <td>{item.slot}</td>
-                  <td>{item.zone}</td>
-                  <td><span className="rep-badge warn">{item.overdueMinutes} phút</span></td>
-                  <td><strong>{currency.format(item.fee)}</strong></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <p className="rep-empty" style={{ marginTop: 16 }}>Không có phiên quá hạn trong khoảng thời gian này.</p>
-      )}
-    </div>
-  );
-}
-
 // ─── Main Reports View ──────────────────────────────────────────────────────
-type TabKey = "summary" | "revenue" | "occupancy" | "customers" | "peak" | "penalty" | "zones";
+type TabKey = "summary" | "revenue" | "occupancy" | "customers" | "peak" | "zones";
 
 export function ReportsView() {
   const { currentUser, reportSummary, reportFrom, setReportFrom, reportTo, setReportTo, loadReportSummary, downloadReport } = useParkingApp();
@@ -429,7 +355,6 @@ export function ReportsView() {
   const [occupancyData, setOccupancyData] = useState<OccupancyHourPoint[]>([]);
   const [topCustomersData, setTopCustomersData] = useState<TopCustomer[]>([]);
   const [peakHoursData, setPeakHoursData] = useState<PeakHourPoint[]>([]);
-  const [penaltyData, setPenaltyData] = useState<PenaltyData | null>(null);
   const [entryZoneData, setEntryZoneData] = useState<ZoneEntry[]>([]);
   const [exitZoneData, setExitZoneData] = useState<ZoneExit[]>([]);
 
@@ -456,10 +381,6 @@ export function ReportsView() {
       if (activeTab === "peak") {
         const res = await apiFetch(`/reports/peak-hours${params}`);
         if (res.ok) setPeakHoursData((await res.json()).data ?? []);
-      }
-      if (activeTab === "penalty") {
-        const res = await apiFetch(`/reports/penalty${params}`);
-        if (res.ok) setPenaltyData((await res.json()).data ?? null);
       }
       if (activeTab === "zones") {
         const [entryRes, exitRes] = await Promise.all([
@@ -494,7 +415,6 @@ export function ReportsView() {
     { key: "occupancy", label: "Lấp đầy", icon: <ParkingCircle size={14} /> },
     { key: "customers", label: "Khách hàng", icon: <Users size={14} /> },
     { key: "peak", label: "Giờ cao điểm", icon: <Flame size={14} /> },
-    { key: "penalty", label: "Phạt", icon: <ShieldAlert size={14} /> },
     { key: "zones", label: "Theo zone", icon: <MapPin size={14} /> },
   ];
 
@@ -697,29 +617,6 @@ export function ReportsView() {
             </button>
           </div>
           <RepPeakHours data={peakHoursData} />
-        </div>
-      )}
-
-      {/* Penalty Tab */}
-      {activeTab === "penalty" && (
-        <div className="rep-content">
-          <div className="rep-filter-bar">
-            <div className="rep-date-inputs">
-              <label>
-                <span>Từ ngày</span>
-                <input type="date" value={chartFrom} onChange={(e) => setChartFrom(e.target.value)} />
-              </label>
-              <label>
-                <span>Đến ngày</span>
-                <input type="date" value={chartTo} onChange={(e) => setChartTo(e.target.value)} />
-              </label>
-            </div>
-            <button className="rep-btn primary" onClick={loadChartData} disabled={chartLoading} type="button">
-              <RefreshCw size={14} className={chartLoading ? "spin" : ""} />
-              {chartLoading ? "Đang tải..." : "Tải dữ liệu"}
-            </button>
-          </div>
-          <RepPenaltyReport data={penaltyData} loading={chartLoading} />
         </div>
       )}
 

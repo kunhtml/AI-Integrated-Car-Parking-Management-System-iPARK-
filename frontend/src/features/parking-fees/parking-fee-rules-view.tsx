@@ -180,6 +180,20 @@ export function ParkingFeeRulesView() {
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">
+                  Bắt đầu tính tiền sau (phút)
+                </label>
+                <input
+                  className="w-full rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  min={0}
+                  onChange={(e) => setConfig({ ...config, freeMinutes: Number(e.target.value) })}
+                  type="number"
+                  value={config.freeMinutes}
+                />
+                <p className="mt-1 text-xs text-slate-400">Thời gian đầu được miễn phí trước khi phát sinh phí.</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">
                   Giá ban ngày (VND/ngày)
                 </label>
                 <input
@@ -291,16 +305,6 @@ export function ParkingFeeRulesView() {
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Số phút miễn phí ban đầu</label>
-              <input
-                className="w-full rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-blue-500"
-                min={0}
-                onChange={(e) => setConfig({ ...config, freeMinutes: Number(e.target.value) })}
-                type="number"
-                value={config.freeMinutes}
-              />
-            </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">Trần phí ngày (VND)</label>

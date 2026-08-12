@@ -28,6 +28,7 @@ export function createPaymentActions({
       nightRate: Number(form.get("nightRate") || 0),
       dayStartHour: Number(form.get("dayStartHour") || 0),
       nightStartHour: Number(form.get("nightStartHour") || 0),
+      gracePeriod: Number(form.get("gracePeriod") || 0),
     };
 
     try {

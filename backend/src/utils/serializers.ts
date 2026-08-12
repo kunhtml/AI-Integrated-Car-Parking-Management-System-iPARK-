@@ -34,8 +34,8 @@ export function serializeUser(user: UserDocument) {
     phone: user.phone ?? null,
     isVerified: user.isVerified,
     lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
-    createdAt: user.createdAt.toISOString(),
-    updatedAt: user.updatedAt.toISOString(),
+    createdAt: user.createdAt ? user.createdAt.toISOString() : null,
+    updatedAt: user.updatedAt ? user.updatedAt.toISOString() : null,
   };
 }
 

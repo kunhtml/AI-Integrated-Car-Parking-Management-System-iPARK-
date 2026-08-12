@@ -15,10 +15,7 @@ export function AppHeader({ currentUser, onToggleNav, onLogout }: AppHeaderProps
       <button className="icon-button mobile-only" onClick={onToggleNav} type="button">
         <Menu size={20} />
       </button>
-      <div>
-        <p>{roleLabels[currentUser.role]}</p>
-        <h1>{currentUser.name}</h1>
-      </div>
+      <div style={{ flex: 1 }} />
       <button className="logout-button" onClick={onLogout} type="button">
         <LogOut size={18} />
         Đăng xuất

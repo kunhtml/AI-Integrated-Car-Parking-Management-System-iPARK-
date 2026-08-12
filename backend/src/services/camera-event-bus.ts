@@ -22,6 +22,7 @@ export type CameraIngestEvent = {
   imagePath?: string;
   barrierOpened: boolean;
   sessionId?: string | null;
+  checkInAt?: string | null;
   sessionStatus?: string | null;
   sessionPaymentStatus?: string | null;
   exitState?: string | null;

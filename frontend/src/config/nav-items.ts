@@ -3,7 +3,6 @@ import {
   BarChart3,
   Bell,
   Briefcase,
-  Camera,
   Car,
   CalendarDays,
   CircleAlert,
@@ -20,7 +19,7 @@ import {
   Wallet,
 } from "lucide-react";
 
-import type { Role, View } from "@/types";
+import type { Role, View, ViewAsMode } from "@/types";
 
 export type NavItem = {
   id: View;
@@ -28,6 +27,8 @@ export type NavItem = {
   label: string;
   icon: LucideIcon;
   roles: Role[];
+  // Chi an nut tren sidebar cua cac role nay (van truy cap duoc bang link truc tiep).
+  hiddenFromSidebar?: Role[];
 };
 
 export const navItems: NavItem[] = [
@@ -36,6 +37,13 @@ export const navItems: NavItem[] = [
     path: "/overview",
     label: "Tổng quan",
     icon: LayoutDashboard,
+    roles: ["admin", "staff"],
+  },
+  {
+    id: "staff-desk",
+    path: "/staff-desk",
+    label: "Bàn nhân viên",
+    icon: ScanLine,
     roles: ["admin", "staff"],
   },
   {
@@ -85,21 +93,8 @@ export const navItems: NavItem[] = [
     path: "/disputes",
     label: "Khiếu nại",
     icon: MessageSquareWarning,
-    roles: ["customer", "admin", "staff"],
-  },
-  {
-    id: "cameras",
-    path: "/cameras",
-    label: "Live monitor & Logs",
-    icon: Camera,
-    roles: ["admin", "staff"],
-  },
-  {
-    id: "staff-desk",
-    path: "/staff-desk",
-    label: "Bàn nhân viên",
-    icon: ScanLine,
-    roles: ["admin", "staff"],
+    roles: ["admin", "staff", "customer"],
+    hiddenFromSidebar: ["admin"],
   },
   {
     id: "rfid",
@@ -168,7 +163,11 @@ export const navItems: NavItem[] = [
 
 export const adminOnlyPaths = ["/pricing", "/reports", "/staff-applications"];
 
-export function getNavItemsForRole(role: Role) {
+export function getNavItemsForRole(role: Role, viewAs?: ViewAsMode) {
+  // Nếu staff đang ở "member mode", show navigation của customer
+  if (role === "staff" && viewAs === "customer") {
+    return navItems.filter((item) => item.roles.includes("customer"));
+  }
   return navItems.filter((item) => item.roles.includes(role));
 }
 

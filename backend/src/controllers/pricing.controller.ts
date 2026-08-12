@@ -2,7 +2,26 @@ import mongoose from "mongoose";
 import { Request, Response } from "express";
 import { z } from "zod";
 import { PricingConfig } from "../models/PricingConfig.js";
-import { serializePricingConfig } from "../utils/serializers.js";
+
+
+function serializePricingConfig(config: any) {
+  return {
+    id: config._id?.toString?.() || "default",
+    freeMinutes: config.freeMinutes ?? 20,
+    hourlyRate: config.hourlyRate ?? config.dayRate ?? 5000,
+    overnightRate: config.overnightRate ?? config.nightRate ?? 10000,
+    dayStartHour: config.dayStartHour ?? 6,
+    nightStartHour: config.nightStartHour ?? 22,
+    monthlyRate: config.monthlyRate ?? 1200000,
+    overdueFineRate: config.overdueFineRate ?? 50000,
+    dailyMaxRate: config.dailyMaxRate ?? 120000,
+    graceExitMinutes: config.graceExitMinutes ?? 10,
+    effectiveFrom: config.effectiveFrom ?? config.createdAt ?? new Date(),
+    isActive: Boolean(config.isActive),
+    createdAt: config.createdAt ?? null,
+    updatedAt: config.updatedAt ?? null,
+  };
+}
 
 const defaultPricingConfig = {
   id: "default",

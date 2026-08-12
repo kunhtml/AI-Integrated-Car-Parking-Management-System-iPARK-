@@ -35,6 +35,7 @@ type MyRfidCard = {
 export function SubscriptionsView() {
   const {
     currentUser,
+    viewAs,
     planList,
     subscriptionList,
     setSubscriptionList,
@@ -57,7 +58,8 @@ export function SubscriptionsView() {
 
   if (!currentUser) return null;
   const isAdmin = currentUser.role === "admin";
-  const isCustomer = currentUser.role === "customer";
+  // Dùng viewAs để xác định chế độ hiển thị
+  const isCustomer = currentUser.role === "staff" ? viewAs === "customer" : currentUser.role === "customer";
 
   const now = Date.now();
   const myActiveSubs = useMemo(

@@ -977,6 +977,50 @@ tr:hover td {
   border-left: 3px solid #93c5fd;
 }
 
+/* Mode toggle for staff */
+.sidebar-mode-toggle {
+  margin-top: auto;
+  padding: 0px 12px 8px;
+}
+
+.mode-switch-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 16px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius);
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: linear-gradient(135deg, rgb(123, 104, 238) 0%, rgb(147, 112, 219) 100%);
+  color: #fff;
+  box-shadow: rgba(123, 104, 238, 0.45) 0px 4px 12px, rgba(255, 255, 255, 0.15) 0px 1px 0px inset;
+}
+
+.mode-switch-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: rgba(123, 104, 238, 0.55) 0px 6px 16px, rgba(255, 255, 255, 0.2) 0px 1px 0px inset;
+}
+
+.mode-switch-btn:active {
+  transform: translateY(0);
+  box-shadow: rgba(123, 104, 238, 0.35) 0px 2px 8px, rgba(255, 255, 255, 0.1) 0px 1px 0px inset;
+}
+
+.mode-switch-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* ─── Workspace ────────────────────────────────────────────────── */
 .workspace {
   min-width: 0;
@@ -1015,6 +1059,11 @@ tr:hover td {
   padding: 0 14px;
   font-size: 13px;
   font-weight: 500;
+}
+
+/* ─── Toast Notifications ──────────────────────────────────────── */
+.ipark-toast-container {
+  top: 72px !important;
 }
 
 /* ─── Layout Grids ─────────────────────────────────────────────── */
@@ -3204,6 +3253,16 @@ tr:hover td {
   border: 1px solid #f4d79a;
   background: #fff8e8;
   color: #8a5a08;
+}
+
+.staff-desk__alert--success {
+  border: 1px solid #9bd8ad;
+  background: #ecfdf3;
+  color: #167044;
+}
+
+.staff-desk__alert--success strong {
+  font-weight: 700;
 }
 
 .staff-desk__action {
@@ -16656,5 +16715,234 @@ textarea.form-input {
 
   .guest-exit-actions {
     flex-direction: column;
+  }
+}
+
+/* Combined revenue chart */
+.staff-combo-chart {
+  padding: 14px 16px 18px;
+}
+
+.staff-combo-legend {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 10px;
+  color: var(--fg-muted, #64748b);
+  font-size: 11px;
+}
+
+.staff-combo-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.staff-combo-legend-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.staff-combo-legend-dot--revenue {
+  background: #3b82f6;
+}
+
+.staff-combo-legend-dot--count {
+  background: #f97316;
+}
+
+.staff-combo-plot {
+  position: relative;
+  height: 142px;
+  border-bottom: 1px solid var(--border, #e2e8f0);
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 34px,
+    color-mix(in srgb, var(--border, #e2e8f0) 60%, transparent) 35px
+  );
+}
+
+.staff-combo-bars {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 7px;
+}
+
+.staff-combo-bar-column {
+  position: relative;
+  flex: 1;
+  height: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-direction: column;
+}
+
+.staff-combo-bar {
+  width: min(32px, 72%);
+  min-height: 3px;
+  border-radius: 5px 5px 0 0;
+  background: linear-gradient(180deg, #60a5fa, #2563eb);
+  transition: height 0.3s ease, filter 0.2s ease;
+}
+
+.staff-combo-bar:hover {
+  filter: brightness(1.08);
+}
+
+.staff-combo-bar-value {
+  position: absolute;
+  bottom: 0;
+  color: var(--fg-muted, #64748b);
+  font-size: 9px;
+  white-space: nowrap;
+  transform: translateY(-100%);
+}
+
+.staff-combo-line {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.staff-combo-labels {
+  display: flex;
+  gap: 7px;
+  padding-top: 8px;
+}
+
+.staff-combo-labels span {
+  flex: 1;
+  min-width: 0;
+  color: var(--fg-muted, #64748b);
+  font-size: 9px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Reference-style revenue bars */
+.staff-revenue-chart {
+  margin: 0 16px 12px;
+  padding: 22px 20px 26px;
+  background: #f8f8fc;
+  border-radius: 2px;
+}
+
+.staff-revenue-chart-title {
+  margin: 0 0 22px;
+  color: #596174;
+  font-size: clamp(20px, 2.4vw, 32px);
+  font-weight: 700;
+  text-align: center;
+}
+
+.staff-revenue-plot {
+  position: relative;
+  height: 250px;
+  padding: 0 12px 30px;
+}
+
+.staff-revenue-axis {
+  position: absolute;
+  left: 16px;
+  right: 8px;
+  bottom: 30px;
+  height: 1px;
+  background: #3a9660;
+}
+
+.staff-revenue-axis::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 1px;
+  height: calc(100% + 205px);
+  background: #3a9660;
+}
+
+.staff-revenue-bars {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+  gap: clamp(8px, 2vw, 28px);
+  height: 100%;
+}
+
+.staff-revenue-bar-column {
+  position: relative;
+  flex: 1;
+  height: 100%;
+  min-width: 22px;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.staff-revenue-value {
+  margin-bottom: 7px;
+  color: #596174;
+  font-size: clamp(10px, 1.1vw, 16px);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.staff-revenue-bar {
+  width: min(42px, 68%);
+  min-height: 3px;
+  border-radius: 2px 2px 0 0;
+  background: linear-gradient(
+    to bottom,
+    #13c5b6 0%,
+    #55d1c9 28%,
+    rgba(85, 209, 201, 0.45) 68%,
+    rgba(85, 209, 201, 0.04) 100%
+  );
+  transition: height 0.3s ease, filter 0.2s ease;
+}
+
+.staff-revenue-bar:hover {
+  filter: saturate(1.2) brightness(1.04);
+}
+
+.staff-revenue-label {
+  position: absolute;
+  bottom: 2px;
+  transform: translateY(100%);
+  color: #596174;
+  font-size: clamp(9px, 1vw, 14px);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .staff-revenue-chart {
+    margin-inline: 8px;
+    padding-inline: 10px;
+  }
+
+  .staff-revenue-plot {
+    height: 210px;
+    padding-inline: 2px;
+  }
+
+  .staff-revenue-bars {
+    gap: 3px;
+  }
+
+  .staff-revenue-bar {
+    width: min(30px, 80%);
   }
 }

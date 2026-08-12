@@ -19,7 +19,7 @@ type RoleGuardProps = {
 export function RoleGuard({ allowedRoles, children }: RoleGuardProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const { currentUser } = useParkingApp();
+  const { currentUser, viewAs } = useParkingApp();
   const lastRedirectRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -29,7 +29,12 @@ export function RoleGuard({ allowedRoles, children }: RoleGuardProps) {
 
     let targetPath: string | null = null;
 
-    if (allowedRoles && !allowedRoles.includes(currentUser.role)) {
+    // Xác định role hiệu dụng dựa trên viewAs
+    const effectiveRole = currentUser.role === "staff" && viewAs === "customer"
+      ? "customer"
+      : currentUser.role;
+
+    if (allowedRoles && !allowedRoles.includes(effectiveRole)) {
       targetPath = getDefaultPathForRole(currentUser.role);
     } else if (
       adminOnlyPaths.includes(pathname) &&
@@ -37,7 +42,7 @@ export function RoleGuard({ allowedRoles, children }: RoleGuardProps) {
     ) {
       targetPath = getDefaultPathForRole(currentUser.role);
     } else {
-      const allowedPaths = getNavItemsForRole(currentUser.role).map(
+      const allowedPaths = getNavItemsForRole(currentUser.role, viewAs).map(
         (item) => item.path,
       );
       if (
@@ -57,13 +62,18 @@ export function RoleGuard({ allowedRoles, children }: RoleGuardProps) {
       lastRedirectRef.current = targetPath;
       router.replace(targetPath);
     }
-  }, [currentUser?.id, currentUser?.role, pathname, allowedRoles, router]);
+  }, [currentUser?.id, currentUser?.role, viewAs, pathname, allowedRoles, router]);
 
   if (!currentUser) {
     return null;
   }
 
-  if (allowedRoles && !allowedRoles.includes(currentUser.role)) {
+  // Xác định role hiệu dụng dựa trên viewAs
+  const effectiveRole = currentUser.role === "staff" && viewAs === "customer"
+    ? "customer"
+    : currentUser.role;
+
+  if (allowedRoles && !allowedRoles.includes(effectiveRole)) {
     return null;
   }
 

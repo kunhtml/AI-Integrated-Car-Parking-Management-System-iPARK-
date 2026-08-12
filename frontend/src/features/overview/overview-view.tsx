@@ -29,6 +29,8 @@ import {
   Zap,
 } from "lucide-react";
 import { useParkingApp } from "@/context/parking-app-context";
+import { apiFetch } from "@/lib/client-api";
+import { useDashboardPolling } from "@/hooks/use-dashboard-polling";
 import { currency } from "@/lib/constants";
 import type {
   ParkingSession,
@@ -49,6 +51,26 @@ function monthAgoStr() {
   const d = new Date();
   d.setDate(d.getDate() - 30);
   return d.toISOString().slice(0, 10);
+}
+
+function getSessionCheckInDate(session: Pick<ParkingSession, "checkIn" | "checkInDate"> & { checkInAt?: string }) {
+  if (session.checkInAt) {
+    const date = new Date(session.checkInAt);
+    if (!Number.isNaN(date.getTime())) return date;
+  }
+
+  const [day, month, year] = (session.checkInDate || "").split("/");
+  const date = new Date(`${year}-${month}-${day}T${session.checkIn || "00:00"}`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function sessionDateKey(session: Pick<ParkingSession, "checkIn" | "checkInDate"> & { checkInAt?: string }) {
+  const date = getSessionCheckInDate(session);
+  if (!date) return null;
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -370,10 +392,10 @@ function RecentSessions({ sessions }: { sessions: ParkingSession[] }) {
   const recent = useMemo(
     () =>
       [...sessions]
-        .filter((s) => s.checkIn)
+        .filter((s) => getSessionCheckInDate(s))
         .sort((a, b) => {
-          const ta = a.checkIn ? new Date(a.checkIn).getTime() : 0;
-          const tb = b.checkIn ? new Date(b.checkIn).getTime() : 0;
+          const ta = getSessionCheckInDate(a)?.getTime() ?? 0;
+          const tb = getSessionCheckInDate(b)?.getTime() ?? 0;
           return tb - ta;
         })
         .slice(0, 8),
@@ -392,10 +414,16 @@ function RecentSessions({ sessions }: { sessions: ParkingSession[] }) {
             <span className="staff-session-slot">{s.slot}</span>
           </div>
           <div className="staff-session-meta">
-            {s.checkIn && (
+            {getSessionCheckInDate(s) && (
               <span className="staff-session-time">
                 <Clock size={10} />
-                {new Date(s.checkIn).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
+                {getSessionCheckInDate(s)!.toLocaleString("vi-VN", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
               </span>
             )}
             <span
@@ -427,6 +455,7 @@ function TopCustomersList({ customers }: { customers: TopCustomer[] }) {
           <div className="staff-customer-avatar">{c.name?.charAt(0).toUpperCase() ?? "?"}</div>
           <div className="staff-customer-info">
             <span className="staff-customer-name">{c.name}</span>
+            <span className="staff-customer-sessions">Biển số: {c.plate || "—"}</span>
             <span className="staff-customer-sessions">{c.sessionCount} phiên</span>
           </div>
           <strong className="staff-customer-spent">{currency.format(c.totalSpent)}</strong>
@@ -440,10 +469,10 @@ function TopCustomersList({ customers }: { customers: TopCustomer[] }) {
 function ActivityFeed({ sessions }: { sessions: ParkingSession[] }) {
   const feed = useMemo(() => {
     return [...sessions]
-      .filter((s) => s.checkIn)
+      .filter((s) => getSessionCheckInDate(s))
       .sort((a, b) => {
-        const ta = a.checkIn ? new Date(a.checkIn).getTime() : 0;
-        const tb = b.checkIn ? new Date(b.checkIn).getTime() : 0;
+        const ta = getSessionCheckInDate(a)?.getTime() ?? 0;
+        const tb = getSessionCheckInDate(b)?.getTime() ?? 0;
         return tb - ta;
       })
       .slice(0, 10);
@@ -463,8 +492,11 @@ function ActivityFeed({ sessions }: { sessions: ParkingSession[] }) {
               <strong>{s.plate}</strong> {s.status === "Đang gửi" ? "vào" : "ra"}
             </span>
             <span className="staff-feed-time">
-              {s.checkIn &&
-                new Date(s.checkIn).toLocaleTimeString("vi-VN", {
+              {getSessionCheckInDate(s) &&
+                getSessionCheckInDate(s)!.toLocaleString("vi-VN", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
                   hour: "2-digit",
                   minute: "2-digit",
                 })}
@@ -480,24 +512,35 @@ function ActivityFeed({ sessions }: { sessions: ParkingSession[] }) {
 // ─── Revenue Bar Chart (admin) ───────────────────────────────────────────────
 function RevenueBarChart({ data, range }: { data: RevenueChartPoint[]; range: TimeRange }) {
   if (!data.length) return <p className="staff-empty">Chưa có dữ liệu doanh thu.</p>;
-  const maxRev = Math.max(...data.map((d) => d.revenue), 1);
+  const maxRevenue = Math.max(...data.map((point) => point.revenue), 1);
+  const compactNumber = new Intl.NumberFormat("vi-VN", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  });
 
   return (
-    <div className="staff-bar-chart">
-      <div className="staff-bar-inner">
-        {data.map((p, i) => (
-          <div key={i} className="staff-bar-col">
-            <div
-              className="staff-bar-fill"
-              style={{ height: `${(p.revenue / maxRev) * 100}%` }}
-              title={currency.format(p.revenue)}
-            />
-            <span className="staff-bar-val">{currency.formatShort(p.revenue)}</span>
-            <span className="staff-bar-label">
-              {range === "today" ? String(p.date).padStart(2, "0") + "h" : p.date.slice(5)}
-            </span>
-          </div>
-        ))}
+    <div className="staff-revenue-chart">
+      <h3 className="staff-revenue-chart-title">Doanh thu theo thời gian</h3>
+      <div className="staff-revenue-plot">
+        <div className="staff-revenue-axis" aria-hidden="true" />
+        <div className="staff-revenue-bars">
+          {data.map((point, index) => {
+            const height = (point.revenue / maxRevenue) * 100;
+            return (
+              <div className="staff-revenue-bar-column" key={`${point.date}-${index}`}>
+                <span className="staff-revenue-value">{compactNumber.format(point.revenue)}</span>
+                <div
+                  className="staff-revenue-bar"
+                  style={{ height: `${height}%` }}
+                  title={`${currency.format(point.revenue)} · ${point.count} phiên`}
+                />
+                <span className="staff-revenue-label">
+                  {range === "today" ? `${String(point.date).padStart(2, "0")}h` : point.date.slice(5)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -552,7 +595,7 @@ function StaffDashboard() {
   const todayStats = useMemo(() => {
     const today = todayStr();
     const todaySessions = sessions.filter((s) => {
-      const d = s.checkIn ? s.checkIn.slice(0, 10) : null;
+      const d = sessionDateKey(s);
       return d === today;
     });
     const entryCount = todaySessions.filter((s) => s.status !== "Hủy").length;
@@ -723,7 +766,7 @@ function StaffDashboard() {
                   <h2 className="staff-panel-title">Hoạt động hôm nay</h2>
                 </div>
               </div>
-              <span className="staff-panel-count">{sessions.filter((s) => s.checkIn?.startsWith(todayStr())).length}</span>
+              <span className="staff-panel-count">{sessions.filter((s) => sessionDateKey(s) === todayStr()).length}</span>
             </div>
             <RecentSessions sessions={sessions} />
           </div>
@@ -742,10 +785,22 @@ function AdminDashboard() {
     slotList,
     userList,
     registeredVehicles,
+    setSessions,
+    setZoneList,
+    setSlotList,
   } = useParkingApp();
   const [timeRange, setTimeRange] = useState<TimeRange>("7d");
   const [revenueData, setRevenueData] = useState<RevenueChartPoint[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Real-time polling for admin dashboard
+  useDashboardPolling({
+    enabled: true,
+    intervalMs: 30_000, // Poll every 30 seconds
+    onSessionsUpdate: setSessions,
+    onZonesUpdate: setZoneList,
+    onSlotsUpdate: setSlotList,
+  });
 
   const todayStats = useMemo(() => {
     const today = todayStr();
@@ -779,16 +834,24 @@ function AdminDashboard() {
   const paidSessionCount = sessions.filter((s) => s.fee > 0).length;
 
   const topCustomers: TopCustomer[] = useMemo(() => {
-    const map = new Map<string, { name: string; count: number; spent: number }>();
+    const map = new Map<string, { name: string; plate: string; count: number; spent: number }>();
     sessions.forEach((s) => {
-      const key = s.owner || "Khách vãng";
-      const e = map.get(key) ?? { name: key, count: 0, spent: 0 };
-      e.count += 1;
-      e.spent += s.fee || 0;
-      map.set(key, e);
+      const name = s.owner || "Khách vãng";
+      const plate = s.plate || "Không rõ biển số";
+      const key = `${name}:${plate}`;
+      const entry = map.get(key) ?? { name, plate, count: 0, spent: 0 };
+      entry.count += 1;
+      entry.spent += s.fee || 0;
+      map.set(key, entry);
     });
     return Array.from(map.entries())
-      .map(([userId, v]) => ({ userId, name: v.name, sessionCount: v.count, totalSpent: v.spent }))
+      .map(([userId, entry]) => ({
+        userId,
+        name: entry.name,
+        plate: entry.plate,
+        sessionCount: entry.count,
+        totalSpent: entry.spent,
+      }))
       .sort((a, b) => b.totalSpent - a.totalSpent)
       .slice(0, 5);
   }, [sessions]);
@@ -799,15 +862,15 @@ function AdminDashboard() {
       const from = timeRange === "today" ? todayStr() : timeRange === "7d" ? weekAgoStr() : monthAgoStr();
       const to = todayStr();
       const groupBy = timeRange === "today" ? "hour" : "day";
-      const res = await fetch(`http://localhost:4000/api/reports/revenue-chart?from=${from}&to=${to}&groupBy=${groupBy}`);
-      if (res.ok) {
-        const json = await res.json();
-        setRevenueData(json.data ?? []);
+      const res = await apiFetch(`/reports/revenue-chart?from=${from}&to=${to}&groupBy=${groupBy}`);
+      if (!res.ok) {
+        setRevenueData([]);
       } else {
-        setRevenueData(generateMockRevenue(from, to, groupBy));
+        const json = await res.json();
+        setRevenueData(Array.isArray(json.data) ? json.data : []);
       }
     } catch {
-      setRevenueData(generateMockRevenue(timeRange === "today" ? todayStr() : weekAgoStr(), todayStr(), "day"));
+      setRevenueData([]);
     }
     setLoading(false);
   };
@@ -961,23 +1024,4 @@ export function OverviewView() {
   }
 
   return <AdminDashboard />;
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-function generateMockRevenue(from: string, to: string, groupBy: string): RevenueChartPoint[] {
-  const points: RevenueChartPoint[] = [];
-  const fromDate = new Date(from);
-  const toDate = new Date(to);
-  const current = new Date(fromDate);
-  while (current <= toDate) {
-    const dateStr = current.toISOString().slice(0, 10);
-    points.push({
-      date: dateStr,
-      revenue: Math.floor(Math.random() * 500000) + 50000,
-      count: Math.floor(Math.random() * 20) + 5,
-    });
-    if (groupBy === "day") current.setDate(current.getDate() + 1);
-    else current.setDate(current.getDate() + 7);
-  }
-  return points;
 }

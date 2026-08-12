@@ -305,11 +305,13 @@ export async function lookupByPlate(request: Request, response: Response) {
       })
     : null;
   const isSubscriber = !!subscription;
+  const isResident = isSubscriber || vehicle?.status === "Đã đăng ký";
 
   if (card) {
     response.json({
       ok: true,
       isSubscriber,
+      isResident,
       card: serializeCard(card),
       vehicle: vehicle
         ? { id: vehicle._id.toString(), ownerName: vehicle.ownerName }
@@ -321,6 +323,7 @@ export async function lookupByPlate(request: Request, response: Response) {
   response.json({
     ok: true,
     isSubscriber,
+    isResident,
     card: null,
     vehicle: vehicle
       ? {

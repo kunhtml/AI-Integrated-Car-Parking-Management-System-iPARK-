@@ -70,12 +70,16 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
 export function WalletView() {
   const {
     currentUser,
+    viewAs,
     sessions,
     setSessions,
     transactionList,
     setTransactionList,
     confirmTransaction,
   } = useParkingApp();
+
+  // Dùng viewAs để xác định chế độ hiển thị
+  const isCustomer = currentUser?.role === "staff" ? viewAs === "customer" : currentUser?.role === "customer";
 
   const [checkingSessionId, setCheckingSessionId] = useState<string | null>(null);
   const [sessionCheckResult, setSessionCheckResult] = useState<{ id: string; status: string } | null>(null);
@@ -229,7 +233,7 @@ export function WalletView() {
                   <ExternalLink size={14} /> Mở link
                 </a>
               )}
-              {currentUser.role === "customer" && (
+              {isCustomer && (
                 <button
                   className="small-button"
                   onClick={() => setDetailTransaction(item)}
@@ -276,7 +280,7 @@ export function WalletView() {
           return (
             <div className="inline-actions" key={item.id}>
               <span style={{ color: "var(--color-success)" }}>✓</span>
-              {currentUser.role === "customer" && (
+              {isCustomer && (
                 <button
                   className="small-button"
                   onClick={() => setDetailTransaction(item)}
@@ -290,7 +294,7 @@ export function WalletView() {
         }
         return (
           <div className="inline-actions" key={item.id}>
-            {currentUser.role === "customer" && (
+            {isCustomer && (
               <button
                 className="small-button"
                 onClick={() => setDetailTransaction(item)}
@@ -309,7 +313,7 @@ export function WalletView() {
   return (
     <section className="content-grid">
       {/* Session chưa thanh toán */}
-      {currentUser.role === "customer" && unpaidSession && (
+      {isCustomer && unpaidSession && (
         <div className="panel">
           <div className="panel-heading">
             <div>

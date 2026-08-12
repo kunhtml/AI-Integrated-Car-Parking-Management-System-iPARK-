@@ -368,9 +368,7 @@ function ApprovedView({ application }: { application: StaffApplication }) {
       >
         <ShieldCheck size={16} style={{ flexShrink: 0, marginTop: 2 }} />
         <div>
-          Đơn của bạn đã được phê duyệt. Vui lòng{" "}
-          <b>đăng xuất và đăng nhập lại</b> để hệ thống cập nhật vai trò{" "}
-          <b>Nhân viên</b> cho tài khoản.
+          Đơn của bạn đã được phê duyệt. Bạn đang làm <b>Nhân viên</b>
         </div>
       </div>
 

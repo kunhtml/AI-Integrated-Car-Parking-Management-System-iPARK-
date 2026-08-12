@@ -26,12 +26,14 @@ import type {
   TopCustomer,
   TransactionItem,
   VehicleRequest,
+  ViewAsMode,
   Zone,
   ZoneSlotsResponse,
 } from "@/types";
 
 export type ParkingAppState = {
   mode: AuthMode;
+  viewAs: ViewAsMode;
   currentUser: DemoUser | null;
   sessions: ParkingSession[];
   registeredVehicles: RegisteredVehicle[];
@@ -72,6 +74,7 @@ export type ParkingAppState = {
 export function createInitialState(): ParkingAppState {
   return {
     mode: "login",
+    viewAs: "staff",
     currentUser: null,
     sessions: [],
     registeredVehicles: [],

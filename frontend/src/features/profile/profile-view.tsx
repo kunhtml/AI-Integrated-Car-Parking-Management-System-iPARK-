@@ -2050,7 +2050,10 @@ function maskEmail(email: string): string {
 
 // ─── Main Component ────────────────────────────────────────────────
 export function ProfileView() {
-  const { currentUser, setCurrentUser, logout } = useParkingApp();
+  const { currentUser, viewAs, setCurrentUser, logout } = useParkingApp();
+
+  // Dùng viewAs để xác định chế độ hiển thị
+  const isCustomer = currentUser?.role === "staff" ? viewAs === "customer" : currentUser?.role === "customer";
 
   const [editingField, setEditingField] = useState<string | null>(null);
   const [fieldMsg, setFieldMsg] = useState<{
@@ -2111,7 +2114,8 @@ export function ProfileView() {
   return (
     <div className="content-grid" style={{ gap: 24, padding: "0 0 40px" }}>
       {/* ── Avatar + Info ──────────────────────────────────────────── */}
-      <section style={sectionStyle}>
+      <div>
+        <section style={sectionStyle}>
         <div style={headingStyle}>
           <div>
             <p style={sectionLabelStyle}>Hồ sơ cá nhân</p>
@@ -2198,11 +2202,10 @@ export function ProfileView() {
           />
         </div>
       </section>
+      </div>
 
-      {/* ── Đăng ký làm nhân viên (chỉ customer) ───────────────── */}
-      {currentUser.role === "customer" && <StaffApplicationCard />}
-
-      {/* ── Bảo mật (chỉ 2 button) ───────────────────────────────── */}
+      {/* ── Bảo mật ──────────────────────────────────────────────── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       <section style={sectionStyle}>
         <div style={headingStyle}>
           <div>
@@ -2479,6 +2482,10 @@ export function ProfileView() {
           </button>
         </div>
       </section>
+
+      {/* ── Đăng ký làm nhân viên ────────────────────────────────── */}
+      {isCustomer && <StaffApplicationCard />}
+      </div>
 
       {/* ── Modals ───────────────────────────────────────────────── */}
       {changePwOpen && (

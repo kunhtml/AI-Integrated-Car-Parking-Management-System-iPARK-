@@ -7,7 +7,7 @@ export const defaultPricingConfig = {
   nightRate: 10000,
   dayStartHour: 6,
   nightStartHour: 22,
-  gracePeriod: 0,
+  gracePeriod: 20,
   maxMinutes: 1440,
 };
 
@@ -78,7 +78,7 @@ export function calculateParkingFee(
   checkInAt: Date,
   checkOutAt: Date,
   config: Pick<PricingConfigDocument, "dayRate" | "nightRate"> &
-    Partial<Pick<PricingConfigDocument, "dayStartHour" | "nightStartHour">>,
+    Partial<Pick<PricingConfigDocument, "dayStartHour" | "nightStartHour" | "freeMinutes" | "gracePeriod">>,
 ): FeeBreakdown {
   const dailyBreakdown: DailyBreakdownItem[] = [];
 
@@ -118,16 +118,19 @@ export function calculateParkingFee(
     currentDay.setDate(currentDay.getDate() + 1);
   }
 
-  const totalFee = dailyBreakdown.reduce((sum, d) => sum + d.fee, 0);
   const totalMinutes = Math.max(
     0,
     Math.round((checkOutAt.getTime() - checkInAt.getTime()) / 60000),
   );
+  const freeMinutes = config.gracePeriod ?? config.freeMinutes ?? 20;
+  const totalFee = totalMinutes <= freeMinutes
+    ? 0
+    : dailyBreakdown.reduce((sum, d) => sum + d.fee, 0);
 
   return {
     totalMinutes,
-    freeMinutes: 0,
-    billableMinutes: totalMinutes,
+    freeMinutes,
+    billableMinutes: Math.max(0, totalMinutes - freeMinutes),
     billableHours: 0,
     hourlyRate: 0,
     parkingFee: totalFee,

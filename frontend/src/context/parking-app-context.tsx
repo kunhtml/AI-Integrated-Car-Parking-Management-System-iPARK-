@@ -63,6 +63,7 @@ import type {
   TopCustomer,
   TransactionItem,
   VehicleRequest,
+  ViewAsMode,
   Zone,
   ZoneSlotsResponse,
 } from "@/types";
@@ -71,6 +72,8 @@ import type { FormEvent } from "react";
 type ParkingAppContextValue = {
   mode: AuthMode;
   setMode: (mode: AuthMode) => void;
+  viewAs: ViewAsMode;
+  setViewAs: (mode: ViewAsMode) => void;
   currentUser: DemoUser | null;
   setCurrentUser: (user: DemoUser | null) => void;
   sessions: ParkingSession[];
@@ -212,7 +215,9 @@ type ParkingAppContextValue = {
   ) => Promise<void>;
   removeVehicle: (id: string) => Promise<void>;
   zoneList: Zone[];
+  setZoneList: (zones: Zone[] | ((prev: Zone[]) => Zone[])) => void;
   slotList: ParkingSlot[];
+  setSlotList: (slots: ParkingSlot[] | ((prev: ParkingSlot[]) => ParkingSlot[])) => void;
   createZone: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   updateZone: (id: string, updates: Partial<Zone>) => Promise<void>;
   deleteZone: (id: string) => Promise<void>;
@@ -313,6 +318,10 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
 
   const setMode = useCallback(
     (mode: AuthMode) => setState((s) => ({ ...s, mode })),
+    [],
+  );
+  const setViewAs = useCallback(
+    (viewAs: ViewAsMode) => setState((s) => ({ ...s, viewAs })),
     [],
   );
   const setCurrentUser = useCallback(
@@ -884,6 +893,8 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
     () => ({
       mode: state.mode,
       setMode,
+      viewAs: state.viewAs,
+      setViewAs,
       currentUser: state.currentUser,
       setCurrentUser,
       sessions: state.sessions,
@@ -925,7 +936,9 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       ...miscActions,
       ...vehicleActions,
       zoneList: state.zoneList,
+      setZoneList,
       slotList: state.slotList,
+      setSlotList,
       ...zoneActions,
       ...slotActions,
       reloadSlots,
@@ -986,6 +999,7 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       userActions,
       shiftScheduleActions,
       capacityActions,
+      setViewAs,
     ],
   );
 

@@ -15,7 +15,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 
 export const reportsRoutes = Router();
 
-reportsRoutes.use(requireAuth, requireRole("admin"));
+reportsRoutes.use(requireAuth, requireRole("admin", "staff"));
 reportsRoutes.get("/summary", asyncHandler(getReportSummary));
 reportsRoutes.get("/export", asyncHandler(exportReport));
 reportsRoutes.get("/revenue-chart", asyncHandler(revenueChartHandler));

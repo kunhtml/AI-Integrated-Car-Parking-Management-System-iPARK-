@@ -120,6 +120,7 @@ function EmptyState({ hasFilter, onReset }: { hasFilter: boolean; onReset: () =>
 export function SessionsView() {
   const {
     currentUser,
+    viewAs,
     filteredSessions,
     searchText,
     setSearchText,
@@ -137,7 +138,8 @@ export function SessionsView() {
 
   if (!currentUser) return null;
 
-  const isCustomer = currentUser.role === "customer";
+  // Dùng viewAs để xác định chế độ hiển thị
+  const isCustomer = currentUser.role === "staff" ? viewAs === "customer" : currentUser.role === "customer";
   const isAdmin = currentUser.role === "admin";
 
   // Keyboard shortcut: "/" focuses search (admin only)
