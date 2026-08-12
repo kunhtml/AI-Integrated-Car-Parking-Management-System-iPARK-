@@ -19,6 +19,9 @@ export type DeviceDocument = {
   username?: string;
   password?: string;
   roiNote?: string;
+  roi?: unknown;
+  autoScanEnabled?: boolean;
+  autoScanIntervalSeconds?: number;
   status: "online" | "offline" | "unknown";
   lastSnapshotUrl?: string;
   lastSnapshotAt?: Date;
@@ -39,6 +42,9 @@ const deviceSchema = new Schema<DeviceDocument>(
     username: { type: String },
     password: { type: String },
     roiNote: { type: String },
+    roi: { type: Schema.Types.Mixed },
+    autoScanEnabled: { type: Boolean, default: false },
+    autoScanIntervalSeconds: { type: Number, default: 10, min: 1 },
     status: { type: String, enum: ["online", "offline", "unknown"], default: "unknown" },
     lastSnapshotUrl: { type: String },
     lastSnapshotAt: { type: Date },

@@ -96,8 +96,8 @@ BRIDGE_SERVICE_TOKEN = os.getenv(
     "BRIDGE_SERVICE_TOKEN",
     "ipark-bridge-token-2026-change-me-in-production",
 )
-SERIAL_PORT_IN = os.getenv("SERIAL_PORT_IN", "COM3")
-SERIAL_PORT_OUT = os.getenv("SERIAL_PORT_OUT", "COM5")
+SERIAL_PORT_IN = os.getenv("SERIAL_PORT_IN", os.getenv("ESP32_IN_PORT", "COM3"))
+SERIAL_PORT_OUT = os.getenv("SERIAL_PORT_OUT", os.getenv("ESP32_OUT_PORT", "COM5"))
 CAMERA_INDEX_IN = int(os.getenv("CAMERA_INDEX_IN", "0"))
 CAMERA_INDEX_OUT = int(os.getenv("CAMERA_INDEX_OUT", "1"))
 # Backend camera trên Windows. DSHOW (DirectShow) ổn định hơn MSMF cho
@@ -220,14 +220,17 @@ class BackendClient:
                 timeout=10,
             )
             data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
-            return {
+            result = {
                 "ok": r.ok,
                 "status_code": r.status_code,
                 "created": data.get("created", False),
                 "card": data.get("card"),
                 "code": data.get("code"),
-                "message": data.get("message", ""),
+                "message": data.get("message", "") or data.get("error", ""),
             }
+            if not r.ok:
+                print(f"[BACKEND][RFID][SCAN] rejected status={r.status_code} uid={uid!r} response={data}")
+            return result
         except Exception as e:
             print("[BACKEND][RFID][SCAN] error:", e)
             return {"ok": False, "created": False, "card": None, "message": str(e)}
@@ -526,39 +529,51 @@ _stream_events: dict[str, threading.Event] = {
 # Cached host URL cho background thread (cập nhật mỗi request)
 _last_bridge_host = ""
 
-scan_enabled = False
-scan_start_time = 0
-scan_timeout = None
-last_scanned_uid = None
-scan_result = None
-scan_message = ""
-scan_direction = "in"
+scan_enabled_by_direction = {"in": False, "out": False}
+scan_start_time_by_direction = {"in": 0.0, "out": 0.0}
+scan_timeout_by_direction = {"in": None, "out": None}
+last_scanned_uid_by_direction = {"in": None, "out": None}
+scan_result_by_direction = {"in": None, "out": None}
+scan_message_by_direction = {"in": "", "out": ""}
 
 
 # ==== RFID SCAN POLLING STATE (cho Flask UI) ====
-def poll_rfid_scan_state():
-    """Trả về dict trạng thái scan để Flask UI poll."""
+def _normalize_scan_direction(direction: str) -> str:
+    return direction if direction in ("in", "out") else "in"
+
+
+def _serial_for_direction(direction: str):
+    return (arduino_in, serial_lock_in) if direction == "in" else (arduino_out, serial_lock_out)
+
+
+def _stop_rfid_scan(direction: str):
+    direction = _normalize_scan_direction(direction)
+    scan_enabled_by_direction[direction] = False
+    ser, lock = _serial_for_direction(direction)
+    safe_write(ser, lock, "SCAN_OFF")
+
+
+def poll_rfid_scan_state(direction="in"):
+    direction = _normalize_scan_direction(direction)
     return {
-        "scanEnabled": scan_enabled,
-        "scanResult": scan_result,
-        "scanMessage": scan_message,
-        "lastScannedUid": last_scanned_uid,
-        "scanStartTime": scan_start_time,
+        "scanEnabled": scan_enabled_by_direction[direction],
+        "scanResult": scan_result_by_direction[direction],
+        "scanMessage": scan_message_by_direction[direction],
+        "lastScannedUid": last_scanned_uid_by_direction[direction],
+        "scanStartTime": scan_start_time_by_direction[direction],
+        "direction": direction,
     }
 
 
 def set_rfid_scan_enabled(value: bool, direction: str = "in"):
-    global scan_enabled, scan_start_time, scan_result, last_scanned_uid, scan_message, scan_direction
-    scan_enabled = value
-    scan_start_time = time.time() if value else 0
-    scan_result = None
-    scan_message = ""
-    last_scanned_uid = None
-    scan_direction = direction if direction in ("in", "out") else "in"
-    if value:
-        send_to_both("SCAN_ON")
-    else:
-        send_to_both("SCAN_OFF")
+    direction = _normalize_scan_direction(direction)
+    scan_enabled_by_direction[direction] = value
+    scan_start_time_by_direction[direction] = time.time() if value else 0
+    scan_result_by_direction[direction] = None
+    last_scanned_uid_by_direction[direction] = None
+    scan_message_by_direction[direction] = ""
+    ser, lock = _serial_for_direction(direction)
+    safe_write(ser, lock, "SCAN_ON" if value else "SCAN_OFF")
 
 
 # ==== OCR & XỬ LÝ FRAME ====
@@ -793,9 +808,9 @@ def process_frame(frame, plate_counter, last_plate, last_seen_time, prefix, ser,
 
 # ==== ĐỌC TỪ ARDUINO ====
 def read_from_arduino(ser, ser_out=None, direction="in"):
-    global scan_enabled, last_scanned_uid, scan_result, pending_vehicle_info
+    global pending_vehicle_info
+    direction = _normalize_scan_direction(direction)
 
-    # ser=None khi COM port chưa cắm/không mở được -> skip, không crash thread.
     if ser is None or ser.in_waiting <= 0:
         return
 
@@ -804,129 +819,85 @@ def read_from_arduino(ser, ser_out=None, direction="in"):
         return
 
     if line.startswith("UID:"):
-        print("[SCAN][UID RAW]", line)
+        print(f"[SCAN][{direction.upper()}][UID RAW]", line)
 
-    # RFID UID SCAN — Staff quét thẻ trắng替客人 tạo phiên
-    # Flow: Camera OCR detect biển số → lookup subscriber ngay →
-    #       Staff quét thẻ → dùng kết quả đã lưu → tạo card đúng loại
-    if scan_enabled and line.startswith("UID:"):
+    if scan_enabled_by_direction[direction] and line.startswith("UID:"):
         uid = line.replace("UID:", "").strip()
         if not uid:
             return
 
-        if scan_direction == "out":
-            scan_result = "success"
-            scan_message = ""
-            last_scanned_uid = uid
-            scan_enabled = False
-            send_to_both("SCAN_OFF")
+        scan_result_by_direction[direction] = "success"
+        scan_message_by_direction[direction] = ""
+        last_scanned_uid_by_direction[direction] = uid
+
+        if direction == "out":
+            _stop_rfid_scan(direction)
             return
 
-        # Kiểm tra lookup đã hoàn tất chưa (background thread có thể chưa xong)
         if not pending_vehicle_info.get("lookupDone"):
             waited = 0.0
             while waited < 5.0 and not pending_vehicle_info.get("lookupDone"):
                 time.sleep(0.2)
                 waited += 0.2
             if not pending_vehicle_info.get("lookupDone"):
-                scan_result = "error"
-                scan_message = "Đang xác minh biển số, vui lòng thử lại."
-                last_scanned_uid = uid
-                scan_enabled = False
-                send_to_both("SCAN_OFF")
+                scan_result_by_direction[direction] = "error"
+                scan_message_by_direction[direction] = "Đang xác minh biển số, vui lòng thử lại."
+                _stop_rfid_scan(direction)
                 return
 
-        # Kiểm tra lookup có bị lỗi không — fail-safe: không cho scan
         if pending_vehicle_info.get("lookupError"):
-            scan_result = "error"
-            scan_message = "Không thể xác minh thông tin xe, vui lòng thử lại."
-            last_scanned_uid = uid
-            scan_enabled = False
+            scan_result_by_direction[direction] = "error"
+            scan_message_by_direction[direction] = "Không thể xác minh thông tin xe, vui lòng thử lại."
             pending_vehicle_info = {"plate": "", "lookupDone": False, "lookupError": False, "isSubscriber": False, "ownerName": "Guest", "vehicle": None, "detectedAt": 0.0}
-            send_to_both("SCAN_OFF")
+            _stop_rfid_scan(direction)
             return
 
-        # Kiểm tra timeout — dữ liệu quá cũ thì không dùng
         elapsed = time.time() - (pending_vehicle_info.get("detectedAt") or 0)
         if elapsed > _PENDING_TIMEOUT:
-            scan_result = "error"
-            scan_message = "Dữ liệu biển số đã hết hạn. Xe vui lòng lùi lại để camera nhận lại."
-            last_scanned_uid = uid
-            scan_enabled = False
+            scan_result_by_direction[direction] = "error"
+            scan_message_by_direction[direction] = "Dữ liệu biển số đã hết hạn. Xe vui lòng lùi lại để camera nhận lại."
             pending_vehicle_info = {"plate": "", "lookupDone": False, "lookupError": False, "isSubscriber": False, "ownerName": "Guest", "vehicle": None, "detectedAt": 0.0}
-            send_to_both("SCAN_OFF")
+            _stop_rfid_scan(direction)
             return
 
-        # Kiểm tra plate trong pending_vehicle_info khớp với biển số hiện tại
-        # (tránh trường hợp xe A detect xong, xe B tiến vào nhưng pending chưa reset)
         pending_plate = _normalize_plate(pending_vehicle_info.get("plate") or "")
         current_plate = pending_plate or _normalize_plate(last_detected_plate_in or "")
         if pending_plate and pending_plate != _normalize_plate(last_detected_plate_in or ""):
-            # Biển số đã thay đổi (xe mới tiến vào) → bỏ qua pending cũ
-            scan_result = "error"
-            scan_message = "Biển số đã thay đổi, vui lòng chờ camera nhận lại."
-            last_scanned_uid = uid
-            scan_enabled = False
+            scan_result_by_direction[direction] = "error"
+            scan_message_by_direction[direction] = "Biển số đã thay đổi, vui lòng chờ camera nhận lại."
             pending_vehicle_info = {"plate": "", "lookupDone": False, "lookupError": False, "isSubscriber": False, "ownerName": "Guest", "vehicle": None, "detectedAt": 0.0}
-            send_to_both("SCAN_OFF")
+            _stop_rfid_scan(direction)
             return
 
         is_subscriber = pending_vehicle_info.get("isSubscriber", False)
         owner_name = pending_vehicle_info.get("ownerName") or "Guest"
         card_user_type = "resident" if is_subscriber else "guest"
-
         result = backend.rfid_scan_register(uid, owner_name=owner_name, plate=current_plate, user_type=card_user_type)
         if not result.get("ok"):
-            scan_result = "error"
-            scan_message = result.get("message") or "Thẻ RFID không hợp lệ hoặc đã bị vô hiệu hóa."
+            scan_result_by_direction[direction] = "error"
+            scan_message_by_direction[direction] = result.get("message") or f"Backend từ chối thẻ (HTTP {result.get('status_code', 0)})."
         else:
-            # Thẻ đã tồn tại hoặc mới tạo — đều hợp lệ
-            scan_result = "success"
-            scan_message = ""
-
-            # Đồng bộ card + plate xuống ESP32 (cả IN và OUT)
             sync_cmd = f"ADD|{uid}|{owner_name}|{current_plate}|{card_user_type}|active"
             send_to_both(sync_cmd)
-
-            # Nếu có plate OCR → tạo phiên gửi xe
             if current_plate:
                 image_path = capture_snapshot_for_event("in", base_url=_last_bridge_host)
-                push_result = backend.push_camera_log(
-                    direction="in",
-                    detected_plate=current_plate,
-                    confidence=0.95,
-                    rfid_uid=uid,
-                    owner_name=owner_name,
-                    plate=current_plate,
-                    user_type=card_user_type,
-                    image_path=image_path,
-                    metadata={
-                        "source": "staff-scan",
-                        "snapshot": bool(image_path),
-                        "isSubscriber": is_subscriber,
-                    },
-                )
-
-                # Chỉ mở barrier nếu tạo session thành công
+                push_result = backend.push_camera_log(direction="in", detected_plate=current_plate, confidence=0.95, rfid_uid=uid, owner_name=owner_name, plate=current_plate, user_type=card_user_type, image_path=image_path, metadata={"source": "staff-scan", "snapshot": bool(image_path), "isSubscriber": is_subscriber})
                 if push_result.get("ok"):
                     open_gate("in")
                     def _auto_close_in():
                         time.sleep(5)
                         close_gate("in")
                     threading.Thread(target=_auto_close_in, daemon=True).start()
-
                     user_label = "Resident" if is_subscriber else "Guest"
-                    scan_message = f"{user_label}: {current_plate} — barrier opened"
+                    scan_message_by_direction[direction] = f"{user_label}: {current_plate} — barrier opened"
                 else:
-                    scan_result = "error"
-                    scan_message = "Không tạo được phiên gửi xe. Barrier không mở."
+                    scan_result_by_direction[direction] = "error"
+                    scan_message_by_direction[direction] = "Không tạo được phiên gửi xe. Barrier không mở."
             else:
-                scan_message = "Chưa detect được biển số. Vui lòng chờ camera nhận biển."
+                scan_message_by_direction[direction] = "Chưa detect được biển số. Vui lòng chờ camera nhận biển."
 
-        last_scanned_uid = uid
-        scan_enabled = False
         pending_vehicle_info = {"plate": "", "lookupDone": False, "lookupError": False, "isSubscriber": False, "ownerName": "Guest", "vehicle": None, "detectedAt": 0.0}
-        send_to_both("SCAN_OFF")
+        _stop_rfid_scan(direction)
         return
 
     # DATA log từ ESP32
@@ -1119,10 +1090,12 @@ def _ocr_worker(frame_copy, plate_counter, last_plate, last_seen_time,
                             "vehicle": None,
                             "detectedAt": time.time(),
                         }
-                # Đánh dấu đang lookup (lookupDone=False) để scan handler biết phải chờ
+                # Khởi tạo trạng thái trước khi chạy lookup nền để không ghi đè
+                # kết quả lookup nếu thread hoàn thành rất nhanh.
                 pending_vehicle_info = {
                     "plate": detected,
                     "lookupDone": False,
+                    "lookupError": False,
                     "isSubscriber": False,
                     "ownerName": "Guest",
                     "vehicle": None,
@@ -1294,7 +1267,7 @@ def capture_snapshot_for_event(direction: str, base_url: str = "") -> str:
     direction: "in" | "out"
     base_url: nếu truyền vào, trả về absolute URL để frontend backend hiển thị được.
     """
-    global last_snapshot_in, last_snapshot_out, last_scanned_uid, last_detected_plate_in, last_detected_plate_out
+    global last_snapshot_in, last_snapshot_out, last_detected_plate_in, last_detected_plate_out
     direction_norm = (direction or "").lower().strip()
     if direction_norm not in ("in", "out"):
         direction_norm = "in"
@@ -1309,7 +1282,7 @@ def capture_snapshot_for_event(direction: str, base_url: str = "") -> str:
             try:
                 now = datetime.now()
                 ts = now.strftime("%Y%m%d_%H%M%S_%f")[:-3]
-                uid_part = (last_scanned_uid or "anon").replace(":", "").replace("|", "")[:24]
+                uid_part = (last_scanned_uid_by_direction[direction_norm] or "anon").replace(":", "").replace("|", "")[:24]
                 plate_part = (last_detected_plate_in if direction_norm == "in" else last_detected_plate_out) or ""
                 plate_norm = _normalize_plate(plate_part) or "nopl"
                 new_fname = f"{direction_norm}_{ts}_{plate_norm}_{uid_part}.jpg"
@@ -1334,7 +1307,7 @@ def capture_snapshot_for_event(direction: str, base_url: str = "") -> str:
     # ---- FALLBACK: chụp từ last_frame (giống hành vi cũ) ----
     now = datetime.now()
     ts = now.strftime("%Y%m%d_%H%M%S_%f")[:-3]
-    uid_part = (last_scanned_uid or "anon").replace(":", "").replace("|", "")[:24]
+    uid_part = (last_scanned_uid_by_direction[direction_norm] or "anon").replace(":", "").replace("|", "")[:24]
     plate_part = (last_detected_plate_in if direction_norm == "in" else last_detected_plate_out) or ""
     plate_norm = _normalize_plate(plate_part) or "nopl"
     fname = f"{direction_norm}_{ts}_{plate_norm}_{uid_part}.jpg"
@@ -1737,24 +1710,34 @@ def start_rfid_scan():
 
 @app.route("/api/rfid/scan/poll")
 def poll_rfid_scan():
-    state = poll_rfid_scan_state()
+    direction = _normalize_scan_direction(request.args.get("direction", "in"))
+    state = poll_rfid_scan_state(direction)
+    timeout = scan_timeout_by_direction[direction]
     if not state["scanEnabled"] and state["scanResult"] is None:
-        return jsonify({"status": "idle"})
-    if state["scanEnabled"] and scan_timeout is not None and time.time() - state["scanStartTime"] > scan_timeout:
-        set_rfid_scan_enabled(False)
-        state["scanResult"] = "timeout"
+        return jsonify({"status": "idle", "direction": direction})
+    if state["scanEnabled"] and timeout is not None and time.time() - state["scanStartTime"] > timeout:
+        scan_result_by_direction[direction] = "timeout"
+        _stop_rfid_scan(direction)
+        state = poll_rfid_scan_state(direction)
     if state["scanResult"] is None:
-        return jsonify({"status": "waiting"})
+        return jsonify({"status": "waiting", "direction": direction})
     return jsonify({
         "status": state["scanResult"],
         "uid": state["lastScannedUid"],
         "message": state.get("scanMessage", ""),
+        "direction": direction,
     })
 
 
 @app.route("/api/rfid/scan/cancel", methods=["POST"])
 def cancel_rfid_scan():
-    set_rfid_scan_enabled(False)
+    body = request.get_json(silent=True) or {}
+    direction = body.get("direction")
+    if direction in ("in", "out"):
+        set_rfid_scan_enabled(False, direction)
+    else:
+        for scan_direction in ("in", "out"):
+            set_rfid_scan_enabled(False, scan_direction)
     return jsonify({"ok": True})
 
 

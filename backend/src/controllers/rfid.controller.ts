@@ -114,25 +114,23 @@ export async function lookupRfidCardByUid(
 }
 
 export async function createRfidCard(request: Request, response: Response) {
+  // This legacy endpoint only registers Guest cards into inventory.
+  // Member cards must be sold through rfidSales.service so they are linked 1:1
+  // with an existing vehicle and its owner.
   const body = z
     .object({
       uid: z.string().trim().min(1),
-      ownerName: z.string().trim().optional(),
-      plate: z.string().trim().optional(),
-      userType: z.enum(["resident", "guest"]).default("guest"),
       notes: z.string().trim().optional(),
     })
     .parse(request.body);
 
   const uid = body.uid.trim();
-  const plate = normalizePlate(body.plate || "");
-
   const existing = await RfidCard.findOne({ uid });
   if (existing) {
     response.status(409).json({
       ok: false,
       code: "duplicate",
-      message: `UID ${uid} đã tồn tại.`,
+      message: `UID ${uid} already exists.`,
       card: serializeCard(existing),
     });
     return;
@@ -140,16 +138,18 @@ export async function createRfidCard(request: Request, response: Response) {
 
   const card = await RfidCard.create({
     uid,
-    ownerName: body.ownerName || "Guest",
-    plate,
-    userType: body.userType,
-    status: "active",
+    ownerName: "Guest",
+    plate: "",
+    userType: "guest",
+    cardType: "guest",
+    status: "available",
     notes: body.notes,
   });
-
-  response.status(201).json({ ok: true, card: serializeCard(card) });
+  response.status(201).json({
+    ok: true,
+    card: serializeCard(card),
+  });
 }
-
 export async function updateRfidCard(request: Request, response: Response) {
   const body = z
     .object({
@@ -231,38 +231,38 @@ export async function registerScannedCard(
       uid: z.string().trim().min(1),
       ownerName: z.string().trim().optional(),
       plate: z.string().trim().optional(),
-      userType: z.enum(["resident", "guest"]).default("guest"),
+      userType: z.enum(["resident", "guest"]).optional(),
     })
     .parse(request.body);
 
   const uid = body.uid.trim();
+  const ownerName = body.ownerName?.trim() || "Guest";
+  const plate = normalizePlate(body.plate || "");
+  const userType = body.userType || "guest";
   let card = await RfidCard.findOne({ uid });
-
   if (card) {
     if (card.status === "inactive") {
       response.status(403).json({
         ok: false,
         code: "CARD_INACTIVE",
-        message: "Thẻ RFID đã bị vô hiệu hóa, không thể sử dụng.",
+        message: "RFID card is inactive and cannot be used.",
       });
       return;
     }
-    response.json({
-      ok: true,
-      created: false,
-      card: serializeCard(card),
-    });
+    response.json({ ok: true, created: false, card: serializeCard(card) });
     return;
   }
 
+  // A scanned unknown card enters Guest inventory. It cannot become Member
+  // until the explicit card-sale flow binds it to an owner and vehicle.
   card = await RfidCard.create({
     uid,
-    ownerName: body.ownerName || "Guest",
-    plate: normalizePlate(body.plate || ""),
-    userType: body.userType,
-    status: "active",
+    ownerName,
+    plate,
+    userType,
+    cardType: "guest",
+    status: "available",
   });
-
   response.status(201).json({
     ok: true,
     created: true,
@@ -271,9 +271,8 @@ export async function registerScannedCard(
 }
 
 /**
- * Đồng bộ: trả về toàn bộ thẻ active để Python đẩy xuống ESP32.
- */
-export async function exportAllCards(_request: Request, response: Response) {
+ * Synchronization: return active cards for the ESP32 device.
+ */export async function exportAllCards(_request: Request, response: Response) {
   const cards = await RfidCard.find({ status: "active" }).sort({
     createdAt: 1,
   });

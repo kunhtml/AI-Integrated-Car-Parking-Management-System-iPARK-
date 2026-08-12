@@ -6,6 +6,7 @@ export type AiDetectionResult = {
   rawText: string;
   vehicleType: string;
   imageHash: string;
+  detectionMethod?: string;
 };
 
 export async function detectVehicleImage(file: Express.Multer.File): Promise<AiDetectionResult> {

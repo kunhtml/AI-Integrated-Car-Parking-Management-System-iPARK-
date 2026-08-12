@@ -141,6 +141,13 @@ export async function handlePayOSWebhook(request: Request, response: Response) {
     if (transaction) {
       // Idempotent: already processed
       if (transaction.status === "paid") {
+        if (transaction.transactionType === "rfid_sale" || transaction.transactionType === "rfid_replacement") {
+          const { finalizePaidRfidTransaction } = await import("./rfidSales.service.js");
+          await finalizePaidRfidTransaction(transaction._id.toString());
+          console.log("[PayOS Webhook] Reconciled paid RFID transaction:", orderCode);
+          response.json({ message: "RFID payment already applied" });
+          return;
+        }
         console.log("[PayOS Webhook] Already paid, skipping:", orderCode);
         response.json({ message: "Already processed" });
         return;
@@ -176,6 +183,15 @@ export async function handlePayOSWebhook(request: Request, response: Response) {
     transaction.note = webhookData.data.reference || String(orderCode);
     if (session && !transaction.sessionId) transaction.sessionId = session._id;
     await transaction.save();
+
+    // Giao dịch bán/cấp lại thẻ RFID → kích hoạt thẻ sau khi PayOS báo paid
+    if (transaction.transactionType === "rfid_sale" || transaction.transactionType === "rfid_replacement") {
+      const { finalizePaidRfidTransaction } = await import("./rfidSales.service.js");
+      await finalizePaidRfidTransaction(transaction._id.toString());
+      console.log(`[PayOS Webhook] RFID transaction ${transaction._id} activated.`);
+      response.json({ message: "RFID payment applied" });
+      return;
+    }
 
     // Giao dịch mua/gia hạn gói thành viên → kích hoạt / cộng ngày
     if (transaction.subscriptionId) {

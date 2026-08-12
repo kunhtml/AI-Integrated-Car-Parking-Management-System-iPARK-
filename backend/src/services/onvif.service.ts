@@ -40,9 +40,9 @@ export async function handleOnvifMotionEvent(deviceId: string, eventData: any) {
 
     // Ghi log pending ngay (với detectionMethod rõ ràng)
     await safeCreateRecognitionLog({
-      action: "camera-motion",
+      action: "camera-entry",
       source: "camera",
-      status: "pending",
+      status: "pending-verification",
       deviceId,
       deviceName: device.name,
       detectionMethod: "camera",
@@ -51,7 +51,7 @@ export async function handleOnvifMotionEvent(deviceId: string, eventData: any) {
 
     // Xử lý detection — async nếu có Redis, sync nếu không
     await addDetectJob({
-      action: "camera-motion",
+      action: "camera-entry",
       source: "camera",
       deviceId,
       deviceName: device.name,
@@ -92,9 +92,9 @@ export async function handleOnvifEvent(deviceId: string, eventData: any) {
 
   // Ghi log pending
   await safeCreateRecognitionLog({
-    action: "camera-motion",
+    action: "camera-entry",
     source: "camera",
-    status: "pending",
+    status: "pending-verification",
     deviceId,
     deviceName: device.name,
     detectionMethod: "camera",
@@ -103,7 +103,7 @@ export async function handleOnvifEvent(deviceId: string, eventData: any) {
 
   // Xử lý detection — async nếu có Redis, sync nếu không
   await addDetectJob({
-    action: "camera-motion",
+    action: "camera-entry",
     source: "camera",
     deviceId,
     deviceName: device.name,

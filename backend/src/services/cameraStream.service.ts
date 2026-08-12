@@ -5,7 +5,7 @@ import path from "node:path";
 import ffmpegPath from "ffmpeg-static";
 
 type StreamEntry = {
-  process: ChildProcess;
+  process: any;
   viewers: number;
   createdAt: Date;
 };
@@ -33,12 +33,12 @@ function buildInputUrl(params: {
   return url;
 }
 
-function startFfmpeg(args: string[]) {
+function startFfmpeg(args: string[]): any {
   if (!ffmpegPath) {
     throw new Error("ffmpeg-static chưa được cài đặt. Không phát được stream camera.");
   }
 
-  return spawn(ffmpegPath, args, { stdio: ["ignore", "pipe", "pipe"] });
+  return spawn(ffmpegPath as unknown as string, args, { stdio: ["ignore", "pipe", "pipe"] }) as any;
 }
 
 export async function captureSnapshotFromDevice(params: {
@@ -70,7 +70,7 @@ export async function captureSnapshotFromDevice(params: {
       stderr += chunk.toString();
     });
 
-    process.on("close", (code) => {
+    process.on("close", (code: number | null) => {
       if (code === 0) {
         resolve();
       } else {

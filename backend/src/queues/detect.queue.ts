@@ -84,14 +84,17 @@ interface DetectJobData {
 
 async function processDetectLogic(data: Record<string, unknown>) {
   const {
-    deviceId,
+    deviceId: rawDeviceId,
     action = "camera-motion",
     source = "camera",
     imageBase64,
-    deviceName,
-    sessionId,
+    deviceName: rawDeviceName,
+    sessionId: rawSessionId,
     ...rest
   } = data;
+  const deviceId = typeof rawDeviceId === "string" ? rawDeviceId : undefined;
+  const deviceName = typeof rawDeviceName === "string" ? rawDeviceName : undefined;
+  const sessionId = typeof rawSessionId === "string" ? rawSessionId : undefined;
 
   let imageBuffer: Buffer | null = null;
 

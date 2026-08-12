@@ -1,8 +1,9 @@
 import { Device, DeviceDocument } from "../models/Device.js";
 import { ParkingSession } from "../models/ParkingSession.js";
 import { Vehicle } from "../models/Vehicle.js";
-import { allocateCarSlot, canEnterParking, parkingConfig } from "../config/parking.js";
-import { detectVehicleImage, saveUploadedImage } from "./ai.service.js";
+import { allocateSlot, occupySlot } from "./parkingSlot.service.js";
+import { classifyVehicleByPlate } from "./parkingQuota.service.js";
+import { detectVehicleImage } from "./ai.service.js";
 import { captureDeviceSnapshot } from "./device.service.js";
 import { createNotification } from "./notification.service.js";
 import { safeCreateRecognitionLog } from "./recognitionLog.service.js";
@@ -37,7 +38,9 @@ async function scanOnce(device: DeviceDocument): Promise<void> {
     device.status = "online";
     device.lastSnapshotUrl = snapshot.imageUrl;
     device.lastSnapshotAt = new Date();
-    await device.save();
+    await Device.findByIdAndUpdate(device._id, {
+      $set: { status: device.status, lastSnapshotUrl: device.lastSnapshotUrl, lastSnapshotAt: device.lastSnapshotAt },
+    });
 
     // 2. OCR nhận diện biển số
     const detection = await detectVehicleImage(
@@ -46,7 +49,6 @@ async function scanOnce(device: DeviceDocument): Promise<void> {
         mimetype: snapshot.mimetype,
         originalname: "auto-scan.jpg",
       } as Express.Multer.File,
-      device.roi,
     );
 
     if (!detection.plate) {
@@ -65,25 +67,18 @@ async function scanOnce(device: DeviceDocument): Promise<void> {
     }
     lastDetected.set(dedupKey, new Date());
 
-    // 4. Kiểm tra bãi còn chỗ
-    const activeCount = await ParkingSession.countDocuments({ status: "Đang gửi" });
-    const isMember = !!(await ownerFromPlate(detection.plate));
-    const check = await canEnterParking(isMember, activeCount);
-
-    if (!check.allowed) {
+    // 4. Phân loại quota theo subscription active và cấp slot đúng pool.
+    const quotaAccess = await classifyVehicleByPlate(detection.plate);
+    const isMember = quotaAccess.customerType === "member";
+    const slotDoc = await allocateSlot("Ô tô", undefined, { quotaType: quotaAccess.quotaType });
+    if (!slotDoc) {
       await safeCreateRecognitionLog({
-        action: "camera-entry",
-        source: "camera",
-        status: "success",
-        detectedPlate: detection.plate,
-        confidence: detection.confidence,
-        rawText: detection.rawText,
-        imageHash: detection.imageHash,
-        detectionMethod: detection.detectionMethod,
-        imageUrl: snapshot.imageUrl,
-        deviceId: device._id,
-        deviceName: device.name,
-        message: `Auto-scan: OCR thành công nhưng bãi xe không cho phép xe vào. (${check.reason})`,
+        action: "camera-entry", source: "camera", status: "failed",
+        detectedPlate: detection.plate, confidence: detection.confidence,
+        rawText: detection.rawText, imageHash: detection.imageHash,
+        detectionMethod: "ocr", imageUrl: snapshot.imageUrl,
+        deviceId: device._id, deviceName: device.name,
+        message: "Auto-scan: không còn slot phù hợp với quota."
       });
       return;
     }
@@ -93,16 +88,23 @@ async function scanOnce(device: DeviceDocument): Promise<void> {
       plate: detection.plate,
       ownerName: isMember ? "Thành viên" : "Khách vãng lai",
       vehicleType: "Ô tô",
-      slot: allocateCarSlot(activeCount),
+      slot: slotDoc.slotCode,
+       slotId: slotDoc._id,
+       customerType: quotaAccess.customerType,
+       quotaType: quotaAccess.quotaType,
       entryImageUrl: snapshot.imageUrl,
       entryDetectedPlate: detection.plate,
       entryConfidence: detection.confidence,
       entryImageHash: detection.imageHash,
       aiRawText: detection.rawText,
       ownerUserId: await ownerFromPlate(detection.plate),
-      priorityType: isMember ? "member" : "walkin",
+      ...(quotaAccess.customerType === "member"
+        ? { paymentStatus: "fully_paid", paymentMethod: "subscription", fee: 0, paidAmount: 0 }
+        : {}),
       entryGate: device.name,
     });
+
+    await occupySlot(slotDoc._id, session._id);
 
     // 6. Log nhận diện
     await safeCreateRecognitionLog({
@@ -114,7 +116,7 @@ async function scanOnce(device: DeviceDocument): Promise<void> {
       confidence: detection.confidence,
       rawText: detection.rawText,
       imageHash: detection.imageHash,
-      detectionMethod: detection.detectionMethod,
+      detectionMethod: "ocr",
       imageUrl: snapshot.imageUrl,
       vehicleType: session.vehicleType,
       sessionId: session._id,
