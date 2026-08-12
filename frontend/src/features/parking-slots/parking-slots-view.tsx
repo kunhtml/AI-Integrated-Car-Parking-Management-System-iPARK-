@@ -17,7 +17,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { useParkingApp } from "@/context/parking-app-context";
-import type { ParkingSlot, SlotAccessPolicy, SlotStatus } from "@/types";
+import type { ParkingSlot, SlotStatus } from "@/types";
 
 type QuotaType = "member" | "walk_in";
 type SlotWithQuota = ParkingSlot & { quotaType?: QuotaType };
@@ -72,13 +72,12 @@ function PoolMetric({ label, value, tone }: { label: string; value: number; tone
   );
 }
 
-function SlotTile({ slot, zoneName, isAdmin, onUpdateStatus, onDelete, onPolicy }: {
+function SlotTile({ slot, displayNumber, isAdmin, onUpdateStatus, onDelete }: {
   slot: ParkingSlot;
-  zoneName: string;
+  displayNumber: number;
   isAdmin: boolean;
   onUpdateStatus: (id: string, status: SlotStatus) => void;
   onDelete: (id: string) => void;
-  onPolicy: (id: string, policy: SlotAccessPolicy) => void;
 }) {
   const quota = slotQuota(slot as SlotWithQuota);
   const canManage = isAdmin && slot.status !== "occupied" && slot.status !== "reserved";
@@ -86,8 +85,7 @@ function SlotTile({ slot, zoneName, isAdmin, onUpdateStatus, onDelete, onPolicy 
     <article className={`quota-slot-tile ${quota} ${slot.status}`}>
       <div className="quota-slot-tile-head">
         <div>
-          <span className="quota-slot-code">{slot.slotCode}</span>
-          <span className="quota-slot-zone">{zoneName}</span>
+          <span className="quota-slot-code">{displayNumber}</span>
         </div>
         <span className={`quota-status ${slot.status}`}>{slot.status === "occupied" ? <Car size={13} /> : slot.status === "empty" ? <CheckCircle2 size={13} /> : <CircleDot size={13} />}{statusLabel[slot.status]}</span>
       </div>
@@ -96,11 +94,7 @@ function SlotTile({ slot, zoneName, isAdmin, onUpdateStatus, onDelete, onPolicy 
       </div>
       {isAdmin && (
         <div className="quota-slot-tile-foot">
-          <select aria-label={`Phân nhóm ${slot.slotCode}`} value={quota === "member" ? "resident" : "guest"} onChange={(event) => onPolicy(slot.id, event.target.value as SlotAccessPolicy)} disabled={slot.status === "occupied"}>
-            <option value="resident">Thành viên</option>
-            <option value="guest">Vãng lai</option>
-          </select>
-          {canManage && <div className="quota-slot-actions">
+            {canManage && <div className="quota-slot-actions">
             <button type="button" title={slot.status === "maintenance" ? "Mở lại" : "Đặt bảo trì"} onClick={() => onUpdateStatus(slot.id, slot.status === "maintenance" ? "empty" : "maintenance")}>{slot.status === "maintenance" ? <RotateCcw size={14} /> : <Wrench size={14} />}</button>
             <button type="button" title="Xóa slot" className="danger" onClick={() => onDelete(slot.id)}><Trash2 size={14} /></button>
           </div>}
@@ -111,9 +105,8 @@ function SlotTile({ slot, zoneName, isAdmin, onUpdateStatus, onDelete, onPolicy 
 }
 
 export function ParkingSlotsView() {
-  const { currentUser, zoneList, slotList, createSlot, updateSlotStatus, deleteSlot, updateSlotAccessPolicy } = useParkingApp();
+  const { currentUser, slotList, createSlot, updateSlotStatus, deleteSlot } = useParkingApp();
   const [activePool, setActivePool] = useState<QuotaType | "all">("all");
-  const [selectedZone, setSelectedZone] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<SlotStatus | "">("");
   const [query, setQuery] = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -131,11 +124,11 @@ export function ParkingSlotsView() {
   const visibleSlots = useMemo(() => slotList.filter((slot) => {
     const quota = slotQuota(slot as SlotWithQuota);
     if (activePool !== "all" && quota !== activePool) return false;
-    if (selectedZone && slot.zoneId !== selectedZone) return false;
     if (selectedStatus && slot.status !== selectedStatus) return false;
     return !query || `${slot.slotCode} ${slot.currentPlate ?? ""}`.toLowerCase().includes(query.toLowerCase());
-  }), [slotList, activePool, selectedZone, selectedStatus, query]);
+  }), [slotList, activePool, selectedStatus, query]);
 
+  const slotNumbers = new Map([...slotList].sort((a, b) => a.slotCode.localeCompare(b.slotCode, undefined, { numeric: true })).map((slot, index) => [slot.id, index + 1]));
   const filteredSlots = visibleSlots;
 
   return (
@@ -149,9 +142,9 @@ export function ParkingSlotsView() {
         {summary.map((pool) => { const Icon = pool.icon; const active = activePool === pool.key; return <button key={pool.key} type="button" onClick={() => setActivePool(active ? "all" : pool.key)} className={`quota-pool-card ${pool.key} ${active ? "selected" : ""}`}><div className="quota-pool-card-head"><span className="quota-pool-icon"><Icon size={20} /></span><div><strong>{pool.label}</strong><small>{pool.description}</small></div></div><div className="quota-metrics"><PoolMetric label="tổng slot" value={pool.total} /><PoolMetric label="còn cấp được" value={pool.available} tone="success" /><PoolMetric label="đang dùng/giữ" value={pool.active} tone="warning" /></div><div className="quota-capacity"><span style={{ width: `${pool.total ? Math.round((pool.available / pool.total) * 100) : 0}%` }} /></div></button>; })}
       </div>
 
-      {showCreate && isAdmin && <form className="quota-create-form" onSubmit={(event) => { void createSlot(event); setShowCreate(false); }}><div><h2>Thêm slot vào quota</h2><p>Chọn đúng nhóm để slot mới được đưa vào pool cấp phát tương ứng.</p></div><label>Mã slot<input required name="slotCode" placeholder="Ví dụ: M-A01 hoặc W-B01" /></label><label>Khu vực<select required name="zoneId" defaultValue=""><option value="" disabled>Chọn khu vực</option>{zoneList.map((zone) => <option key={zone.id} value={zone.id}>{zone.name}</option>)}</select></label><label>Nhóm quota<select name="accessPolicy" defaultValue="guest"><option value="resident">Thành viên</option><option value="guest">Vãng lai</option></select></label><label>Ghi chú<input name="notes" placeholder="Tùy chọn" /></label><button type="submit"><Plus size={16} /> Tạo slot</button></form>}
+      {showCreate && isAdmin && <form className="quota-create-form" onSubmit={(event) => { void createSlot(event); setShowCreate(false); }}><div><h2>Thêm slot vào quota</h2><p>Chọn đúng nhóm để slot mới được đưa vào pool cấp phát tương ứng.</p></div><label>Mã slot<input name="slotCode" placeholder="Để trống để tự đánh số slot tiếp theo" /></label><p className="quota-create-default">Slot mới mặc định dành cho khách vãng lai. Khi xe được đăng ký thành viên, hệ thống sẽ chuyển quota tương ứng.</p><label>Ghi chú<input name="notes" placeholder="Tùy chọn" /></label><button type="submit"><Plus size={16} /> Tạo slot</button></form>}
 
-      <div className="quota-control-bar"><div className="quota-pool-tabs"><button type="button" onClick={() => setActivePool("all")} className={activePool === "all" ? "active" : ""}>Tất cả slot</button>{POOLS.map((pool) => <button type="button" key={pool.key} onClick={() => setActivePool(pool.key)} className={activePool === pool.key ? "active" : ""}>{pool.shortLabel}</button>)}</div><div className="quota-filters"><label className="quota-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm mã slot hoặc biển số" /></label><label><Filter size={15} /><select value={selectedZone} onChange={(event) => setSelectedZone(event.target.value)}><option value="">Tất cả khu</option>{zoneList.map((zone) => <option key={zone.id} value={zone.id}>{zone.name}</option>)}</select></label><select aria-label="Lọc trạng thái" value={selectedStatus} onChange={(event) => setSelectedStatus(event.target.value as SlotStatus | "")}><option value="">Mọi trạng thái</option><option value="empty">Sẵn sàng cấp</option><option value="occupied">Đang sử dụng</option><option value="reserved">Đã giữ chỗ</option><option value="maintenance">Bảo trì</option></select></div></div>
+      <div className="quota-control-bar"><div className="quota-pool-tabs"><button type="button" onClick={() => setActivePool("all")} className={activePool === "all" ? "active" : ""}>Tất cả slot</button>{POOLS.map((pool) => <button type="button" key={pool.key} onClick={() => setActivePool(pool.key)} className={activePool === pool.key ? "active" : ""}>{pool.shortLabel}</button>)}</div><div className="quota-filters"><label className="quota-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm mã slot hoặc biển số" /></label><select aria-label="Lọc trạng thái" value={selectedStatus} onChange={(event) => setSelectedStatus(event.target.value as SlotStatus | "")}><option value="">Mọi trạng thái</option><option value="empty">Sẵn sàng cấp</option><option value="occupied">Đang sử dụng</option><option value="reserved">Đã giữ chỗ</option><option value="maintenance">Bảo trì</option></select></div></div>
 
       <div className="quota-legend"><span><i className="member" /> Slot thành viên</span><span><i className="walk-in" /> Slot vãng lai</span><span><CheckCircle2 size={14} /> Sẵn sàng cấp</span><span><Car size={14} /> Có xe đỗ</span></div>
       <section className="quota-slot-unified">
@@ -160,7 +153,7 @@ export function ParkingSlotsView() {
           <span>{filteredSlots.length} slot hiển thị</span>
         </header>
         <div className="quota-slot-grid">
-          {filteredSlots.map((slot) => <SlotTile key={slot.id} slot={slot} zoneName={zoneList.find((zone) => zone.id === slot.zoneId)?.name ?? slot.zoneName ?? "Chưa gán khu"} isAdmin={Boolean(isAdmin)} onUpdateStatus={(id, status) => void updateSlotStatus(id, status)} onDelete={(id) => void deleteSlot(id)} onPolicy={(id, policy) => void updateSlotAccessPolicy(id, policy)} />)}
+          {filteredSlots.map((slot) => <SlotTile key={slot.id} slot={slot} displayNumber={slotNumbers.get(slot.id) ?? 0} isAdmin={Boolean(isAdmin)} onUpdateStatus={(id, status) => void updateSlotStatus(id, status)} onDelete={(id) => void deleteSlot(id)} />)}
           {filteredSlots.length === 0 && <div className="quota-empty"><LayoutGrid size={30} /><span>Chưa có slot phù hợp với bộ lọc.</span></div>}
         </div>
       </section>
