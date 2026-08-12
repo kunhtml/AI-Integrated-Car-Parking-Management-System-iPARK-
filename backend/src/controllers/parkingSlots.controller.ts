@@ -87,38 +87,48 @@ export async function getSlotMapHandler(_request: Request, response: Response) {
 export async function createParkingSlotHandler(request: Request, response: Response) {
   const body = z
     .object({
-      slotCode: z.string().min(2).max(20),
-      zoneId: z.string().min(1),
+      slotCode: z.string().trim().max(20).optional().default(""),
+      zoneId: z.string().trim().optional().or(z.literal("")),
       slotType: slotTypeEnum.default("regular"),
       features: z.array(z.string()).default([]),
-      floor: z.number().int().default(0),
+      floor: z.coerce.number().int().default(0),
       notes: z.string().optional(),
-      accessPolicy: z.enum(["resident", "guest", "shared"]).default("shared"),
+      accessPolicy: z.enum(["resident", "guest", "shared"]).default("guest"),
     })
     .parse(request.body);
 
-  const zone = await Zone.findById(body.zoneId);
-  if (!zone) {
-    response.status(404).json({ message: "Zone không tồn tại." });
-    return;
-  }
+  const zone = body.zoneId
+    ? await Zone.findById(body.zoneId)
+    : await Zone.findOne({ isActive: true }).sort({ displayOrder: 1, name: 1 });
+  const assignedZone = zone ?? await Zone.create({
+    name: "Bãi chung",
+    description: "Khu mặc định cho các slot chưa phân khu.",
+    capacity: 100,
+    walkInQuota: 100,
+    subscriberQuota: 0,
+    allowedVehicleTypes: ["Ô tô"],
+    displayOrder: 999,
+    isActive: true,
+  });
 
-  const existed = await ParkingSlot.findOne({ slotCode: body.slotCode.toUpperCase() });
+  const nextNumber = (await ParkingSlot.countDocuments()) + 1;
+  const slotCode = body.slotCode || String(nextNumber);
+  const existed = await ParkingSlot.findOne({ slotCode: slotCode.toUpperCase() });
   if (existed) {
-    response.status(409).json({ message: `Slot "${body.slotCode}" đã tồn tại.` });
+    response.status(409).json({ message: `Slot "${slotCode}" đã tồn tại.` });
     return;
   }
 
   const slot = await ParkingSlot.create({
-    slotCode: body.slotCode.toUpperCase(),
-    zoneId: zone._id,
-    zoneName: zone.name,
+    slotCode: slotCode.toUpperCase(),
+    zoneId: assignedZone._id,
+    zoneName: assignedZone.name,
     slotType: body.slotType,
     features: body.features,
     floor: body.floor,
     notes: body.notes,
-    accessPolicy: body.accessPolicy,
-    quotaType: body.accessPolicy === "resident" ? "member" : "walk_in",
+    accessPolicy: "guest",
+    quotaType: "walk_in",
     status: "empty",
   });
 
