@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Ban, CircleAlert } from "lucide-react";
+import { Ban } from "lucide-react";
 
 import { DataTable } from "@/components/ui/data-table";
 import { useParkingApp } from "@/context/parking-app-context";
@@ -10,7 +10,7 @@ import type { IncidentItem } from "@/types";
 
 export function IncidentsView() {
   const router = useRouter();
-  const { currentUser, incidentList, createIncident, resolveIncident } =
+  const { currentUser, incidentList, resolveIncident } =
     useParkingApp();
 
   if (!currentUser) {
@@ -40,39 +40,7 @@ export function IncidentsView() {
   }
 
   return (
-    <section className="content-grid">
-      <div className="panel">
-        <div className="panel-heading">
-          <div>
-            <p>Sự cố</p>
-            <h2>Tạo báo cáo</h2>
-          </div>
-          <CircleAlert size={22} />
-        </div>
-        <form className="stack-form" onSubmit={createIncident}>
-          <label>
-            Loại sự cố
-            <select name="type">
-              <option>Xe blacklist</option>
-              <option>Lỗi nhận dạng</option>
-              <option>Yêu cầu miễn phạt</option>
-              <option>Camera offline</option>
-              <option>Khác</option>
-            </select>
-          </label>
-          <label>
-            Biển số
-            <input name="plate" placeholder="Nếu có" />
-          </label>
-          <label>
-            Ghi chú
-            <input name="note" placeholder="Nhập ghi chú xử lý" required />
-          </label>
-          <button className="full-button" type="submit">
-            Lưu sự cố
-          </button>
-        </form>
-      </div>
+    <section className="content-grid incidents-grid">
       <div className="panel wide">
         <div className="panel-heading">
           <div>

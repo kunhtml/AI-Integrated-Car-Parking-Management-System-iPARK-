@@ -175,7 +175,7 @@ export async function verifyEmailOtp(request: Request, response: Response) {
   if (!token || !(await bcrypt.compare(body.otp, token.otpHash))) {
     response
       .status(400)
-      .json({ message: "OTP khÃ´ng Ä‘Ãºng hoáº·c Ä‘Ã£ háº¿t háº¡n." });
+      .json({ message: "OTP không đúng hoặc đã hết hạn." });
     return;
   }
 
@@ -535,7 +535,7 @@ export async function forgotPassword(request: Request, response: Response) {
   if (!smtpConfigured()) {
     response.status(503).json({
       message:
-        "SMTP chÆ°a Ä‘Æ°á»£c cáº¥u hÃ¬nh. KhÃ´ng thá»ƒ gá»­i OTP Ä‘áº·t láº¡i máº­t kháº©u.",
+        "SMTP chưa được cấu hình. Không thể gửi OTP đặt lại mật khẩu.",
     });
     return;
   }
@@ -552,15 +552,15 @@ export async function forgotPassword(request: Request, response: Response) {
 
     await sendMail(
       email,
-      "MÃ£ OTP Ä‘áº·t láº¡i máº­t kháº©u iPARK",
-      `MÃ£ OTP cá»§a báº¡n lÃ  ${otp}. MÃ£ cÃ³ hiá»‡u lá»±c trong 5 phÃºt.`,
+      "Mã OTP đặt lại mật khẩu iPARK",
+      `Mã OTP của bạn là ${otp}. Mã có hiệu lực trong 5 phút.`,
     );
   }
 
   response.json({
     ok: true,
     message:
-      "Náº¿u email tá»“n táº¡i, há»‡ thá»‘ng Ä‘Ã£ gá»­i OTP Ä‘áº·t láº¡i máº­t kháº©u.",
+      "Nếu email tồn tại, hệ thống đã gửi OTP đặt lại mật khẩu.",
   });
 }
 
@@ -584,13 +584,13 @@ export async function resetPassword(request: Request, response: Response) {
   if (!token || !(await bcrypt.compare(body.otp, token.otpHash))) {
     response
       .status(400)
-      .json({ message: "OTP khÃ´ng Ä‘Ãºng hoáº·c Ä‘Ã£ háº¿t háº¡n." });
+      .json({ message: "OTP không đúng hoặc đã hết hạn." });
     return;
   }
 
   const user = await User.findOne({ email });
   if (!user) {
-    response.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y tÃ i khoáº£n." });
+    response.status(404).json({ message: "Không tìm thấy tài khoản." });
     return;
   }
 
@@ -956,7 +956,7 @@ export async function updateProfile(request: Request, response: Response) {
 
   const user = await User.findById(userId);
   if (!user) {
-    response.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y tÃ i khoáº£n." });
+    response.status(404).json({ message: "Không tìm thấy tài khoản." });
     return;
   }
 
@@ -1012,7 +1012,7 @@ export async function resendOtp(request: Request, response: Response) {
 
     await sendMail(
       email,
-      "MÃ£ OTP Ä‘áº·t láº¡i máº­t kháº©u iPARK (gá»­i láº¡i)",
+      "Mã OTP đặt lại mật khẩu iPARK (gá»­i láº¡i)",
       `MÃ£ OTP má»›i cá»§a báº¡n lÃ  ${otp}. MÃ£ cÃ³ hiá»‡u lá»±c trong 5 phÃºt.`,
     );
   }
@@ -1051,7 +1051,7 @@ export async function requestChangeEmail(request: Request, response: Response) {
 
   const user = await User.findById(userId);
   if (!user) {
-    response.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y tÃ i khoáº£n." });
+    response.status(404).json({ message: "Không tìm thấy tài khoản." });
     return;
   }
 
@@ -1126,7 +1126,7 @@ export async function verifyChangeEmail(request: Request, response: Response) {
 
   const user = await User.findById(userId);
   if (!user) {
-    response.status(404).json({ message: "KhÃ´ng tÃ¬m tháº¥y tÃ i khoáº£n." });
+    response.status(404).json({ message: "Không tìm thấy tài khoản." });
     return;
   }
 
@@ -1141,7 +1141,7 @@ export async function verifyChangeEmail(request: Request, response: Response) {
   if (!token || !(await bcrypt.compare(body.otp, token.otpHash))) {
     response
       .status(400)
-      .json({ message: "OTP khÃ´ng Ä‘Ãºng hoáº·c Ä‘Ã£ háº¿t háº¡n." });
+      .json({ message: "OTP không đúng hoặc đã hết hạn." });
     return;
   }
 

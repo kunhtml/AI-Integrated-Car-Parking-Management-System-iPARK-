@@ -58,7 +58,7 @@ export const navItems: NavItem[] = [
     path: "/vehicles",
     label: "Phương tiện",
     icon: ScanLine,
-    roles: ["admin", "staff", "customer"],
+    roles: ["admin", "customer"],
   },
   {
     id: "wallet",
@@ -122,7 +122,7 @@ export const navItems: NavItem[] = [
     path: "/users",
     label: "Người dùng",
     icon: UsersRound,
-    roles: ["admin", "staff"],
+    roles: ["admin"],
   },
   {
     id: "pricing",
@@ -154,7 +154,7 @@ export const navItems: NavItem[] = [
   },
 ];
 
-export const adminOnlyPaths = ["/pricing", "/reports", "/staff-applications"];
+export const adminOnlyPaths = ["/users", "/pricing", "/reports", "/staff-applications"];
 
 export function getNavItemsForRole(role: Role, viewAs?: ViewAsMode) {
   // Nếu staff đang ở "member mode", show navigation của customer

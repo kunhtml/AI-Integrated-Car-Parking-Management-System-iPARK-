@@ -40,6 +40,10 @@ export async function getVehicle(request: Request, response: Response) {
     response.status(404).json({ message: "Không tìm thấy phương tiện." });
     return;
   }
+  if (request.user?.role === "customer" && vehicle.userId?._id?.toString() !== request.user.id) {
+    response.status(404).json({ message: "Không tìm thấy phương tiện." });
+    return;
+  }
   response.json({
     vehicle: serializeVehicle(
       vehicle,
@@ -49,6 +53,10 @@ export async function getVehicle(request: Request, response: Response) {
 }
 
 export async function createVehicle(request: Request, response: Response) {
+  if (request.user?.role !== "customer") {
+    response.status(403).json({ message: "Chỉ khách hàng mới được đăng ký phương tiện." });
+    return;
+  }
   const body = z
     .object({
       plate: z.string().min(5),

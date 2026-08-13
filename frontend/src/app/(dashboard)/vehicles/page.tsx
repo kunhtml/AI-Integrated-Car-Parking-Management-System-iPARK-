@@ -1,7 +1,12 @@
 "use client";
 
+import { RoleGuard } from "@/components/layout/role-guard";
 import { VehiclesView } from "@/features/vehicles/vehicles-view";
 
 export default function VehiclesPage() {
-  return <VehiclesView />;
+  return (
+    <RoleGuard allowedRoles={["admin", "customer"]}>
+      <VehiclesView />
+    </RoleGuard>
+  );
 }

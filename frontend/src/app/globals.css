@@ -17968,3 +17968,11 @@ textarea.form-input {
   .rfid-detail-grid { grid-template-columns: 1fr; gap: 12px; }
   .rfid-detail-item { grid-template-columns: 120px minmax(0, 1fr); }
 }
+
+.incidents-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.incidents-grid > .panel.wide {
+  width: 100%;
+}
+

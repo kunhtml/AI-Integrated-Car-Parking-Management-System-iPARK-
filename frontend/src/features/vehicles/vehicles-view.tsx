@@ -3400,17 +3400,6 @@ export function VehiclesView() {
                     >
                       <Download size={13} />
                     </button>
-                    <button
-                      className="small-button primary"
-                      onClick={() => {
-                        setShowAddForm(true);
-                        setEditingVehicle(null);
-                      }}
-                      type="button"
-                      style={{ display: "flex", alignItems: "center", gap: 4 }}
-                    >
-                      <Plus size={14} /> Thêm xe
-                    </button>
                   </>
                 )}
                 {!isAdmin && (
