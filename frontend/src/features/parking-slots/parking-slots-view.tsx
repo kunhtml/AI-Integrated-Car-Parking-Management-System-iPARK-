@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import {
   Car,
   CheckCircle2,
@@ -8,8 +8,8 @@ import {
   Filter,
   LayoutGrid,
   ParkingSquare,
-  Plus,
   Search,
+  Settings2,
   Trash2,
   UserRound,
   UsersRound,
@@ -105,12 +105,24 @@ function SlotTile({ slot, displayNumber, isAdmin, onUpdateStatus, onDelete }: {
 }
 
 export function ParkingSlotsView() {
-  const { currentUser, slotList, createSlot, updateSlotStatus, deleteSlot } = useParkingApp();
+  const { currentUser, slotList, updateSlotStatus, deleteSlot, capacityConfig, loadCapacityConfig, updateGlobalCapacity } = useParkingApp();
   const [activePool, setActivePool] = useState<QuotaType | "all">("all");
   const [selectedStatus, setSelectedStatus] = useState<SlotStatus | "">("");
   const [query, setQuery] = useState("");
-  const [showCreate, setShowCreate] = useState(false);
+  const [showCapacitySettings, setShowCapacitySettings] = useState(false);
+  const [capacityDraft, setCapacityDraft] = useState("");
+  const [capacityError, setCapacityError] = useState<string | null>(null);
+  const [isSavingCapacity, setIsSavingCapacity] = useState(false);
   const isAdmin = currentUser?.role === "admin";
+  const maxCapacity = capacityConfig?.globalCapacity ?? 0;
+  useEffect(() => {
+    if (isAdmin) void loadCapacityConfig();
+  }, [isAdmin]);
+
+  const minimumCapacity = useMemo(
+    () => slotList.filter((slot) => slot.status === "occupied" || slot.status === "reserved").length,
+    [slotList],
+  );
 
   const summary = useMemo(() => {
     return POOLS.map((pool) => {
@@ -121,28 +133,87 @@ export function ParkingSlotsView() {
     });
   }, [slotList]);
 
-  const visibleSlots = useMemo(() => slotList.filter((slot) => {
-    const quota = slotQuota(slot as SlotWithQuota);
-    if (activePool !== "all" && quota !== activePool) return false;
-    if (selectedStatus && slot.status !== selectedStatus) return false;
-    return !query || `${slot.slotCode} ${slot.currentPlate ?? ""}`.toLowerCase().includes(query.toLowerCase());
-  }), [slotList, activePool, selectedStatus, query]);
+  const visibleSlots = useMemo(() => slotList
+    .filter((slot) => {
+      const quota = slotQuota(slot as SlotWithQuota);
+      if (activePool !== "all" && quota !== activePool) return false;
+      if (selectedStatus && slot.status !== selectedStatus) return false;
+      return !query || `${slot.slotCode} ${slot.currentPlate ?? ""}`.toLowerCase().includes(query.toLowerCase());
+    })
+    .sort((left, right) => left.slotCode.localeCompare(right.slotCode, undefined, { numeric: true })),
+  [slotList, activePool, selectedStatus, query]);
 
   const slotNumbers = new Map([...slotList].sort((a, b) => a.slotCode.localeCompare(b.slotCode, undefined, { numeric: true })).map((slot, index) => [slot.id, index + 1]));
   const filteredSlots = visibleSlots;
+
+  const openCapacitySettings = async () => {
+    setCapacityError(null);
+    setCapacityDraft(String(Math.max(capacityConfig?.globalCapacity ?? 1, 1)));
+    setShowCapacitySettings(true);
+
+    try {
+      const data = await loadCapacityConfig();
+      const configuredCapacity = data?.config?.globalCapacity ?? capacityConfig?.globalCapacity ?? slotList.length;
+      setCapacityDraft(String(Math.max(configuredCapacity, 1)));
+    } catch {
+      setCapacityError("Không tải được cấu hình hiện tại. Bạn vẫn có thể nhập sức chứa mới để lưu.");
+    }
+  };
+
+  const saveCapacity = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const nextCapacity = Number(capacityDraft);
+    if (!Number.isInteger(nextCapacity) || nextCapacity < 1) {
+      setCapacityError("Tổng sức chứa phải là số nguyên lớn hơn 0.");
+      return;
+    }
+    if (nextCapacity < minimumCapacity) {
+      setCapacityError(`Không thể đặt dưới ${minimumCapacity} slot vì đang có ${minimumCapacity} slot có xe hoặc được giữ chỗ.`);
+      return;
+    }
+
+    setCapacityError(null);
+    setIsSavingCapacity(true);
+    const updated = await updateGlobalCapacity({ globalCapacity: nextCapacity });
+    setIsSavingCapacity(false);
+    if (!updated) {
+      setCapacityError("Không thể cập nhật sức chứa. Vui lòng kiểm tra lại cấu hình zone.");
+      return;
+    }
+
+    setShowCapacitySettings(false);
+  };
 
   return (
     <section className="quota-slots-page">
       <header className="quota-slots-hero">
         <div className="quota-slots-hero-copy"><div className="quota-slots-eyebrow"><ParkingSquare size={15} /> Vận hành bãi đỗ</div><h1>Quản lý quota chỗ đỗ</h1><p>Hai pool độc lập giúp xe thành viên và xe vãng lai luôn được cấp đúng khu vực, không lấy chéo quota.</p></div>
-        {isAdmin && <button type="button" className="quota-create-button" onClick={() => setShowCreate((value) => !value)}><Plus size={17} /> {showCreate ? "Đóng tạo slot" : "Tạo slot mới"}</button>}
+        {isAdmin && <div className="quota-hero-actions">
+          <button type="button" className="quota-capacity-button" onClick={() => { void openCapacitySettings(); }}>
+            <Settings2 size={17} /> Sức chứa
+          </button>
+        </div>}
       </header>
+
+      {showCapacitySettings && isAdmin && <form className="quota-capacity-form" onSubmit={saveCapacity}>
+        <div>
+          <h2>Tổng sức chứa bãi xe</h2>
+          <p>Khi tăng sức chứa, hệ thống tự tạo slot còn thiếu. Khi giảm, hệ thống tự xóa slot trống dư.</p>
+        </div>
+        <label>
+          Số slot tối đa
+          <input type="number" min={Math.max(minimumCapacity, 1)} step="1" value={capacityDraft} onChange={(event) => setCapacityDraft(event.target.value)} required />
+        </label>
+        <button type="submit" disabled={isSavingCapacity}>
+          <Settings2 size={16} /> {isSavingCapacity ? "Đang lưu..." : "Lưu sức chứa"}
+        </button>
+        <p className="quota-capacity-hint">Đang hiển thị: <strong>{slotList.length}</strong> / <strong>{maxCapacity || "-"}</strong> slot. Tối thiểu: <strong>{minimumCapacity}</strong> slot đang có xe/được giữ chỗ.</p>
+        {capacityError && <p className="quota-capacity-error" role="alert">{capacityError}</p>}
+      </form>}
 
       <div className="quota-pool-overview">
         {summary.map((pool) => { const Icon = pool.icon; const active = activePool === pool.key; return <button key={pool.key} type="button" onClick={() => setActivePool(active ? "all" : pool.key)} className={`quota-pool-card ${pool.key} ${active ? "selected" : ""}`}><div className="quota-pool-card-head"><span className="quota-pool-icon"><Icon size={20} /></span><div><strong>{pool.label}</strong><small>{pool.description}</small></div></div><div className="quota-metrics"><PoolMetric label="tổng slot" value={pool.total} /><PoolMetric label="còn cấp được" value={pool.available} tone="success" /><PoolMetric label="đang dùng/giữ" value={pool.active} tone="warning" /></div><div className="quota-capacity"><span style={{ width: `${pool.total ? Math.round((pool.available / pool.total) * 100) : 0}%` }} /></div></button>; })}
       </div>
-
-      {showCreate && isAdmin && <form className="quota-create-form" onSubmit={(event) => { void createSlot(event); setShowCreate(false); }}><div><h2>Thêm slot vào quota</h2><p>Chọn đúng nhóm để slot mới được đưa vào pool cấp phát tương ứng.</p></div><label>Mã slot<input name="slotCode" placeholder="Để trống để tự đánh số slot tiếp theo" /></label><p className="quota-create-default">Slot mới mặc định dành cho khách vãng lai. Khi xe được đăng ký thành viên, hệ thống sẽ chuyển quota tương ứng.</p><label>Ghi chú<input name="notes" placeholder="Tùy chọn" /></label><button type="submit"><Plus size={16} /> Tạo slot</button></form>}
 
       <div className="quota-control-bar"><div className="quota-pool-tabs"><button type="button" onClick={() => setActivePool("all")} className={activePool === "all" ? "active" : ""}>Tất cả slot</button>{POOLS.map((pool) => <button type="button" key={pool.key} onClick={() => setActivePool(pool.key)} className={activePool === pool.key ? "active" : ""}>{pool.shortLabel}</button>)}</div><div className="quota-filters"><label className="quota-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm mã slot hoặc biển số" /></label><select aria-label="Lọc trạng thái" value={selectedStatus} onChange={(event) => setSelectedStatus(event.target.value as SlotStatus | "")}><option value="">Mọi trạng thái</option><option value="empty">Sẵn sàng cấp</option><option value="occupied">Đang sử dụng</option><option value="reserved">Đã giữ chỗ</option><option value="maintenance">Bảo trì</option></select></div></div>
 

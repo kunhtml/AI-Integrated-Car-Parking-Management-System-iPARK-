@@ -276,6 +276,7 @@ export async function resubmitVehicle(request: Request, response: Response) {
 
   const body = z
     .object({
+      plate: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{5,9}$/).optional(),
       ownerName: z.string().optional(),
       ownerPhone: z.string().optional(),
       ownerAddress: z.string().optional(),
@@ -290,6 +291,14 @@ export async function resubmitVehicle(request: Request, response: Response) {
     .parse(request.body);
 
   // Cập nhật thông tin xe nếu customer có chỉnh sửa
+  if (body.plate !== undefined && body.plate !== vehicle.plate) {
+    const duplicate = await Vehicle.findOne({ plate: body.plate, _id: { $ne: vehicle._id } });
+    if (duplicate) {
+      response.status(409).json({ message: "Biển số này đã được đăng ký cho phương tiện khác." });
+      return;
+    }
+    vehicle.plate = body.plate;
+  }
   if (body.ownerName !== undefined) vehicle.ownerName = body.ownerName;
   if (body.ownerPhone !== undefined) vehicle.ownerPhone = body.ownerPhone;
   if (body.ownerAddress !== undefined) vehicle.ownerAddress = body.ownerAddress;

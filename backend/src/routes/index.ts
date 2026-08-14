@@ -1,3 +1,4 @@
+import { dashboardRoutes } from './dashboard.routes.js';
 import { Router } from "express";
 import { authRoutes } from "./auth.routes.js";
 import { devicesRoutes } from "./devices.routes.js";
@@ -106,3 +107,4 @@ apiRoutes.use("/rfid", rfidRoutes);
 apiRoutes.use("/camera-logs", cameraBridgeAdminRoutes);
 apiRoutes.use("/uploads", uploadsRoutes);
 apiRoutes.use("/capacity-config", capacityConfigRoutes);
+apiRoutes.use('/dashboard', dashboardRoutes);

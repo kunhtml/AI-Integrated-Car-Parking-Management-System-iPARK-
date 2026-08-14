@@ -1,3 +1,19 @@
+export type StaffGate = "entry" | "exit";
+
+export type RfidCardStatus = "active" | "inactive" | "available" | "pending-sale" | "in-use" | "lost" | "blocked" | "damaged" | "returned";
+export type RfidCard = { id: string; uid: string; cardId?: string; ownerName?: string; plate?: string; userType?: "resident" | "guest"; cardType?: "member" | "guest"; status: RfidCardStatus; notes?: string; createdAt?: string; updatedAt?: string; issuedAt?: string | null; lastUsedAt?: string | null; lostAt?: string | null; blockedAt?: string | null; blockedReason?: string | null; };
+export type RfidScanLog = { id: string; cardId?: string; action: string; status?: string; failureReason?: string; plateDetected?: string; createdAt?: string; performedBy?: string; };
+
+export type InvoiceItem = {
+  id: string;
+  invoiceNumber: string;
+  customerName: string;
+  customerEmail?: string | null;
+  total?: number;
+  status: "Draft" | "Issued" | "Paid" | "Cancelled" | string;
+  createdAt: string;
+};
+
 export type Role = "admin" | "staff" | "customer";
 export type ViewAsMode = "staff" | "customer";
 
@@ -20,6 +36,7 @@ export type View =
   | "parking-slots"
   | "reservations"
   | "subscriptions"
+  | "rfid-registration"
   | "penalties"
   | "rfid"
   | "camera-logs"
@@ -35,6 +52,7 @@ export type DemoUser = {
   email: string;
   password?: string;
   role: Role;
+  gate?: StaffGate;
   status: "Đang hoạt động" | "Đã khóa";
   avatarUrl?: string | null;
   provider?: string;
@@ -96,7 +114,7 @@ export type ParkingSession = {
   prepaidCheckoutAt?: string;
   slot: string;
   slotId?: string;
-  status: "Đang gửi" | "Đã hoàn thành" | "Đã hủy";
+  status: "Đang gửi" | "Đã hoàn thành" | "Đã hủy" | "Chờ thanh toán" | "Hủy";
   paymentStatus?: "unpaid" | "partial_paid" | "fully_paid";
   fee: number;
   paidAmount?: number;
@@ -255,11 +273,30 @@ export type NotificationItem = {
   createdAt: string;
 };
 
+export type RecognitionLogItem = {
+  id: string;
+  deviceId?: string;
+  deviceName?: string;
+  gate?: "entry" | "exit" | "in" | "out";
+  action: "entry" | "exit" | "camera-entry" | "camera-exit" | "manual";
+  source: "upload" | "camera";
+  detectedPlate?: string;
+  plate?: string;
+  confidence?: number | null;
+  status: "success" | "failed" | "mismatch" | "pending-verification" | string;
+  message?: string;
+  rawText?: string;
+  createdAt: string;
+  imageUrl?: string;
+};
+
 export type DeviceItem = {
   id: string;
   name: string;
   gate: "entry" | "exit";
   rtspUrl: string;
+  httpUrl?: string;
+  deviceType?: string;
   username?: string;
   roiNote?: string;
   status: "online" | "offline" | "unknown";
@@ -271,6 +308,13 @@ export type DeviceItem = {
     lastMaintenanceAt?: string;
     nextMaintenanceAt?: string;
   };
+  roi?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    label?: string;
+  } | null;
 };
 
 export type ShiftItem = {

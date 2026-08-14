@@ -7,6 +7,20 @@ import { allocateSlot, occupySlot } from "./parkingSlot.service.js";
 import { classifyVehicleByPlate } from "./parkingQuota.service.js";
 import { findActiveSubscriptionByPlate } from "./subscription.service.js";
 
+/**
+ * RFID Guest là thẻ dùng chung theo lượt. Khi xe ra, mọi liên kết phương tiện
+ * trên thẻ phải được xóa; lịch sử luôn được giữ ở ParkingSession/RfidScanLog.
+ */
+function releaseGuestCard(card: RfidCardDocument, returnedAt: Date) {
+  card.status = "available";
+  card.returnedAt = returnedAt;
+  card.lastUsedAt = returnedAt;
+  card.plate = "";
+  card.ownerName = "Guest";
+  card.userId = undefined;
+  card.vehicleId = undefined;
+}
+
 // ───────────────── Card CRUD ─────────────────
 
 export async function registerCard(cardId: string, notes?: string, createdBy?: string) {
@@ -136,6 +150,17 @@ export async function validateEntry(
   const normalizedPlate = plateDetected?.trim().toUpperCase();
   const isMemberCard = card.cardType === "member";
   const memberPlate = card.plate?.trim().toUpperCase() || "";
+
+  // Tự chữa dữ liệu cũ của RFID Guest nếu phiên trước chưa làm sạch đầy đủ.
+  // Biển của phiên hiện tại được lưu trên ParkingSession, không lưu trên thẻ.
+  if (!isMemberCard && (card.plate || card.userId || card.vehicleId)) {
+    card.plate = "";
+    card.ownerName = "Guest";
+    card.userId = undefined;
+    card.vehicleId = undefined;
+    await card.save();
+  }
+
   let quotaAccess: { customerType: "member" | "guest"; quotaType: "member" | "walk_in"; userId?: string };
   if (isMemberCard) {
     if (!card.userId || !card.vehicleId || !memberPlate) {
@@ -267,10 +292,11 @@ export async function validateExit(
     const feeBreakdown = calculateParkingFee(activeSession.checkInAt, activeSession.checkOutAt, pricing);
     activeSession.fee = feeBreakdown.totalFee;
     activeSession.feeBreakdown = feeBreakdown;
-    activeSession.rfidReturnedAt = new Date();
+    const returnedAt = new Date();
+    activeSession.rfidReturnedAt = returnedAt;
     await activeSession.save();
     await createPendingTransactionForSession(activeSession);
-    card.status = "available";
+    releaseGuestCard(card, returnedAt);
   } else {
     activeSession.fee = 0;
     activeSession.paidAmount = 0;
@@ -338,10 +364,11 @@ export async function confirmExitWithMismatch(
     const feeBreakdown = calculateParkingFee(session.checkInAt, session.checkOutAt, pricing);
     session.fee = feeBreakdown.totalFee;
     session.feeBreakdown = feeBreakdown;
-    session.rfidReturnedAt = new Date();
+    const returnedAt = new Date();
+    session.rfidReturnedAt = returnedAt;
     await session.save();
     await createPendingTransactionForSession(session);
-    card.status = "available";
+    releaseGuestCard(card, returnedAt);
   } else {
     session.fee = 0;
     session.paidAmount = 0;
@@ -419,10 +446,15 @@ export async function returnCard(
     throw new AppError("Không tìm thấy phiên gửi xe.", 404);
   }
 
-  session.rfidReturnedAt = new Date();
+  if (card.cardType === "member") {
+    throw new AppError("RFID Member là thẻ sở hữu riêng, không được trả về kho.", 409);
+  }
+
+  const returnedAt = new Date();
+  session.rfidReturnedAt = returnedAt;
   await session.save();
 
-  card.status = "available";
+  releaseGuestCard(card, returnedAt);
   await card.save();
 
   await logScan({

@@ -1,13 +1,26 @@
 import { Router } from "express";
-import { createRfidCard, deleteRfidCard, exportAllCards, getRfidCard, listMyRfidCards, listRfidCards, listUnassignedResidents, lookupByPlate, lookupRfidCardByUid, registerScannedCard, setRfidCardStatus, updateRfidCard } from "../controllers/rfid.controller.js";
+import { createRfidCard, deleteRfidCard, exportAllCards, getRfidCard, listMyRfidCards, listRfidCards, listRfidAssignments, listUnassignedResidents, lookupByPlate, lookupRfidCardByUid, registerScannedCard, setRfidCardStatus, updateRfidCard } from "../controllers/rfid.controller.js";
 import { confirmSale, inventory, replaceCard, returnCard, sell, sellForCustomer, reconcilePending, reconcileCustomerSale, cardDetails, transactions, updateStatus } from "../controllers/rfidSales.controller.js";
 import { requireAuth, requireRole } from "../middlewares/auth.middleware.js";
+import { listMyRfidIssues, createRfidIssue, listRfidIssues, updateRfidIssue } from "../controllers/rfidIssue.controller.js";
+import { assignPurchaseCard, createPurchaseRequest, listMyPurchaseRequests, listPurchaseRequests, payPurchaseRequest, reconcilePurchaseRequest, reviewPurchaseRequest } from "../controllers/rfidPurchase.controller.js";
 import { requireServiceToken } from "../middlewares/service-auth.middleware.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
 export const rfidRoutes = Router();
 rfidRoutes.use(requireAuth);
 rfidRoutes.get("/mine", asyncHandler(listMyRfidCards));
+rfidRoutes.get("/purchase-requests/mine", asyncHandler(listMyPurchaseRequests));
+rfidRoutes.post("/purchase-requests", asyncHandler(createPurchaseRequest));
+rfidRoutes.post("/purchase-requests/:id/pay", asyncHandler(payPurchaseRequest));
+rfidRoutes.post("/purchase-requests/:id/reconcile", asyncHandler(reconcilePurchaseRequest));
+rfidRoutes.get("/purchase-requests", requireRole("admin", "staff"), asyncHandler(listPurchaseRequests));
+rfidRoutes.post("/purchase-requests/:id/review", requireRole("admin", "staff"), asyncHandler(reviewPurchaseRequest));
+rfidRoutes.post("/purchase-requests/:id/assign", requireRole("admin", "staff"), asyncHandler(assignPurchaseCard));
+rfidRoutes.get("/issue-requests/mine", asyncHandler(listMyRfidIssues));
+rfidRoutes.post("/issue-requests", asyncHandler(createRfidIssue));
+rfidRoutes.get("/issue-requests", requireRole("admin", "staff"), asyncHandler(listRfidIssues));
+rfidRoutes.patch("/issue-requests/:id", requireRole("admin", "staff"), asyncHandler(updateRfidIssue));
 rfidRoutes.get("/inventory", requireRole("admin", "staff"), asyncHandler(inventory));
 rfidRoutes.get("/transactions", requireRole("admin", "staff"), asyncHandler(transactions));
 rfidRoutes.get("/:id/details", requireRole("admin", "staff"), asyncHandler(cardDetails));
@@ -19,6 +32,7 @@ rfidRoutes.post("/my-sales/:transactionId/reconcile", asyncHandler(reconcileCust
 rfidRoutes.post("/:id/return", requireRole("admin", "staff"), asyncHandler(returnCard));
 rfidRoutes.post("/:id/replace", requireRole("admin", "staff"), asyncHandler(replaceCard));
 rfidRoutes.get("/", requireRole("admin", "staff"), asyncHandler(listRfidCards));
+rfidRoutes.get("/assignments", requireRole("admin", "staff"), asyncHandler(listRfidAssignments));
 rfidRoutes.get("/unassigned-residents", requireRole("admin", "staff"), asyncHandler(listUnassignedResidents));
 rfidRoutes.post("/", requireRole("admin", "staff"), asyncHandler(createRfidCard));
 rfidRoutes.get("/:id", requireRole("admin", "staff"), asyncHandler(getRfidCard));

@@ -1,3 +1,5 @@
+export const bridgeBaseUrl = process.env.NEXT_PUBLIC_BRIDGE_URL || 'http://localhost:5050';
+
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
 
 export async function apiFetch(path: string, init?: RequestInit) {

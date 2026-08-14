@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import mongoose from "mongoose";
 import { ParkingSession } from "../models/ParkingSession.js";
 import { RfidCard } from "../models/RfidCard.js";
 import { ParkingCameraLog } from "../models/ParkingCameraLog.js";
@@ -6,11 +7,20 @@ import { findActiveSubscriptionByPlate } from "../services/subscription.service.
 import { calculateParkingFee } from "../services/pricing.service.js";
 import { getActivePricingConfig } from "../services/pricing.service.js";
 import { env } from "../config/env.js";
+import {
+  classifyExitMismatch,
+  settleExitAfterVerify,
+} from "../services/exitMismatch.service.js";
 
-/**
- * Backend POST /api/exit/verify
- * Verify RFID card + xác định amountDue + canOpenGate
- */
+function actorId(request: Request) {
+  const id = request.user?.id;
+  if (id && mongoose.Types.ObjectId.isValid(id)) {
+    return new mongoose.Types.ObjectId(id);
+  }
+  return undefined;
+}
+
+/** POST /api/exit/verify — Verify RFID + amountDue + canOpenGate */
 export async function verifyExit(request: Request, response: Response) {
   const { sessionId, uid } = request.body as {
     sessionId?: string;
@@ -50,111 +60,32 @@ export async function verifyExit(request: Request, response: Response) {
     return;
   }
 
-  const card = await RfidCard.findOne({ uid: uid.trim() });
+  const scannedUid = uid.trim();
+  const card = await RfidCard.findOne({ uid: scannedUid });
 
   if (card && !["active", "in-use"].includes(card.status)) {
-    response
-      .status(400)
-      .json({ verified: false, reason: "Thẻ RFID không active" });
+    response.status(400).json({
+      verified: false,
+      exception: false,
+      reason:
+        card.status === "lost"
+          ? "Thẻ đã bị báo mất"
+          : card.status === "blocked"
+            ? card.blockedReason || "Thẻ đã bị khóa"
+            : "Thẻ RFID không hợp lệ để ra",
+    });
     return;
   }
 
-  if (card) {
-    // Thẻ còn tồn tại: kiểm tra plate
-    const cardPlate = card.plate?.toUpperCase().trim() ?? "";
-    if (cardPlate !== "" && cardPlate !== session.plate.toUpperCase().trim()) {
-      response.status(400).json({
-        verified: false,
-        reason: "Thẻ RFID không khớp với biển số của phiên này",
-      });
-      return;
-    }
-    if (cardPlate === "") {
-      // Thẻ Guest còn tồn tại: tra CameraLog lúc vào
-      const entryLog = await ParkingCameraLog.findOne({
-        sessionId: session._id,
-        direction: "in",
-        rfidUid: uid.trim(),
-      });
-      if (!entryLog) {
-        response.status(400).json({
-          verified: false,
-          reason: "Thẻ Guest không khớp với thẻ đã dùng lúc vào",
-        });
-        return;
-      }
-    }
-  } else {
-    // Thẻ không tìm thấy (có thể AI service đã xóa sau khi xe ra)
-    // Fallback: kiểm tra CameraLog direction=in của phiên này có rfidUid khớp không
-    const entryLog = await ParkingCameraLog.findOne({
-      sessionId: session._id,
-      direction: "in",
-      rfidUid: uid.trim(),
-    });
-    if (!entryLog) {
-      response.status(400).json({
-        verified: false,
-        reason: "Không tìm thấy thẻ RFID và UID không khớp lịch sử vào",
-      });
-      return;
-    }
+  const mismatch = await classifyExitMismatch({ session, uid: scannedUid });
+  if (mismatch) {
+    response.status(409).json(mismatch);
+    return;
   }
 
-  // RFID verify OK
-  session.exitState = "rfid_verified";
-  session.exitRfidUid = uid.trim();
-  session.exitRfidVerifiedAt = new Date();
-  await session.save();
-
-  // Tính amountDue dựa trên subscription status
-  const ownerUserId =
-    session.ownerUserId || (await session.populate("ownerUserId")).ownerUserId;
-  // Quyền lợi được chốt tại lúc vào bãi: Member không bị tính phí nếu gói hết hạn trong lúc đang gửi xe.
-  const isMemberSession = session.customerType === "member";
-  const activeSubscription = isMemberSession ? null : await findActiveSubscriptionByPlate(session.plate);
-
-  let amountDue = 0;
-  let isSubscriber = false;
-  let paymentStatus = session.paymentStatus || "pending";
-
-  if (isMemberSession || activeSubscription) {
-    isSubscriber = true;
-    amountDue = 0;
-    paymentStatus = "fully_paid";
-  } else {
-    isSubscriber = false;
-    // Tính phí nếu chưa có fee (trường hợp session được tạo mà chưa tính phí)
-    if (session.fee == null || session.fee === 0) {
-      const checkInAt = new Date(session.checkInAt);
-      const now = new Date();
-      const pricing = await getActivePricingConfig();
-      const feeBreakdown = calculateParkingFee(checkInAt, now, pricing);
-      session.fee = feeBreakdown.totalFee;
-      session.feeBreakdown = feeBreakdown;
-      await session.save();
-    }
-    amountDue = (session.fee || 0) - (session.paidAmount || 0);
-    if (amountDue <= 0) {
-      paymentStatus = "fully_paid";
-      amountDue = 0;
-    }
-  }
-
-  // canOpenGate = RFID verified AND amountDue <= 0 AND paymentStatus = fully_paid
-  const canOpenGate =
-    session.exitRfidVerifiedAt != null &&
-    amountDue <= 0 &&
-    paymentStatus === "fully_paid";
-
-  response.json({
-    verified: true,
-    sessionId: session._id.toString(),
-    amountDue,
-    paymentStatus,
-    isSubscriber,
-    canOpenGate,
-  });
+  session.exitRfidUid = scannedUid;
+  const settled = await settleExitAfterVerify(session);
+  response.json(settled);
 }
 
 /**
@@ -260,8 +191,17 @@ export async function openGate(request: Request, response: Response) {
     if (usedCard) {
       usedCard.lastUsedAt = new Date();
       if (usedCard.cardType === "guest") {
+        // RFID Guest được tái sử dụng. Không để lại biển/chủ xe từ phiên cũ,
+        // vì dữ liệu đó không phải liên kết cố định và có thể gây false
+        // `wrong_card` ở lần xe tiếp theo ra cổng.
+        const returnedAt = new Date();
         usedCard.status = "available";
-        session.rfidReturnedAt = new Date();
+        usedCard.returnedAt = returnedAt;
+        usedCard.plate = "";
+        usedCard.ownerName = "Guest";
+        usedCard.userId = undefined;
+        usedCard.vehicleId = undefined;
+        session.rfidReturnedAt = returnedAt;
         await session.save();
       } else {
         usedCard.status = "active";
@@ -336,4 +276,115 @@ export async function getPendingExit(request: Request, response: Response) {
       createdAt: (session.exitDetectedAt ?? session.checkInAt).toISOString(),
     },
   });
+}
+
+/**
+ * POST /api/exit/resolve-mismatch
+ * Nhân viên xác nhận / hiệu chỉnh / từ chối lệch định danh tại cổng ra.
+ */
+export async function resolveExitMismatch(request: Request, response: Response) {
+  const body = request.body as {
+    sessionId?: string;
+    action?: string;
+    manualPlate?: string;
+    verificationNote?: string;
+  };
+  const sessionId = String(body.sessionId || "").trim();
+  const action = String(body.action || "").trim();
+  const note = String(body.verificationNote || "").trim();
+  const manualPlate = String(body.manualPlate || "").trim().toUpperCase();
+
+  if (!sessionId || !action) {
+    response.status(400).json({ ok: false, message: "Thiếu sessionId hoặc action" });
+    return;
+  }
+
+  const session = await ParkingSession.findById(sessionId);
+  if (!session) {
+    response.status(404).json({ ok: false, message: "Không tìm thấy phiên gửi xe" });
+    return;
+  }
+  if (session.status !== "Đang gửi") {
+    response.status(400).json({ ok: false, message: "Phiên không còn đang gửi" });
+    return;
+  }
+
+  const exceptionType = session.exceptionType || "";
+  const scannedUid = session.exitRfidUid || "";
+  const needsNote = ["confirm", "correct_exit_plate", "correct_session_plate", "accept_uid"].includes(action);
+  if (needsNote && note.length < 8) {
+    response.status(400).json({ ok: false, message: "Vui lòng nhập lý do xử lý (tối thiểu 8 ký tự)." });
+    return;
+  }
+
+  if (exceptionType === "wrong_card" || exceptionType === "two_vehicles") {
+    if (action !== "retry" && action !== "reject") {
+      response.status(400).json({
+        ok: false,
+        message: "Thẻ đang gắn xe khác. Chỉ được quẹt lại hoặc từ chối.",
+      });
+      return;
+    }
+  }
+
+  if (action === "retry") {
+    session.verificationStatus = "Chờ duyệt";
+    session.exitState = "waiting_rfid";
+    await session.save();
+    response.json({ ok: true, retry: true, message: "Quẹt lại thẻ RFID." });
+    return;
+  }
+
+  if (action === "reject") {
+    session.verificationStatus = "Từ chối";
+    session.verificationNote = note || "Từ chối cho xe ra do sai lệch định danh";
+    session.verifiedBy = actorId(request);
+    session.verifiedAt = new Date();
+    session.exitState = "waiting_rfid";
+    await session.save();
+    response.json({ ok: true, rejected: true, message: "Đã từ chối. Barrier giữ đóng." });
+    return;
+  }
+
+  if (action === "correct_exit_plate") {
+    if (manualPlate.length < 5) {
+      response.status(400).json({ ok: false, message: "Nhập biển số ra đã hiệu chỉnh." });
+      return;
+    }
+    session.exitDetectedPlate = manualPlate;
+    session.manualPlate = manualPlate;
+  }
+
+  if (action === "correct_session_plate") {
+    if (manualPlate.length < 5) {
+      response.status(400).json({ ok: false, message: "Nhập biển phiên đã hiệu chỉnh." });
+      return;
+    }
+    const other = await ParkingSession.findOne({
+      _id: { $ne: session._id },
+      status: "Đang gửi",
+      plate: manualPlate,
+    });
+    if (other) {
+      response.status(409).json({
+        ok: false,
+        message: `Xe ${manualPlate} vẫn đang gửi. Không được đổi biển phiên.`,
+      });
+      return;
+    }
+    session.plate = manualPlate;
+    session.manualPlate = manualPlate;
+  }
+
+  if (action === "accept_uid" || action === "confirm" || action === "correct_exit_plate" || action === "correct_session_plate") {
+    session.verificationNote = note;
+    session.verifiedBy = actorId(request);
+    session.verifiedAt = new Date();
+    if (scannedUid) session.exitRfidUid = scannedUid;
+    const settled = await settleExitAfterVerify(session);
+    response.json({ ok: true, ...settled });
+    return;
+  }
+
+  response.status(400).json({ ok: false, message: `Action không hợp lệ: ${action}` });
 }

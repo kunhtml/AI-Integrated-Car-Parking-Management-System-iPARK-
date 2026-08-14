@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { useParkingApp } from "@/context/parking-app-context";
 import { apiFetch } from "@/lib/client-api";
-import { currency } from "@/lib/constants";
+
 import type {
   RevenueChartPoint,
   OccupancyHourPoint,
@@ -45,6 +45,20 @@ function monthAgoStr() {
   const d = new Date();
   d.setDate(d.getDate() - 30);
   return d.toISOString().slice(0, 10);
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency: "VND",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function formatShortCurrency(value: number) {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(0)}K`;
+  return `${value}`;
 }
 
 // ─── KPI Card ────────────────────────────────────────────────────────────────
@@ -101,10 +115,10 @@ function RepRevenueChart({ data, groupBy }: RepRevenueChartProps) {
               <div
                 className="rep-bar-fill"
                 style={{ height: `${(p.revenue / maxRev) * 100}%` }}
-                title={currency.format(p.revenue)}
+                title={formatCurrency(p.revenue)}
               />
             </div>
-            <span className="rep-bar-val">{currency.formatShort(p.revenue)}</span>
+            <span className="rep-bar-val">{formatShortCurrency(p.revenue)}</span>
             <span className="rep-bar-label">
               {groupBy === "hour"
                 ? `${p.date}h`
@@ -120,9 +134,9 @@ function RepRevenueChart({ data, groupBy }: RepRevenueChartProps) {
             {data.map((p, i) => (
               <tr key={i}>
                 <td>{groupBy === "hour" ? `${p.date}h` : p.date}</td>
-                <td><strong>{currency.format(p.revenue)}</strong></td>
+                <td><strong>{formatCurrency(p.revenue)}</strong></td>
                 <td>{p.count}</td>
-                <td>{p.count > 0 ? currency.format(Math.round(p.revenue / p.count)) : "—"}</td>
+                <td>{p.count > 0 ? formatCurrency(Math.round(p.revenue / p.count)) : "—"}</td>
               </tr>
             ))}
           </tbody>
@@ -193,9 +207,9 @@ function RepTopCustomers({ data }: RepTopCustomersProps) {
             <span className="rep-customer-sessions">{c.sessionCount} phiên gửi</span>
           </div>
           <div className="rep-customer-spent">
-            <strong>{currency.format(c.totalSpent)}</strong>
+            <strong>{formatCurrency(c.totalSpent)}</strong>
             <span className="rep-customer-avg">
-              TB {c.sessionCount > 0 ? currency.format(Math.round(c.totalSpent / c.sessionCount)) : "—"}/phiên
+              TB {c.sessionCount > 0 ? formatCurrency(Math.round(c.totalSpent / c.sessionCount)) : "—"}/phiên
             </span>
           </div>
         </div>
@@ -331,7 +345,7 @@ function RepZoneReport({ entries, exits }: RepZoneReportProps) {
         {exits.map((e) => (
           <div key={e.zone} className="rep-zone-rev-row">
             <span className="rep-zone-name">{e.zone}</span>
-            <strong className="rep-zone-rev-amount">{currency.format(e.revenue)}</strong>
+            <strong className="rep-zone-rev-amount">{formatCurrency(e.revenue)}</strong>
           </div>
         ))}
       </div>
@@ -495,7 +509,7 @@ export function ReportsView() {
                 <KpiCard icon={<ArrowDown size={16} />} label="Xe vào" value={String(kpis.entryCount)} sub="tổng lượt vào" color="blue" />
                 <KpiCard icon={<ArrowUp size={16} />} label="Xe ra" value={String(kpis.exitCount)} sub="tổng lượt ra" color="cyan" />
                 <KpiCard icon={<Car size={16} />} label="Đang gửi" value={String(kpis.activeCount)} sub="phiên đang hoạt động" color="amber" />
-                <KpiCard icon={<Wallet size={16} />} label="Doanh thu" value={currency.format(kpis.revenue)} sub="trong khoảng thời gian" color="green" />
+                <KpiCard icon={<Wallet size={16} />} label="Doanh thu" value={formatCurrency(kpis.revenue)} sub="trong khoảng thời gian" color="green" />
                 <KpiCard icon={<Activity size={16} />} label="Phiên miễn phí" value={String(kpis.freeSessionCount)} sub="không tính phí" color="purple" />
                 <KpiCard icon={<TrendingUp size={16} />} label="Phiên có phí" value={String(kpis.paidSessionCount)} sub="đã thanh toán" color="blue" />
               </div>
@@ -504,7 +518,7 @@ export function ReportsView() {
                   <TrendingUp size={14} />
                   <span>
                     Doanh thu trung bình mỗi phiên có phí:{" "}
-                    <strong>{currency.format(Math.round(kpis.revenue / kpis.paidSessionCount))}</strong>
+                    <strong>{formatCurrency(Math.round(kpis.revenue / kpis.paidSessionCount))}</strong>
                   </span>
                 </div>
               )}

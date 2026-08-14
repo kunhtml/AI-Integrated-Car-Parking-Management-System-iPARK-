@@ -25,6 +25,7 @@ export function createPaymentActions({
   async function updatePricing(form: FormData) {
     const payload = {
       dayRate: Number(form.get("dayRate") || 0),
+      rfidCardSalePrice: Number(form.get("rfidCardSalePrice") || 0),
       nightRate: Number(form.get("nightRate") || 0),
       dayStartHour: Number(form.get("dayStartHour") || 0),
       nightStartHour: Number(form.get("nightStartHour") || 0),
@@ -115,10 +116,14 @@ export function createPaymentActions({
           `/public/session/${sessionId}/payment-status`,
         );
         if (res.ok) {
-          const status = await res.json();
+          const status = (await res.json()) as {
+            paymentStatus?: string;
+            transaction?: { status?: string };
+          };
           if (
             status.paymentStatus === "fully_paid" ||
-            status.paymentStatus === "partial_paid"
+            status.paymentStatus === "partial_paid" ||
+            status.transaction?.status === "paid"
           ) {
             clearInterval(intervalId);
             await reloadSessions();
@@ -127,14 +132,6 @@ export function createPaymentActions({
             );
             return;
           }
-        }
-        if (status?.transaction?.status === "paid") {
-          clearInterval(intervalId);
-          await reloadSessions();
-          setActionLog(
-            `Thanh toán thành công cho phiên ${sessionId.slice(-6)}.`,
-          );
-          return;
         }
       } catch {
         // ignore errors during polling

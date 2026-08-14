@@ -19,7 +19,7 @@ import type { RfidCard, RfidScanLog, RfidCardStatus } from "@/types";
 import * as rfidApi from "./rfid-api";
 import { RfidCardTable } from "./components/RfidCardTable";
 
-const STATUS_LABELS: Record<RfidCardStatus, string> = {
+const STATUS_LABELS: Partial<Record<RfidCardStatus, string>> = {
   available: "Sẵn sàng",
   "in-use": "Đang sử dụng",
   lost: "Mất",
@@ -60,12 +60,14 @@ type ConfirmAction = {
   card: RfidCard;
 };
 
-type TabType = "cards" | "scan-logs";
+type Assignment = { id: string; uid: string; cardId: string; cardType: "guest" | "member"; status: string; ownerName: string; plate: string; sessionId?: string; sessionStatus: string; updatedAt?: string };
+type TabType = "cards" | "assignments" | "scan-logs";
 
 export function RfidCardsView() {
   const [activeTab, setActiveTab] = useState<TabType>("cards");
   const [cards, setCards] = useState<RfidCard[]>([]);
   const [scanLogs, setScanLogs] = useState<RfidScanLog[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
@@ -117,6 +119,17 @@ export function RfidCardsView() {
     void loadCards();
   }, [loadCards]);
 
+  const loadAssignments = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await rfidApi.fetchRfidAssignments();
+      if (!res.ok) { setError("Không tải được trạng thái gắn thẻ."); return; }
+      const data = await res.json();
+      setAssignments(data.assignments || []);
+    } catch { setError("Không kết nối được API."); }
+    finally { setLoading(false); }
+  }, []);
+
   // ─── Load scan logs ───
   const loadScanLogs = useCallback(async () => {
     setLoading(true);
@@ -139,8 +152,9 @@ export function RfidCardsView() {
   }, [scanLogAction]);
 
   useEffect(() => {
+    if (activeTab === "assignments") void loadAssignments();
     if (activeTab === "scan-logs") void loadScanLogs();
-  }, [activeTab, loadScanLogs]);
+  }, [activeTab, loadAssignments, loadScanLogs]);
 
   // ─── Register ───
   async function handleRegister(e: React.FormEvent) {
@@ -216,7 +230,7 @@ export function RfidCardsView() {
 
   // ─── Card history ───
   async function openHistory(card: RfidCard) {
-    setHistoryCardId(card.cardId);
+    setHistoryCardId(card.cardId ?? card.uid);
     setHistoryLoading(true);
     try {
       // API /:id/history expects MongoDB ObjectId, not cardId string
@@ -246,7 +260,7 @@ export function RfidCardsView() {
   const filteredCards = useMemo(() => {
     if (!searchCardId.trim()) return cards;
     const q = searchCardId.trim().toLowerCase();
-    return cards.filter((c) => c.cardId.toLowerCase().includes(q));
+    return cards.filter((c) => (c.cardId ?? c.uid).toLowerCase().includes(q));
   }, [cards, searchCardId]);
 
   // ─── Render ───
@@ -358,11 +372,13 @@ export function RfidCardsView() {
               <History size={14} /> Lịch sử quét
             </button>
           </div>
-          <span className="muted-cell">
+'          <span className="muted-cell">
             {activeTab === "cards"
               ? `${filteredCards.length} thẻ`
-              : `${scanLogs.length} bản ghi`}
-          </span>
+              : activeTab === "assignments"
+                ? `${assignments.length} thẻ`
+                : `${scanLogs.length} bản ghi`}
+          </span>'
         </div>
 
         {error && <p className="muted-text error">{error}</p>}
@@ -424,7 +440,26 @@ export function RfidCardsView() {
           </>
         )}
 
-        {/* ── Scan logs tab ── */}
+'        {activeTab === "assignments" && (
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>Thẻ</th><th>Loại</th><th>Khách / chủ xe</th><th>Biển số hiện tại</th><th>Trạng thái phiên</th><th>Cập nhật</th></tr></thead>
+              <tbody>
+                {assignments.map((item) => <tr key={item.id}>
+                  <td><strong>{item.cardId}</strong><div className="muted-cell">UID: {item.uid}</div></td>
+                  <td><span className={`badge ${item.cardType === "member" ? "success" : "warning"}`}>{item.cardType === "member" ? "Member" : "Guest"}</span></td>
+                  <td>{item.ownerName || "Guest"}</td>
+                  <td>{item.plate || <span className="muted-cell">Không gắn xe</span>}</td>
+                  <td><span className={`badge ${item.sessionId ? "success" : ""}`}>{item.cardType === "member" ? "Bán đứt / cố định" : item.sessionStatus}</span></td>
+                  <td>{fmt(item.updatedAt)}</td>
+                </tr>)}
+                {!assignments.length && <tr><td colSpan={6} className="muted-cell">{loading ? "Đang tải…" : "Chưa có thẻ."}</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+'        {/* ── Scan logs tab ── */}
         {activeTab === "scan-logs" && (
           <>
             <div className="filter-row">

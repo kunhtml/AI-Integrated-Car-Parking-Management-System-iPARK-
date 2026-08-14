@@ -142,8 +142,17 @@ export async function handlePayOSWebhook(request: Request, response: Response) {
       // Idempotent: already processed
       if (transaction.status === "paid") {
         if (transaction.transactionType === "rfid_sale" || transaction.transactionType === "rfid_replacement") {
-          const { finalizePaidRfidTransaction } = await import("./rfidSales.service.js");
-          await finalizePaidRfidTransaction(transaction._id.toString());
+          const { RfidPurchaseRequest } = await import("../models/RfidPurchaseRequest.js");
+          const purchaseRequest = await RfidPurchaseRequest.findOne({ transactionId: transaction._id });
+          if (purchaseRequest) {
+            await RfidPurchaseRequest.updateOne(
+              { _id: purchaseRequest._id, status: "pending_payment" },
+              { $set: { status: "waiting_issuance" } },
+            );
+          } else {
+            const { finalizePaidRfidTransaction } = await import("./rfidSales.service.js");
+            await finalizePaidRfidTransaction(transaction._id.toString());
+          }
           console.log("[PayOS Webhook] Reconciled paid RFID transaction:", orderCode);
           response.json({ message: "RFID payment already applied" });
           return;
@@ -186,8 +195,17 @@ export async function handlePayOSWebhook(request: Request, response: Response) {
 
     // Giao dịch bán/cấp lại thẻ RFID → kích hoạt thẻ sau khi PayOS báo paid
     if (transaction.transactionType === "rfid_sale" || transaction.transactionType === "rfid_replacement") {
-      const { finalizePaidRfidTransaction } = await import("./rfidSales.service.js");
-      await finalizePaidRfidTransaction(transaction._id.toString());
+      const { RfidPurchaseRequest } = await import("../models/RfidPurchaseRequest.js");
+          const purchaseRequest = await RfidPurchaseRequest.findOne({ transactionId: transaction._id });
+          if (purchaseRequest) {
+            await RfidPurchaseRequest.updateOne(
+              { _id: purchaseRequest._id, status: "pending_payment" },
+              { $set: { status: "waiting_issuance" } },
+            );
+          } else {
+            const { finalizePaidRfidTransaction } = await import("./rfidSales.service.js");
+            await finalizePaidRfidTransaction(transaction._id.toString());
+          }
       console.log(`[PayOS Webhook] RFID transaction ${transaction._id} activated.`);
       response.json({ message: "RFID payment applied" });
       return;

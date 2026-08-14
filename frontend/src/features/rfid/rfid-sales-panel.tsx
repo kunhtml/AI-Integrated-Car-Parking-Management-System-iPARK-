@@ -39,6 +39,7 @@ import {
   reconcilePendingRfidSales,
 } from "./rfid-sales-api";
 
+type RfidAssignment = { id: string; uid: string; cardId: string; cardType: "guest" | "member"; ownerName: string; plate: string; sessionId?: string; };
 type PanelTab = "inventory" | "transactions";
 type StatusAction = "lost" | "blocked" | "damaged";
 type SaleForm = {
@@ -169,6 +170,7 @@ export function RfidSalesPanel() {
   const [tab, setTab] = useState<PanelTab>("inventory");
   const [inventory, setInventory] = useState<RfidInventoryItem[]>([]);
   const [transactions, setTransactions] = useState<RfidTransaction[]>([]);
+  const [assignments, setAssignments] = useState<RfidAssignment[]>([]);
   const [summary, setSummary] = useState<Array<{ _id: RfidLifecycleStatus; count: number }>>([]);
   const [inventoryStatus, setInventoryStatus] = useState<"all" | RfidLifecycleStatus>("all");
   const [query, setQuery] = useState("");
@@ -194,13 +196,15 @@ export function RfidSalesPanel() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [inventoryResult, transactionsResult] = await Promise.all([
+      const [inventoryResult, transactionsResult, assignmentResult] = await Promise.all([
         getRfidInventory({ limit: 100 }),
         getRfidTransactions({ limit: 50 }),
+        apiFetch("/rfid/assignments").then(async (response) => response.ok ? response.json() : { assignments: [] }),
       ]);
       setInventory(inventoryResult.items);
       setSummary(inventoryResult.summary);
       setTransactions(transactionsResult.items);
+      setAssignments(assignmentResult.assignments || []);
     } catch (error) {
       setNotice({ tone: "error", text: error instanceof Error ? error.message : "Không tải được dữ liệu RFID." });
     } finally {
@@ -264,6 +268,9 @@ export function RfidSalesPanel() {
   }
 
   const summaryCount = (status: RfidLifecycleStatus) => summary.find((item) => item._id === status)?.count ?? 0;
+  const memberCards = useMemo(() => assignments.filter((card) => card.cardType === "member"), [assignments]);
+  const guestCardsInUse = useMemo(() => assignments.filter((card) => card.cardType === "guest" && Boolean(card.sessionId)), [assignments]);
+
   const availableCards = useMemo(() => inventory.filter((card) => card.status === "available"), [inventory]);
   const filteredInventory = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -502,8 +509,8 @@ export function RfidSalesPanel() {
     <section className="rfid-sales-section" aria-label="Bán và quản lý vòng đời thẻ RFID">
       <div className="rfid-sales-heading">
         <div>
-          <p className="rfid-eyebrow">NGHIỆP VỤ THẺ</p>
-          <h3>RFID Member — bán đứt theo xe</h3>
+          <p className="rfid-eyebrow">QUẢN LÝ RFID</p>
+          <h3>Quản lý hệ thống thẻ RFID</h3>
           <p>Thẻ Guest ở kho được cấp và thu hồi tại cổng; thẻ Member được bán đứt, liên kết duy nhất với một xe và có thể dùng để mua gói.</p>
         </div>
         <div className="rfid-sales-heading-actions">
@@ -519,9 +526,7 @@ export function RfidSalesPanel() {
           <button className="small-button" type="button" onClick={() => setInventoryForm({ ...EMPTY_INVENTORY_FORM })}>
             <PackageCheck size={15} /> Nhập thẻ kho
           </button>
-          <button className="small-button primary" type="button" onClick={() => openSale()}>
-            <Plus size={15} /> Bán thẻ Member
-          </button>
+
         </div>
       </div>
 
@@ -536,24 +541,45 @@ export function RfidSalesPanel() {
       <div className="rfid-sales-kpis">
         <button type="button" className="rfid-sales-kpi available" onClick={() => { setTab("inventory"); setInventoryStatus("available"); }}>
           <PackageCheck size={19} />
-          <span><small>Sẵn sàng bán</small><strong>{summaryCount("available")}</strong></span>
+          <span><small>Thẻ đang có sẵn</small><strong>{summaryCount("available")}</strong></span>
         </button>
         <button type="button" className="rfid-sales-kpi in-use" onClick={() => { setTab("inventory"); setInventoryStatus("in-use"); }}>
           <TicketCheck size={19} />
-          <span><small>Đang sử dụng</small><strong>{summaryCount("in-use") + summaryCount("active")}</strong></span>
+          <span><small>Thẻ RFID khách đăng ký</small><strong>{memberCards.length}</strong></span>
         </button>
-        <button type="button" className="rfid-sales-kpi pending" onClick={() => { setTab("inventory"); setInventoryStatus("pending-sale"); }}>
-          <WalletCards size={19} />
-          <span><small>Chờ thanh toán</small><strong>{summaryCount("pending-sale")}</strong></span>
-        </button>
+
         <button type="button" className="rfid-sales-kpi issue" onClick={() => { setTab("inventory"); setInventoryStatus("lost"); }}>
           <ShieldAlert size={19} />
           <span><small>Mất / hỏng / khóa</small><strong>{summaryCount("lost") + summaryCount("damaged") + summaryCount("blocked")}</strong></span>
         </button>
       </div>
 
+      <div className="rfid-assignment-grid">
+        <article className="rfid-assignment-card member">
+          <div className="rfid-assignment-card__header">
+            <div><p>Thẻ Member đã đăng ký</p><strong>{memberCards.length} thẻ đang gắn xe</strong></div>
+            <span className="rfid-assignment-card__count">{memberCards.length}</span>
+          </div>
+          {memberCards.length ? (
+            <div className="rfid-assignment-card__list">
+              {memberCards.map((card) => <div className="rfid-assignment-card__row" key={card.id}><strong>UID: {card.uid}</strong><span>{card.ownerName || "Thành viên"} · <b>{card.plate || "—"}</b></span></div>)}
+            </div>
+          ) : <p className="rfid-assignment-card__empty">Chưa có thẻ Member nào được bán/gắn xe.</p>}
+        </article>
+        <article className="rfid-assignment-card guest">
+          <div className="rfid-assignment-card__header">
+            <div><p>Thẻ RFID vãng lai</p><strong>{guestCardsInUse.length} thẻ đang có phiên</strong></div>
+            <span className="rfid-assignment-card__count">{guestCardsInUse.length}</span>
+          </div>
+          {guestCardsInUse.length ? (
+            <div className="rfid-assignment-card__list">
+              {guestCardsInUse.map((card) => <div className="rfid-assignment-card__row" key={card.id}><strong>UID: {card.uid}</strong><span>Khách vãng lai · <b>{card.plate}</b></span></div>)}
+            </div>
+          ) : <p className="rfid-assignment-card__empty">Không có thẻ Guest nào đang được sử dụng.</p>}
+        </article>
+      </div>
       <div className="rfid-sales-tabs" role="tablist" aria-label="Nghiệp vụ thẻ RFID">
-        <button type="button" className={tab === "inventory" ? "active" : ""} onClick={() => setTab("inventory")} role="tab" aria-selected={tab === "inventory"}>
+        <button type="button" className={tab === "inventory" ? "active" : ""} onClick={() => { setTab("inventory"); setInventoryStatus("all"); setQuery(""); }} role="tab" aria-selected={tab === "inventory"}>
           <CreditCard size={16} /> Tồn kho thẻ
         </button>
         <button type="button" className={tab === "transactions" ? "active" : ""} onClick={() => setTab("transactions")} role="tab" aria-selected={tab === "transactions"}>

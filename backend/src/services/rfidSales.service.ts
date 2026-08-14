@@ -275,6 +275,13 @@ export async function changeRfidCardStatus(id: string, status: Extract<RfidCardS
   if (!card) throw new AppError("Không tìm thấy thẻ RFID.", 404);
   if (status === "available" && card.status === "in-use") throw new AppError("Không thể mở lại thẻ đang gán cho xe; hãy dùng quy trình trả thẻ.", 409);
   card.status = status;
+  if (status === "available" && card.cardType === "guest") {
+    card.plate = "";
+    card.ownerName = "Guest";
+    card.userId = undefined;
+    card.vehicleId = undefined;
+    card.returnedAt = new Date();
+  }
   if (status === "lost") card.lostAt = new Date();
   if (status === "blocked") { card.blockedAt = new Date(); card.blockedReason = reason?.trim() || "Khóa theo yêu cầu vận hành"; }
   if (status === "damaged") { card.damagedAt = new Date(); card.damagedReason = reason?.trim() || "Thẻ hỏng"; }

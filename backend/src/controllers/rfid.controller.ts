@@ -4,6 +4,7 @@ import { RfidCard, RfidCardDocument } from "../models/RfidCard.js";
 import { Vehicle } from "../models/Vehicle.js";
 import { Subscription } from "../models/Subscription.js";
 import { User } from "../models/User.js";
+import { ParkingSession } from "../models/ParkingSession.js";
 
 function normalizePlate(plate: string): string {
   return (plate || "")
@@ -36,6 +37,31 @@ export async function listRfidCards(_request: Request, response: Response) {
  * mà xe của họ CHƯA được gán vào thẻ RFID active nào.
  * Dùng cho form Thêm / Sửa thẻ RFID để admin/staff chọn và tự điền biển số.
  */
+export async function listRfidAssignments(_request: Request, response: Response) {
+  const cards = await RfidCard.find().sort({ updatedAt: -1, createdAt: -1 }).limit(500).lean();
+  const identifiers = cards.flatMap((card) => [card.uid, card.cardId].filter(Boolean));
+  const sessions = identifiers.length
+    ? await ParkingSession.find({ status: "Đang gửi", $or: [{ rfidCardId: { $in: identifiers } }, { exitRfidUid: { $in: identifiers } }] }).lean()
+    : [];
+  const activeByIdentifier = new Map<string, (typeof sessions)[number]>();
+  for (const session of sessions) {
+    for (const identifier of [session.rfidCardId, session.exitRfidUid]) {
+      if (identifier) activeByIdentifier.set(identifier.toUpperCase(), session);
+    }
+  }
+  response.json({ assignments: cards.map((card) => {
+    const session = activeByIdentifier.get(card.uid.toUpperCase()) || (card.cardId ? activeByIdentifier.get(card.cardId.toUpperCase()) : undefined);
+    const isMember = card.cardType === "member";
+    return {
+      id: card._id.toString(), uid: card.uid, cardId: card.cardId || card.uid,
+      cardType: card.cardType, status: card.status,
+      ownerName: isMember ? card.ownerName : (session?.ownerName || "Guest"),
+      plate: isMember ? card.plate : (session?.plate || ""),
+      sessionId: session?._id.toString(), sessionStatus: session ? session.status : "Không có phiên",
+      updatedAt: card.updatedAt,
+    };
+  }) });
+}
 export async function listUnassignedResidents(
   _request: Request,
   response: Response,
@@ -346,18 +372,15 @@ export async function listMyRfidCards(request: Request, response: Response) {
     response.status(401).json({ message: "Chưa đăng nhập." });
     return;
   }
-  const vehicles = await Vehicle.find({ userId }).select("plate").lean();
-  const plates = new Set(
-    vehicles.map((v) => (v.plate || "").trim().toUpperCase()),
-  );
-  if (plates.size === 0) {
-    response.json({ cards: [] });
-    return;
-  }
+  const vehicles = await Vehicle.find({ userId }).select("_id plate").lean();
+  const plates = vehicles.map((vehicle) => (vehicle.plate || "").trim().toUpperCase());
   const cards = await RfidCard.find({
-    plate: { $in: Array.from(plates) },
-  })
-    .sort({ createdAt: -1 })
-    .limit(20);
+    cardType: "member",
+    $or: [
+      { userId },
+      ...(plates.length ? [{ plate: { $in: plates } }] : []),
+      ...(vehicles.length ? [{ vehicleId: { $in: vehicles.map((vehicle) => vehicle._id) } }] : []),
+    ],
+  }).sort({ createdAt: -1 }).limit(50);
   response.json({ cards: cards.map(serializeCard) });
 }

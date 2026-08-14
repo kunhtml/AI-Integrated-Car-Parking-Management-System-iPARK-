@@ -4,7 +4,7 @@ import { History, ShieldBan, ShieldCheck, AlertTriangle } from "lucide-react";
 import type { RfidCard } from "@/types";
 import { RfidCardStatusBadge } from "./RfidCardStatusBadge";
 
-function fmt(value?: string) {
+function fmt(value?: string | null) {
   if (!value) return "—";
   return new Date(value).toLocaleString("vi-VN", {
     hour: "2-digit",

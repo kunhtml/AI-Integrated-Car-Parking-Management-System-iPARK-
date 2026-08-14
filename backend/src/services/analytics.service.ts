@@ -4,20 +4,26 @@ import { Transaction } from "../models/Transaction.js";
 import { User } from "../models/User.js";
 
 export type RevenuePoint = { date: string; revenue: number; count: number };
+type RevenueGroupBy = "day" | "week" | "month" | "hour";
+
+const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
 export type OccupancyPoint = { hour: number; avgOccupancy: number; maxOccupancy: number };
 export type TopCustomerItem = { userId: string; name: string; email?: string; sessionCount: number; totalSpent: number };
 export type PeakHourPoint = { dayOfWeek: number; hour: number; count: number };
 
 /**
- * Revenue chart data grouped by day/week/month.
+ * Revenue chart data grouped by hour/day/week/month.
  */
 export async function getRevenueChart(
   from: Date,
   to: Date,
-  groupBy: "day" | "week" | "month" = "day",
+  groupBy: RevenueGroupBy = "day",
 ): Promise<RevenuePoint[]> {
   let dateFormat: string;
   switch (groupBy) {
+    case "hour":
+      dateFormat = "%H";
+      break;
     case "week":
       dateFormat = "%Y-W%V";
       break;
@@ -37,7 +43,13 @@ export async function getRevenueChart(
     },
     {
       $group: {
-        _id: { $dateToString: { format: dateFormat, date: "$paidAt" } },
+        _id: {
+          $dateToString: {
+            format: dateFormat,
+            date: "$paidAt",
+            timezone: VIETNAM_TIME_ZONE,
+          },
+        },
         revenue: { $sum: "$amount" },
         count: { $sum: 1 },
       },

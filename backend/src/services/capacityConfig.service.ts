@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import { CapacityConfig } from "../models/CapacityConfig.js";
 import { CapacityChangeLog } from "../models/CapacityChangeLog.js";
 import { Zone } from "../models/Zone.js";
+import { ParkingSlot } from "../models/ParkingSlot.js";
 
 export const DEFAULT_GLOBAL_CAPACITY = 100;
 
@@ -62,6 +63,98 @@ export async function computeActiveZoneCapacitySum(excludeZoneId?: string) {
   return zones.reduce((sum, z) => sum + (z.capacity ?? 0), 0);
 }
 
+async function alignDefaultZoneCapacity(targetCapacity: number) {
+  const totalZoneCapacity = await computeActiveZoneCapacitySum();
+  const defaultZone = await Zone.findOne({ name: "Bãi chung", isActive: true });
+  if (!defaultZone) {
+    if (totalZoneCapacity > targetCapacity) {
+      throw new CapacityConfigError(
+        `Tổng capacity các zone (${totalZoneCapacity}) vượt quá tổng sức chứa mới (${targetCapacity}). Hãy giảm capacity zone trước.`,
+      );
+    }
+    return;
+  }
+
+  const otherZonesCapacity = totalZoneCapacity - defaultZone.capacity;
+  const nextZoneCapacity = targetCapacity - otherZonesCapacity;
+  if (nextZoneCapacity < 1) {
+    throw new CapacityConfigError(
+      `Tổng capacity của các zone khác (${otherZonesCapacity}) vượt quá tổng sức chứa mới (${targetCapacity}).`,
+    );
+  }
+
+  const subscriberQuota = Math.min(defaultZone.subscriberQuota, nextZoneCapacity);
+  const walkInQuota = nextZoneCapacity - subscriberQuota;
+  defaultZone.capacity = nextZoneCapacity;
+  defaultZone.subscriberQuota = subscriberQuota;
+  defaultZone.walkInQuota = walkInQuota;
+  await defaultZone.save();
+}
+
+async function syncSlotsToGlobalCapacity(targetCapacity: number) {
+  const existingSlots = await ParkingSlot.find()
+    .select("_id slotCode status")
+    .sort({ createdAt: -1 })
+    .lean();
+
+  if (existingSlots.length > targetCapacity) {
+    const slotsToRemove = existingSlots.length - targetCapacity;
+    const removableSlots = existingSlots
+      .filter((slot) => slot.status === "empty" || slot.status === "maintenance")
+      .slice(0, slotsToRemove);
+    if (removableSlots.length < slotsToRemove) {
+      throw new CapacityConfigError(
+        `Không thể giảm xuống ${targetCapacity} slot vì còn ${slotsToRemove - removableSlots.length} slot đang sử dụng hoặc được giữ chỗ.`,
+        409,
+      );
+    }
+
+    await ParkingSlot.deleteMany({ _id: { $in: removableSlots.map((slot) => slot._id) } });
+    return -removableSlots.length;
+  }
+
+  const slotsToCreate = targetCapacity - existingSlots.length;
+  if (slotsToCreate === 0) return 0;
+
+  let zone = await Zone.findOne({ isActive: true })
+    .sort({ displayOrder: 1, name: 1 });
+  if (!zone) {
+    zone = await Zone.create({
+      name: "Bãi chung",
+      description: "Khu mặc định cho các slot tự động tạo theo tổng sức chứa.",
+      capacity: targetCapacity,
+      walkInQuota: targetCapacity,
+      subscriberQuota: 0,
+      allowedVehicleTypes: ["Ô tô"],
+      displayOrder: 999,
+      isActive: true,
+    });
+  }
+
+  const usedCodes = new Set(existingSlots.map((slot) => slot.slotCode.toUpperCase()));
+  const slots = [];
+  let number = 1;
+  while (slots.length < slotsToCreate) {
+    const slotCode = String(number++);
+    if (usedCodes.has(slotCode)) continue;
+    usedCodes.add(slotCode);
+    slots.push({
+      slotCode,
+      zoneId: zone._id,
+      zoneName: zone.name,
+      slotType: "regular" as const,
+      features: [],
+      floor: 0,
+      accessPolicy: "guest" as const,
+      quotaType: "walk_in" as const,
+      status: "empty" as const,
+    });
+  }
+
+  await ParkingSlot.insertMany(slots);
+  return slots.length;
+}
+
 export async function updateGlobalCapacity(
   newCapacity: number,
   changedBy: string | undefined,
@@ -70,13 +163,27 @@ export async function updateGlobalCapacity(
   if (!Number.isInteger(newCapacity) || newCapacity < 1) {
     throw new CapacityConfigError("Tổng sức chứa phải là số nguyên ≥ 1.");
   }
-  const before = await getOrCreateGlobalConfig();
-  const otherZonesSum = await computeActiveZoneCapacitySum();
-  if (otherZonesSum > newCapacity) {
+
+  const activeSlotCount = await ParkingSlot.countDocuments({
+    status: { $in: ["occupied", "reserved"] },
+  });
+  if (newCapacity < activeSlotCount) {
     throw new CapacityConfigError(
-      `Tổng capacity hiện tại của các zone (${otherZonesSum}) vượt quá tổng sức chứa mới (${newCapacity}). Hãy giảm capacity zone trước.`,
+      `Không thể giảm xuống ${newCapacity} slot vì đang có ${activeSlotCount} slot có xe hoặc được giữ chỗ. Sức chứa tối thiểu là ${activeSlotCount}.`,
+      409,
     );
   }
+
+  const before = await getOrCreateGlobalConfig();
+  await alignDefaultZoneCapacity(newCapacity);
+  const totalZoneCapacity = await computeActiveZoneCapacitySum();
+  if (totalZoneCapacity > newCapacity) {
+    throw new CapacityConfigError(
+      `Tổng capacity hiện tại của các zone (${totalZoneCapacity}) vượt quá tổng sức chứa mới (${newCapacity}). Hãy giảm capacity zone trước.`,
+    );
+  }
+
+  await syncSlotsToGlobalCapacity(newCapacity);
   const after = await CapacityConfig.findOneAndUpdate(
     { key: "default" },
     { $set: { globalCapacity: newCapacity, updatedBy: changedBy } },
@@ -136,4 +243,18 @@ export async function updateZoneCapacity(
     reason,
   });
   return zone;
+}
+
+export async function assertSlotCreationCapacity(additionalSlots = 1) {
+  if (!Number.isInteger(additionalSlots) || additionalSlots < 1) {
+    throw new CapacityConfigError("S\u1ed1 slot c\u1ea7n t\u1ea1o ph\u1ea3i l\u00e0 s\u1ed1 nguy\u00ean d\u01b0\u01a1ng.");
+  }
+  const config = await getOrCreateGlobalConfig();
+  const currentSlots = await ParkingSlot.countDocuments();
+  if (currentSlots + additionalSlots > config.globalCapacity) {
+    throw new CapacityConfigError(
+      "Kh\u00f4ng th\u1ec3 t\u1ea1o th\u00eam slot: \u0111\u00e3 c\u00f3 " + currentSlots + "/" + config.globalCapacity + " slot; t\u1ed5ng s\u1ee9c ch\u1ee9a l\u00e0 " + config.globalCapacity + ".",
+      409,
+    );
+  }
 }

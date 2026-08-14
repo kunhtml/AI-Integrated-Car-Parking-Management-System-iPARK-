@@ -291,6 +291,16 @@ export async function createParkingSession(
       isMember = false;
       ownerUserId = undefined;
       plateCheck = { warn: undefined, discount: 0 };
+
+      // Biển của Guest thuộc phiên, không thuộc thẻ dùng chung. Dọn dữ liệu
+      // còn sót từ phiên trước trước khi cấp thẻ cho xe mới.
+      if (card.plate || card.userId || card.vehicleId) {
+        card.plate = "";
+        card.ownerName = "Guest";
+        card.userId = undefined;
+        card.vehicleId = undefined;
+        await card.save();
+      }
     }
 
     rfidCard = {

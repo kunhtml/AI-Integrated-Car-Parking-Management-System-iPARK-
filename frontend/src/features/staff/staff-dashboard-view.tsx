@@ -256,12 +256,9 @@ export function StaffDashboardView() {
                     id: "dev-mock-gate-1",
                     name: `AI ANPR Camera ${gateLabel}`,
                     gate: gate,
-                    status: "Online",
-                    type: "Camera",
-                    ipAddress: "192.168.1.104",
-                    fps: 30,
-                    resolution: "1920x1080",
-                    isAiProcessing: true,
+                    status: "online",
+                    rtspUrl: "",
+                    httpUrl: "",
                   }}
                   showLiveLogs
                 />

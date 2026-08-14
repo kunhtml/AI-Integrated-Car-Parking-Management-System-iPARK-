@@ -33,7 +33,7 @@ import { createZoneActions } from "@/hooks/actions/use-zone-actions";
 import { useOperationalData } from "@/hooks/use-operational-data";
 import { useSessionLoader } from "@/hooks/use-session-loader";
 import { parkingConfig } from "@/lib/parking-config";
-import { apiFetch } from "@/lib/client-api";
+import { apiFetch, bridgeFetch } from "@/lib/client-api";
 import type {
   AuthMode,
   CapacityChangeLog,
@@ -113,7 +113,12 @@ type ParkingAppContextValue = {
   notificationList: NotificationItem[];
   deviceList: DeviceItem[];
   shiftList: ShiftItem[];
-  shiftScheduleList: ShiftScheduleItem[];
+  shiftScheduleList: ShiftScheduleItem[];  loadSchedules: (params?: { staffId?: string; fromDate?: string; toDate?: string; month?: number; year?: number }) => Promise<ShiftScheduleItem[]>;
+  loadMySchedule: (params?: { fromDate?: string; toDate?: string; month?: number; year?: number }) => Promise<ShiftScheduleItem[]>;
+  createSchedule: (data: { staffId: string; date: string; shiftType: "morning" | "afternoon" | "evening" | "night"; startTime: string; endTime: string; note?: string; location?: string; deviceId?: string }) => Promise<ShiftScheduleItem>;
+  deleteSchedule: (id: string) => Promise<boolean>;
+  checkInShift: (id: string) => Promise<ShiftScheduleItem>;
+  completeShiftSchedule: (id: string) => Promise<ShiftScheduleItem>;
   incidentList: IncidentItem[];
   reportFrom: string;
   setReportFrom: (from: string) => void;
@@ -140,7 +145,13 @@ type ParkingAppContextValue = {
     event: FormEvent<HTMLFormElement>,
   ) => Promise<DemoUser | null>;
   logout: () => Promise<void>;
-  setupTwoFactor: () => Promise<void>;
+  setupTwoFactor: () => Promise<{
+    setupTwoFactorId?: string;
+    email?: string;
+    message?: string;
+  }>;
+  resendTwoFactorOtp: (setupTwoFactorId?: string) => Promise<Record<string, unknown>>;
+  requestDisableTwoFactor: () => Promise<Record<string, unknown>>;
   verifyTwoFactor: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   disableTwoFactor: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   createSession?: (event: FormEvent<HTMLFormElement>) => Promise<void>;
@@ -149,11 +160,10 @@ type ParkingAppContextValue = {
   approveCheckout: (id: string, plate: string) => Promise<void>;
   cameraEntry: (deviceId: string) => Promise<void>;
   cameraExit: (deviceId: string) => Promise<void>;
+  triggerGate: (gateId: string, reason?: string) => Promise<void>;
   updatePricing: (form: FormData) => Promise<boolean>;
   confirmTransaction: (id: string) => Promise<void>;
   createPaymentForSession: (id: string) => Promise<void>;
-  saveDevice: (event: FormEvent<HTMLFormElement>) => Promise<void>;
-  snapshotDevice: (id: string) => Promise<void>;
   loadReportSummary: (from: string, to: string) => Promise<void>;
   downloadReport: (
     type: "sessions" | "revenue",
@@ -175,13 +185,14 @@ type ParkingAppContextValue = {
   createDeleteRequest: (
     vehicleId: string,
     subscriptionId: string,
+    reason?: string,
   ) => Promise<void>;
   resolveRequest: (
     requestId: string,
     action: "approved" | "rejected",
     adminNote?: string,
   ) => Promise<void>;
-  loadVehicleRequests: () => Promise<void>;
+  loadVehicleRequests: (params?: { includeResolved?: boolean }) => Promise<void>;
   loadVehicles: () => Promise<void>;
   addVehicle: (data: {
     plate: string;
@@ -221,7 +232,7 @@ type ParkingAppContextValue = {
   createZone: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   updateZone: (id: string, updates: Partial<Zone>) => Promise<void>;
   deleteZone: (id: string) => Promise<void>;
-  createSlot: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  createSlot: (event: FormEvent<HTMLFormElement>) => Promise<boolean>;
   bulkCreateSlots: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   updateSlotStatus: (
     id: string,
@@ -889,6 +900,15 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
     });
   }, [state.sessions, state.searchText]);
 
+  const triggerGate = useCallback(async (gateId: string, reason?: string) => {
+    const gate = gateId.startsWith("entry") ? "in" : "out";
+    const response = await bridgeFetch(`/gate/${gate}/open`, {
+      method: "POST",
+      body: JSON.stringify({ reason: reason || "manual" }),
+    });
+    if (!response.ok) throw new Error("Không mở được barrier.");
+  }, []);
+
   const value = useMemo<ParkingAppContextValue>(
     () => ({
       mode: state.mode,
@@ -931,6 +951,7 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       filteredSessions,
       ...authActions,
       ...sessionActions,
+      triggerGate,
       ...paymentActions,
       ...reportActions,
       ...miscActions,
@@ -969,7 +990,10 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       loadZoneSlots: capacityActions.loadZoneSlots,
       updateGlobalCapacity: async (payload) => {
         const ok = await capacityActions.updateGlobalCapacity(payload);
-        if (ok) await capacityActions.loadUsage();
+        if (ok) {
+          await capacityActions.loadUsage();
+          await reloadSlots();
+        }
         return ok;
       },
       updateZoneCapacity: async (zoneId, payload) => {

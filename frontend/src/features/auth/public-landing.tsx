@@ -452,7 +452,7 @@ export function AuthPanel() {
   }, [twoFactorResendCooldown]);
 
   async function onResendOtp() {
-    if (resendCooldown > 0) return;
+    if (resendCooldown > 0 || !handleResendVerificationOtp) return;
     setResendCooldown(10);
     await handleResendVerificationOtp(pendingEmail);
   }
@@ -655,6 +655,7 @@ export function AuthPanel() {
       {mode === "verify-register" && (
         <form
           onSubmit={async (event) => {
+            if (!handleVerifyRegister) return;
             const result = await handleVerifyRegister(event);
             if (result) setMode("login");
           }}

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Check, CreditCard, Radio, Wifi, Package, ListChecks, Plus } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Check, CreditCard, Package, ListChecks } from "lucide-react";
 import { useParkingApp } from "@/context/parking-app-context";
 import { apiFetch } from "@/lib/client-api";
 import { VehicleDetailModal } from "@/features/vehicles/vehicles-view";
@@ -10,7 +10,6 @@ import { AdminPlans } from "./admin-plans";
 import { AdminSubscriptions } from "./admin-subscriptions";
 import { PaymentModal } from "./payment-modal";
 import { PlanGrid } from "./plan-grid";
-import { StatusBadge } from "./status-badge";
 import { SubscriptionCard } from "./subscription-card";
 import { VehiclePickerModal } from "./vehicle-picker-modal";
 
@@ -22,15 +21,6 @@ type PurchaseState =
 
 type AdminTab = "plans" | "subscriptions";
 
-type MyRfidCard = {
-  id: string;
-  uid: string;
-  ownerName: string;
-  plate: string;
-  userType: "resident" | "guest";
-  status: "active" | "inactive";
-  createdAt: string;
-};
 
 export function SubscriptionsView() {
   const {
@@ -56,12 +46,10 @@ export function SubscriptionsView() {
   const [purchasePicker, setPurchasePicker] = useState<PurchaseState>({ open: false });
   const [adminTab, setAdminTab] = useState<AdminTab>("plans");
 
-  if (!currentUser) return null;
-  const isAdmin = currentUser.role === "admin";
+  const [now] = useState(() => Date.now());
+  const isAdmin = currentUser?.role === "admin";
   // Dùng viewAs để xác định chế độ hiển thị
-  const isCustomer = currentUser.role === "staff" ? viewAs === "customer" : currentUser.role === "customer";
-
-  const now = Date.now();
+  const isCustomer = currentUser?.role === "staff" ? viewAs === "customer" : currentUser?.role === "customer";
   const myActiveSubs = useMemo(
     () =>
       subscriptionList.filter(
@@ -72,84 +60,7 @@ export function SubscriptionsView() {
       ),
     [subscriptionList, now],
   );
-  const heroSub = myActiveSubs[0] ?? null;
-
-  const [myCards, setMyCards] = useState<MyRfidCard[]>([]);
-  const [myCardsLoading, setMyCardsLoading] = useState(false);
-  const [rfidBuyingVehicleId, setRfidBuyingVehicleId] = useState<string | null>(null);
-  const [rfidNotice, setRfidNotice] = useState<string | null>(null);
-  const [pendingRfidTransactionId, setPendingRfidTransactionId] = useState<string | null>(null);
-
-  async function refreshMyRfidCards() {
-    try {
-      const r = await apiFetch("/rfid/mine");
-      const d = await r.json().catch(() => ({}));
-      if (r.ok && Array.isArray(d.cards)) setMyCards(d.cards);
-    } catch {
-      /* silent */
-    }
-  }
-
-  useEffect(() => {
-    if (!isCustomer) return;
-    let cancelled = false;
-    setMyCardsLoading(true);
-    void refreshMyRfidCards().finally(() => {
-      if (!cancelled) setMyCardsLoading(false);
-    });
-    return () => { cancelled = true; };
-  }, [isCustomer]);
-
-  useEffect(() => {
-    if (!isCustomer || !pendingRfidTransactionId) return;
-    let cancelled = false;
-    let attempts = 0;
-    const timer = window.setInterval(async () => {
-      if (cancelled || attempts++ >= 20) {
-        window.clearInterval(timer);
-        if (!cancelled) setPendingRfidTransactionId(null);
-        return;
-      }
-      try {
-        const r = await apiFetch(`/rfid/my-sales/${pendingRfidTransactionId}/reconcile`, { method: "POST" });
-        const data = await r.json().catch(() => ({}));
-        if (r.ok && data.transaction?.status === "paid" && data.card?.status === "active") {
-          window.clearInterval(timer);
-          await refreshMyRfidCards();
-          if (!cancelled) {
-            setPendingRfidTransactionId(null);
-            setRfidNotice("Thanh toán thành công. Thẻ RFID Member đã được kích hoạt.");
-          }
-        }
-      } catch {
-        /* retry */
-      }
-    }, 3000);
-    return () => { cancelled = true; window.clearInterval(timer); };
-  }, [isCustomer, pendingRfidTransactionId]);
-
-  async function handleBuyRfid(vehicle: RegisteredVehicle) {
-    if (rfidBuyingVehicleId) return;
-    setRfidBuyingVehicleId(vehicle.id);
-    setRfidNotice(null);
-    try {
-      const r = await apiFetch("/rfid/my-sales", { method: "POST", body: JSON.stringify({ vehicleId: vehicle.id }) });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data.message || "Không thể tạo đơn mua thẻ RFID.");
-      if (data.transaction?.id) setPendingRfidTransactionId(data.transaction.id);
-      const checkoutUrl = data.payos?.checkoutUrl || data.transaction?.payosCheckoutUrl;
-      if (checkoutUrl) {
-        window.open(checkoutUrl, "_blank", "noopener,noreferrer");
-        setRfidNotice(`Đã mở trang thanh toán PayOS cho thẻ RFID của xe ${vehicle.plate}. Sau khi thanh toán, hãy tải lại trang để xem thẻ.`);
-      } else {
-        setRfidNotice(`Đã tạo đơn mua thẻ RFID cho xe ${vehicle.plate}.`);
-      }
-    } catch (error: any) {
-      setRfidNotice(error?.message || "Không thể mua thẻ RFID.");
-    } finally {
-      setRfidBuyingVehicleId(null);
-    }
-  }
+  if (!currentUser) return null;
 
   async function refreshSubscriptionList() {
     try {
@@ -191,7 +102,7 @@ export function SubscriptionsView() {
       const result = await purchaseSubscription(planId, vehicle.id);
       const base = subscriptionList.find((s) => s.id === result.subscription.id);
       const baseEnd = base ? new Date(base.endDate).getTime() : 0;
-      const payos = result.payos as any;
+      const payos = result.payos as SubPayos | undefined;
       if (payos?.qrCode) {
         setPayment({
           subId: result.subscription.id,
@@ -212,8 +123,8 @@ export function SubscriptionsView() {
       } else {
         setFeedback({ type: "success", text: `Mua gói thành công cho xe ${vehicle.plate}.` });
       }
-    } catch (err: any) {
-      setFeedback({ type: "error", text: err?.message || "Không mua được gói." });
+    } catch (err: unknown) {
+      setFeedback({ type: "error", text: (err instanceof Error ? err.message : "") || "Không mua được gói." });
     } finally {
       setPurchasing(false);
       setActivePlanId(null);
@@ -285,9 +196,9 @@ export function SubscriptionsView() {
       } else {
         setFeedback({ type: "success", text: "Gia hạn gói thành công." });
       }
-    } catch (err: any) {
-      const errMsg = err?.message ?? "";
-      const isPendingRenew = err?.status === 409 && /yêu cầu gia hạn chờ thanh toán/i.test(errMsg);
+    } catch (err: unknown) {
+      const errMsg = (err instanceof Error ? err.message : "") ?? "";
+      const isPendingRenew = (err as { status?: number })?.status === 409 && /yêu cầu gia hạn chờ thanh toán/i.test(errMsg);
       if (isPendingRenew) {
         await openPendingPayment(id, baseEnd, plate);
       } else {
@@ -368,16 +279,6 @@ export function SubscriptionsView() {
   async function onPaymentPaid() {
     setFeedback({ type: "success", text: payment?.renewMode ? "Gia hạn thành công!" : "Thanh toán thành công!" });
     await refreshSubscriptionList();
-    await refreshMyRfidCards();
-    if (pendingRfidTransactionId) {
-      const response = await apiFetch(`/rfid/my-sales/${pendingRfidTransactionId}/reconcile`, { method: "POST" });
-      const data = await response.json().catch(() => ({}));
-      if (response.ok && data.card?.status === "active") {
-        setRfidNotice("Thanh toán thành công. Thẻ RFID Member đã được kích hoạt.");
-        await refreshMyRfidCards();
-        setPendingRfidTransactionId(null);
-      }
-    }
   }
 
   function activeSubForVehicle(vehicleId: string): Subscription | null {
@@ -389,7 +290,7 @@ export function SubscriptionsView() {
   return (
     <>
       {detailVehicle && (
-        <VehicleDetailModal vehicle={detailVehicle} onClose={() => setDetailVehicle(null)} />
+        <VehicleDetailModal vehicle={detailVehicle} onClose={() => setDetailVehicle(null)} onApprove={() => undefined} onReject={() => undefined} rejectReason="" onRejectReasonChange={() => undefined} processing={false} />
       )}
 
       {payment && (
@@ -423,157 +324,6 @@ export function SubscriptionsView() {
             {feedback.type === "success" ? <Check size={16} /> : <CreditCard size={16} />}
             {feedback.text}
           </div>
-        )}
-
-        {/* Hero: thẻ RFID của customer */}
-        {isCustomer && heroSub && (
-          <section className="hero-section">
-            <div className="hero-header">
-              <div className="hero-title">
-                <div className="hero-icon rfid">
-                  <Radio size={20} />
-                </div>
-                <div>
-                  <h2>Thẻ RFID của bạn</h2>
-                  <p>Quẹt khi gửi xe để được miễn phí</p>
-                </div>
-              </div>
-              <div className="hero-badges">
-                <span className="hero-plan-badge">
-                  <CreditCard size={12} /> {heroSub.planName}
-                </span>
-                <StatusBadge status={heroSub.status} />
-              </div>
-            </div>
-
-            {myCardsLoading ? (
-              <div className="rfid-card-grid">
-                <div className="rfid-card rfid-card-empty">
-                  <p>Đang tải thẻ…</p>
-                </div>
-              </div>
-            ) : myCards.length === 0 ? (
-              <div className="rfid-card-grid">
-                <div className="rfid-card rfid-card-empty">
-                  <Radio size={28} />
-                  <p>Chưa có thẻ RFID. Vui lòng liên hệ quản lý để đăng ký.</p>
-                </div>
-              </div>
-            ) : (
-              <div className="rfid-card-grid">
-                {myCards.map((card) => {
-                  // Mỗi thẻ có thể gắn với 1 biển; tìm gói subscription tương ứng.
-                  // Ưu tiên: gói có primaryVehicle.plate khớp card.plate, fallback gói đầu tiên.
-                  const cardSub =
-                    myActiveSubs.find(
-                      (s) =>
-                        s.primaryVehicle?.plate &&
-                        card.plate &&
-                        s.primaryVehicle.plate.toUpperCase() === card.plate.toUpperCase(),
-                    ) ?? heroSub;
-                  const subEndDate = cardSub ? new Date(cardSub.endDate) : null;
-                  const daysLeft = subEndDate
-                    ? Math.max(
-                        0,
-                        Math.ceil(
-                          (subEndDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000),
-                        ),
-                      )
-                    : 0;
-                  const expired =
-                    subEndDate !== null && subEndDate.getTime() < Date.now();
-                  return (
-                    <article
-                      key={card.id}
-                      className={`rfid-card rfid-card-${card.status} rfid-card-${card.userType}`}
-                    >
-                      <div className="rfid-card-top">
-                        <div className="rfid-card-brand">
-                          <Radio size={16} />
-                          <span>RFID · {card.userType === "resident" ? "Cư dân" : "Khách"}</span>
-                        </div>
-                        <span className={`rfid-status-pill ${card.status}`}>
-                          {card.status === "active" ? "Hoạt động" : "Vô hiệu"}
-                        </span>
-                      </div>
-
-                      <div className="rfid-card-uid-row">
-                        <span className="rfid-label">Mã thẻ UID</span>
-                        <span className="rfid-uid">{card.uid}</span>
-                      </div>
-
-                      <div className="rfid-card-info-row">
-                        <div className="rfid-info">
-                          <span className="rfid-label">Chủ thẻ</span>
-                          <span className="rfid-value">{card.ownerName}</span>
-                        </div>
-                        <div className="rfid-info">
-                          <span className="rfid-label">Biển số</span>
-                          <span className="rfid-value rfid-plate">{card.plate || "—"}</span>
-                        </div>
-                      </div>
-
-                      <div className="rfid-card-info-row">
-                        <div className="rfid-info">
-                          <span className="rfid-label">Hết hạn</span>
-                          <span className="rfid-value">
-                            {subEndDate
-                              ? subEndDate.toLocaleDateString("vi-VN", {
-                                  day: "2-digit",
-                                  month: "2-digit",
-                                  year: "numeric",
-                                })
-                              : "—"}
-                          </span>
-                        </div>
-                        <div className="rfid-info">
-                          <span className="rfid-label">Còn lại</span>
-                          <span className={`rfid-value ${expired ? "expired" : "accent"}`}>
-                            {!subEndDate
-                              ? "—"
-                              : expired
-                              ? "Hết hạn"
-                              : daysLeft > 0
-                              ? `${daysLeft} ngày`
-                              : "—"}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="rfid-card-bottom">
-                        <Wifi size={14} />
-                        <span>Hệ thống tự động nhận diện khi xe vào/ra</span>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            )}
-
-            {myActiveSubs.length > 1 && (
-              <p className="hero-note">
-                Bạn có <strong>{myActiveSubs.length} gói</strong> đang hoạt động — xem chi tiết bên dưới.
-              </p>
-            )}
-          </section>
-        )}
-
-        {isCustomer && (
-          <section className="customer-subs-section">
-            <h2 className="section-title"><Radio size={18} /> Mua thẻ RFID Member</h2>
-            <p className="muted-cell">Mỗi xe cần một thẻ RFID Member riêng trước khi mua gói tháng. Hệ thống tự chọn thẻ còn trong kho và tạo thanh toán online.</p>
-            {rfidNotice && <div className="feedback-banner info">{rfidNotice}</div>}
-            <div className="subs-cards-grid">
-              {registeredVehicles.filter((vehicle) => vehicle.status !== "Blacklist" && vehicle.status !== "Cần duyệt").map((vehicle) => {
-                const hasCard = myCards.some((card) => card.plate?.replace(/[\s-]/g, "").toUpperCase() === vehicle.plate.replace(/[\s-]/g, "").toUpperCase() && card.status === "active");
-                return <div className="subscription-card" key={vehicle.id}>
-                  <strong>{vehicle.plate}</strong>
-                  <span>{hasCard ? "Đã có RFID Member" : "Chưa có RFID Member"}</span>
-                  {!hasCard && <button className="small-button" type="button" disabled={!!rfidBuyingVehicleId} onClick={() => void handleBuyRfid(vehicle)}>{rfidBuyingVehicleId === vehicle.id ? "Đang tạo đơn…" : "Mua thẻ RFID"}</button>}
-                </div>;
-              })}
-            </div>
-          </section>
         )}
 
         {/* Customer: all subscription cards */}

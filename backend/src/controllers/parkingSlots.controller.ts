@@ -6,6 +6,7 @@ import { ParkingSession } from "../models/ParkingSession.js";
 import { Zone } from "../models/Zone.js";
 import { bulkCreateSlots, getSlotMap } from "../services/parkingSlot.service.js";
 import { serializeParkingSlot } from "../utils/serializers.js";
+import { assertSlotCreationCapacity } from "../services/capacityConfig.service.js";
 
 const slotTypeEnum = z.enum(["regular", "VIP", "electric", "handicap"]);
 
@@ -97,6 +98,8 @@ export async function createParkingSlotHandler(request: Request, response: Respo
     })
     .parse(request.body);
 
+  await assertSlotCreationCapacity();
+
   const zone = body.zoneId
     ? await Zone.findById(body.zoneId)
     : await Zone.findOne({ isActive: true }).sort({ displayOrder: 1, name: 1 });
@@ -146,6 +149,8 @@ export async function bulkCreateSlotsHandler(request: Request, response: Respons
       accessPolicy: z.enum(["resident", "guest", "shared"]).default("shared"),
     })
     .parse(request.body);
+
+  await assertSlotCreationCapacity(body.count);
 
   const slots = await bulkCreateSlots(body);
   response

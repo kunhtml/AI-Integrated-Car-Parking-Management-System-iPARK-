@@ -3,15 +3,19 @@ import {
   verifyExit,
   openGate,
   getPendingExit,
+  resolveExitMismatch,
 } from "../controllers/exit.controller.js";
+import { requireAuth, requireRole } from "../middlewares/auth.middleware.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
 
 export const exitRoutes = Router();
 
-// GET /api/exit/pending — Lấy phiên xe ra đang chờ RFID (để restore UI khi mount)
 exitRoutes.get("/pending", getPendingExit);
-
-// POST /api/exit/verify — Verify RFID + xác định amountDue + canOpenGate
 exitRoutes.post("/verify", verifyExit);
-
-// POST /api/exit/open-gate — Gate authorize + mở barie
 exitRoutes.post("/open-gate", openGate);
+exitRoutes.post(
+  "/resolve-mismatch",
+  requireAuth,
+  requireRole("admin", "staff"),
+  asyncHandler(resolveExitMismatch),
+);

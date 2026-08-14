@@ -2,9 +2,40 @@ import mongoose from "mongoose";
 import { Request, Response } from "express";
 import { parkingConfig } from "../config/parking.js";
 import { ParkingSession } from "../models/ParkingSession.js";
+import { Transaction } from "../models/Transaction.js";
 import { PricingConfig } from "../models/PricingConfig.js";
+import { User } from "../models/User.js";
+import { Vehicle } from "../models/Vehicle.js";
 import { Zone } from "../models/Zone.js";
 import { serializeParkingSession } from "../utils/serializers.js";
+
+type DashboardRange = "today" | "7d" | "30d";
+
+const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
+
+function getVietnamDateParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: VIETNAM_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value);
+
+  return { year: value("year"), month: value("month"), day: value("day") };
+}
+
+function getDashboardRange(value: unknown) {
+  const range: DashboardRange = value === "7d" || value === "30d" ? value : "today";
+  const days = range === "today" ? 1 : range === "7d" ? 7 : 30;
+  const { year, month, day } = getVietnamDateParts();
+  const vietnamOffsetMs = 7 * 60 * 60 * 1000;
+  const start = new Date(Date.UTC(year, month - 1, day - (days - 1)) - vietnamOffsetMs);
+  const end = new Date(Date.UTC(year, month - 1, day + 1) - vietnamOffsetMs - 1);
+
+  return { range, start, end };
+}
 
 const emptyOverview = {
   total: 0,
@@ -24,7 +55,7 @@ const emptyOverview = {
 };
 
 export async function getDashboardOverview(
-  _request: Request,
+  request: Request,
   response: Response,
 ) {
   if (mongoose.connection.readyState !== 1) {
@@ -32,26 +63,31 @@ export async function getDashboardOverview(
     return;
   }
 
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
+  const { range, start, end } = getDashboardRange(request.query.range);
+  const rangeFilter = { $gte: start, $lte: end };
 
-  const [total, active, completed, paidSessions, recent, todaySessions] = await Promise.all([
-    ParkingSession.countDocuments({}),
+  const [total, active, exits, paidTransactionSummary, freeSessionCount, customerCount, registeredVehicleCount, totalCapacity, recent, rangeSessions] = await Promise.all([
+    ParkingSession.countDocuments({ checkInAt: rangeFilter, status: { $ne: "Đã hủy" } }),
     ParkingSession.countDocuments({ status: "Đang gửi" }),
-    ParkingSession.countDocuments({ status: "Đã hoàn thành" }),
-    ParkingSession.find({ status: "Đã hoàn thành", paymentStatus: "fully_paid", updatedAt: { $gte: startOfDay } })
-      .select("fee")
-      .lean(),
+    ParkingSession.countDocuments({ status: "Đã hoàn thành", checkOutAt: rangeFilter }),
+    Transaction.aggregate<{ revenue: number; count: number }>([
+      { $match: { status: "paid", paidAt: rangeFilter } },
+      { $group: { _id: null, revenue: { $sum: "$amount" }, count: { $sum: 1 } } },
+    ]),
+    ParkingSession.countDocuments({ status: "Đã hoàn thành", checkOutAt: rangeFilter, fee: 0 }),
+    User.countDocuments({ role: "customer", createdAt: rangeFilter }),
+    Vehicle.countDocuments({ status: "Đã đăng ký", createdAt: rangeFilter }),
+    Zone.aggregate<{ total: number }>([
+      { $match: { isActive: true } },
+      { $group: { _id: null, total: { $sum: "$capacity" } } },
+    ]),
     ParkingSession.find({}).sort({ createdAt: -1 }).limit(8),
-    ParkingSession.find({ createdAt: { $gte: startOfDay } }).select("checkInAt createdAt").lean(),
+    ParkingSession.find({ checkInAt: rangeFilter, status: { $ne: "Đã hủy" } }).select("checkInAt").lean(),
   ]);
 
-  const revenue = paidSessions.reduce(
-    (sum, session) => sum + Number(session.fee || 0),
-    0,
-  );
+  const revenue = paidTransactionSummary[0]?.revenue ?? 0;
+  const successfulTransactionCount = paidTransactionSummary[0]?.count ?? 0;
 
-  // Hourly counts calculation
   const hourBuckets: Record<string, number> = {
     "06:00": 0,
     "08:00": 0,
@@ -61,9 +97,8 @@ export async function getDashboardOverview(
     "16:00": 0,
   };
 
-  for (const session of todaySessions) {
-    const date = session.checkInAt ? new Date(session.checkInAt) : new Date(session.createdAt);
-    const hour = date.getHours();
+  for (const session of rangeSessions) {
+    const hour = new Date(session.checkInAt).getHours();
     if (hour >= 5 && hour < 7) hourBuckets["06:00"]++;
     else if (hour >= 7 && hour < 9) hourBuckets["08:00"]++;
     else if (hour >= 9 && hour < 11) hourBuckets["10:00"]++;
@@ -75,16 +110,27 @@ export async function getDashboardOverview(
   const maxCount = Math.max(...Object.values(hourBuckets), 1);
   const hourlyPerformance = Object.entries(hourBuckets).map(([label, count]) => [
     label,
-    todaySessions.length === 0 ? 0 : Math.round((count / maxCount) * 100),
+    rangeSessions.length === 0 ? 0 : Math.round((count / maxCount) * 100),
   ]);
+  const capacity = totalCapacity[0]?.total || parkingConfig.totalCapacity;
 
   response.json({
     overview: {
+      range,
+      from: start.toISOString(),
+      to: end.toISOString(),
       total: total || 0,
       active: active || 0,
-      available: Math.max(parkingConfig.totalCapacity - active, 0),
+      available: Math.max(capacity - active, 0),
+      capacity,
       revenue,
-      completion: completed || 0,
+      entryCount: total || 0,
+      exitCount: exits || 0,
+      completion: exits || 0,
+      successfulTransactionCount,
+      freeSessionCount,
+      customerCount,
+      registeredVehicleCount,
       hourlyPerformance,
       recent: recent.map(serializeParkingSession),
     },

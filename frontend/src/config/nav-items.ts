@@ -118,6 +118,13 @@ export const navItems: NavItem[] = [
     roles: ["admin", "customer"],
   },
   {
+    id: "rfid-registration",
+    path: "/rfid-registration",
+    label: "Đăng ký RFID",
+    icon: Radio,
+    roles: ["customer"],
+  },
+  {
     id: "users",
     path: "/users",
     label: "Người dùng",

@@ -3265,6 +3265,106 @@ tr:hover td {
   font-weight: 700;
 }
 
+.staff-desk__alert--danger {
+  border: 1px solid #f0b4b4;
+  background: #fef2f2;
+  color: #9f1239;
+}
+
+.staff-desk__mismatch {
+  display: grid;
+  gap: 10px;
+}
+
+.staff-desk__mismatch-photos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.staff-desk__mismatch-shot {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f8fafc;
+}
+
+.staff-desk__mismatch-shot.is-warn {
+  border-color: #f0b4b4;
+}
+
+.staff-desk__mismatch-shot img {
+  display: block;
+  width: 100%;
+  height: 92px;
+  object-fit: cover;
+}
+
+.staff-desk__mismatch-shot-empty {
+  height: 92px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.staff-desk__mismatch-shot p {
+  margin: 0;
+  padding: 6px 8px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.staff-desk__mismatch-shot strong {
+  display: block;
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.staff-desk__mismatch-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 10px;
+  margin: 0;
+}
+
+.staff-desk__mismatch-meta dt {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.staff-desk__mismatch-meta dd {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.staff-desk__mismatch-meta dd.is-warn {
+  color: #be123c;
+}
+
+.staff-desk__mismatch-field {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: #334155;
+}
+
+.staff-desk__mismatch-field input,
+.staff-desk__mismatch-field textarea {
+  width: 100%;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  padding: 8px;
+  font: inherit;
+}
+
+.staff-desk__mismatch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .staff-desk__action {
   display: grid;
   gap: 10px;
@@ -17673,7 +17773,7 @@ textarea.form-input {
 
 .rfid-sales-kpis {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   margin: 18px 0;
 }
@@ -17976,3 +18076,21 @@ textarea.form-input {
   width: 100%;
 }
 
+
+/* Compact Member / Guest RFID assignment summary */
+.rfid-assignment-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0 0 18px; }
+.rfid-assignment-card { min-width: 0; padding: 15px 17px; border: 1px solid #dbe6f3; border-radius: 13px; background: #fff; }
+.rfid-assignment-card.member { border-top: 3px solid #2675dd; }
+.rfid-assignment-card.guest { border-top: 3px solid #159a63; }
+.rfid-assignment-card__header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.rfid-assignment-card__header p { margin: 0 0 4px; color: #71839a; font-size: 12px; font-weight: 700; }
+.rfid-assignment-card__header strong { color: #17324d; font-size: 15px; }
+.rfid-assignment-card__count { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 10px; background: #edf5ff; color: #1967d2; font-size: 16px; font-weight: 800; }
+.rfid-assignment-card.guest .rfid-assignment-card__count { background: #ecfbf3; color: #128255; }
+.rfid-assignment-card__empty { margin: 12px 0 0; color: #74849a; font-size: 12px; }
+.rfid-assignment-card__list { display: grid; gap: 7px; max-height: 124px; margin-top: 12px; overflow-y: auto; }
+.rfid-assignment-card__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border-radius: 8px; background: #f7faff; color: #5f7288; font-size: 12px; }
+.rfid-assignment-card__row strong { color: #244666; }
+.rfid-assignment-card__row b { color: #17324d; }
+@media (max-width: 760px) { .rfid-assignment-grid { grid-template-columns: 1fr; } .rfid-assignment-card__row { align-items: flex-start; flex-direction: column; gap: 3px; } }
+.quota-slots-hero{gap:10px}.quota-hero-actions{position:relative;z-index:1;display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-left:auto;pointer-events:auto}.quota-hero-actions .quota-create-button,.quota-hero-actions .quota-capacity-button{margin:0}.quota-capacity-button{padding:12px 16px;border:1px solid rgba(255,255,255,.65);border-radius:12px;background:rgba(255,255,255,.14);color:#fff;font-weight:800;font-size:13px;display:inline-flex;align-items:center;gap:8px;white-space:nowrap;backdrop-filter:blur(8px)}.quota-capacity-button:hover{background:rgba(255,255,255,.23)}.quota-capacity-form{display:grid;grid-template-columns:minmax(240px,1fr) minmax(180px,260px) auto;align-items:end;gap:16px;padding:18px 20px;border:1px solid #bfe4dc;border-radius:18px;background:linear-gradient(110deg,#effcf8,#fbfffe);box-shadow:0 8px 20px rgba(16,111,87,.07)}.quota-capacity-form h2{margin:0 0 5px;color:#124f43;font-size:17px}.quota-capacity-form p{margin:0;color:#4f6f68;font-size:12px;line-height:1.5}.quota-capacity-form label{display:grid;gap:7px;color:#355a52;font-size:12px;font-weight:800}.quota-capacity-form input{height:40px;padding:0 11px;border:1px solid #b7d9d0;border-radius:10px;background:#fff;color:#143b33}.quota-capacity-form button{height:40px;padding:0 14px;border:0;border-radius:10px;background:#0f7a64;color:#fff;font-weight:800;display:inline-flex;align-items:center;justify-content:center;gap:7px}.quota-capacity-hint{grid-column:1/-1;margin:0;color:#4f6f68;font-size:12px}.quota-capacity-error{grid-column:1/-1;margin:0;color:#b42318;font-size:12px;font-weight:700}@media(max-width:760px){.quota-slots-hero{align-items:flex-start;flex-wrap:wrap}.quota-hero-actions{margin-left:0}.quota-capacity-form{grid-template-columns:1fr}.quota-capacity-hint{grid-column:auto}}@media(max-width:620px){.quota-hero-actions{width:100%;flex-direction:column;align-items:stretch}.quota-hero-actions .quota-create-button,.quota-hero-actions .quota-capacity-button{width:100%;margin-top:5px}}

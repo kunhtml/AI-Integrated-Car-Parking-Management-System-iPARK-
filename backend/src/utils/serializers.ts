@@ -128,6 +128,8 @@ export function serializeParkingSession(session: ParkingSessionDocument) {
     verificationStatus: session.verificationStatus,
     manualPlate: session.manualPlate,
     verificationNote: session.verificationNote,
+    exceptionType: session.exceptionType,
+    exceptionEvidence: session.exceptionEvidence,
     transactionId: session.transactionId?.toString(),
     ownerEmail: session.ownerEmail,
   };

@@ -79,6 +79,8 @@ export type ParkingSessionDocument = {
   verificationNote?: string;
   verifiedBy?: mongoose.Types.ObjectId;
   verifiedAt?: Date;
+  exceptionType?: string;
+  exceptionEvidence?: Record<string, unknown>;
   transactionId?: mongoose.Types.ObjectId;
   createdBy?: mongoose.Types.ObjectId;
   checkInStaff?: mongoose.Types.ObjectId;
@@ -195,6 +197,8 @@ const parkingSessionSchema = new Schema<ParkingSessionDocument>(
     verificationNote: { type: String },
     verifiedBy: { type: Schema.Types.ObjectId, ref: "User" },
     verifiedAt: { type: Date },
+    exceptionType: { type: String, trim: true, index: true },
+    exceptionEvidence: { type: Schema.Types.Mixed },
     ownerUserId: { type: Schema.Types.ObjectId, ref: "User", index: true },
     transactionId: { type: Schema.Types.ObjectId, ref: "Transaction" },
     createdBy: { type: Schema.Types.ObjectId, ref: "User" },

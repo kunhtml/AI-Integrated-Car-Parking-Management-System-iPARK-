@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity,
   AlertCircle,
@@ -39,18 +39,24 @@ import type {
   TopCustomer,
 } from "@/types";
 
+function dateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 function todayStr() {
-  return new Date().toISOString().slice(0, 10);
+  return dateKey();
 }
 function weekAgoStr() {
-  const d = new Date();
-  d.setDate(d.getDate() - 7);
-  return d.toISOString().slice(0, 10);
+  const date = new Date();
+  date.setDate(date.getDate() - 6);
+  return dateKey(date);
 }
 function monthAgoStr() {
-  const d = new Date();
-  d.setDate(d.getDate() - 30);
-  return d.toISOString().slice(0, 10);
+  const date = new Date();
+  date.setDate(date.getDate() - 29);
+  return dateKey(date);
 }
 
 function getSessionCheckInDate(session: Pick<ParkingSession, "checkIn" | "checkInDate"> & { checkInAt?: string }) {
@@ -75,6 +81,19 @@ function sessionDateKey(session: Pick<ParkingSession, "checkIn" | "checkInDate">
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 type TimeRange = "today" | "7d" | "30d";
+
+type DashboardOverview = {
+  active: number;
+  available: number;
+  capacity: number;
+  revenue: number;
+  entryCount: number;
+  exitCount: number;
+  successfulTransactionCount: number;
+  freeSessionCount: number;
+  customerCount: number;
+  registeredVehicleCount: number;
+};
 
 interface StatCardProps {
   icon: React.ReactNode;
@@ -730,7 +749,7 @@ function StaffDashboard() {
             </div>
             <MyShiftsList
               schedules={shiftScheduleList}
-              currentUserId={currentUser?.id}
+              currentUserId={currentUser?.id == null ? undefined : String(currentUser.id)}
               currentUserName={currentUser?.name}
             />
           </div>
@@ -751,7 +770,7 @@ function StaffDashboard() {
                 </div>
               </div>
             </div>
-            <ShiftCalendar schedules={shiftScheduleList} currentUserId={currentUser?.id} />
+            <ShiftCalendar schedules={shiftScheduleList} currentUserId={currentUser?.id == null ? undefined : String(currentUser.id)} />
           </div>
 
           {/* Recent Sessions */}
@@ -783,8 +802,6 @@ function AdminDashboard() {
     sessions,
     zoneList,
     slotList,
-    userList,
-    registeredVehicles,
     setSessions,
     setZoneList,
     setSlotList,
@@ -792,6 +809,7 @@ function AdminDashboard() {
   const [timeRange, setTimeRange] = useState<TimeRange>("7d");
   const [revenueData, setRevenueData] = useState<RevenueChartPoint[]>([]);
   const [loading, setLoading] = useState(false);
+  const [overview, setOverview] = useState<DashboardOverview | null>(null);
 
   // Real-time polling for admin dashboard
   useDashboardPolling({
@@ -802,36 +820,19 @@ function AdminDashboard() {
     onSlotsUpdate: setSlotList,
   });
 
-  const todayStats = useMemo(() => {
-    const today = todayStr();
-    const todaySessions = sessions.filter((s) => {
-      const d = s.checkIn ? s.checkIn.slice(0, 10) : null;
-      return d === today;
-    });
-    const entryCount = todaySessions.filter((s) => s.status !== "Hủy").length;
-    const exitCount = todaySessions.filter((s) => s.status === "Đã hoàn thành").length;
-    const todayRevenue = todaySessions.reduce((sum, s) => sum + (s.fee || 0), 0);
-    return { entryCount, exitCount, todayRevenue };
-  }, [sessions]);
-
   const zoneOccupancy = useMemo(() => {
     return zoneList.map((z) => {
       const slots = slotList.filter((s) => s.zoneId === z.id);
-      const occupied = slots.filter((s) => s.status === "occupied" || s.status === "Đang gửi").length;
+      const occupied = slots.filter((s) => s.status === "occupied").length;
       return { name: z.name, occupied, capacity: z.capacity };
     });
   }, [zoneList, slotList]);
 
-  const totalVehicles = registeredVehicles.length;
-  const activeSubscriptions = useMemo(
-    () => registeredVehicles.filter((v) => v.status === "active" || v.status === "Đang hoạt động").length,
-    [registeredVehicles],
-  );
-  const totalUsers = userList.length;
-  const capacity = slotList.length || 30;
-  const occupancyPct = capacity > 0 ? Math.round(((capacity - stats.available) / capacity) * 100) : 0;
-  const freeSessionCount = sessions.filter((s) => s.fee === 0).length;
-  const paidSessionCount = sessions.filter((s) => s.fee > 0).length;
+  const capacity = (overview?.capacity ?? slotList.length) || 30;
+  const activeCount = overview?.active ?? stats.active;
+  const availableCount = overview?.available ?? stats.available;
+  const occupancyPct = capacity > 0 ? Math.round(((capacity - availableCount) / capacity) * 100) : 0;
+  const rangeLabel = timeRange === "today" ? "hôm nay" : timeRange === "7d" ? "7 ngày" : "30 ngày";
 
   const topCustomers: TopCustomer[] = useMemo(() => {
     const map = new Map<string, { name: string; plate: string; count: number; spent: number }>();
@@ -856,7 +857,7 @@ function AdminDashboard() {
       .slice(0, 5);
   }, [sessions]);
 
-  const loadRevenue = async () => {
+  const loadRevenue = useCallback(async () => {
     setLoading(true);
     try {
       const from = timeRange === "today" ? todayStr() : timeRange === "7d" ? weekAgoStr() : monthAgoStr();
@@ -873,11 +874,35 @@ function AdminDashboard() {
       setRevenueData([]);
     }
     setLoading(false);
-  };
+  }, [timeRange]);
+
+  const loadOverview = useCallback(async () => {
+    try {
+      const response = await apiFetch(`/dashboard/overview?range=${timeRange}`);
+      if (!response.ok) return;
+      const data = await response.json();
+      setOverview(data.overview ?? null);
+    } catch {
+      setOverview(null);
+    }
+  }, [timeRange]);
 
   useEffect(() => {
-    loadRevenue();
-  }, [timeRange]);
+    const timeoutId = window.setTimeout(() => {
+      void loadRevenue();
+      void loadOverview();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [loadOverview, loadRevenue]);
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      void loadOverview();
+    }, 30_000);
+
+    return () => clearInterval(intervalId);
+  }, [loadOverview]);
 
   return (
     <section className="staff-root">
@@ -888,7 +913,7 @@ function AdminDashboard() {
             <BarChart3 size={22} />
           </div>
           <div>
-            <h1 className="staff-title">Tổng quan hệ thống</h1>
+            <h1 className="staff-title">Chào Admin đã quay trở lại.</h1>
             <p className="staff-subtitle">
               {new Date().toLocaleDateString("vi-VN", {
                 weekday: "long",
@@ -917,12 +942,12 @@ function AdminDashboard() {
 
       {/* KPI Row */}
       <div className="staff-kpi-row">
-        <StatCard icon={<Car size={18} />} label="Xe đang gửi" value={String(stats.active)} sub={`/ ${capacity} chỗ`} color="blue" />
-        <StatCard icon={<ParkingCircle size={18} />} label="Chỗ còn trống" value={String(stats.available)} sub={`${occupancyPct}% lấp đầy`} color="green" />
-        <StatCard icon={<Wallet size={18} />} label="Doanh thu hôm nay" value={currency.format(todayStats.todayRevenue)} sub={`${paidSessionCount} phiên có phí`} color="amber" />
-        <StatCard icon={<Activity size={18} />} label="Xe vào hôm nay" value={String(todayStats.entryCount)} sub={`${todayStats.exitCount} xe ra`} color="cyan" />
-        <StatCard icon={<Users size={18} />} label="Khách đăng ký" value={String(totalUsers)} sub={`${activeSubscriptions} xe đang hoạt động`} color="purple" />
-        <StatCard icon={<TrendingUp size={18} />} label="Tổng phiên" value={String(stats.completion)} sub={`${freeSessionCount} miễn phí`} color="red" />
+        <StatCard icon={<Car size={18} />} label="Xe đang gửi" value={String(activeCount)} sub={`/ ${capacity} chỗ`} color="blue" />
+        <StatCard icon={<ParkingCircle size={18} />} label="Chỗ còn trống" value={String(availableCount)} sub={`${occupancyPct}% lấp đầy`} color="green" />
+        <StatCard icon={<Wallet size={18} />} label={`Doanh thu ${rangeLabel}`} value={currency.format(overview?.revenue ?? 0)} sub={`${overview?.successfulTransactionCount ?? 0} giao dịch thành công`} color="amber" />
+        <StatCard icon={<Activity size={18} />} label={`Xe vào ${rangeLabel}`} value={String(overview?.entryCount ?? 0)} sub={`${overview?.exitCount ?? 0} xe ra`} color="cyan" />
+        <StatCard icon={<Users size={18} />} label={`Khách đăng ký ${rangeLabel}`} value={String(overview?.customerCount ?? 0)} sub={`${overview?.registeredVehicleCount ?? 0} xe đã đăng ký`} color="purple" />
+        <StatCard icon={<TrendingUp size={18} />} label={`Tổng phiên ${rangeLabel}`} value={String(overview?.entryCount ?? 0)} sub={`${overview?.freeSessionCount ?? 0} miễn phí`} color="red" />
       </div>
 
       {/* Main Charts Row */}

@@ -30,11 +30,12 @@ export function createSlotActions({ setSlotList, setActionLog }: SlotActionsPara
     const data = await response.json();
     if (!response.ok) {
       setActionLog(data.message || data.errors?.map((error: { message?: string }) => error.message).filter(Boolean).join("; ") || "Không tạo được slot.");
-      return;
+      return false;
     }
     setSlotList((items) => [...items, { ...data.slot, accessPolicy: "guest", quotaType: "walk_in" }]);
     setActionLog(`Đã tạo slot "${data.slot.slotCode}".`);
     formEl.reset();
+    return true;
   }
 
   async function bulkCreateSlots(event: FormEvent<HTMLFormElement>) {

@@ -5,7 +5,7 @@ export type OtpTokenDocument = {
   email: string;
   otpHash: string;
   purpose: "reset-password" | "verify-email" | "two-factor" | "change-email";
-  /** Email má»›i (chá»‰ dÃ¹ng cho purpose=change-email) */
+  /** Email mới (chỉ dùng cho purpose=change-email) */
   newEmail?: string;
   // Luu payload dang ky tam thoi (chi dung cho verify-email truoc khi user duoc tao)
   pendingUser?: {

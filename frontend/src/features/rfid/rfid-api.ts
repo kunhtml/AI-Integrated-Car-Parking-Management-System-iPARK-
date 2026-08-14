@@ -3,6 +3,12 @@ import type { RfidCard, RfidScanLog } from "@/types";
 
 // ─── Card API ───
 
+export async function fetchRfidAssignments() { return apiFetch("/rfid/assignments"); }
+
+
+
+export async function fetchMyRfidCards() { return apiFetch("/rfid/mine"); }
+
 export async function fetchRfidCards(params?: {
   status?: string;
   limit?: number;
@@ -143,3 +149,17 @@ export async function fetchRfidScanLogs(params?: {
   const qs = search.toString();
   return apiFetch(`/rfid-cards/scan-logs${qs ? `?${qs}` : ""}`);
 }
+
+export type RfidIssueRequest = { id: string; userId?: string; vehicleId?: string | null; rfidCardId: string; uid: string; type: "lost" | "damaged"; description: string; status: "pending" | "processing" | "completed" | "rejected"; managerNote: string; createdAt: string; handledAt?: string | null; card?: { uid?: string; cardId?: string; plate?: string } | null };
+export async function fetchMyRfidIssues() { return apiFetch("/rfid/issue-requests/mine"); }
+export async function createMyRfidIssue(body: { rfidCardId: string; type: "lost" | "damaged"; description?: string }) { return apiFetch("/rfid/issue-requests", { method: "POST", body: JSON.stringify(body) }); }
+export async function fetchRfidIssues() { return apiFetch("/rfid/issue-requests"); }
+export async function updateRfidIssue(id: string, body: { status: "processing" | "completed" | "rejected"; managerNote?: string }) { return apiFetch("/rfid/issue-requests/" + id, { method: "PATCH", body: JSON.stringify(body) }); }
+
+export type RfidPurchaseRequest = { id: string; vehicleId: string; vehicle?: { plate?: string; ownerName?: string; status?: string } | null; status: "pending_payment" | "waiting_issuance" | "approved_waiting_assignment" | "completed" | "rejected"; salePrice: number; card?: { id?: string; uid?: string; cardId?: string } | null; transactionId?: string; rejectionReason?: string; createdAt: string; };
+export async function fetchMyRfidPurchaseRequests() { return apiFetch("/rfid/purchase-requests/mine"); }
+export async function createRfidPurchaseRequest(body: { vehicleId: string; note?: string }) { return apiFetch("/rfid/purchase-requests", { method: "POST", body: JSON.stringify(body) }); }
+export async function payRfidPurchaseRequest(id: string) { return apiFetch(`/rfid/purchase-requests/${id}/pay`, { method: "POST" }); }
+export async function fetchRfidPurchaseRequests() { return apiFetch("/rfid/purchase-requests"); }
+export async function reviewRfidPurchaseRequest(id: string, body: { action: "approve" | "reject"; reason?: string }) { return apiFetch(`/rfid/purchase-requests/${id}/review`, { method: "POST", body: JSON.stringify(body) }); }
+export async function assignRfidPurchaseCard(id: string, body: { uid: string }) { return apiFetch(`/rfid/purchase-requests/${id}/assign`, { method: "POST", body: JSON.stringify(body) }); }

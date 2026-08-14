@@ -190,8 +190,8 @@ function CardDetailContent({ cardId }: { cardId: string }) {
       </div>
 
       {showHistory && (
-        <CardHistoryTimeline
-          cardId={card.cardId}
+          <CardHistoryTimeline
+          cardId={card.cardId ?? card.uid}
           loading={false}
           logs={history}
           onClose={() => setShowHistory(false)}

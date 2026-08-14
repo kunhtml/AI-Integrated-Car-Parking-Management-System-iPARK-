@@ -22,13 +22,17 @@ import {
 
 import { QRCodeSVG } from "qrcode.react";
 import { apiFetch, bridgeFetch } from "@/lib/client-api";
-import { bridgeBaseUrl } from "@/lib/constants";
+import { bridgeBaseUrl } from "@/lib/client-api";
 import {
   CameraIngestEvent,
   CameraStreamStatus,
   resolveBridgeImageUrl,
   useCameraIngestEvents,
 } from "@/features/staff-desk/use-camera-events";
+import {
+  ExitMismatch,
+  ExitMismatchPanel,
+} from "@/features/staff-desk/exit-mismatch-panel";
 
 type Phase = "idle" | "creating" | "opening" | "done" | "error";
 
@@ -71,6 +75,7 @@ export function StaffDeskView() {
     setExitScanPhase("idle");
     setExitVerifyData(null);
     setExitPaymentData(null);
+    setExitMismatch(null);
     setActiveExit(pendingIngest);
   }, [pendingIngest]);
 
@@ -80,20 +85,25 @@ export function StaffDeskView() {
     if (streamStatus !== "open") return;
     // Nếu đã có activeExit rồi thì không cần fetch
     if (activeExit) return;
-    apiFetch<{ pending: boolean; event?: CameraIngestEvent }>("/exit/pending")
-      .then((res) => {
+    apiFetch("/exit/pending")
+      .then(async (response) => {
+        if (!response.ok) return;
+        const res = (await response.json()) as {
+          pending: boolean;
+          event?: CameraIngestEvent;
+        };
         if (res.pending && res.event) {
           autoExitScanFiredRef.current = false;
           setExitScanPhase("idle");
           setExitVerifyData(null);
           setExitPaymentData(null);
+          setExitMismatch(null);
           setActiveExit(res.event);
         }
       })
       .catch(() => {
         // Không làm gì nếu lỗi — SSE realtime sẽ cập nhật khi có xe mới
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      });    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [streamStatus]);
 
   // ====== RFID scan ======
@@ -142,6 +152,9 @@ export function StaffDeskView() {
     amount: number;
   } | null>(null);
   const [exitPaymentPolling, setExitPaymentPolling] = useState(false);
+  const [exitMismatch, setExitMismatch] = useState<ExitMismatch | null>(null);
+  const [exitMismatchPending, setExitMismatchPending] = useState(false);
+  const [exitMismatchError, setExitMismatchError] = useState("");
 
   const stopScanPolling = useCallback(() => {
     if (scanIntervalRef.current !== null) {
@@ -580,6 +593,7 @@ export function StaffDeskView() {
         });
         const data = await res.json().catch(() => ({}));
         if (data.verified) {
+          setExitMismatch(null);
           setExitVerifyData({
             amountDue: data.amountDue,
             paymentStatus: data.paymentStatus,
@@ -591,6 +605,12 @@ export function StaffDeskView() {
           } else if (data.canOpenGate) {
             await openExitBarrier();
           }
+        } else if (data.exception) {
+          setExitMismatch(data as ExitMismatch);
+          setExitScanPhase("error");
+          setExitScanUid("");
+          setExitScanError("");
+          autoExitScanFiredRef.current = true;
         } else {
           setExitScanPhase("error");
           setExitScanError(data.reason || "Xác minh thất bại");
@@ -631,6 +651,82 @@ export function StaffDeskView() {
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [activeExit?.sessionId],
+  );
+
+  const retryExitScan = useCallback(() => {
+    setExitMismatch(null);
+    setExitMismatchError("");
+    autoExitScanFiredRef.current = false;
+    void startExitScan();
+  }, [startExitScan]);
+
+  const rejectExitMismatch = useCallback(async () => {
+    if (!exitMismatch?.sessionId) return;
+    setExitMismatchPending(true);
+    setExitMismatchError("");
+    try {
+      const res = await apiFetch("/exit/resolve-mismatch", {
+        method: "POST",
+        body: JSON.stringify({
+          sessionId: exitMismatch.sessionId,
+          action: "reject",
+          verificationNote: "Từ chối cho xe ra do sai lệch định danh",
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setExitMismatchError(data.message || "Không từ chối được.");
+        return;
+      }
+      setExitMismatch(null);
+      setExitScanPhase("error");
+      setExitScanError("Đã từ chối. Barrier giữ đóng. Yêu cầu đúng thẻ hoặc xử lý lại.");
+    } catch {
+      setExitMismatchError("Lỗi kết nối server");
+    } finally {
+      setExitMismatchPending(false);
+    }
+  }, [exitMismatch?.sessionId]);
+
+  const resolveExitMismatch = useCallback(
+    async (action: string, manualPlate: string, note: string) => {
+      if (!exitMismatch?.sessionId) return;
+      setExitMismatchPending(true);
+      setExitMismatchError("");
+      try {
+        const res = await apiFetch("/exit/resolve-mismatch", {
+          method: "POST",
+          body: JSON.stringify({
+            sessionId: exitMismatch.sessionId,
+            action,
+            manualPlate,
+            verificationNote: note,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.verified) {
+          setExitMismatchError(data.message || "Không xử lý được lệch định danh.");
+          return;
+        }
+        setExitMismatch(null);
+        setExitVerifyData({
+          amountDue: data.amountDue,
+          paymentStatus: data.paymentStatus,
+          isSubscriber: data.isSubscriber,
+          canOpenGate: data.canOpenGate,
+        });
+        if (data.amountDue > 0) {
+          await createExitPayment(data.amountDue);
+        } else if (data.canOpenGate) {
+          await openExitBarrier();
+        }
+      } catch {
+        setExitMismatchError("Lỗi kết nối server");
+      } finally {
+        setExitMismatchPending(false);
+      }
+    },
+    [exitMismatch?.sessionId, createExitPayment, openExitBarrier],
   );
 
   // Poll exit payment status — nhận sessionId trực tiếp để tránh stale closure
@@ -794,11 +890,18 @@ export function StaffDeskView() {
             ) : (
               <ExitCard
                 event={activeExit}
+                mismatch={exitMismatch}
+                mismatchPending={exitMismatchPending}
+                mismatchError={exitMismatchError}
+                onRetryMismatch={retryExitScan}
+                onRejectMismatch={() => void rejectExitMismatch()}
+                onResolveMismatch={resolveExitMismatch}
                 onDismiss={() => {
                   setActiveExit(null);
                   setExitScanPhase("idle");
                   setExitVerifyData(null);
                   setExitPaymentData(null);
+                  setExitMismatch(null);
                   autoExitScanFiredRef.current = false;
                   if (exitScanIntervalRef.current !== null) {
                     window.clearInterval(exitScanIntervalRef.current);
@@ -1235,6 +1338,12 @@ function ExitCard({
   paymentData,
   exitVerifyData,
   onOpenGate,
+  mismatch,
+  mismatchPending,
+  mismatchError,
+  onRetryMismatch,
+  onRejectMismatch,
+  onResolveMismatch,
 }: {
   event: CameraIngestEvent;
   onDismiss: () => void;
@@ -1253,6 +1362,12 @@ function ExitCard({
     canOpenGate: boolean;
   } | null;
   onOpenGate?: () => void;
+  mismatch?: ExitMismatch | null;
+  mismatchPending?: boolean;
+  mismatchError?: string;
+  onRetryMismatch?: () => void;
+  onRejectMismatch?: () => void;
+  onResolveMismatch?: (action: string, manualPlate: string, note: string) => void;
 }) {
   const imgUrl = resolveBridgeImageUrl(event.imagePath);
   const didCheckout = event.sessionStatus === "Đã hoàn thành";
@@ -1275,7 +1390,9 @@ function ExitCard({
           </span>
           <h2 className="staff-desk__plate">{event.detectedPlate}</h2>
           <p className="staff-desk__plate-sub">
-            {didCheckout
+            {mismatch
+              ? "Sai lệch định danh — barrier đang đóng"
+              : didCheckout
               ? "Phiên đã checkout từ camera."
               : noSession
                 ? "Không tìm thấy phiên đang gửi cho biển số này."
@@ -1291,7 +1408,18 @@ function ExitCard({
         </button>
       </div>
 
-      {imgUrl ? (
+      {mismatch && onRetryMismatch && onRejectMismatch && onResolveMismatch ? (
+        <ExitMismatchPanel
+          mismatch={mismatch}
+          pending={Boolean(mismatchPending)}
+          error={mismatchError || ""}
+          onRetry={onRetryMismatch}
+          onReject={onRejectMismatch}
+          onResolve={onResolveMismatch}
+        />
+      ) : null}
+
+      {mismatch ? null : imgUrl ? (
         <div className="staff-desk__ingest-img">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={imgUrl} alt={`Biển số ${event.detectedPlate}`} />
@@ -1319,7 +1447,7 @@ function ExitCard({
           label="Thời gian ra"
           value={formatDateTime(event.createdAt)}
         />
-'        <MetaRow
+        <MetaRow
           icon={<CreditCard size={14} />}
           label="Chủ xe"
           value={displayOwnerName}
@@ -1376,6 +1504,7 @@ function ExitCard({
         </div>
       ) : null}
 
+      {!mismatch ? (
       <div className="staff-desk__action">
         {/* Show QR if payment is needed */}
         {hasPaymentData ? (
@@ -1488,6 +1617,7 @@ function ExitCard({
           </p>
         )}
       </div>
+      ) : null}
     </div>
   );
 }

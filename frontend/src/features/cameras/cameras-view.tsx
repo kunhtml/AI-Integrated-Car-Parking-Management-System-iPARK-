@@ -15,9 +15,11 @@ import {
   WifiOff,
 } from "lucide-react";
 
-import { bridgeBaseUrl } from "@/lib/constants";
 import { bridgeFetch } from "@/lib/client-api";
 import { CamerasLogsPanel } from "@/features/cameras/cameras-logs-panel";
+
+const bridgeBaseUrl =
+  process.env.NEXT_PUBLIC_BRIDGE_URL || "http://localhost:5050";
 
 type Gate = "in" | "out";
 
@@ -106,10 +108,12 @@ export function CamerasView() {
           data.cameras.length > 0
         ) {
           // Normalize gate → "in" | "out" (giữ default nếu bridge trả "entry"/"exit")
-          const normalized = data.cameras.map((c: CameraStream) => ({
+          const normalized = data.cameras.map(
+            (c: Omit<CameraStream, "gate"> & { gate: Gate | "entry" | "exit" }) => ({
             ...c,
-            gate: c.gate === "exit" ? "out" : "in",
-          })) as CameraStream[];
+              gate: c.gate === "exit" || c.gate === "out" ? "out" : "in",
+            }),
+          ) as CameraStream[];
           setStreams(normalized);
         }
       } catch {

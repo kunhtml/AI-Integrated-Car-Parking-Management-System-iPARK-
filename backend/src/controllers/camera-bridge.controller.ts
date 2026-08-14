@@ -177,6 +177,15 @@ async function buildSessionForEntry(
     });
   }
 
+  if (rfidCard && !isMember && (rfidCard.plate || rfidCard.userId || rfidCard.vehicleId)) {
+    // RFID Guest dùng chung theo lượt; không mang theo biển/chủ xe của phiên cũ.
+    rfidCard.plate = "";
+    rfidCard.ownerName = "Guest";
+    rfidCard.userId = undefined;
+    rfidCard.vehicleId = undefined;
+    await rfidCard.save();
+  }
+
   const session = await ParkingSession.create({
     plate,
     ownerName,
@@ -226,7 +235,9 @@ async function buildSessionForEntry(
  * Xử lý checkout cho phiên đang đỗ.
  * Bridge không có AI service đầy đủ nên dùng giá đơn giản (giờ * 5000).
  */
-async function finalizeBridgeCheckout(session: ParkingSessionDocument) {
+async function finalizeBridgeCheckout(
+  session: mongoose.HydratedDocument<ParkingSessionDocument>,
+) {
   session.status = "Đã hoàn thành";
   session.checkOutAt = new Date();
 
@@ -242,6 +253,29 @@ async function finalizeBridgeCheckout(session: ParkingSessionDocument) {
     await createPendingTransactionForSession(session);
   }
 
+  if (session.rfidCardId) {
+    const usedCard = await RfidCard.findOne({
+      $or: [{ uid: session.rfidCardId }, { cardId: session.rfidCardId }],
+    });
+    if (usedCard) {
+      const returnedAt = new Date();
+      usedCard.lastUsedAt = returnedAt;
+      if (usedCard.cardType === "member") {
+        usedCard.status = "active";
+      } else {
+        usedCard.status = "available";
+        usedCard.returnedAt = returnedAt;
+        usedCard.plate = "";
+        usedCard.ownerName = "Guest";
+        usedCard.userId = undefined;
+        usedCard.vehicleId = undefined;
+        session.rfidReturnedAt = returnedAt;
+      }
+      await usedCard.save();
+    }
+  }
+
+  await session.save();
   await freeSlot(session.slotId);
   return session;
 }

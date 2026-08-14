@@ -7,6 +7,7 @@ import { ParkingSession, ParkingSessionDocument } from "../models/ParkingSession
 import { ReportExport } from "../models/ReportExport.js";
 import { Transaction } from "../models/Transaction.js";
 import { serializeReportExport } from "../utils/serializers.js";
+import { registerVietnameseFonts } from "../utils/pdfFonts.js";
 
 const emptyReport = {
   filters: {
@@ -252,7 +253,7 @@ export async function exportReport(request: Request, response: Response) {
     });
     const totalPaid = transactions.reduce((sum, transaction) => sum + transaction.amount, 0);
     const buffer = await buildPdfReport({
-      title: type === "revenue" ? "Bao cao doanh thu iPARK" : "Bao cao phien do xe iPARK",
+      title: type === "revenue" ? "Báo cáo doanh thu iPARK" : "Báo cáo phiên đỗ xe iPARK",
       fromText,
       toText,
       sessions,
@@ -304,17 +305,19 @@ function buildPdfReport(values: {
     document.on("data", (chunk: Buffer) => chunks.push(chunk));
     document.on("end", () => resolve(Buffer.concat(chunks)));
 
+    const fonts = registerVietnameseFonts(document);
     const revenue = values.sessions.reduce((sum, session) => sum + session.fee, 0);
-    document.fontSize(20).text(values.title, { align: "center" });
+    document.font(fonts.bold).fontSize(20).text(values.title, { align: "center" });
     document.moveDown(0.5);
-    document.fontSize(11).text(`Khoang ngay: ${values.fromText} - ${values.toText}`);
-    document.text(`Tong phien: ${values.sessions.length}`);
+    document.font(fonts.regular).fontSize(11).text(`Khoảng ngày: ${values.fromText} - ${values.toText}`);
+    document.text(`Tổng phiên: ${values.sessions.length}`);
     document.text(`Doanh thu checkout: ${revenue.toLocaleString("vi-VN")} VND`);
-    document.text(`Da xac nhan thanh toan: ${values.totalPaid.toLocaleString("vi-VN")} VND`);
+    document.text(`Đã xác nhận thanh toán: ${values.totalPaid.toLocaleString("vi-VN")} VND`);
     document.moveDown();
 
-    document.fontSize(12).text("Danh sach phien gan nhat", { underline: true });
+    document.font(fonts.bold).fontSize(12).text("Danh sách phiên gần nhất", { underline: true });
     document.moveDown(0.5);
+    document.font(fonts.regular);
     values.sessions.slice(0, 40).forEach((session, index) => {
       document
         .fontSize(9)
@@ -326,7 +329,7 @@ function buildPdfReport(values: {
     });
 
     if (!values.sessions.length) {
-      document.fontSize(10).text("Khong co du lieu trong khoang ngay da chon.");
+      document.fontSize(10).text("Không có dữ liệu trong khoảng ngày đã chọn.");
     }
 
     document.end();

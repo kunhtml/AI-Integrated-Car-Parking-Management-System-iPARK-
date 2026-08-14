@@ -1054,6 +1054,7 @@ function ResubmitVehicleModal({
   onSubmit: (data: Partial<RegisteredVehicle>) => Promise<void>;
 }) {
   const [form, setForm] = useState({
+    plate: vehicle.plate ?? "",
     ownerName: vehicle.owner ?? "",
     ownerPhone: vehicle.ownerPhone ?? "",
     ownerAddress: vehicle.ownerAddress ?? "",
@@ -1113,6 +1114,9 @@ function ResubmitVehicleModal({
 
   function validateForm(): Record<string, string> {
     const errs: Record<string, string> = {};
+    const plate = form.plate.trim().toUpperCase();
+    if (!plate) errs.plate = "Vui lòng nhập biển số.";
+    else if (!/^[A-Z0-9]{5,9}$/.test(plate)) errs.plate = "Biển số chỉ gồm chữ và số (5–9 ký tự).";
     if (form.ownerName.trim() && form.ownerName.trim().length < 2)
       errs.ownerName = "Họ tên phải có ít nhất 2 ký tự.";
     const phone = form.ownerPhone.trim();
@@ -1152,6 +1156,7 @@ function ResubmitVehicleModal({
     setSaving(true);
     const yearNum = form.year.trim() ? Number(form.year) : undefined;
     await onSubmit({
+      plate: form.plate.trim().toUpperCase(),
       owner: form.ownerName.trim() || undefined,
       ownerPhone: form.ownerPhone.trim() || undefined,
       ownerAddress: form.ownerAddress.trim() || undefined,
@@ -1167,8 +1172,8 @@ function ResubmitVehicleModal({
   }
 
   const fields: { key: keyof typeof form; label: string; span?: boolean }[] = [
+    { key: "plate", label: "Biển số" },
     { key: "ownerName", label: "Họ tên chủ xe" },
-    { key: "ownerPhone", label: "Số điện thoại" },
     { key: "brand", label: "Nhãn hiệu" },
     { key: "color", label: "Màu sơn" },
   ];
@@ -1229,10 +1234,7 @@ function ResubmitVehicleModal({
                 Chỉnh sửa và gửi lại đơn
               </h2>
               <span style={{ fontSize: "0.78rem", color: "var(--muted)" }}>
-                Biển số:{" "}
-                <strong style={{ fontFamily: "monospace" }}>
-                  {vehicle.plate}
-                </strong>
+                Có thể sửa biển số trước khi gửi lại đơn
               </span>
             </div>
           </div>
@@ -2578,8 +2580,8 @@ export function VehiclesView() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          plate: data.plate || undefined,
           ownerName: (data.owner as string) || undefined,
-          ownerPhone: data.ownerPhone || undefined,
           ownerAddress: data.ownerAddress || undefined,
           brand: data.brand || undefined,
           model: data.model || undefined,

@@ -3,18 +3,41 @@ import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
 import { ParkingSession, ParkingSessionDocument } from "../models/ParkingSession.js";
 import { Transaction } from "../models/Transaction.js";
+import { registerVietnameseFonts } from "../utils/pdfFonts.js";
 
 function formatDateInput(value: unknown) {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
 }
 
+const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
+
+function vietnamDateText(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: VIETNAM_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+
+  return `${value("year")}-${value("month")}-${value("day")}`;
+}
+
+function vietnamDayBoundary(dateText: string, endOfDay: boolean) {
+  const [year, month, day] = dateText.split("-").map(Number);
+  const vietnamOffsetMs = 7 * 60 * 60 * 1000;
+  const timeOfDayMs = endOfDay ? 24 * 60 * 60 * 1000 - 1 : 0;
+
+  return new Date(Date.UTC(year, month - 1, day) - vietnamOffsetMs + timeOfDayMs);
+}
+
 function getDateRange(request: Request) {
-  const today = new Date();
-  const defaultDate = today.toISOString().slice(0, 10);
+  const defaultDate = vietnamDateText();
   const fromText = formatDateInput(request.query.from) || defaultDate;
   const toText = formatDateInput(request.query.to) || fromText;
-  const from = new Date(`${fromText}T00:00:00.000`);
-  const to = new Date(`${toText}T23:59:59.999`);
+  const from = vietnamDayBoundary(fromText, false);
+  const to = vietnamDayBoundary(toText, true);
 
   return { fromText, toText, from, to };
 }
@@ -90,7 +113,7 @@ export async function exportReport(request: Request, response: Response) {
     });
     const totalPaid = transactions.reduce((sum, transaction) => sum + transaction.amount, 0);
     const buffer = await buildPdfReport({
-      title: type === "revenue" ? "Bao cao doanh thu iPARK" : "Bao cao phien do xe iPARK",
+      title: type === "revenue" ? "Báo cáo doanh thu iPARK" : "Báo cáo phiên đỗ xe iPARK",
       fromText,
       toText,
       sessions,
@@ -142,17 +165,19 @@ function buildPdfReport(values: {
     document.on("data", (chunk: Buffer) => chunks.push(chunk));
     document.on("end", () => resolve(Buffer.concat(chunks)));
 
+    const fonts = registerVietnameseFonts(document);
     const revenue = values.sessions.reduce((sum, session) => sum + session.fee, 0);
-    document.fontSize(20).text(values.title, { align: "center" });
+    document.font(fonts.bold).fontSize(20).text(values.title, { align: "center" });
     document.moveDown(0.5);
-    document.fontSize(11).text(`Khoang ngay: ${values.fromText} - ${values.toText}`);
-    document.text(`Tong phien: ${values.sessions.length}`);
+    document.font(fonts.regular).fontSize(11).text(`Khoảng ngày: ${values.fromText} - ${values.toText}`);
+    document.text(`Tổng phiên: ${values.sessions.length}`);
     document.text(`Doanh thu checkout: ${revenue.toLocaleString("vi-VN")} VND`);
-    document.text(`Da xac nhan thanh toan: ${values.totalPaid.toLocaleString("vi-VN")} VND`);
+    document.text(`Đã xác nhận thanh toán: ${values.totalPaid.toLocaleString("vi-VN")} VND`);
     document.moveDown();
 
-    document.fontSize(12).text("Danh sach phien gan nhat", { underline: true });
+    document.font(fonts.bold).fontSize(12).text("Danh sách phiên gần nhất", { underline: true });
     document.moveDown(0.5);
+    document.font(fonts.regular);
     values.sessions.slice(0, 40).forEach((session, index) => {
       document
         .fontSize(9)
@@ -164,7 +189,7 @@ function buildPdfReport(values: {
     });
 
     if (!values.sessions.length) {
-      document.fontSize(10).text("Khong co du lieu trong khoang ngay da chon.");
+      document.fontSize(10).text("Không có dữ liệu trong khoảng ngày đã chọn.");
     }
 
     document.end();
@@ -181,7 +206,7 @@ import {
 
 export async function revenueChartHandler(request: Request, response: Response) {
   const { from, to } = getDateRange(request);
-  const groupBy = (request.query.groupBy as "day" | "week" | "month") || "day";
+  const groupBy = (request.query.groupBy as "day" | "week" | "month" | "hour") || "day";
   const data = await getRevenueChart(from, to, groupBy);
   response.json({ data });
 }

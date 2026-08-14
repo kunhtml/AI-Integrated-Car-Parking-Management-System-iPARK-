@@ -500,7 +500,7 @@ last_detected_plate_out = ""
 # Dùng khi staff quét thẻ trắng để tạo card đúng loại mà không cần gọi API lại.
 # lookupDone: True khi background lookup đã hoàn tất (tránh staff quét trước khi có kết quả).
 # detectedAt: thời điểm OCR detect, dùng timeout để tránh dùng dữ liệu cũ.
-_PENDING_TIMEOUT = 60  # giây — nếu quá thời gian này thì coi như pending_vehicle_info hết hạn
+_PENDING_TIMEOUT = 12  # giây — tránh dính cache biển xe trước khi 2 xe vào sát nhau
 pending_vehicle_info = {
     "plate": "",
     "lookupDone": False,

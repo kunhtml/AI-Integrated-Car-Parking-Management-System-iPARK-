@@ -4,10 +4,15 @@ import { Search, RefreshCw } from "lucide-react";
 import type { RfidCardStatus } from "@/types";
 
 const STATUS_LABELS: Record<RfidCardStatus, string> = {
+  active: "Đang kích hoạt",
+  inactive: "Không hoạt động",
   available: "Sẵn sàng",
+  "pending-sale": "Chờ bán",
   "in-use": "Đang sử dụng",
   lost: "Mất",
   blocked: "Đã khóa",
+  damaged: "Hỏng",
+  returned: "Đã trả",
 };
 
 type Props = {

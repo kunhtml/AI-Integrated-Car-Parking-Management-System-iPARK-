@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { apiBaseUrl, bridgeBaseUrl } from "@/lib/constants";
+import { apiBaseUrl } from "@/lib/constants"
+import { bridgeBaseUrl } from "@/lib/client-api";
 
 export type CameraIngestEvent = {
   id: string;
