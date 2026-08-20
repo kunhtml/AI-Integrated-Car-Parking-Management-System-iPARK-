@@ -91,7 +91,7 @@ async function buildSessionForEntry(
     if (isMemberRfid) {
       const memberPlate = normalizePlate(rfidCard.plate || "");
       if (
-        rfidCard.status !== "active" ||
+        !["active", "in-use"].includes(rfidCard.status) ||
         !rfidCard.userId ||
         !rfidCard.vehicleId ||
         !memberPlate
@@ -376,6 +376,17 @@ export async function pushCameraLog(request: Request, response: Response) {
       if (typeof body.confidence === "number") {
         openSession.exitConfidence = body.confidence;
       }
+      const activeMembership = await findActiveSubscriptionByPlate(plate);
+      const expectedMemberCard = activeMembership
+        ? await RfidCard.findOne({
+            plate,
+            cardType: "member",
+            status: { $in: ["active", "in-use"] },
+          })
+            .sort({ updatedAt: -1 })
+            .select("uid")
+        : null;
+      openSession.expectedExitRfidUid = expectedMemberCard?.uid;
       // Đánh dấu đang chờ xác minh RFID — KHÔNG finalize, KHÔNG freeSlot
       openSession.exitState = "waiting_rfid";
       openSession.exitDetectedAt = new Date();
@@ -419,7 +430,8 @@ export async function pushCameraLog(request: Request, response: Response) {
   const memberCardForPlate = activeMemberSubscription ? await RfidCard.findOne({ plate, cardType: "member", status: { $in: ["active", "in-use"] } }).select("uid") : null;
   const eventUserType = openSession?.customerType === "member" || activeMemberSubscription ? "resident" : body.userType;
   const eventOwnerName = openSession?.ownerName || body.ownerName || vehicle?.ownerName || "Chưa xác định";
-  const eventMetadata = { ...(body.metadata ?? {}), ...(activeMemberSubscription ? { isSubscriber: true, expectedRfidUid: memberCardForPlate?.uid ?? null } : {}) };
+  const expectedRfidUid = openSession?.expectedExitRfidUid || memberCardForPlate?.uid || null;
+  const eventMetadata = { ...(body.metadata ?? {}), ...(activeMemberSubscription ? { isSubscriber: true, expectedRfidUid } : {}) };
   const isExitWaiting =
     body.direction === "out" && action === "skipped" && sessionId;
   cameraEventBus.emitIngest({

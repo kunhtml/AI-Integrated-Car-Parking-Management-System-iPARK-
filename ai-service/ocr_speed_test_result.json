@@ -1,0 +1,43 @@
+{
+  "config": {
+    "input": "static\\snapshots\\in_20260814_220415_578_nopl_crop.jpg",
+    "repeat": 2,
+    "warmup": 1,
+    "lang": "en",
+    "use_angle_cls": false,
+    "note": "Latency chỉ đo lệnh OCR, chưa gồm thời gian đọc file và load model."
+  },
+  "summary": {
+    "model_load_ms": 775.607,
+    "warmup_runs": 1,
+    "images_ok": 1,
+    "images_failed": 0,
+    "total_ocr_runs": 2,
+    "total_ocr_ms": 143.966,
+    "average_ocr_ms": 71.983,
+    "median_ocr_ms": 71.983,
+    "p95_ocr_ms": 75.229,
+    "ocr_fps": 13.892
+  },
+  "images": [
+    {
+      "image": "static\\snapshots\\in_20260814_220415_578_nopl_crop.jpg",
+      "width": 178,
+      "height": 78,
+      "runs": 2,
+      "texts": [
+        "30K099.99"
+      ],
+      "latencies_ms": [
+        68.376,
+        75.59
+      ],
+      "average_ms": 71.983,
+      "median_ms": 71.983,
+      "min_ms": 68.376,
+      "max_ms": 75.59,
+      "ocr_fps": 13.892
+    }
+  ],
+  "failures": []
+}

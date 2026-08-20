@@ -986,7 +986,7 @@ def read_from_arduino(ser, ser_out=None, direction="in"):
             if data_direction == "Out":
                 open_gate("out")
                 def _auto_close_out():
-                    time.sleep(5)
+                    time.sleep(7)
                     close_gate("out")
                 threading.Thread(target=_auto_close_out, daemon=True).start()
 
@@ -1618,9 +1618,9 @@ def control_gate(direction, action):
         return jsonify({"error": "Invalid command"}), 400
     if action == "open":
         open_gate(direction)
-        # Tự đóng barie sau 5 giây
+        # Cổng ra giữ mở 7 giây sau thanh toán; cổng vào giữ thời gian mặc định.
         def _auto_close(gate=direction):
-            time.sleep(5)
+            time.sleep(7 if gate == "out" else 5)
             close_gate(gate)
         threading.Thread(target=_auto_close, daemon=True).start()
     else:

@@ -319,9 +319,12 @@ void senddata() {
   }
 
   if (!found) {
-    Serial.println("The khong hop le!");
-    LCD_SaiThe();
-    coiCanhBao(4, 500);
+    Serial.println("UID:" + StrUID);
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Dang xac minh");
+    lcd.setCursor(0, 1);
+    lcd.print("Vui long doi...");
   }
 }
 
