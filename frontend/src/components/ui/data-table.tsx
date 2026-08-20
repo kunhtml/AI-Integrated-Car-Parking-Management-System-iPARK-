@@ -2,10 +2,12 @@ export function DataTable({
   headers,
   rows,
   onRowClick,
+  emptyMessage,
 }: {
   headers: React.ReactNode[];
   rows: React.ReactNode[][];
   onRowClick?: (rowIndex: number) => void;
+  emptyMessage?: React.ReactNode;
 }) {
   return (
     <div className="table-wrap">
@@ -18,7 +20,13 @@ export function DataTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, rowIndex) => (
+          {rows.length === 0 ? (
+            <tr>
+              <td className="data-table-empty" colSpan={headers.length}>
+                {emptyMessage ?? "Chưa có dữ liệu."}
+              </td>
+            </tr>
+          ) : rows.map((row, rowIndex) => (
             <tr
               key={rowIndex}
               className={onRowClick ? "clickable-table-row" : undefined}

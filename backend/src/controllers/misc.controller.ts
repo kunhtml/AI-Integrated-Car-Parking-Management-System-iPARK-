@@ -15,12 +15,7 @@ import {
 /* ───────────────── Notifications ───────────────── */
 
 export async function listNotifications(request: Request, response: Response) {
-  const user = request.user as { role?: string; id?: string } | undefined;
-  const roleFilter = user?.role || "all";
-
-  const notifications = await Notification.find({
-    targetRole: { $in: [roleFilter, "all"] },
-  } as any)
+  const notifications = await Notification.find({ userId: request.user?.id })
     .sort({ createdAt: -1 })
     .limit(100)
     .lean();
@@ -32,9 +27,9 @@ export async function markNotificationRead(
   request: Request,
   response: Response,
 ) {
-  const notification = await Notification.findByIdAndUpdate(
-    request.params.id,
-    { read: true, readAt: new Date() },
+  const notification = await Notification.findOneAndUpdate(
+    { _id: request.params.id, userId: request.user?.id },
+    { $addToSet: { readBy: request.user?.id } },
     { new: true },
   );
 
@@ -50,11 +45,9 @@ export async function markAllNotificationsRead(
   request: Request,
   response: Response,
 ) {
-  const user = request.user as { role?: string } | undefined;
-  const roleFilter = user?.role || "all";
   await Notification.updateMany(
-    { read: false, targetRole: { $in: [roleFilter, "all"] } } as any,
-    { read: true, readAt: new Date() },
+    { userId: request.user?.id },
+    { $addToSet: { readBy: request.user?.id } },
   );
   response.json({ ok: true });
 }

@@ -2,15 +2,10 @@ import { Request, Response } from "express";
 import { z } from "zod";
 import { Notification } from "../models/Notification.js";
 import { serializeNotification } from "../utils/serializers.js";
+import { createNotificationsForRoles } from "../services/notification.service.js";
 
 export async function listNotifications(request: Request, response: Response) {
-  const notifications = await Notification.find({
-    $or: [
-      { targetRole: "all" },
-      { targetRole: request.user?.role },
-      { userId: request.user?.id },
-    ],
-  })
+  const notifications = await Notification.find({ userId: request.user?.id })
     .sort({ createdAt: -1 })
     .limit(100);
 
@@ -29,13 +24,20 @@ export async function createNotificationController(request: Request, response: R
       targetRole: z.enum(["admin", "staff", "customer", "all"]).default("all"),
     })
     .parse(request.body);
-  const notification = await Notification.create(body);
-  response.status(201).json({ notification: serializeNotification(notification, request.user?.id) });
+  const roles = body.targetRole === "all"
+    ? ["admin", "staff", "customer"] as const
+    : [body.targetRole];
+  const created = await createNotificationsForRoles({
+    title: body.title,
+    content: body.content,
+    roles: [...roles],
+  });
+  response.status(201).json({ created });
 }
 
 export async function markNotificationRead(request: Request, response: Response) {
-  const notification = await Notification.findByIdAndUpdate(
-    request.params.id,
+  const notification = await Notification.findOneAndUpdate(
+    { _id: request.params.id, userId: request.user?.id },
     { $addToSet: { readBy: request.user?.id } },
     { returnDocument: "after" },
   );

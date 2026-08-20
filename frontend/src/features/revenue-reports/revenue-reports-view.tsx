@@ -22,10 +22,18 @@ type ExportRow = {
 type ReportState = {
   kpis: {
     totalRevenue: number;
+    cashRevenue?: number;
+    payosRevenue?: number;
     vehicleCount: number;
     occupancyRate: number;
     avgParkingTimeMinutes: number;
     activeSessions: number;
+  };
+  exceptions?: {
+    manualEntry: number;
+    manualExit: number;
+    cameraUnavailable: number;
+    rfidException: number;
   };
   revenueChart: Array<{ label: string; revenue: number }>;
   trafficChart: Array<{ label: string; entries: number; exits: number }>;
@@ -40,10 +48,18 @@ type ReportState = {
 const emptyReport: ReportState = {
   kpis: {
     totalRevenue: 0,
+    cashRevenue: 0,
+    payosRevenue: 0,
     vehicleCount: 0,
     occupancyRate: 0,
     avgParkingTimeMinutes: 0,
     activeSessions: 0,
+  },
+  exceptions: {
+    manualEntry: 0,
+    manualExit: 0,
+    cameraUnavailable: 0,
+    rfidException: 0,
   },
   revenueChart: [],
   trafficChart: [],
@@ -231,6 +247,20 @@ export function RevenueReportsView() {
           <KpiCard icon={<ReceiptText size={20} />} label="Avg Parking Time" value={avgParkingTime} />
           <KpiCard icon={<Car size={20} />} label="Active Sessions" value={String(report.kpis.activeSessions)} />
         </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <KpiCard icon={<CreditCard size={20} />} label="Doanh thu PayOS" value={currency.format(report.kpis.payosRevenue ?? 0)} />
+          <KpiCard icon={<CreditCard size={20} />} label="Doanh thu tiền mặt" value={currency.format(report.kpis.cashRevenue ?? 0)} />
+        </div>
+
+        {report.exceptions && (
+          <div className="grid gap-4 md:grid-cols-4">
+            <KpiCard icon={<ReceiptText size={20} />} label="Nhập tay (vào)" value={String(report.exceptions.manualEntry)} />
+            <KpiCard icon={<ReceiptText size={20} />} label="Nhập tay (ra)" value={String(report.exceptions.manualExit)} />
+            <KpiCard icon={<ReceiptText size={20} />} label="Camera hỏng" value={String(report.exceptions.cameraUnavailable)} />
+            <KpiCard icon={<ReceiptText size={20} />} label="Ngoại lệ RFID" value={String(report.exceptions.rfidException)} />
+          </div>
+        )}
 
         <div className="grid gap-6 lg:grid-cols-2">
           <ChartPanel title="Revenue Chart" subtitle="Line/bar by day for the selected period">

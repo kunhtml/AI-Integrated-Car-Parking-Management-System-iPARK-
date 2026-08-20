@@ -17,10 +17,18 @@ const emptyReport = {
   },
   kpis: {
     totalRevenue: 0,
+    cashRevenue: 0,
+    payosRevenue: 0,
     vehicleCount: 0,
     occupancyRate: 0,
     avgParkingTimeMinutes: 0,
     activeSessions: 0,
+  },
+  exceptions: {
+    manualEntry: 0,
+    manualExit: 0,
+    cameraUnavailable: 0,
+    rfidException: 0,
   },
   revenueChart: [],
   trafficChart: [],
@@ -71,6 +79,18 @@ export async function getRevenueReport(request: Request, response: Response) {
   const sessions = await ParkingSession.find(criteria).lean();
   const exports = await ReportExport.find({ reportType: "revenue" }).sort({ createdAt: -1 }).limit(10);
 
+  const paidTransactions = await Transaction.find({
+    transactionType: "parking",
+    status: "paid",
+    paidAt: { $gte: start, $lte: end },
+  }).lean();
+  let cashRevenue = 0;
+  let payosRevenue = 0;
+  for (const tx of paidTransactions) {
+    if (tx.method === "cash") cashRevenue += Number(tx.amount || 0);
+    else if (tx.method === "payos") payosRevenue += Number(tx.amount || 0);
+  }
+
   const totalRevenue = sessions.reduce(
     (sum, session) => sum + (session.paymentStatus === "fully_paid" ? Number(session.fee || 0) : 0),
     0,
@@ -106,10 +126,24 @@ export async function getRevenueReport(request: Request, response: Response) {
       filters: { dateRange, parkingArea, vehicleType },
       kpis: {
         totalRevenue,
+        cashRevenue,
+        payosRevenue,
         vehicleCount,
         occupancyRate: totalSlots ? Math.round((occupiedSlots / totalSlots) * 100) : 0,
         avgParkingTimeMinutes,
         activeSessions,
+      },
+      exceptions: {
+        manualEntry: sessions.filter((s) => s.entrySource === "manual").length,
+        manualExit: sessions.filter((s) => s.exitSource === "manual").length,
+        cameraUnavailable: sessions.filter(
+          (s) =>
+            s.entryPhotoStatus === "camera_unavailable" ||
+            s.exitPhotoStatus === "camera_unavailable",
+        ).length,
+        rfidException: sessions.filter(
+          (s) => s.entryRfidUnverified || s.exitRfidManualVerified,
+        ).length,
       },
       revenueChart: Array.from(buckets.values()).map((item) => ({ label: item.label, revenue: item.revenue })),
       trafficChart: Array.from(buckets.values()).map((item) => ({
@@ -201,6 +235,10 @@ function sessionRow(session: ParkingSessionDocument) {
     "Match": session.matchStatus || "",
     "AI biển vào": session.entryDetectedPlate || "",
     "AI biển ra": session.exitDetectedPlate || "",
+    "Nguồn vào": session.entrySource || "",
+    "Nguồn ra": session.exitSource || "",
+    "Phương thức": session.paymentMethod || "",
+    "Đã thu": session.paidAmount ?? 0,
   };
 }
 

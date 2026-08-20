@@ -44,7 +44,7 @@ export const navItems: NavItem[] = [
     path: "/staff-desk",
     label: "Bàn nhân viên",
     icon: ScanLine,
-    roles: ["admin", "staff"],
+    roles: ["staff"],
   },
   {
     id: "sessions",
@@ -93,15 +93,14 @@ export const navItems: NavItem[] = [
     path: "/disputes",
     label: "Khiếu nại",
     icon: MessageSquareWarning,
-    roles: ["admin", "staff", "customer"],
-    hiddenFromSidebar: ["admin"],
+    roles: ["customer"],
   },
   {
     id: "rfid",
     path: "/rfid",
     label: "Thẻ RFID",
     icon: Radio,
-    roles: ["admin", "staff"],
+    roles: ["admin"],
   },
   {
     id: "parking-slots",

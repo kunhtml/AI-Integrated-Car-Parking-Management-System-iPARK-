@@ -1,4 +1,5 @@
 import mongoose, { Model, Schema } from "mongoose";
+import { requireResponsibleStaffAt } from "../services/shiftResponsibility.service.js";
 
 export type DailyRateType = "day" | "night";
 export type CustomerType = "member" | "guest";
@@ -60,8 +61,12 @@ export type ParkingSessionDocument = {
     | "gate_opened";
   exitDetectedAt?: Date;
   exitRfidUid?: string;
+  expectedExitRfidUid?: string;
   exitRfidVerifiedAt?: Date;
   rfidCardId?: string;
+  entryRfidUid?: string;
+  // UID tra cứu từ hồ sơ Member khi đầu đọc không thể xác minh thẻ lúc vào.
+  entryExpectedRfidUid?: string;
   rfidAssignedAt?: Date;
   rfidReturnedAt?: Date;
   rfidGate?: "entry" | "exit";
@@ -79,6 +84,19 @@ export type ParkingSessionDocument = {
   verificationNote?: string;
   verifiedBy?: mongoose.Types.ObjectId;
   verifiedAt?: Date;
+  entrySource?: "camera" | "manual";
+  exitSource?: "camera" | "manual";
+  entryPhotoStatus?: "photo_captured" | "camera_unavailable";
+  exitPhotoStatus?: "photo_captured" | "camera_unavailable";
+  manualEntryReason?: string;
+  manualExitReason?: string;
+  visualConfirmed?: boolean;
+  visualConfirmedBy?: mongoose.Types.ObjectId;
+  visualConfirmedAt?: Date;
+  entryRfidUnverified?: boolean;
+  exitRfidManualVerified?: boolean;
+  cashNote?: string;
+  collectedBy?: mongoose.Types.ObjectId;
   exceptionType?: string;
   exceptionEvidence?: Record<string, unknown>;
   transactionId?: mongoose.Types.ObjectId;
@@ -169,8 +187,11 @@ const parkingSessionSchema = new Schema<ParkingSessionDocument>(
     },
     exitDetectedAt: { type: Date },
     exitRfidUid: { type: String },
+    expectedExitRfidUid: { type: String, trim: true, uppercase: true },
     exitRfidVerifiedAt: { type: Date },
     rfidCardId: { type: String, index: true },
+    entryRfidUid: { type: String, trim: true, uppercase: true, index: true },
+    entryExpectedRfidUid: { type: String, trim: true, uppercase: true, index: true },
     rfidAssignedAt: { type: Date },
     rfidReturnedAt: { type: Date },
     rfidGate: { type: String, enum: ["entry", "exit"] },
@@ -197,6 +218,19 @@ const parkingSessionSchema = new Schema<ParkingSessionDocument>(
     verificationNote: { type: String },
     verifiedBy: { type: Schema.Types.ObjectId, ref: "User" },
     verifiedAt: { type: Date },
+    entrySource: { type: String, enum: ["camera", "manual"], index: true },
+    exitSource: { type: String, enum: ["camera", "manual"], index: true },
+    entryPhotoStatus: { type: String, enum: ["photo_captured", "camera_unavailable"] },
+    exitPhotoStatus: { type: String, enum: ["photo_captured", "camera_unavailable"] },
+    manualEntryReason: { type: String, trim: true },
+    manualExitReason: { type: String, trim: true },
+    visualConfirmed: { type: Boolean, default: false },
+    visualConfirmedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    visualConfirmedAt: { type: Date },
+    entryRfidUnverified: { type: Boolean, default: false },
+    exitRfidManualVerified: { type: Boolean, default: false },
+    cashNote: { type: String, trim: true },
+    collectedBy: { type: Schema.Types.ObjectId, ref: "User" },
     exceptionType: { type: String, trim: true, index: true },
     exceptionEvidence: { type: Schema.Types.Mixed },
     ownerUserId: { type: Schema.Types.ObjectId, ref: "User", index: true },
@@ -220,6 +254,12 @@ const parkingSessionSchema = new Schema<ParkingSessionDocument>(
   },
   { timestamps: true },
 );
+
+parkingSessionSchema.pre("validate", async function () {
+  if (this.isNew && !this.checkInStaff) {
+    this.checkInStaff = await requireResponsibleStaffAt(this.checkInAt || new Date());
+  }
+});
 
 parkingSessionSchema.index({ plate: 1, checkInAt: -1 });
 parkingSessionSchema.index({ slotId: 1 });

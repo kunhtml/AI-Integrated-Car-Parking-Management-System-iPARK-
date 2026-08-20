@@ -1,11 +1,15 @@
 import { Request, Response } from "express";
 import { z } from "zod";
 import { Incident } from "../models/Incident.js";
+import { ParkingSession } from "../models/ParkingSession.js";
 import { createNotification } from "../services/notification.service.js";
 import { serializeIncident } from "../utils/serializers.js";
 
-export async function listIncidents(_request: Request, response: Response) {
-  const incidents = await Incident.find().sort({ createdAt: -1 }).limit(200);
+export async function listIncidents(request: Request, response: Response) {
+  const criteria = request.user?.role === "staff"
+    ? { sessionId: { $in: await ParkingSession.find({ checkInStaff: request.user.id }).distinct("_id") } }
+    : {};
+  const incidents = await Incident.find(criteria).sort({ createdAt: -1 }).limit(200);
   response.json({ incidents: incidents.map(serializeIncident) });
 }
 

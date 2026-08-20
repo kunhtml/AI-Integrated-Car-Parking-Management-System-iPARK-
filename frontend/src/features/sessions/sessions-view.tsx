@@ -17,7 +17,9 @@ import {
 } from "lucide-react";
 
 import { useParkingApp } from "@/context/parking-app-context";
+import { apiFetch } from "@/lib/client-api";
 import { currency } from "@/lib/constants";
+import type { ParkingSession } from "@/types";
 
 const PAGE_SIZE = 12;
 
@@ -40,23 +42,35 @@ function formatDuration(minutes: number): string {
   return `${mins} phút`;
 }
 
-function LiveMinutes({ checkIn }: { checkIn: string }) {
+function completedDuration(checkIn: string, checkOut?: string): string | null {
+  if (!checkOut) return null;
+  const [inHour, inMinute] = checkIn.split(":").map(Number);
+  const [outHour, outMinute] = checkOut.split(":").map(Number);
+  if (![inHour, inMinute, outHour, outMinute].every(Number.isFinite)) return null;
+  let minutes = outHour * 60 + outMinute - (inHour * 60 + inMinute);
+  if (minutes < 0) minutes += 24 * 60;
+  return formatDuration(minutes);
+}
+
+function LiveMinutes({ checkIn, checkInAt }: { checkIn: string; checkInAt?: string }) {
   const [minutes, setMinutes] = useState(0);
 
   useEffect(() => {
     function calc() {
       const now = new Date();
-      const [h, m] = checkIn.split(":").map(Number);
-      const checkInDate = new Date();
-      checkInDate.setHours(h, m, 0, 0);
-      if (checkInDate > now) checkInDate.setDate(checkInDate.getDate() - 1);
+      const checkInDate = checkInAt ? new Date(checkInAt) : new Date();
+      if (!checkInAt || Number.isNaN(checkInDate.getTime())) {
+        const [h, m] = checkIn.split(":").map(Number);
+        checkInDate.setHours(h, m, 0, 0);
+        if (checkInDate > now) checkInDate.setDate(checkInDate.getDate() - 1);
+      }
       const diff = Math.floor((now.getTime() - checkInDate.getTime()) / 60000);
-      setMinutes(diff);
+      setMinutes(Math.max(0, diff));
     }
     calc();
     const interval = setInterval(calc, 60000);
     return () => clearInterval(interval);
-  }, [checkIn]);
+  }, [checkIn, checkInAt]);
 
   return (
     <span className="session-live-min">
@@ -82,12 +96,22 @@ function StatusBadge({ status }: { status: string }) {
   return <span className="status-pill status-cancelled">{status}</span>;
 }
 
-function PayBadge({ paymentStatus }: { paymentStatus?: string }) {
+function PayBadge({ paymentStatus, paymentMethod }: { paymentStatus?: string; paymentMethod?: string }) {
+  if (paymentMethod === "subscription")
+    return <span className="pay-pill pay-paid">Theo gói thành viên</span>;
   if (paymentStatus === "fully_paid")
     return <span className="pay-pill pay-paid">Đã thanh toán</span>;
   if (paymentStatus === "partial_paid")
     return <span className="pay-pill pay-partial">Một phần</span>;
   return <span className="pay-pill pay-unpaid">Chưa thanh toán</span>;
+}
+
+function paymentMethodLabel(paymentMethod?: string, paymentStatus?: string) {
+  if (paymentMethod === "payos") return "Thanh toán PayOS";
+  if (paymentMethod === "cash") return "Thanh toán tiền mặt";
+  if (paymentMethod === "subscription") return "Theo gói thành viên";
+  if (paymentStatus === "fully_paid") return "Đã thanh toán (chưa xác định phương thức)";
+  return "Chưa thanh toán";
 }
 
 function MatchBadge({ match }: { match?: string }) {
@@ -124,6 +148,7 @@ export function SessionsView() {
     filteredSessions,
     searchText,
     setSearchText,
+    setSessions,
     completeSession,
   } = useParkingApp();
 
@@ -133,10 +158,35 @@ export function SessionsView() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [payFilter, setPayFilter] = useState<PayFilter>("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [detailSession, setDetailSession] = useState<ParkingSession | null>(null);
 
   const searchRef = useRef<HTMLInputElement>(null);
 
   if (!currentUser) return null;
+
+  // Refresh provisional fees so active sessions reflect the current parking time.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function refreshSessions() {
+      try {
+        const response = await apiFetch("/parking-sessions");
+        if (!cancelled && response.ok) {
+          const data = await response.json();
+          setSessions(data.sessions ?? []);
+        }
+      } catch {
+        // Keep the most recently loaded session data if the refresh fails.
+      }
+    }
+
+    void refreshSessions();
+    const interval = window.setInterval(() => void refreshSessions(), 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [setSessions]);
 
   // Dùng viewAs để xác định chế độ hiển thị
   const isCustomer = currentUser.role === "staff" ? viewAs === "customer" : currentUser.role === "customer";
@@ -153,10 +203,13 @@ export function SessionsView() {
       if (e.key === "Escape" && confirmId) {
         setConfirmId(null);
       }
+      if (e.key === "Escape" && detailSession) {
+        setDetailSession(null);
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isCustomer, confirmId]);
+  }, [isCustomer, confirmId, detailSession]);
 
   const stats = useMemo(() => {
     let active = 0;
@@ -253,6 +306,9 @@ export function SessionsView() {
 
   // Compute fee display — never show "0 ₫" for active sessions
   function renderFee(session: (typeof pageItems)[number]) {
+    if (session.paymentMethod === "subscription") {
+      return <span className="fee-meta">Đã bao gồm trong gói thành viên</span>;
+    }
     if (session.feeBreakdown) {
       return (
         <>
@@ -484,6 +540,7 @@ export function SessionsView() {
                   <th>Chủ xe</th>
                   <th>Vị trí</th>
                   <th>Vào</th>
+                  <th>Thời gian ra</th>
                   <th>Thời lượng</th>
                   <th>Trạng thái</th>
                   <th>Thanh toán</th>
@@ -499,9 +556,10 @@ export function SessionsView() {
                     <tr
                       key={session.id}
                       className={`${cardAccent(session.status, isOverstayed)} ${isSelected ? "is-selected" : ""}`}
+                      onClick={() => setDetailSession(session)}
                     >
                       {isAdmin && (
-                        <td className="col-check">
+                        <td className="col-check" onClick={(event) => event.stopPropagation()}>
                           {session.status === "Đang gửi" ? (
                             <button
                               type="button"
@@ -531,9 +589,21 @@ export function SessionsView() {
                       </td>
                       <td>
                         {session.checkOut ? (
-                          <span className="val-mono">{session.checkOut}</span>
-                        ) : session.status === "Đang gửi" ? (
-                          <LiveMinutes checkIn={session.checkIn} />
+                          <span className="val-mono">
+                            {session.checkOutDate ? `${session.checkOutDate} ` : ""}
+                            {session.checkOut}
+                          </span>
+                        ) : (
+                          <span className="muted">—</span>
+                        )}
+                      </td>
+                      <td>
+                        {session.status === "Đang gửi" ? (
+                          <LiveMinutes checkIn={session.checkIn} checkInAt={session.checkInAt} />
+                        ) : completedDuration(session.checkIn, session.checkOut) ? (
+                          <span className="val-mono">
+                            {completedDuration(session.checkIn, session.checkOut)}
+                          </span>
                         ) : (
                           <span className="muted">—</span>
                         )}
@@ -553,10 +623,10 @@ export function SessionsView() {
                         </div>
                       </td>
                       <td>
-                        <PayBadge paymentStatus={session.paymentStatus} />
+                        <PayBadge paymentStatus={session.paymentStatus} paymentMethod={session.paymentMethod} />
                       </td>
                       <td className="col-fee">{renderFee(session)}</td>
-                      <td className="col-act">
+                      <td className="col-act" onClick={(event) => event.stopPropagation()}>
                         {isAdmin && session.status === "Đang gửi" ? (
                           confirmId === session.id ? (
                             <div className="confirm-inline confirm-inline-list">
@@ -606,6 +676,78 @@ export function SessionsView() {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {detailSession && (
+          <div
+            className="modal-overlay"
+            role="presentation"
+            onClick={() => setDetailSession(null)}
+          >
+            <section
+              className="modal-card session-detail-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="session-detail-title"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="modal-header">
+                <div className="modal-title">
+                  <Eye size={18} aria-hidden />
+                  <div>
+                    <p className="muted-text">Chi tiết phiên đỗ xe</p>
+                    <h3 id="session-detail-title">{detailSession.plate}</h3>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => setDetailSession(null)}
+                  aria-label="Đóng chi tiết phiên"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="session-detail-grid">
+                <div><span>Mã phiên</span><strong>#{detailSession.id.slice(-8).toUpperCase()}</strong></div>
+                <div><span>Chủ xe</span><strong>{detailSession.owner || "Khách vãng lai"}</strong></div>
+                <div><span>Vị trí</span><strong>{detailSession.slot || "—"}</strong></div>
+                <div><span>Thời gian vào</span><strong>{detailSession.checkInDate} {detailSession.checkIn}</strong></div>
+                <div><span>Thời gian ra</span><strong>{detailSession.checkOut ? `${detailSession.checkOutDate ?? ""} ${detailSession.checkOut}`.trim() : "Chưa ra bãi"}</strong></div>
+                <div><span>Thời lượng</span><strong>{detailSession.status === "Đang gửi" ? <LiveMinutes checkIn={detailSession.checkIn} checkInAt={detailSession.checkInAt} /> : completedDuration(detailSession.checkIn, detailSession.checkOut) ?? "—"}</strong></div>
+              </div>
+
+              <div className="session-detail-status">
+                <div><span>Trạng thái</span><StatusBadge status={detailSession.status} /> <MatchBadge match={detailSession.matchStatus} /></div>
+                <div><span>Thanh toán</span><PayBadge paymentStatus={detailSession.paymentStatus} paymentMethod={detailSession.paymentMethod} /></div>
+                <div><span>Phương thức</span><strong>{paymentMethodLabel(detailSession.paymentMethod, detailSession.paymentStatus)}</strong></div>
+                <div><span>Phí {detailSession.status === "Đang gửi" ? "tạm tính" : ""}</span>{renderFee(detailSession)}</div>
+              </div>
+
+              {(detailSession.manualEntryReason || detailSession.manualExitReason || (detailSession.exitRfidManualVerified && detailSession.verificationNote)) && (
+                <div className="session-detail-notes">
+                  <h4>Ghi chú xử lý thủ công</h4>
+                  {detailSession.manualEntryReason && (
+                    <p><strong>Vào thủ công:</strong> {detailSession.manualEntryReason}</p>
+                  )}
+                  {detailSession.manualExitReason && (
+                    <p>
+                      <strong>
+                        {detailSession.status === "Đang gửi"
+                          ? "Lần thử ra thủ công (chưa checkout):"
+                          : "Ra thủ công:"}
+                      </strong>{" "}
+                      {detailSession.manualExitReason}
+                    </p>
+                  )}
+                  {detailSession.exitRfidManualVerified && detailSession.verificationNote && (
+                    <p><strong>Xác minh RFID thủ công:</strong> {detailSession.verificationNote}</p>
+                  )}
+                </div>
+              )}
+            </section>
           </div>
         )}
 

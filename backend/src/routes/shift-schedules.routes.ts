@@ -6,6 +6,7 @@ import {
   createShiftSchedule,
   deleteShiftSchedule,
   getMySchedule,
+  getMyCurrentShift,
   getShiftStats,
   getShiftTypes,
   getStaffsForSchedule,
@@ -26,6 +27,7 @@ shiftScheduleRoutes.get("/types", asyncHandler(getShiftTypes));
 
 // Staff can see their own schedule
 shiftScheduleRoutes.get("/my", asyncHandler(getMySchedule));
+shiftScheduleRoutes.get("/my/current", asyncHandler(getMyCurrentShift));
 shiftScheduleRoutes.get("/week", asyncHandler(getWeeklySchedule));
 
 // Admin only routes

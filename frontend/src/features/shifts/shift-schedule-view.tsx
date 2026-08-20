@@ -38,7 +38,10 @@ function getWeekDates(date: Date): Date[] {
 }
 
 function formatDate(date: Date): string {
-  return date.toISOString().split("T")[0];
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return year + "-" + month + "-" + day;
 }
 
 function isSameDay(d1: Date, d2: Date): boolean {
@@ -522,7 +525,7 @@ export function ShiftScheduleView() {
 
             {/* Week view - Timetable style */}
             <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 800 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", minWidth: 800 }}>
                 <thead>
                   <tr>
                     <th style={{ padding: 12, textAlign: "left", borderBottom: "2px solid var(--border)", background: "var(--bg-secondary)", width: 120 }}>Ca</th>
@@ -577,6 +580,7 @@ export function ShiftScheduleView() {
                               borderBottom: "1px solid var(--border)",
                               borderLeft: "1px solid var(--border)",
                               minHeight: 90,
+                              overflowWrap: "anywhere",
                               verticalAlign: "top",
                               background: isSameDay(date, new Date()) ? "rgba(37, 99, 235, 0.05)" : "transparent",
                               cursor: isAdmin && date >= new Date(new Date().setHours(0,0,0,0)) ? "pointer" : "default",

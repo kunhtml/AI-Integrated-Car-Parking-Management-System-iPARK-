@@ -97,10 +97,11 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return data as T;
 }
 
-export async function getRfidInventory(filters: { status?: RfidLifecycleStatus; search?: string; limit?: number } = {}) {
+export async function getRfidInventory(filters: { status?: RfidLifecycleStatus; search?: string; limit?: number; page?: number } = {}) {
   const query = new URLSearchParams();
   if (filters.status) query.set("status", filters.status);
   if (filters.search?.trim()) query.set("search", filters.search.trim());
+  if (filters.page) query.set("page", String(filters.page));
   query.set("limit", String(filters.limit ?? 100));
   return parseResponse<InventoryResponse>(await apiFetch(`/rfid/inventory?${query.toString()}`));
 }

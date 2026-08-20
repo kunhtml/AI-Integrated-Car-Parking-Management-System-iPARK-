@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { verifyExit, openGate } from "./exit.controller.js";
+import { verifyExit, openGate, prepareManualExit, dismissPendingExit } from "./exit.controller.js";
 
 export const exitRouter = Router();
 
@@ -8,3 +8,5 @@ exitRouter.post("/verify", verifyExit);
 
 // POST /api/exit/open-gate — Gate authorize + mở barie
 exitRouter.post("/open-gate", openGate);
+exitRouter.post("/prepare-manual", prepareManualExit);
+exitRouter.post("/dismiss", dismissPendingExit);

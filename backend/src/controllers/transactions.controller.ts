@@ -8,6 +8,7 @@ import { createNotification } from "../services/notification.service.js";
 import { objectId } from "../services/transaction.service.js";
 import { createPayOSPayment } from "../services/payos.service.js";
 import { serializeTransaction } from "../utils/serializers.js";
+import { createAuditLog } from "../services/auditLog.service.js";
 
 export async function listTransactions(request: Request, response: Response) {
   let transactions;
@@ -196,6 +197,99 @@ export async function confirmTransaction(request: Request, response: Response) {
   });
 
   response.json({ transaction: serializeTransaction(transaction) });
+}
+
+export async function payCashForSession(request: Request, response: Response) {
+  const body = z
+    .object({
+      amount: z.number().positive().optional(),
+      note: z.string().trim().optional(),
+    })
+    .parse(request.body ?? {});
+
+  const session = await ParkingSession.findById(request.params.sessionId);
+  if (!session) {
+    response.status(404).json({ message: "Không tìm thấy phiên đỗ xe." });
+    return;
+  }
+
+  if (session.fee == null || session.fee <= 0) {
+    session.paymentStatus = "fully_paid";
+    session.paidAmount = 0;
+    await session.save();
+    response.json({
+      transaction: null,
+      sessionPaymentStatus: "fully_paid",
+      message: "Phiên không phát sinh phí.",
+    });
+    return;
+  }
+
+  const amountDue = session.fee - (session.paidAmount || 0);
+  if (amountDue <= 0) {
+    session.paymentStatus = "fully_paid";
+    await session.save();
+    response.json({
+      transaction: null,
+      sessionPaymentStatus: "fully_paid",
+      message: "Phiên đã thanh toán đủ.",
+    });
+    return;
+  }
+
+  const amount = body.amount ?? amountDue;
+  if (amount > amountDue) {
+    response.status(400).json({
+      message: `Số tiền thu (${amount}) vượt quá số cần thu (${amountDue}).`,
+    });
+    return;
+  }
+
+  const collectorId = objectId(request.user?.id);
+  const transaction = await Transaction.create({
+    sessionId: session._id,
+    userId: session.ownerUserId,
+    createdBy: collectorId,
+    transactionType: "parking",
+    method: "cash",
+    amount,
+    status: "paid",
+    paidAt: new Date(),
+    note: body.note || `Thu tiền mặt tại cổng ra - phiên ${String(session._id)}`,
+    plate: session.plate,
+  });
+
+  session.paidAmount = (session.paidAmount || 0) + amount;
+  session.paymentMethod = "cash";
+  session.cashNote = body.note || session.cashNote;
+  session.collectedBy = collectorId;
+  session.transactionId = transaction._id;
+  session.paymentStatus =
+    session.paidAmount >= session.fee ? "fully_paid" : "partial_paid";
+  await session.save();
+
+  await createAuditLog({
+    action: "cash_payment",
+    entityType: "ParkingSession",
+    entityId: session._id,
+    performedBy: request.user?.id ?? "",
+    changes: {
+      new: {
+        amount,
+        paidAmount: session.paidAmount,
+        fee: session.fee,
+        paymentStatus: session.paymentStatus,
+      },
+    },
+  });
+
+  response.status(201).json({
+    transaction: serializeTransaction(transaction, session),
+    sessionPaymentStatus: session.paymentStatus,
+    paidAmount: session.paidAmount,
+    amountDue: session.fee - session.paidAmount,
+    message: "Đã ghi nhận thanh toán tiền mặt.",
+  });
 }
 
 export async function cancelTransaction(request: Request, response: Response) {

@@ -110,12 +110,14 @@ export type ParkingSession = {
   checkInDate: string;
   checkInAt?: string;
   checkOut?: string;
+  checkOutDate?: string;
   expectedCheckOut?: string;
   prepaidCheckoutAt?: string;
   slot: string;
   slotId?: string;
   status: "Đang gửi" | "Đã hoàn thành" | "Đã hủy" | "Chờ thanh toán" | "Hủy";
   paymentStatus?: "unpaid" | "partial_paid" | "fully_paid";
+  paymentMethod?: string;
   fee: number;
   paidAmount?: number;
   dailyBreakdown?: DailyBreakdownItem[];
@@ -130,6 +132,11 @@ export type ParkingSession = {
   verificationStatus?: "Không cần" | "Chờ duyệt" | "Đã duyệt" | "Từ chối";
   manualPlate?: string;
   verificationNote?: string;
+  entrySource?: "camera" | "manual";
+  exitSource?: "camera" | "manual";
+  manualEntryReason?: string;
+  manualExitReason?: string;
+  exitRfidManualVerified?: boolean;
   transactionId?: string;
   ownerEmail?: string;
   feeBreakdown?: FeeBreakdown;

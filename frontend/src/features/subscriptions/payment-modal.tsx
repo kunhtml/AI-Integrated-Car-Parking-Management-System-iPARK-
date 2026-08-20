@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Banknote,
   Building2,
@@ -95,8 +95,18 @@ export function PaymentModal({ payos, subscriptionId, renewMode, renewBaseEnd, p
   const [pollTick, setPollTick] = useState(0);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [successCountdown, setSuccessCountdown] = useState(5);
+  const onCloseRef = useRef(onClose);
+  const onPaidRef = useRef(onPaid);
+  const paymentReportedRef = useRef(false);
 
   useEffect(() => {
+    onCloseRef.current = onClose;
+    onPaidRef.current = onPaid;
+  }, [onClose, onPaid]);
+
+  useEffect(() => {
+    if (status === "paid") return;
+
     let cancelled = false;
     const interval = setInterval(async () => {
       try {
@@ -105,10 +115,11 @@ export function PaymentModal({ payos, subscriptionId, renewMode, renewBaseEnd, p
         if (cancelled) return;
         const paidRenew = renewMode && d.endDate && new Date(d.endDate).getTime() > renewBaseEnd;
         const paidNew = !renewMode && d.status === "active";
-        if (paidRenew || paidNew) {
+        if ((paidRenew || paidNew) && !paymentReportedRef.current) {
+          paymentReportedRef.current = true;
           setStatus("paid");
           clearInterval(interval);
-          onPaid();
+          onPaidRef.current();
         } else {
           setPollTick((n) => n + 1);
         }
@@ -121,7 +132,7 @@ export function PaymentModal({ payos, subscriptionId, renewMode, renewBaseEnd, p
       cancelled = true;
       clearInterval(interval);
     };
-  }, [subscriptionId, renewMode, renewBaseEnd, onPaid]);
+  }, [subscriptionId, renewMode, renewBaseEnd, status]);
 
   async function checkNow() {
     setChecking(true);
@@ -131,9 +142,10 @@ export function PaymentModal({ payos, subscriptionId, renewMode, renewBaseEnd, p
       const d = await r.json();
       const paidRenew = renewMode && d.endDate && new Date(d.endDate).getTime() > renewBaseEnd;
       const paidNew = !renewMode && d.status === "active";
-      if (paidRenew || paidNew) {
+      if ((paidRenew || paidNew) && !paymentReportedRef.current) {
+        paymentReportedRef.current = true;
         setStatus("paid");
-        onPaid();
+        onPaidRef.current();
       } else {
         setError("Chưa nhận được thanh toán. Vui lòng chờ 10–30 giây sau khi chuyển khoản hoặc kiểm tra lại nội dung.");
       }
@@ -146,19 +158,19 @@ export function PaymentModal({ payos, subscriptionId, renewMode, renewBaseEnd, p
 
   useEffect(() => {
     if (status !== "paid") return;
-    setSuccessCountdown(5);
-    const timer = window.setInterval(() => {
-      setSuccessCountdown((current) => {
-        if (current <= 1) {
-          window.clearInterval(timer);
-          onClose();
-          return 0;
-        }
-        return current - 1;
-      });
+
+    // Do not call the parent's onClose from inside a state updater. React may
+    // evaluate that updater while rendering this component.
+    if (successCountdown <= 0) {
+      const closeTimer = window.setTimeout(() => onCloseRef.current(), 0);
+      return () => window.clearTimeout(closeTimer);
+    }
+
+    const timer = window.setTimeout(() => {
+      setSuccessCountdown((current) => Math.max(0, current - 1));
     }, 1000);
-    return () => window.clearInterval(timer);
-  }, [status, onClose]);
+    return () => window.clearTimeout(timer);
+  }, [status, successCountdown]);
 
   async function copy(text: string, key: string) {
     try {

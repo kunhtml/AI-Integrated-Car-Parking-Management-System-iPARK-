@@ -46,6 +46,10 @@ function displayPlate(value?: string | null) {
   return (value || "").toUpperCase().trim();
 }
 
+function normalizeUid(value?: string | null) {
+  return (value || "").trim().toUpperCase();
+}
+
 function platesEqual(a?: string | null, b?: string | null) {
   const na = displayPlate(a).replace(/[^A-Z0-9]/g, "");
   const nb = displayPlate(b).replace(/[^A-Z0-9]/g, "");
@@ -53,6 +57,9 @@ function platesEqual(a?: string | null, b?: string | null) {
 }
 
 export async function findExpectedEntryUid(session: SessionDoc) {
+  const expectedExitUid = normalizeUid(session.expectedExitRfidUid);
+  if (expectedExitUid) return expectedExitUid;
+
   const entryLog = await ParkingCameraLog.findOne({
     sessionId: session._id,
     direction: "in",
@@ -60,7 +67,7 @@ export async function findExpectedEntryUid(session: SessionDoc) {
   })
     .sort({ createdAt: -1 })
     .lean();
-  return (entryLog?.rfidUid || session.rfidCardId || "").trim();
+  return normalizeUid(entryLog?.rfidUid || session.rfidCardId);
 }
 
 export async function findCardBoundPlate(uid: string, sessionId: string) {
@@ -101,16 +108,17 @@ function uidMatchesSession(
   cardPlate: string,
   sessionPlate: string,
 ) {
-  if (expectedUid && uid === expectedUid) return true;
-  if (cardPlate && platesEqual(cardPlate, sessionPlate)) return true;
-  return false;
+  const scannedUid = normalizeUid(uid);
+  const requiredUid = normalizeUid(expectedUid);
+  if (requiredUid) return scannedUid === requiredUid;
+  return Boolean(cardPlate && platesEqual(cardPlate, sessionPlate));
 }
 
 export async function classifyExitMismatch(params: {
   session: SessionDoc;
   uid: string;
 }): Promise<ExitExceptionPayload | null> {
-  const uid = params.uid.trim();
+  const uid = normalizeUid(params.uid);
   const session = params.session;
   const sessionPlate = displayPlate(session.plate);
   const exitPlate = displayPlate(session.exitDetectedPlate) || sessionPlate;

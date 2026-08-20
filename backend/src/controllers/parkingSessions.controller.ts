@@ -36,6 +36,7 @@ import { Transaction, TransactionDocument } from "../models/Transaction.js";
 import { saveUploadedImage } from "../services/upload.service.js";
 import { serializeParkingSession } from "../utils/serializers.js";
 import { classifyVehicleByPlate } from "../services/parkingQuota.service.js";
+import { createAuditLog } from "../services/auditLog.service.js";
 
 async function finalizeCheckout(session: ParkingSessionDocument) {
   session.status = "Đã hoàn thành";
@@ -152,19 +153,38 @@ export async function listParkingSessions(
 ) {
   const criteria =
     request.user?.role === "customer" ? { ownerUserId: request.user.id } : {};
-  const sessions = await ParkingSession.find(criteria)
-    .sort({ createdAt: -1 })
-    .limit(100);
   const sessionsWithTransactions = await ParkingSession.find(criteria)
     .sort({ createdAt: -1 })
     .limit(100)
     .populate<{ transactionId: TransactionDocument | null }>("transactionId");
 
+  const now = new Date();
+  const serializedSessions = await Promise.all(
+    sessionsWithTransactions.map(async (session) => {
+      const serialized = serializeParkingSession(
+        session as unknown as ParkingSessionDocument,
+      );
+
+      // Active sessions show a fresh estimate without persisting a final fee.
+      if (session.status === "Đang gửi") {
+        const slot = session.slotId
+          ? await ParkingSlot.findById(session.slotId).select("zoneId").lean()
+          : null;
+        const pricing = await getActivePricingConfigForZone(slot?.zoneId);
+        const feeBreakdown = calculateParkingFee(session.checkInAt, now, pricing);
+        serialized.fee = feeBreakdown.totalFee;
+        serialized.feeBreakdown = feeBreakdown;
+      }
+
+      return {
+        ...serialized,
+        transactionStatus: session.transactionId?.status ?? null,
+      };
+    }),
+  );
+
   response.json({
-    sessions: sessionsWithTransactions.map((session) => ({
-      ...serializeParkingSession(session as unknown as ParkingSessionDocument),
-      transactionStatus: session.transactionId?.status ?? null,
-    })),
+    sessions: serializedSessions,
   });
 }
 
@@ -180,8 +200,37 @@ export async function createParkingSession(
       entryDetectedPlate: z.string().trim().optional(),
       entryConfidence: z.number().min(0).max(1).optional(),
       entryImageUrl: z.string().trim().optional(),
+      entrySource: z.enum(["camera", "manual"]).optional(),
+      manualEntryReason: z.string().trim().optional(),
+      entryPhotoStatus: z.enum(["photo_captured", "camera_unavailable"]).optional(),
+      visualConfirmed: z.boolean().optional(),
+      entryRfidUnverified: z.boolean().optional(),
     })
     .parse(request.body);
+
+  const isManualEntry = body.entrySource === "manual";
+  if (isManualEntry) {
+    const cameraDown = body.entryPhotoStatus === "camera_unavailable";
+    if (cameraDown) {
+      if (!body.manualEntryReason || body.manualEntryReason.trim().length < 8) {
+        response.status(400).json({
+          message: "Camera hỏng: cần nhập lý do (tối thiểu 8 ký tự).",
+        });
+        return;
+      }
+      if (!body.visualConfirmed) {
+        response.status(400).json({
+          message: "Camera hỏng: cần tích xác nhận đã kiểm tra biển số bằng mắt.",
+        });
+        return;
+      }
+    } else if (!body.entryImageUrl) {
+      response.status(400).json({
+        message: "Nhập biển thủ công: cần chụp ảnh biển số minh chứng.",
+      });
+      return;
+    }
+  }
 
   const normalizeRfidPlate = (value: string) =>
     value.trim().toUpperCase().replace(/[\s-]+/g, "");
@@ -212,6 +261,61 @@ export async function createParkingSession(
     ownerUserId,
     body.plate,
   );
+  let manualMemberCardUid: string | undefined;
+
+  // RFID có thể hỏng nhưng xe Member vẫn phải được nhận diện từ hồ sơ đã đăng ký.
+  // Không cấp thành phiên khách; nếu gói đã hết hạn thì vẫn dùng quota vãng lai và
+  // thanh toán như lượt gửi thường, nhưng danh tính Member được giữ lại để truy vết.
+  if (isManualEntry && body.entryRfidUnverified && !body.rfidUid) {
+    const memberCard = await RfidCard.findOne({
+      plate: normalizeRfidPlate(body.plate),
+      cardType: "member",
+      status: { $in: ["active", "in-use"] },
+    });
+    if (memberCard) {
+      const memberPlate = normalizeRfidPlate(memberCard.plate || "");
+      const vehicle = memberCard.userId && memberCard.vehicleId
+        ? await Vehicle.findOne({
+            _id: memberCard.vehicleId,
+            userId: memberCard.userId,
+            plate: memberPlate,
+          })
+        : null;
+      if (!memberCard.userId || !memberCard.vehicleId || !memberPlate || !vehicle) {
+        response.status(409).json({
+          message: "Không thể xử lý thủ công vì dữ liệu liên kết của thẻ Member chưa hợp lệ.",
+        });
+        return;
+      }
+
+      const subscription = await findActiveSubscriptionByPlate(memberPlate);
+      manualMemberCardUid = memberCard.uid;
+      rfidCard = {
+        _id: memberCard._id,
+        uid: memberCard.uid,
+        cardId: memberCard.cardId,
+        cardType: memberCard.cardType,
+        userType: memberCard.userType,
+        userId: memberCard.userId,
+        vehicleId: memberCard.vehicleId,
+        plate: memberCard.plate,
+        status: memberCard.status,
+      };
+      ownerUserId = memberCard.userId;
+
+      if (subscription && subscription.primaryVehicleId === memberCard.vehicleId.toString()) {
+        quotaAccess = { customerType: "member", quotaType: "member" };
+        isMember = true;
+        plateCheck = { warn: undefined, discount: 0 };
+      } else {
+        // Có thẻ Member nhưng không có gói hiệu lực: không chiếm quota Member
+        // và không được miễn phí, song bản ghi vẫn là phiên của Member.
+        quotaAccess = { customerType: "member", quotaType: "walk_in" };
+        isMember = false;
+        plateCheck = { warn: undefined, discount: 0 };
+      }
+    }
+  }
 
   if (body.rfidUid) {
     const card = await RfidCard.findOne({ uid: body.rfidUid.trim() });
@@ -226,7 +330,7 @@ export async function createParkingSession(
     const cardPlate = normalizeRfidPlate(card.plate || "");
     if (isMemberCard) {
       if (
-        card.status !== "active" ||
+        !["active", "in-use"].includes(card.status) ||
         !card.userId ||
         !card.vehicleId ||
         !cardPlate ||
@@ -351,10 +455,14 @@ export async function createParkingSession(
     quotaType: quotaAccess.quotaType,
     ...(ownerUserId ? { ownerUserId } : {}),
     createdBy: request.user?.id,
-    checkInStaff: request.user?.id,
+    ...(request.user?.role === "staff" ? { checkInStaff: request.user.id } : {}),
     ...(rfidCard
       ? {
           rfidCardId: rfidCard.cardId || rfidCard.uid,
+          ...(body.rfidUid ? { entryRfidUid: rfidCard.uid } : {}),
+          ...(manualMemberCardUid
+            ? { entryExpectedRfidUid: manualMemberCardUid }
+            : {}),
           rfidAssignedAt: new Date(),
           rfidGate: "entry" as const,
         }
@@ -366,6 +474,25 @@ export async function createParkingSession(
       ? { entryConfidence: body.entryConfidence }
       : {}),
     ...(body.entryImageUrl ? { entryImageUrl: body.entryImageUrl } : {}),
+    entrySource: isManualEntry ? "manual" : "camera",
+    ...(isManualEntry
+      ? {
+          entryPhotoStatus:
+            body.entryPhotoStatus ||
+            (body.entryImageUrl ? "photo_captured" : "camera_unavailable"),
+          ...(body.manualEntryReason
+            ? { manualEntryReason: body.manualEntryReason.trim() }
+            : {}),
+          ...(body.visualConfirmed
+            ? {
+                visualConfirmed: true,
+                visualConfirmedBy: objectId(request.user?.id),
+                visualConfirmedAt: new Date(),
+              }
+            : {}),
+        }
+      : {}),
+    ...(body.entryRfidUnverified ? { entryRfidUnverified: true } : {}),
     ...(isMember
       ? {
           paymentStatus: "fully_paid",
@@ -380,6 +507,24 @@ export async function createParkingSession(
   });
 
   await occupySlot(slotDoc._id, session._id);
+  if (isManualEntry && request.user?.id) {
+    await createAuditLog({
+      action: "manual_entry",
+      entityType: "ParkingSession",
+      entityId: session._id,
+      performedBy: request.user.id,
+      changes: {
+        new: {
+          plate: session.plate,
+          entryPhotoStatus: session.entryPhotoStatus,
+          manualEntryReason: session.manualEntryReason,
+          visualConfirmed: session.visualConfirmed,
+          entryRfidUnverified: session.entryRfidUnverified,
+          entryExpectedRfidUid: session.entryExpectedRfidUid,
+        },
+      },
+    });
+  }
   if (rfidCard) {
     await RfidCard.updateOne(
       { _id: rfidCard._id },
@@ -409,6 +554,7 @@ export async function createParkingSession(
   response.status(201).json({
     session: serializeParkingSession(session),
     isMember,
+    memberRfidManual: Boolean(manualMemberCardUid),
     ...(plateCheck.warn ? { subscriptionWarn: plateCheck.warn } : {}),
   });
 }
@@ -424,6 +570,11 @@ export async function completeParkingSession(
       exitDetectedPlate: z.string().trim().optional(),
       exitConfidence: z.number().min(0).max(1).optional(),
       exitImageHash: z.string().trim().optional(),
+      exitSource: z.enum(["camera", "manual"]).optional(),
+      manualExitReason: z.string().trim().optional(),
+      exitPhotoStatus: z.enum(["photo_captured", "camera_unavailable"]).optional(),
+      visualConfirmed: z.boolean().optional(),
+      exitRfidManualVerified: z.boolean().optional(),
     })
     .parse(request.body);
   const session = await ParkingSession.findById(body.id);
@@ -432,7 +583,32 @@ export async function completeParkingSession(
     return;
   }
 
+  const isManualExit = body.exitSource === "manual";
+  if (isManualExit) {
+    const cameraDown = body.exitPhotoStatus === "camera_unavailable";
+    if (cameraDown) {
+      if (!body.manualExitReason || body.manualExitReason.trim().length < 8) {
+        response.status(400).json({
+          message: "Camera hỏng tại cổng ra: cần nhập lý do (tối thiểu 8 ký tự).",
+        });
+        return;
+      }
+      if (!body.visualConfirmed) {
+        response.status(400).json({
+          message: "Camera hỏng tại cổng ra: cần tích xác nhận biển số bằng mắt.",
+        });
+        return;
+      }
+    } else if (!body.exitImageUrl) {
+      response.status(400).json({
+        message: "Cho ra thủ công: cần chụp ảnh biển số minh chứng.",
+      });
+      return;
+    }
+  }
+
   await finalizeCheckout(session);
+  session.checkOutStaff = objectId(request.user?.id);
   // Ghi đè các trường ảnh checkout nếu payload cung cấp (ưu tiên ảnh mới hơn bridge)
   if (body.exitImageUrl) session.exitImageUrl = body.exitImageUrl;
   if (body.exitDetectedPlate)
@@ -440,7 +616,39 @@ export async function completeParkingSession(
   if (typeof body.exitConfidence === "number")
     session.exitConfidence = body.exitConfidence;
   if (body.exitImageHash) session.exitImageHash = body.exitImageHash;
+  session.exitSource = isManualExit ? "manual" : session.exitSource || "camera";
+  if (isManualExit) {
+    session.exitPhotoStatus =
+      body.exitPhotoStatus ||
+      (body.exitImageUrl ? "photo_captured" : "camera_unavailable");
+    if (body.manualExitReason)
+      session.manualExitReason = body.manualExitReason.trim();
+    if (body.visualConfirmed) {
+      session.visualConfirmed = true;
+      session.visualConfirmedBy = objectId(request.user?.id);
+      session.visualConfirmedAt = new Date();
+    }
+    if (body.exitRfidManualVerified) session.exitRfidManualVerified = true;
+  }
   await session.save();
+
+  if (isManualExit && request.user?.id) {
+    await createAuditLog({
+      action: "manual_exit",
+      entityType: "ParkingSession",
+      entityId: session._id,
+      performedBy: request.user.id,
+      changes: {
+        new: {
+          plate: session.plate,
+          exitPhotoStatus: session.exitPhotoStatus,
+          manualExitReason: session.manualExitReason,
+          visualConfirmed: session.visualConfirmed,
+          exitRfidManualVerified: session.exitRfidManualVerified,
+        },
+      },
+    });
+  }
 
   response.json({ session: serializeParkingSession(session) });
 }
@@ -713,6 +921,8 @@ export async function cameraEntry(request: Request, response: Response) {
       customerType: quotaAccess.customerType,
       quotaType: quotaAccess.quotaType,
     entryImageUrl: snapshot.imageUrl,
+    entrySource: "camera",
+    entryPhotoStatus: "photo_captured",
     entryDetectedPlate: detection.plate,
     entryConfidence: detection.confidence,
     entryImageHash: detection.imageHash,
@@ -778,6 +988,8 @@ export async function cameraExit(request: Request, response: Response) {
     detection.plate,
   );
   session.exitImageUrl = snapshot.imageUrl;
+  session.exitSource = "camera";
+  session.exitPhotoStatus = "photo_captured";
   session.exitDetectedPlate = detection.plate;
   session.exitConfidence = detection.confidence;
   session.exitImageHash = detection.imageHash;

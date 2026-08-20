@@ -18,9 +18,9 @@ export const parkingSessionsRoutes = Router();
 
 parkingSessionsRoutes.use(requireAuth);
 parkingSessionsRoutes.get("/", asyncHandler(listParkingSessions));
-parkingSessionsRoutes.post("/", requireRole("admin", "staff"), asyncHandler(createParkingSession));
-parkingSessionsRoutes.patch("/", requireRole("admin", "staff"), asyncHandler(completeParkingSession));
-parkingSessionsRoutes.post("/camera-entry", requireRole("admin", "staff"), asyncHandler(cameraEntry));
+parkingSessionsRoutes.post("/", requireRole("staff"), asyncHandler(createParkingSession));
+parkingSessionsRoutes.patch("/", requireRole("staff"), asyncHandler(completeParkingSession));
+parkingSessionsRoutes.post("/camera-entry", requireRole("staff"), asyncHandler(cameraEntry));
 parkingSessionsRoutes.post(
   "/:id/verification-request",
   requireRole("admin", "staff"),

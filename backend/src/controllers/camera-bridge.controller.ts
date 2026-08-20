@@ -199,6 +199,7 @@ async function buildSessionForEntry(
     ...(rfidCard
       ? {
           rfidCardId: rfidCard.cardId || rfidCard.uid,
+          entryRfidUid: rfidCard.uid,
           rfidAssignedAt: new Date(),
           rfidGate: "entry" as const,
         }
@@ -431,7 +432,40 @@ export async function pushCameraLog(request: Request, response: Response) {
   const eventUserType = openSession?.customerType === "member" || activeMemberSubscription ? "resident" : body.userType;
   const eventOwnerName = openSession?.ownerName || body.ownerName || vehicle?.ownerName || "Chưa xác định";
   const expectedRfidUid = openSession?.expectedExitRfidUid || memberCardForPlate?.uid || null;
-  const eventMetadata = { ...(body.metadata ?? {}), ...(activeMemberSubscription ? { isSubscriber: true, expectedRfidUid } : {}) };
+  const entryCardId = String(openSession?.rfidCardId || "");
+  const entryCard = entryCardId
+    ? await RfidCard.findOne({
+        $or: [
+          ...(mongoose.Types.ObjectId.isValid(entryCardId)
+            ? [{ _id: new mongoose.Types.ObjectId(entryCardId) }]
+            : []),
+          { uid: entryCardId },
+          { cardId: entryCardId },
+        ],
+      }).select("uid").lean()
+    : null;
+  const entryLog = openSession?._id
+    ? await ParkingCameraLog.findOne({
+        sessionId: openSession._id,
+        direction: "in",
+        rfidUid: { $exists: true, $nin: [null, ""] },
+      }).sort({ createdAt: -1 }).select("rfidUid").lean()
+    : null;
+  const entryRfidUid =
+    openSession?.entryRfidUid ||
+    openSession?.entryExpectedRfidUid ||
+    entryCard?.uid ||
+    entryLog?.rfidUid ||
+    null;
+  const eventMetadata = {
+    ...(body.metadata ?? {}),
+    ...(activeMemberSubscription ? { isSubscriber: true, expectedRfidUid } : {}),
+    entryRfidUnverified: Boolean(openSession?.entryRfidUnverified),
+    entryRfidExpected: Boolean(
+      !openSession?.entryRfidUid && openSession?.entryExpectedRfidUid,
+    ),
+    entryRfidUid,
+  };
   const isExitWaiting =
     body.direction === "out" && action === "skipped" && sessionId;
   cameraEventBus.emitIngest({

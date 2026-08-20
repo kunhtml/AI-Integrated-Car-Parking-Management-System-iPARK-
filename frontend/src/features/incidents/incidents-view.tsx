@@ -58,6 +58,7 @@ export function IncidentsView() {
             item.status,
           ])}
           onRowClick={(rowIndex) => handleResolve(incidentList[rowIndex])}
+          emptyMessage="Không có sự cố cần xử lý."
         />
       </div>
     </section>

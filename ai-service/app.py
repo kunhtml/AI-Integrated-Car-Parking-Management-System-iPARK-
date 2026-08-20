@@ -31,40 +31,69 @@ for _var in (
 ):
     os.environ.setdefault(_var, _TORCH_THREADS)
 
-# OCR_ENABLED=false -> KHÔNG import easyocr/torch. Dùng để test camera thuần
-# (EasyOCR + torch tốn ~500MB RAM và là nguyên nhân chính gây lag CPU).
+# OCR_ENABLED=false -> KHÔNG import paddle/torch. Dùng để test camera thuần.
 OCR_ENABLED = os.getenv("OCR_ENABLED", "true").strip().lower() not in (
     "0", "false", "no", "off",
 )
+# yolo = YOLO detect bbox + PaddleOCR (nặng, chính xác hơn)
+# opencv = OpenCV contour tìm vùng biển + PaddleOCR (nhẹ, không load Torch/Ultralytics)
+# fullframe = PaddleOCR toàn frame, không detect bbox trước
+PLATE_DETECTOR = os.getenv("PLATE_DETECTOR", "yolo").strip().lower()
+if PLATE_DETECTOR not in ("yolo", "opencv", "fullframe"):
+    PLATE_DETECTOR = "yolo"
+YOLO_NEEDED = OCR_ENABLED and PLATE_DETECTOR == "yolo"
 
 import cv2
+import gc
 import re
 import time
 import serial
 import threading
 import requests
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from flask import Flask, Response, jsonify, request
 
-if OCR_ENABLED:
-    import torch
-    from ultralytics import YOLO
-    # PaddleOCR tốt hơn EasyOCR cho biển số xe:
-    # - Hỗ trợ tiếng Việt + latin tốt, ít nhầm A↔4, 0↔D, B↔8.
-    # - Mobile model ~5MB, chạy CPU nhanh hơn EasyOCR ~2-3 lần.
-    # - Whitelist ký tự dễ dàng (chỉ 0-9 + A-Z).
-    from paddleocr import PaddleOCR
-    paddle_ocr = None  # lazy-init sau khi YOLO sẵn sàng (xem bên dưới)
+torch = None
+YOLO = None
+PaddleOCR = None
+paddle_ocr = None
 
-    # Giới hạn thread ở tầng runtime (bổ sung cho env var phía trên).
+if OCR_ENABLED:
+    # Windows: import Torch TRƯỚC PaddlePaddle. Paddle nạp OpenMP/BLAS trước
+    # sẽ làm torch/lib/shm.dll fail với WinError 127.
+    if YOLO_NEEDED:
+        try:
+            import torch
+            from ultralytics import YOLO
+            try:
+                torch.set_num_threads(int(_TORCH_THREADS))
+            except Exception:
+                pass
+            print("[OCR] Torch + Ultralytics loaded")
+        except Exception as e:
+            torch = None
+            YOLO = None
+            PLATE_DETECTOR = "opencv"
+            YOLO_NEEDED = False
+            print(
+                f"[OCR][ERROR] cannot load Torch/YOLO: {type(e).__name__}: {e}\n"
+                f"[OCR] Fallback detector=opencv (no YOLO). "
+                f"Fix: reinstall torch CPU or close apps locking VC++ DLLs."
+            )
+
+    # PaddleOCR sau Torch — latin A-Z/0-9 đủ biển VN.
     try:
-        torch.set_num_threads(int(_TORCH_THREADS))
-    except Exception:
-        pass
+        from paddleocr import PaddleOCR
+    except Exception as e:
+        PaddleOCR = None
+        print(f"[OCR][ERROR] cannot load PaddleOCR: {type(e).__name__}: {e}")
+
+    if YOLO_NEEDED and torch is not None:
+        print("[OCR] mode=yolo — Torch + Ultralytics + PaddleOCR")
+    else:
+        print(f"[OCR] mode={PLATE_DETECTOR} — PaddleOCR only (no Torch/YOLO)")
 else:
-    PaddleOCR = None
-    torch = None
-    YOLO = None
     print("[OCR] DISABLED (OCR_ENABLED=false) — chỉ chạy camera, không nhận biển số.")
 try:
     # OpenCV cũng tự parallel hoá resize/cvtColor; giới hạn để nhường CPU.
@@ -100,6 +129,19 @@ SERIAL_PORT_IN = os.getenv("SERIAL_PORT_IN", os.getenv("ESP32_IN_PORT", "COM3"))
 SERIAL_PORT_OUT = os.getenv("SERIAL_PORT_OUT", os.getenv("ESP32_OUT_PORT", "COM5"))
 CAMERA_INDEX_IN = int(os.getenv("CAMERA_INDEX_IN", "0"))
 CAMERA_INDEX_OUT = int(os.getenv("CAMERA_INDEX_OUT", "1"))
+# Chọn camera theo TÊN DirectShow (khuyến nghị trên Windows).
+# Index OpenCV KHÔNG khớp thứ tự pygrabber/Device Manager — dễ dính webcam laptop.
+# Nếu 2 cam trùng tên (cả hai "USB2.0 PC CAMERA"), dùng ordinal:
+#   CAMERA_NAME_IN=USB2.0 PC CAMERA
+#   CAMERA_NAME_ORDINAL_IN=0
+#   CAMERA_NAME_OUT=USB2.0 PC CAMERA
+#   CAMERA_NAME_ORDINAL_OUT=1
+# CAMERA_EXCLUDE: bỏ qua thiết bị có chuỗi này trong tên (vd. ACER,User Facing)
+CAMERA_NAME_IN = os.getenv("CAMERA_NAME_IN", "").strip()
+CAMERA_NAME_OUT = os.getenv("CAMERA_NAME_OUT", "").strip()
+CAMERA_NAME_ORDINAL_IN = int(os.getenv("CAMERA_NAME_ORDINAL_IN", "0"))
+CAMERA_NAME_ORDINAL_OUT = int(os.getenv("CAMERA_NAME_ORDINAL_OUT", "0"))
+CAMERA_EXCLUDE = os.getenv("CAMERA_EXCLUDE", "ACER,User Facing").strip()
 # Backend camera trên Windows. DSHOW (DirectShow) ổn định hơn MSMF cho
 # webcam thường — MSMF hay spam warning + grab fail khi nguồn chưa sẵn sàng.
 # Set CAMERA_BACKEND=MSMF/FFMPEG/ANY nếu thiết bị yêu cầu backend khác.
@@ -147,6 +189,35 @@ STREAM_MAX_WIDTH = int(os.getenv("STREAM_MAX_WIDTH", "480"))
 # 5s đủ để xe đi qua hoặc tài xế dừng lại check-in.
 PLATE_COOLDOWN_SEC = float(os.getenv("PLATE_COOLDOWN_SEC", "5.0"))
 
+# ================== RAM / OCR SCHEDULER ==================
+# legacy = 1 thread OCR mỗi camera (cũ, dễ OOM khi 2 cam cùng inference)
+# single-worker = 1 AI worker + 1-slot latest-frame mỗi hướng
+OCR_SCHEDULER_MODE = os.getenv("OCR_SCHEDULER_MODE", "single-worker").strip().lower()
+if OCR_SCHEDULER_MODE not in ("legacy", "single-worker"):
+    OCR_SCHEDULER_MODE = "single-worker"
+# Giới hạn chiều rộng frame đưa vào YOLO (0 = giữ nguyên). Scale bbox về ảnh gốc sau detect.
+YOLO_MAX_WIDTH = int(os.getenv("YOLO_MAX_WIDTH", "640"))
+# imgsz truyền vào ultralytics YOLO predict
+YOLO_IMGSZ = int(os.getenv("YOLO_IMGSZ", "640"))
+# OpenCV plate-candidate finder (khi PLATE_DETECTOR=opencv)
+OPENCV_PLATE_MAX_CANDIDATES = max(1, int(os.getenv("OPENCV_PLATE_MAX_CANDIDATES", "5")))
+OPENCV_PLATE_MIN_AREA_RATIO = float(os.getenv("OPENCV_PLATE_MIN_AREA_RATIO", "0.002"))
+OPENCV_PLATE_MAX_AREA_RATIO = float(os.getenv("OPENCV_PLATE_MAX_AREA_RATIO", "0.25"))
+OPENCV_PLATE_MIN_ASPECT = float(os.getenv("OPENCV_PLATE_MIN_ASPECT", "1.5"))
+OPENCV_PLATE_MAX_ASPECT = float(os.getenv("OPENCV_PLATE_MAX_ASPECT", "6.0"))
+# Chỉ ghi snapshot khi có biển số hợp lệ (true) hoặc ngay khi YOLO có bbox (false)
+SNAPSHOT_ON_VALID_PLATE_ONLY = os.getenv(
+    "SNAPSHOT_ON_VALID_PLATE_ONLY", "true"
+).strip().lower() not in ("0", "false", "no", "off")
+# Soft-limit RSS (MB). 0 = tắt. Vượt ngưỡng → tạm dừng submit OCR.
+AI_MEMORY_SOFT_LIMIT_MB = int(os.getenv("AI_MEMORY_SOFT_LIMIT_MB", "0"))
+AI_MEMORY_COOLDOWN_SEC = float(os.getenv("AI_MEMORY_COOLDOWN_SEC", "30"))
+# Background HTTP/lookup pool — tránh Thread() không giới hạn
+BACKGROUND_WORKER_COUNT = max(1, int(os.getenv("BACKGROUND_WORKER_COUNT", "2")))
+BACKGROUND_QUEUE_SIZE = max(1, int(os.getenv("BACKGROUND_QUEUE_SIZE", "32")))
+# Log metric RAM định kỳ (giây). 0 = tắt.
+AI_METRIC_INTERVAL_SEC = float(os.getenv("AI_METRIC_INTERVAL_SEC", "60"))
+
 # Dùng đường dẫn tuyệt đối theo thư mục app.py để không phụ thuộc CWD
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(_BASE_DIR, "static")
@@ -154,6 +225,23 @@ SNAPSHOT_DIR = os.path.join(STATIC_DIR, "snapshots")
 
 # Flask local port (cho giao diện web + RFID management UI)
 FLASK_PORT = int(os.getenv("FLASK_PORT", "5050"))
+
+# Khóa dùng chung cho mọi lần gọi YOLO/PaddleOCR trong process
+_inference_lock = threading.Lock()
+# Trạng thái memory-pressure (degraded)
+_ai_degraded_until = 0.0
+_ai_degraded_reason = ""
+_ai_metrics = {
+    "rss_mb": 0.0,
+    "frames_dropped": 0,
+    "inferences": 0,
+    "last_inference_ms": 0.0,
+    "bg_submitted": 0,
+    "bg_dropped": 0,
+    "bg_pending": 0,
+    "ocr_busy": False,
+    "scheduler_mode": OCR_SCHEDULER_MODE,
+}
 
 # ================== HTTP CLIENT ==================
 class BackendClient:
@@ -293,6 +381,182 @@ backend = BackendClient(BACKEND_URL, BRIDGE_SERVICE_TOKEN)
 serial_lock_in = threading.Lock()
 serial_lock_out = threading.Lock()
 
+# ================== BACKGROUND WORKER POOL ==================
+_bg_executor = ThreadPoolExecutor(
+    max_workers=BACKGROUND_WORKER_COUNT,
+    thread_name_prefix="ai-bg",
+)
+_bg_pending_sema = threading.BoundedSemaphore(BACKGROUND_QUEUE_SIZE)
+
+
+def _submit_background(fn, *args, **kwargs) -> bool:
+    """Chạy tác vụ nền qua pool có giới hạn. Trả False nếu queue đầy (bỏ task)."""
+    global _ai_metrics
+    if not _bg_pending_sema.acquire(blocking=False):
+        _ai_metrics["bg_dropped"] = int(_ai_metrics.get("bg_dropped", 0)) + 1
+        print(f"[BG][DROP] queue full ({BACKGROUND_QUEUE_SIZE}), skip {getattr(fn, '__name__', fn)}")
+        return False
+
+    def _runner():
+        try:
+            fn(*args, **kwargs)
+        except Exception as e:
+            print(f"[BG][ERROR] {getattr(fn, '__name__', fn)}: {type(e).__name__}: {e}")
+        finally:
+            _bg_pending_sema.release()
+            try:
+                _ai_metrics["bg_pending"] = BACKGROUND_QUEUE_SIZE - _bg_pending_sema._value
+            except Exception:
+                pass
+
+    _bg_executor.submit(_runner)
+    _ai_metrics["bg_submitted"] = int(_ai_metrics.get("bg_submitted", 0)) + 1
+    try:
+        _ai_metrics["bg_pending"] = BACKGROUND_QUEUE_SIZE - _bg_pending_sema._value
+    except Exception:
+        pass
+    return True
+
+
+def _process_rss_mb() -> float:
+    """RSS process hiện tại (MB). 0.0 nếu không đọc được."""
+    try:
+        import psutil  # optional
+        return float(psutil.Process(os.getpid()).memory_info().rss) / (1024 * 1024)
+    except Exception:
+        pass
+    if sys.platform.startswith("win"):
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            class PROCESS_MEMORY_COUNTERS(ctypes.Structure):
+                _fields_ = [
+                    ("cb", wintypes.DWORD),
+                    ("PageFaultCount", wintypes.DWORD),
+                    ("PeakWorkingSetSize", ctypes.c_size_t),
+                    ("WorkingSetSize", ctypes.c_size_t),
+                    ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                    ("PagefileUsage", ctypes.c_size_t),
+                    ("PeakPagefileUsage", ctypes.c_size_t),
+                ]
+
+            counters = PROCESS_MEMORY_COUNTERS()
+            counters.cb = ctypes.sizeof(PROCESS_MEMORY_COUNTERS)
+            handle = ctypes.windll.kernel32.GetCurrentProcess()
+            if ctypes.windll.psapi.GetProcessMemoryInfo(
+                handle, ctypes.byref(counters), counters.cb
+            ):
+                return float(counters.WorkingSetSize) / (1024 * 1024)
+        except Exception:
+            pass
+    try:
+        with open("/proc/self/status", "r", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("VmRSS:"):
+                    parts = line.split()
+                    return float(parts[1]) / 1024.0
+    except Exception:
+        pass
+    return 0.0
+
+
+def _set_memory_degraded(reason: str, cooldown_sec: float | None = None) -> None:
+    global _ai_degraded_until, _ai_degraded_reason
+    cd = AI_MEMORY_COOLDOWN_SEC if cooldown_sec is None else cooldown_sec
+    _ai_degraded_until = time.time() + max(1.0, cd)
+    _ai_degraded_reason = reason or "memory-pressure"
+    print(f"[AI][DEGRADED] reason={_ai_degraded_reason} cooldown={cd:.0f}s")
+
+
+def _is_ai_degraded() -> bool:
+    return time.time() < _ai_degraded_until
+
+
+def _check_memory_pressure() -> bool:
+    """True nếu đang/vừa kích hoạt degraded do vượt soft-limit."""
+    global _ai_metrics
+    if AI_MEMORY_SOFT_LIMIT_MB <= 0:
+        return _is_ai_degraded()
+    rss = _process_rss_mb()
+    _ai_metrics["rss_mb"] = round(rss, 1)
+    if rss >= AI_MEMORY_SOFT_LIMIT_MB:
+        _set_memory_degraded("memory-pressure")
+        try:
+            gc.collect()
+        except Exception:
+            pass
+        return True
+    return _is_ai_degraded()
+
+
+def _resize_for_yolo(frame, max_width: int):
+    """Resize frame cho YOLO. Trả (frame_small, scale) với scale = small/original."""
+    if frame is None or max_width <= 0:
+        return frame, 1.0
+    h, w = frame.shape[:2]
+    if w <= max_width:
+        return frame, 1.0
+    scale = max_width / float(w)
+    new_w = max_width
+    new_h = max(1, int(h * scale))
+    small = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+    return small, scale
+
+
+def _scale_boxes_to_original(boxes, scale: float):
+    """Quy đổi bbox từ ảnh YOLO về toạ độ ảnh gốc."""
+    if not boxes or scale <= 0 or abs(scale - 1.0) < 1e-9:
+        return boxes
+    inv = 1.0 / scale
+    out = []
+    for item in boxes:
+        if len(item) >= 5:
+            x1, y1, x2, y2, conf = item[:5]
+            rest = item[5:]
+            out.append((
+                int(x1 * inv), int(y1 * inv), int(x2 * inv), int(y2 * inv), conf, *rest
+            ))
+        else:
+            out.append(item)
+    return out
+
+
+def _metric_logger_loop():
+    """Log RSS + OCR metrics định kỳ."""
+    while True:
+        try:
+            interval = AI_METRIC_INTERVAL_SEC
+            if interval <= 0:
+                time.sleep(30)
+                continue
+            time.sleep(interval)
+            rss = _process_rss_mb()
+            _ai_metrics["rss_mb"] = round(rss, 1)
+            degraded = _is_ai_degraded()
+            print(
+                "[AI][METRIC] "
+                f"rss_mb={rss:.1f} "
+                f"dropped={_ai_metrics.get('frames_dropped', 0)} "
+                f"inferences={_ai_metrics.get('inferences', 0)} "
+                f"last_inf_ms={_ai_metrics.get('last_inference_ms', 0):.0f} "
+                f"bg_sub={_ai_metrics.get('bg_submitted', 0)} "
+                f"bg_drop={_ai_metrics.get('bg_dropped', 0)} "
+                f"bg_pend={_ai_metrics.get('bg_pending', 0)} "
+                f"busy={_ai_metrics.get('ocr_busy', False)} "
+                f"mode={_ai_metrics.get('scheduler_mode', OCR_SCHEDULER_MODE)} "
+                f"degraded={degraded}"
+                + (f"({_ai_degraded_reason})" if degraded else "")
+            )
+            if AI_MEMORY_SOFT_LIMIT_MB > 0 and rss >= AI_MEMORY_SOFT_LIMIT_MB:
+                _set_memory_degraded("memory-pressure")
+        except Exception as e:
+            print(f"[AI][METRIC][ERROR] {type(e).__name__}: {e}")
+            time.sleep(30)
+
 
 def _sanitize_field(s: str) -> str:
     return (s or "").replace("|", " ").replace("\n", " ").replace("\r", " ").strip()
@@ -389,6 +653,224 @@ arduino_out = safe_serial(SERIAL_PORT_OUT)
 
 
 # ==== CẤU HÌNH CAMERA ====
+def _list_dshow_device_names() -> list[str]:
+    """Liệt kê tên camera DirectShow theo đúng thứ tự index OpenCV (Windows)."""
+    # 1) pygrabber — map index OpenCV CAP_DSHOW chính xác nhất
+    try:
+        from pygrabber.dshow_graph import FilterGraph  # type: ignore
+
+        names = list(FilterGraph().get_input_devices() or [])
+        if names:
+            return [str(n) for n in names]
+    except Exception as e:
+        print(f"[CAM] pygrabber unavailable ({type(e).__name__}: {e})")
+
+    # 2) ffmpeg -list_devices (thứ tự thường khớp DSHOW, không luôn 100%)
+    try:
+        import re
+        import subprocess
+
+        r = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-list_devices", "true", "-f", "dshow", "-i", "dummy"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=12,
+        )
+        text = (r.stderr or "") + (r.stdout or "")
+        names = []
+        for line in text.splitlines():
+            m = re.search(r'"([^"]+)"\s*\(video\)', line)
+            if m:
+                names.append(m.group(1))
+        if names:
+            print("[CAM] device list via ffmpeg (verify against OpenCV index if wrong)")
+            return names
+    except Exception as e:
+        print(f"[CAM] ffmpeg device list failed: {type(e).__name__}: {e}")
+    return []
+
+
+def _exclude_tokens() -> list[str]:
+    return [t.strip().lower() for t in CAMERA_EXCLUDE.split(",") if t.strip()]
+
+
+def _is_excluded_name(name: str) -> bool:
+    low = (name or "").lower()
+    return any(tok in low for tok in _exclude_tokens())
+
+
+def _probe_index_openable(index: int, hold_ms: float = 0.25) -> bool:
+    """True nếu OpenCV mở được index và đọc được ít nhất 1 frame."""
+    cap = None
+    try:
+        cap = cv2.VideoCapture(int(index), _OPEN_BACKEND)
+        if not cap.isOpened():
+            return False
+        try:
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        except Exception:
+            pass
+        time.sleep(max(0.0, hold_ms))
+        for _ in range(8):
+            ok, frame = cap.read()
+            if ok and frame is not None:
+                return True
+        return False
+    except Exception:
+        return False
+    finally:
+        if cap is not None:
+            try:
+                cap.release()
+            except Exception:
+                pass
+
+
+def _candidate_indices_for_role(
+    role: str,
+    fallback_index: int,
+    name_query: str,
+    ordinal: int,
+    devices: list[str],
+) -> list[int]:
+    """Danh sách index ưu tiên cho role (chưa kiểm tra openable)."""
+    q = (name_query or "").strip().lower()
+    if q and devices:
+        matches = [
+            i for i, n in enumerate(devices)
+            if q in n.lower() and not _is_excluded_name(n)
+        ]
+        if matches:
+            ord_i = max(0, int(ordinal))
+            # Ưu tiên ordinal, sau đó các match còn lại
+            ordered = matches[ord_i:] + matches[:ord_i]
+            print(
+                f"[CAM][{role}] name='{name_query}' ordinal={ord_i} "
+                f"candidates={ordered} "
+                f"({', '.join(devices[i] for i in ordered)})"
+            )
+            return ordered
+        print(
+            f"[CAM][{role}][WARN] không match tên '{name_query}' sau exclude. "
+            f"Thử fallback/index không excluded."
+        )
+
+    # Fallback: index cấu hình, rồi mọi cam không excluded
+    out: list[int] = []
+    if fallback_index >= 0:
+        out.append(int(fallback_index))
+    if devices:
+        for i, n in enumerate(devices):
+            if not _is_excluded_name(n) and i not in out:
+                out.append(i)
+    else:
+        # Không có device list — quét vài index thường gặp
+        for i in range(0, 6):
+            if i not in out:
+                out.append(i)
+    return out
+
+
+def _resolve_both_camera_indices() -> tuple[int, int]:
+    """
+    Chọn 2 index OpenCV thực sự mở được cho IN/OUT.
+    Bỏ webcam laptop (CAMERA_EXCLUDE). Không tin index "trên giấy".
+    """
+    devices = _list_dshow_device_names()
+    if devices:
+        print(f"[CAM] DirectShow devices ({len(devices)}):")
+        for i, n in enumerate(devices):
+            flag = " [EXCLUDED]" if _is_excluded_name(n) else ""
+            print(f"[CAM]   idx {i}: {n}{flag}")
+
+    in_cands = _candidate_indices_for_role(
+        "in", CAMERA_INDEX_IN, CAMERA_NAME_IN, CAMERA_NAME_ORDINAL_IN, devices
+    )
+    out_cands = _candidate_indices_for_role(
+        "out", CAMERA_INDEX_OUT, CAMERA_NAME_OUT, CAMERA_NAME_ORDINAL_OUT, devices
+    )
+
+    # Loại candidate bị exclude nếu biết tên
+    def _ok_name(idx: int) -> bool:
+        if not devices or idx < 0 or idx >= len(devices):
+            return True
+        return not _is_excluded_name(devices[idx])
+
+    in_cands = [i for i in in_cands if _ok_name(i)]
+    out_cands = [i for i in out_cands if _ok_name(i)]
+
+    openable_cache: dict[int, bool] = {}
+
+    def _openable(idx: int) -> bool:
+        if idx not in openable_cache:
+            ok = _probe_index_openable(idx)
+            openable_cache[idx] = ok
+            label = devices[idx] if devices and 0 <= idx < len(devices) else "?"
+            print(f"[CAM] probe index={idx} ({label}): {'OK' if ok else 'FAIL'}")
+        return openable_cache[idx]
+
+    chosen_in = None
+    for idx in in_cands:
+        if _openable(idx):
+            chosen_in = idx
+            break
+
+    chosen_out = None
+    for idx in out_cands:
+        if chosen_in is not None and idx == chosen_in:
+            continue
+        if _openable(idx):
+            chosen_out = idx
+            break
+
+    # Nếu OUT không có cam riêng, thử mọi openable còn lại
+    if chosen_out is None:
+        all_try = []
+        for seq in (out_cands, in_cands, list(range(0, max(6, len(devices) + 1)))):
+            for idx in seq:
+                if idx not in all_try:
+                    all_try.append(idx)
+        for idx in all_try:
+            if chosen_in is not None and idx == chosen_in:
+                continue
+            if not _ok_name(idx):
+                continue
+            if _openable(idx):
+                chosen_out = idx
+                break
+
+    if chosen_in is None and chosen_out is not None:
+        chosen_in, chosen_out = chosen_out, None
+
+    if chosen_in is None:
+        # Bó buộc fallback — có thể là laptop nếu không còn gì
+        chosen_in = CAMERA_INDEX_IN
+        print(
+            f"[CAM][ERROR] Không probe được camera nào. "
+            f"Fallback IN={chosen_in}. Kiểm tra USB / process khác đang giữ cam."
+        )
+    if chosen_out is None:
+        chosen_out = chosen_in
+        print(
+            f"[CAM][WARN] Chỉ có 1 camera OpenCV mở được. "
+            f"OUT tạm dùng chung index={chosen_out}. "
+            f"Thường do USB cam #2 bị process khác giữ hoặc driver không expose index."
+        )
+
+    def _label(idx: int) -> str:
+        if devices and 0 <= idx < len(devices):
+            return devices[idx]
+        return "?"
+
+    print(
+        f"[CAM] resolved IN={chosen_in} ({_label(chosen_in)}), "
+        f"OUT={chosen_out} ({_label(chosen_out)})"
+    )
+    return int(chosen_in), int(chosen_out)
+
+
 def _open_camera(index):
     """Mở camera bằng backend chỉ định.
 
@@ -401,7 +883,7 @@ def _open_camera(index):
         cap.release()
         print(
             f"[CAM] Cannot open camera index={index} "
-            f"(backend={CAMERA_BACKEND}). OCR will be skipped for this slot."
+            f"(backend={CAMERA_BACKEND}). Slot offline until reconnect."
         )
         return None
     # Giảm buffer nội bộ để giảm độ trễ + fail streak ngắn hơn khi reconnect.
@@ -409,6 +891,16 @@ def _open_camera(index):
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
     except Exception:
         pass
+    # Đọc thử 1 frame để log nhanh cam có tín hiệu không
+    try:
+        ok, frame = cap.read()
+        if ok and frame is not None:
+            h, w = frame.shape[:2]
+            print(f"[CAM] opened index={index} frame={w}x{h} mean={float(frame.mean()):.1f}")
+        else:
+            print(f"[CAM] opened index={index} but first read failed (black/busy?)")
+    except Exception as e:
+        print(f"[CAM] opened index={index} but probe read error: {e}")
     return cap
 
 
@@ -423,56 +915,82 @@ def _safe_read(cap, retries=2):
     return False, None
 
 
+# Resolve index một lần lúc boot (và dùng lại khi reconnect)
+_CAM_INDEX_IN_RESOLVED, _CAM_INDEX_OUT_RESOLVED = _resolve_both_camera_indices()
+if _CAM_INDEX_IN_RESOLVED == _CAM_INDEX_OUT_RESOLVED:
+    print(
+        f"[CAM][WARN] IN và OUT cùng index={_CAM_INDEX_IN_RESOLVED}. "
+        f"Hai hướng dùng chung 1 camera."
+    )
+
+
 def _reconnect(index):
     """Thử mở lại camera; trả về cap mới hoặc None nếu vẫn fail."""
     return _open_camera(index)
 
 
 print(
-    f"[CAM] Using CAMERA_INDEX_IN={CAMERA_INDEX_IN}, "
-    f"CAMERA_INDEX_OUT={CAMERA_INDEX_OUT}, backend={CAMERA_BACKEND}"
+    f"[CAM] backend={CAMERA_BACKEND} "
+    f"IN index={_CAM_INDEX_IN_RESOLVED} (cfg_index={CAMERA_INDEX_IN}, name={CAMERA_NAME_IN!r}) "
+    f"OUT index={_CAM_INDEX_OUT_RESOLVED} (cfg_index={CAMERA_INDEX_OUT}, name={CAMERA_NAME_OUT!r}) "
+    f"exclude={CAMERA_EXCLUDE!r}"
 )
-cap_in = _open_camera(CAMERA_INDEX_IN)
-cap_out = _open_camera(CAMERA_INDEX_OUT)
+cap_in = _open_camera(_CAM_INDEX_IN_RESOLVED)
+if _CAM_INDEX_OUT_RESOLVED == _CAM_INDEX_IN_RESOLVED:
+    # Không share handle (2 thread đọc 1 VideoCapture → race/đen). OUT offline.
+    cap_out = None
+    print(
+        "[CAM][WARN] OUT offline: chỉ resolve được 1 camera. "
+        "Đóng app/browser khác đang giữ USB cam #2 rồi restart."
+    )
+else:
+    cap_out = _open_camera(_CAM_INDEX_OUT_RESOLVED)
 
-# Chỉ load PaddleOCR khi OCR được bật — model ~5MB, nhanh hơn EasyOCR.
-# use_angle_cls=False: biển số xe đã được YOLO crop vuông, không cần xoay.
-# lang='en': latin alphabet (A-Z + 0-9) đủ cho biển số VN, nhẹ hơn 'vi' nhiều.
-# show_log=False: tránh spam PaddleOCR info log ra stdout.
+# Chỉ load PaddleOCR khi OCR được bật — model mobile ~5MB.
+# use_angle_cls=False: crop biển thường đã thẳng.
+# lang='en': latin A-Z/0-9 đủ biển VN, nhẹ hơn 'vi'.
 paddle_ocr = PaddleOCR(use_angle_cls=False, lang='en', show_log=False) if OCR_ENABLED else None
 
-# YOLO model cho detect bbox biển số — chạy nhanh (~20-50ms) trên CPU.
-# Sau khi YOLO tìm được bbox, crop ra rồi đưa vào PaddleOCR đọc text.
-# PyTorch >=2.6 đổi `torch.load(weights_only=True)` mặc định → block load
-# pickle có custom class (ultralytics DetectionModel). best.pt ở đây là
-# file local tin cậy nên ép weights_only=False qua wrapper.
+# YOLO chỉ load khi PLATE_DETECTOR=yolo.
+# PyTorch >=2.6 weights_only=True mặc định → patch load best.pt local.
 YOLO_MODEL_PATH = os.path.join(_BASE_DIR, "yolo_model", "best.pt")
-if OCR_ENABLED and YOLO is not None:
+yolo_model = None
+YOLO_CONF_THR = float(os.getenv("YOLO_CONF_THR", "0.25"))
+if YOLO_NEEDED and YOLO is not None:
     try:
         import torch.serialization as _torch_ser
 
         _orig_torch_load = _torch_ser.load
 
         def _torch_load_unsafe(*args, **kwargs):
-            """Cho phép load pickle chứa class ultralytics — best.pt là file local."""
             kwargs.setdefault("weights_only", False)
             return _orig_torch_load(*args, **kwargs)
 
-        # Patch cả 2 vị trí ultralytics có thể gọi (torch.load trực tiếp + torch.serialization.load)
         import torch as _torch
         _torch.load = _torch_load_unsafe
         _torch_ser.load = _torch_load_unsafe
     except Exception as _e:
         print(f"[YOLO][WARN] cannot patch torch.load: {_e}")
     yolo_model = YOLO(YOLO_MODEL_PATH)
+    try:
+        inner = getattr(yolo_model, "model", None)
+        if inner is not None and hasattr(inner, "eval"):
+            inner.eval()
+    except Exception as _e:
+        print(f"[YOLO][WARN] cannot set eval(): {_e}")
+    print(
+        f"[YOLO] Loaded model from {YOLO_MODEL_PATH} "
+        f"(max_width={YOLO_MAX_WIDTH}, imgsz={YOLO_IMGSZ})"
+    )
 else:
-    yolo_model = None
-YOLO_CONF_THR = float(os.getenv("YOLO_CONF_THR", "0.25"))
+    print(f"[YOLO] DISABLED — detector={PLATE_DETECTOR}, ocr_enabled={OCR_ENABLED}")
 
-if yolo_model is not None:
-    print(f"[YOLO] Loaded model from {YOLO_MODEL_PATH}")
-else:
-    print("[YOLO] DISABLED — YOLO not loaded (OCR_ENABLED=false or ultralytics missing).")
+print(
+    f"[AI] detector={PLATE_DETECTOR} scheduler={OCR_SCHEDULER_MODE} "
+    f"snapshot_valid_only={SNAPSHOT_ON_VALID_PLATE_ONLY} "
+    f"bg_workers={BACKGROUND_WORKER_COUNT} bg_queue={BACKGROUND_QUEUE_SIZE} "
+    f"mem_soft_limit_mb={AI_MEMORY_SOFT_LIMIT_MB}"
+)
 
 pattern = re.compile(r"^\d{2}[A-Z]-?\d{4,5}$")
 # YOLO + EasyOCR đã đủ chính xác để nhận biển số trong 1 frame.
@@ -622,161 +1140,269 @@ def _save_plate_snapshot(crop_img, full_frame, direction: str, plate_hint: str =
     return f"/static/snapshots/{base_name}_crop.jpg"
 
 
+def _find_plate_boxes_opencv(frame) -> list:
+    """Tìm ứng viên bbox biển số bằng OpenCV (contour + aspect ratio).
+
+    Trả list (x1,y1,x2,y2,score) trên toạ độ ảnh gốc, score ~0.4-0.9 heuristic.
+    Không dùng neural net — nhẹ RAM/CPU hơn YOLO rất nhiều.
+    """
+    if frame is None or frame.size == 0:
+        return []
+    h0, w0 = frame.shape[:2]
+    work = frame
+    scale = 1.0
+    if OCR_MAX_WIDTH > 0 and w0 > OCR_MAX_WIDTH:
+        scale = OCR_MAX_WIDTH / float(w0)
+        work = cv2.resize(
+            frame,
+            (OCR_MAX_WIDTH, max(1, int(h0 * scale))),
+            interpolation=cv2.INTER_AREA,
+        )
+    gray = cv2.cvtColor(work, cv2.COLOR_BGR2GRAY)
+    gray = cv2.bilateralFilter(gray, 9, 75, 75)
+    edges = cv2.Canny(gray, 60, 180)
+    edges = cv2.dilate(edges, cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)), iterations=1)
+
+    contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    wh, ww = work.shape[:2]
+    min_area = max(80.0, OPENCV_PLATE_MIN_AREA_RATIO * ww * wh)
+    max_area = OPENCV_PLATE_MAX_AREA_RATIO * ww * wh
+    cands = []
+    for cnt in contours:
+        area = cv2.contourArea(cnt)
+        if area < min_area or area > max_area:
+            continue
+        x, y, w, h = cv2.boundingRect(cnt)
+        if h <= 0 or w <= 0:
+            continue
+        aspect = w / float(h)
+        # Biển 1 dòng ~3-5; biển 2 dòng VN có thể ~1.5-2.5
+        if aspect < OPENCV_PLATE_MIN_ASPECT or aspect > OPENCV_PLATE_MAX_ASPECT:
+            continue
+        # Ưu tiên hình chữ nhật "đầy" contour
+        rect_area = float(w * h)
+        fill = area / rect_area if rect_area > 0 else 0.0
+        if fill < 0.25:
+            continue
+        # Score heuristic: aspect gần 4.0 + fill cao
+        aspect_score = 1.0 - min(1.0, abs(aspect - 3.8) / 3.0)
+        score = 0.35 + 0.35 * fill + 0.30 * max(0.0, aspect_score)
+        cands.append((x, y, x + w, y + h, float(min(0.95, score))))
+
+    if not cands:
+        return []
+
+    # Non-max soft: giữ box lớn/score cao, bỏ box lồng nhau mạnh
+    cands.sort(key=lambda b: (b[4], (b[2] - b[0]) * (b[3] - b[1])), reverse=True)
+    kept = []
+    for box in cands:
+        x1, y1, x2, y2, sc = box
+        drop = False
+        for kx1, ky1, kx2, ky2, _ in kept:
+            ix1, iy1 = max(x1, kx1), max(y1, ky1)
+            ix2, iy2 = min(x2, kx2), min(y2, ky2)
+            iw, ih = max(0, ix2 - ix1), max(0, iy2 - iy1)
+            inter = iw * ih
+            a1 = max(1, (x2 - x1) * (y2 - y1))
+            a2 = max(1, (kx2 - kx1) * (ky2 - ky1))
+            if inter / float(min(a1, a2)) > 0.55:
+                drop = True
+                break
+        if not drop:
+            kept.append(box)
+        if len(kept) >= OPENCV_PLATE_MAX_CANDIDATES:
+            break
+
+    # Scale về ảnh gốc
+    if abs(scale - 1.0) < 1e-9:
+        return kept
+    return _scale_boxes_to_original(kept, scale)
+
+
+def _ocr_parts_from_crop(crop, min_prob: float = 0.3) -> list[str]:
+    """Chạy PaddleOCR trên crop, trả list text đã clean."""
+    if crop is None or getattr(crop, "size", 0) == 0 or paddle_ocr is None:
+        return []
+    try:
+        ocr_raw = paddle_ocr.ocr(crop, cls=False)
+    except Exception as e:
+        print(f"[OCR][ERROR] {type(e).__name__}: {e}")
+        if "not enough memory" in str(e).lower() or "out of memory" in str(e).lower():
+            _set_memory_degraded("oom")
+        return []
+    if not ocr_raw or ocr_raw[0] is None:
+        return []
+    parts = []
+    for item in ocr_raw[0]:
+        try:
+            _, (text, prob) = item
+        except Exception:
+            continue
+        text_clean = re.sub(r"[^A-Z0-9]", "", (text or "").upper())
+        if len(text_clean) >= 2 and float(prob) > min_prob:
+            parts.append(text_clean)
+    return parts
+
+
+def _join_plate_parts(parts: list[str]) -> str | None:
+    if not parts:
+        return None
+    if len(parts) == 1:
+        return parts[0]
+    return parts[0] + "".join(parts[1:])
+
+
 def process_frame(frame, plate_counter, last_plate, last_seen_time, prefix, ser, lock=None, direction="in"):
-    global last_boxes_in, last_boxes_out
+    global last_boxes_in, last_boxes_out, _ai_metrics
     # OCR tắt -> trả frame nguyên bản, không tốn CPU.
     if not OCR_ENABLED or paddle_ocr is None:
         return frame, plate_counter, last_plate, last_seen_time, "", ""
 
     detected_snap = ""
+    pending_crop = None
     is_in = (direction == "in")
+    t0 = time.time()
+    candidate = None
+    detector = PLATE_DETECTOR if yolo_model is not None or PLATE_DETECTOR != "yolo" else "opencv"
+    if PLATE_DETECTOR == "yolo" and yolo_model is None:
+        detector = "opencv"
 
-    # ---- BƯỚC 1: YOLO detect bbox biển số (chạy nhanh ~20-50ms) ----
-    if yolo_model is not None:
-        results = yolo_model(frame, conf=YOLO_CONF_THR, verbose=False)
+    # Mọi YOLO/PaddleOCR đi qua 1 lock — chặn peak RAM khi 2 cam cùng inference.
+    with _inference_lock:
         boxes = []
-        if results and len(results) > 0:
-            for r in results:
-                if r.boxes is not None and len(r.boxes) > 0:
-                    for box in r.boxes:
-                        x1, y1, x2, y2 = box.xyxy[0].tolist()
-                        conf = float(box.conf[0])
-                        boxes.append((int(x1), int(y1), int(x2), int(y2), conf))
+        # ---- BƯỚC 1: tìm bbox ứng viên ----
+        if detector == "yolo" and yolo_model is not None:
+            yolo_frame, yolo_scale = _resize_for_yolo(frame, YOLO_MAX_WIDTH)
+            predict_kwargs = {
+                "conf": YOLO_CONF_THR,
+                "verbose": False,
+                "imgsz": YOLO_IMGSZ,
+            }
+            try:
+                if torch is not None:
+                    with torch.inference_mode():
+                        results = yolo_model(yolo_frame, **predict_kwargs)
+                else:
+                    results = yolo_model(yolo_frame, **predict_kwargs)
+            except Exception as e:
+                print(f"[YOLO][ERROR] {direction}: {type(e).__name__}: {e}")
+                if "not enough memory" in str(e).lower() or "out of memory" in str(e).lower():
+                    _set_memory_degraded("oom")
+                return frame, plate_counter, last_plate, last_seen_time, "", ""
 
-        if not boxes:
-            # Không tìm thấy bbox -> clear overlay boxes, skip OCR/chụp
+            if results and len(results) > 0:
+                for r in results:
+                    if r.boxes is not None and len(r.boxes) > 0:
+                        for box in r.boxes:
+                            x1, y1, x2, y2 = box.xyxy[0].tolist()
+                            conf = float(box.conf[0])
+                            boxes.append((int(x1), int(y1), int(x2), int(y2), conf))
+            try:
+                del results
+            except Exception:
+                pass
+            if yolo_frame is not frame:
+                try:
+                    del yolo_frame
+                except Exception:
+                    pass
+            boxes = _scale_boxes_to_original(boxes, yolo_scale)
+            if boxes:
+                max_conf = max(b[4] for b in boxes)
+                if max_conf < 0.5:
+                    print(f"[YOLO][{direction}] confs={[b[4] for b in boxes]} (max={max_conf:.2f})")
+
+        elif detector == "opencv":
+            boxes = _find_plate_boxes_opencv(frame)
+
+        # fullframe hoặc không có box -> OCR toàn frame (đã resize)
+        if detector == "fullframe" or not boxes:
+            if detector != "fullframe" and not boxes:
+                if is_in:
+                    last_boxes_in = []
+                else:
+                    last_boxes_out = []
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            if OCR_MAX_WIDTH > 0 and gray.shape[1] > OCR_MAX_WIDTH:
+                sc = OCR_MAX_WIDTH / gray.shape[1]
+                gray = cv2.resize(
+                    gray,
+                    (OCR_MAX_WIDTH, max(1, int(gray.shape[0] * sc))),
+                    interpolation=cv2.INTER_AREA,
+                )
+            parts_all = _ocr_parts_from_crop(gray, min_prob=0.5)
+            candidate = _join_plate_parts(parts_all)
+        else:
+            tag = "YOLO" if detector == "yolo" else "CV"
+            for (x1, y1, x2, y2, conf) in boxes:
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
+                cv2.putText(
+                    frame, f"{tag} {conf:.2f}", (x1, y1 - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2,
+                )
+            overlay_boxes = [
+                (x1, y1, x2, y2, conf, "") for (x1, y1, x2, y2, conf) in boxes
+            ]
             if is_in:
-                last_boxes_in = []
+                last_boxes_in = overlay_boxes
             else:
-                last_boxes_out = []
-            return frame, plate_counter, last_plate, last_seen_time, "", ""
+                last_boxes_out = overlay_boxes
 
-        # Log confidences để debug khi bị thấp (0.3-0.5 hay gặp với biển số)
-        confs = [b[4] for b in boxes]
-        max_conf = max(confs) if confs else 0.0
-        # Chỉ log khi conf thấp để tránh spam
-        if max_conf < 0.5:
-            print(f"[YOLO][{direction}] confs={confs} (max={max_conf:.2f}, thr={YOLO_CONF_THR})")
+            # OCR lần lượt các crop; dừng khi ra plate hợp lệ
+            h_img, w_img = frame.shape[:2]
+            pad = 10
+            best_parts = []
+            best_box = boxes[0]
+            for (x1, y1, x2, y2, conf) in boxes:
+                cx1 = max(0, x1 - pad)
+                cy1 = max(0, y1 - pad)
+                cx2 = min(w_img, x2 + pad)
+                cy2 = min(h_img, y2 + pad)
+                crop = frame[cy1:cy2, cx1:cx2]
+                if crop.size == 0:
+                    continue
+                parts = _ocr_parts_from_crop(crop, min_prob=0.3)
+                joined = _join_plate_parts(parts)
+                if joined and pattern.match(joined):
+                    best_parts = parts
+                    best_box = (x1, y1, x2, y2, conf)
+                    pending_crop = crop
+                    candidate = joined
+                    break
+                if parts and (not best_parts or len(joined or "") > len(_join_plate_parts(best_parts) or "")):
+                    best_parts = parts
+                    best_box = (x1, y1, x2, y2, conf)
+                    pending_crop = crop
+                    candidate = joined
 
-        # Vẽ bbox YOLO lên frame (debug visual) - chỉ vẽ tạm trên frame copy
-        for (x1, y1, x2, y2, conf) in boxes:
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
-            cv2.putText(frame, f"YOLO {conf:.2f}", (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+            if pending_crop is None and best_box is not None:
+                x1, y1, x2, y2, _ = best_box
+                cx1 = max(0, x1 - pad)
+                cy1 = max(0, y1 - pad)
+                cx2 = min(w_img, x2 + pad)
+                cy2 = min(h_img, y2 + pad)
+                pending_crop = frame[cy1:cy2, cx1:cx2]
 
-        # Lưu boxes vào global để MJPEG stream vẽ overlay lên last_frame.
-        # Tuple (x1, y1, x2, y2, conf, ocr_text). ocr_text ban đầu rỗng,
-        # sẽ được cập nhật sau khi OCR xong (nếu ra được text).
-        overlay_boxes = [
-            (x1, y1, x2, y2, conf, "") for (x1, y1, x2, y2, conf) in boxes
-        ]
-        if is_in:
-            last_boxes_in = overlay_boxes
-        else:
-            last_boxes_out = overlay_boxes
+            if pending_crop is not None and pending_crop.size > 0:
+                if not SNAPSHOT_ON_VALID_PLATE_ONLY:
+                    detected_snap = _save_plate_snapshot(
+                        pending_crop, frame, direction, plate_hint=""
+                    )
 
-        # ---- BƯỚC 2: CHỤP crop + full frame ra đĩa (bằng chứng) ----
-        # Lưu 1 lần duy nhất cho lần detect này, dùng bbox đầu tiên
-        # (YOLO thường chỉ trả 1 bbox cho biển số).
-        first_box = boxes[0]
-        x1, y1, x2, y2, _ = first_box
-        h_img, w_img = frame.shape[:2]
-        pad = 10
-        cx1 = max(0, x1 - pad)
-        cy1 = max(0, y1 - pad)
-        cx2 = min(w_img, x2 + pad)
-        cy2 = min(h_img, y2 + pad)
-        crop = frame[cy1:cy2, cx1:cx2]
+            if candidate:
+                updated = [
+                    (bx1, by1, bx2, by2, bconf, candidate)
+                    for (bx1, by1, bx2, by2, bconf, _) in overlay_boxes
+                ]
+                if is_in:
+                    last_boxes_in = updated
+                else:
+                    last_boxes_out = updated
 
-        if crop.size > 0:
-            # CHỤP trước, đặt tên tạm "nopl" — sẽ giữ nguyên nếu OCR ra
-            # được plate hợp lệ. Lưu NGAY khi detect để có bằng chứng kể
-            # cả khi OCR sau đó fail.
-            detected_snap = _save_plate_snapshot(
-                crop, frame, direction, plate_hint=""
-            )
+    _ai_metrics["inferences"] = int(_ai_metrics.get("inferences", 0)) + 1
+    _ai_metrics["last_inference_ms"] = (time.time() - t0) * 1000.0
 
-            # ---- BƯỚC 3: PaddleOCR đọc text trên crop trong RAM ----
-            # PaddleOCR.ocr() trả về List[List[Tuple[bbox, (text, prob)]]]
-            # nếu có kết quả, hoặc [None] nếu không. Format khác EasyOCR
-            # nên phải adapt.
-            # cls=False: đã disable angle classifier khi init nên không cần.
-            ocr_raw = paddle_ocr.ocr(crop, cls=False)
-            if ocr_raw and ocr_raw[0] is not None:
-                ocr_results = ocr_raw[0]  # list of (bbox, (text, prob))
-            else:
-                ocr_results = []
-        else:
-            ocr_results = []
-
-        parts_all = []
-        for item in ocr_results:
-            # PaddleOCR item: (bbox, (text, prob)) — bbox là list 4 điểm
-            bbox_ocr, (text, prob) = item
-            text_clean = re.sub(r'[^A-Z0-9]', '', text.upper())
-            if len(text_clean) >= 2 and prob > 0.3:
-                parts_all.append(text_clean)
-                # Vẽ kết quả OCR lên frame (tọa độ gốc)
-                if bbox_ocr is not None and len(bbox_ocr) >= 2:
-                    tl = bbox_ocr[0]
-                    br = bbox_ocr[2]
-                    pt1 = (int(tl[0]) + cx1, int(tl[1]) + cy1)
-                    pt2 = (int(br[0]) + cx1, int(br[1]) + cy1)
-                    cv2.rectangle(frame, pt1, pt2, (0, 255, 0), 2)
-                    cv2.putText(frame, text_clean, (pt1[0], pt1[1] - 10),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-
-        if len(parts_all) == 1:
-            candidate = parts_all[0]
-        elif len(parts_all) >= 2:
-            candidate = parts_all[0] + "".join(parts_all[1:])
-        else:
-            candidate = None
-
-        # Cập nhật text OCR vào overlay_boxes để MJPEG stream hiển thị
-        # luôn biển số ngay khi YOLO detect (không cần đợi cooldown).
-        if candidate and yolo_model is not None:
-            updated = []
-            for (bx1, by1, bx2, by2, bconf, _) in overlay_boxes:
-                updated.append((bx1, by1, bx2, by2, bconf, candidate))
-            if is_in:
-                last_boxes_in = updated
-            else:
-                last_boxes_out = updated
-
-    else:
-        # Fallback: không có YOLO -> OCR trên toàn frame
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        scale = 1.0
-        if OCR_MAX_WIDTH > 0 and gray.shape[1] > OCR_MAX_WIDTH:
-            scale = OCR_MAX_WIDTH / gray.shape[1]
-            gray = cv2.resize(
-                gray,
-                (OCR_MAX_WIDTH, max(1, int(gray.shape[0] * scale))),
-                interpolation=cv2.INTER_AREA,
-            )
-        ocr_raw = paddle_ocr.ocr(gray, cls=False)
-        if ocr_raw and ocr_raw[0] is not None:
-            results = ocr_raw[0]
-        else:
-            results = []
-        parts_all = []
-        for item in results:
-            # PaddleOCR item: (bbox, (text, prob))
-            _, (text, prob) = item
-            text_clean = re.sub(r'[^A-Z0-9]', '', text.upper())
-            if len(text_clean) >= 2 and prob > 0.5:
-                parts_all.append(text_clean)
-        if len(parts_all) == 1:
-            candidate = parts_all[0]
-        elif len(parts_all) >= 2:
-            candidate = parts_all[0] + "".join(parts_all[1:])
-        else:
-            candidate = None
-
-    # ---- BƯỚC 4: Xác nhận biển số với cooldown ----
-    # plate_cooldown_sec: tối thiểu giây giữa 2 lần ACCEPT cùng 1 biển số.
-    # Tránh spam khi xe đậu trước camera.
+    # ---- Xác nhận biển số với cooldown ----
     if candidate and pattern.match(candidate):
         plate_counter[candidate] = plate_counter.get(candidate, 0) + 1
         if (
@@ -784,15 +1410,14 @@ def process_frame(frame, plate_counter, last_plate, last_seen_time, prefix, ser,
             and candidate != last_plate
             and (time.time() - last_seen_time) > PLATE_COOLDOWN_SEC
         ):
-            print(f"{prefix} Biển số:", candidate)
+            print(f"{prefix} Biển số:", candidate, f"(detector={detector})")
             last_plate = candidate
             last_seen_time = time.time()
             plate_counter.clear()
 
-            # Nếu snapshot chưa có (fallback không-YOLO) thì chụp full frame
             if not detected_snap:
                 detected_snap = _save_plate_snapshot(
-                    None, frame, direction, plate_hint=candidate
+                    pending_crop, frame, direction, plate_hint=candidate
                 )
 
             try:
@@ -909,6 +1534,7 @@ def read_from_arduino(ser, ser_out=None, direction="in"):
                     def _auto_close_in():
                         time.sleep(5)
                         close_gate("in")
+                    # Thread riêng: sleep dài không được chiếm background pool
                     threading.Thread(target=_auto_close_in, daemon=True).start()
                     user_label = "Resident" if is_subscriber else "Guest"
                     scan_message_by_direction[direction] = f"{user_label}: {current_plate} — barrier opened"
@@ -1015,128 +1641,254 @@ def close_gate(gate='in'):
     print(f"[MANUAL] Sent CLOSE_GATE to Arduino {gate.upper()}")
 
 
-# ==== CAMERA LOOP ====
-def _ocr_worker(frame_copy, plate_counter, last_plate, last_seen_time,
-                prefix, ser, lock, direction_key):
-    """Chạy OCR (YOLO+EasyOCR) trên bản copy frame — KHÔNG block camera stream.
-
-    Trả về tuple (plate_counter, last_plate, last_seen_time, detected_plate,
-    detected_snap_path) qua biến mutable results_dict.
-    """
+# ==== CAMERA LOOP / OCR SCHEDULER ====
+def _handle_ocr_side_effects(direction_key, last_plate, detected, detected_snap):
+    """Cập nhật state + push/lookup nền sau khi process_frame xong."""
     global last_detected_plate_in, last_detected_plate_out
     global last_snapshot_in, last_snapshot_out
     global pending_vehicle_info
-    try:
-        _, pc, lp, lst, detected, detected_snap = process_frame(
-            frame_copy, plate_counter, last_plate, last_seen_time,
-            prefix, ser, lock, direction_key,
-        )
-        # Ghi kết quả ngược vào dict thread-safe (dict assignment atomic trong CPython)
-        _ocr_worker.results[direction_key] = (pc, lp, lst, detected, detected_snap)
-        if detected:
-            if direction_key == "in":
-                last_detected_plate_in = detected
-            else:
-                last_detected_plate_out = detected
-        if detected_snap:
-            if direction_key == "in":
-                last_snapshot_in = detected_snap
-            else:
-                last_snapshot_out = detected_snap
 
-        # Khi OCR confirm biển số mới (cooldown đã qua → last_plate vừa đổi),
-        # push log lên backend để SSE phát tới /staff-desk ngay lập tức.
-        # detected != "" chứng tỏ plate vừa được accept (cooldown + count đủ).
-        if detected and detected != last_plate:
-            snap_path = detected_snap or ""
-            conf_val = 0.0
-            # Lấy confidence từ YOLO boxes nếu có
-            boxes = last_boxes_in if direction_key == "in" else last_boxes_out
-            if boxes:
-                conf_val = float(boxes[0][4]) if len(boxes[0]) > 4 else 0.0
-            def _push_ocr_log(plate=detected, direction=direction_key,
-                              snap=snap_path, conf=conf_val):
-                try:
+    if detected:
+        if direction_key == "in":
+            last_detected_plate_in = detected
+        else:
+            last_detected_plate_out = detected
+    if detected_snap:
+        if direction_key == "in":
+            last_snapshot_in = detected_snap
+        else:
+            last_snapshot_out = detected_snap
+
+    # detected != "" và khác last_plate → plate vừa được accept
+    if not (detected and detected != last_plate):
+        return
+
+    snap_path = detected_snap or ""
+    conf_val = 0.0
+    boxes = last_boxes_in if direction_key == "in" else last_boxes_out
+    if boxes:
+        conf_val = float(boxes[0][4]) if len(boxes[0]) > 4 else 0.0
+
+    def _push_ocr_log(plate=detected, direction=direction_key,
+                      snap=snap_path, conf=conf_val):
+        try:
+            backend.push_camera_log(
+                direction=direction,
+                detected_plate=plate,
+                confidence=conf,
+                plate=plate,
+                user_type="guest",
+                image_path=snap,
+                metadata={"source": "camera-ocr"},
+            )
+            print(f"[OCR][PUSH] direction={direction} plate={plate} conf={conf:.2f}")
+        except Exception as push_err:
+            print(f"[OCR][PUSH][ERROR] {push_err}")
+
+    _submit_background(_push_ocr_log)
+
+    if direction_key == "in":
+        def _lookup_vehicle_info(plate=detected, direction=direction_key,
+                                 snap=snap_path, conf=conf_val):
+            global pending_vehicle_info
+            try:
+                info = backend.rfid_lookup_plate(plate)
+                is_sub = info.get("isResident", info.get("isSubscriber", False))
+                vehicle = info.get("vehicle") or {}
+                owner = vehicle.get("ownerName") or "Guest"
+                pending_vehicle_info = {
+                    "plate": plate,
+                    "lookupDone": True,
+                    "isSubscriber": is_sub,
+                    "ownerName": owner,
+                    "vehicle": vehicle,
+                    "detectedAt": time.time(),
+                }
+                label = "Resident" if is_sub else "Guest"
+                print(f"[OCR][LOOKUP] {plate} → {label} (owner={owner})")
+                if is_sub:
                     backend.push_camera_log(
                         direction=direction,
                         detected_plate=plate,
                         confidence=conf,
                         plate=plate,
-                        user_type="guest",
+                        user_type="resident",
                         image_path=snap,
-                        metadata={"source": "camera-ocr"},
+                        metadata={"source": "camera-ocr", "lookupResult": "registered-or-subscriber"},
                     )
-                    print(f"[OCR][PUSH] direction={direction} plate={plate} conf={conf:.2f}")
-                except Exception as push_err:
-                    print(f"[OCR][PUSH][ERROR] {push_err}")
-            threading.Thread(target=_push_ocr_log, daemon=True).start()
-
-            # ②③④ Bước 2: OCR detect biển số IN → lookup subscriber ngay
-            # Lưu kết quả vào pending_vehicle_info để staff quét thẻ dùng luôn.
-            if direction_key == "in":
-                def _lookup_vehicle_info(plate=detected, direction=direction_key,
-                                         snap=snap_path, conf=conf_val):
-                    global pending_vehicle_info
-                    try:
-                        info = backend.rfid_lookup_plate(plate)
-                        is_sub = info.get("isResident", info.get("isSubscriber", False))
-                        vehicle = info.get("vehicle") or {}
-                        owner = vehicle.get("ownerName") or "Guest"
-                        pending_vehicle_info = {
-                            "plate": plate,
-                            "lookupDone": True,
-                            "isSubscriber": is_sub,
-                            "ownerName": owner,
-                            "vehicle": vehicle,
-                            "detectedAt": time.time(),
-                        }
-                        label = "Resident" if is_sub else "Guest"
-                        print(f"[OCR][LOOKUP] {plate} → {label} (owner={owner})")
-                        # Nếu là xe đã đăng ký hoặc có subscription → push update để UI cập nhật loại xe
-                        if is_sub:
-                            backend.push_camera_log(
-                                direction=direction,
-                                detected_plate=plate,
-                                confidence=conf,
-                                plate=plate,
-                                user_type="resident",
-                                image_path=snap,
-                                metadata={"source": "camera-ocr", "lookupResult": "registered-or-subscriber"},
-                            )
-                            print(f"[OCR][PUSH-UPDATE] {plate} → resident")
-                    except Exception as e:
-                        print(f"[OCR][LOOKUP][ERROR] {e}")
-                        # Fail-safe: KHÔNG cho phép scan nếu lookup lỗi
-                        # → tránh ghi nhầm subscriber thành guest
-                        pending_vehicle_info = {
-                            "plate": plate,
-                            "lookupDone": True,
-                            "lookupError": True,
-                            "isSubscriber": False,
-                            "ownerName": "Guest",
-                            "vehicle": None,
-                            "detectedAt": time.time(),
-                        }
-                # Khởi tạo trạng thái trước khi chạy lookup nền để không ghi đè
-                # kết quả lookup nếu thread hoàn thành rất nhanh.
+                    print(f"[OCR][PUSH-UPDATE] {plate} → resident")
+            except Exception as e:
+                print(f"[OCR][LOOKUP][ERROR] {e}")
                 pending_vehicle_info = {
-                    "plate": detected,
-                    "lookupDone": False,
-                    "lookupError": False,
+                    "plate": plate,
+                    "lookupDone": True,
+                    "lookupError": True,
                     "isSubscriber": False,
                     "ownerName": "Guest",
                     "vehicle": None,
                     "detectedAt": time.time(),
                 }
-                threading.Thread(target=_lookup_vehicle_info, daemon=True).start()
 
+        pending_vehicle_info = {
+            "plate": detected,
+            "lookupDone": False,
+            "lookupError": False,
+            "isSubscriber": False,
+            "ownerName": "Guest",
+            "vehicle": None,
+            "detectedAt": time.time(),
+        }
+        _submit_background(_lookup_vehicle_info)
+
+
+def _ocr_worker(frame_copy, plate_counter, last_plate, last_seen_time,
+                prefix, ser, lock, direction_key):
+    """Chạy OCR (YOLO+PaddleOCR) trên bản copy frame — KHÔNG block camera stream.
+
+    Dùng bởi legacy mode. Single-worker mode dùng OcrScheduler.
+    """
+    global _ai_metrics
+    _ai_metrics["ocr_busy"] = True
+    try:
+        _, pc, lp, lst, detected, detected_snap = process_frame(
+            frame_copy, plate_counter, last_plate, last_seen_time,
+            prefix, ser, lock, direction_key,
+        )
+        _ocr_worker.results[direction_key] = (pc, lp, lst, detected, detected_snap)
+        _handle_ocr_side_effects(direction_key, last_plate, detected, detected_snap)
     except Exception as e:
         print(f"[OCR][WORKER][ERROR] {direction_key}: {type(e).__name__}: {e}")
+        if "not enough memory" in str(e).lower() or "out of memory" in str(e).lower():
+            _set_memory_degraded("oom")
         _ocr_worker.results[direction_key] = (
             plate_counter, last_plate, last_seen_time, "", ""
         )
+    finally:
+        _ai_metrics["ocr_busy"] = False
+
 
 _ocr_worker.results = {}
+
+
+class OcrScheduler:
+    """1 AI worker + latest-frame slot mỗi hướng (ghi đè frame cũ khi bận)."""
+
+    def __init__(self):
+        self._cond = threading.Condition()
+        self._pending = {}  # direction -> frame (numpy)
+        self._state = {
+            "in": {"plate_counter": {}, "last_plate": "", "last_seen_time": time.time()},
+            "out": {"plate_counter": {}, "last_plate": "", "last_seen_time": time.time()},
+        }
+        self._running = True
+        self._thread = threading.Thread(
+            target=self._worker_loop, name="ocr-scheduler", daemon=True
+        )
+        self._thread.start()
+        print("[OCR] OcrScheduler started (single-worker, 1-slot/direction)")
+
+    def submit(self, direction: str, frame) -> None:
+        global _ai_metrics
+        if not self._running or frame is None:
+            return
+        if _check_memory_pressure():
+            _ai_metrics["frames_dropped"] = int(_ai_metrics.get("frames_dropped", 0)) + 1
+            return
+        with self._cond:
+            if direction in self._pending:
+                _ai_metrics["frames_dropped"] = int(_ai_metrics.get("frames_dropped", 0)) + 1
+            # Giữ bản copy — caller có thể reuse buffer camera
+            self._pending[direction] = frame.copy()
+            self._cond.notify()
+
+    def stop(self) -> None:
+        self._running = False
+        with self._cond:
+            self._cond.notify_all()
+
+    def _pop_next(self):
+        """Ưu tiên hướng có frame pending; round-robin nhẹ theo timestamp submit."""
+        # Deterministic: ưu tiên "in" rồi "out" — đủ cho bãi xe
+        if "in" in self._pending:
+            return "in", self._pending.pop("in")
+        if "out" in self._pending:
+            return "out", self._pending.pop("out")
+        return None, None
+
+    def _worker_loop(self):
+        global plate_counter_in, last_plate_in, last_seen_time_in
+        global plate_counter_out, last_plate_out, last_seen_time_out
+        global last_snapshot_in, last_snapshot_out
+        global _ai_metrics
+
+        while self._running:
+            with self._cond:
+                while self._running and not self._pending:
+                    self._cond.wait(timeout=0.5)
+                if not self._running:
+                    break
+                direction, frame = self._pop_next()
+
+            if direction is None or frame is None:
+                continue
+
+            st = self._state[direction]
+            # Đồng bộ state từ global (camera_loop / RFID có thể đổi last_plate)
+            if direction == "in":
+                st["plate_counter"] = dict(plate_counter_in)
+                st["last_plate"] = last_plate_in
+                st["last_seen_time"] = last_seen_time_in
+                prefix, ser, lock = "IN:", arduino_in, serial_lock_in
+            else:
+                st["plate_counter"] = dict(plate_counter_out)
+                st["last_plate"] = last_plate_out
+                st["last_seen_time"] = last_seen_time_out
+                prefix, ser, lock = "OUT:", arduino_out, serial_lock_out
+
+            prev_last_plate = st["last_plate"]
+            _ai_metrics["ocr_busy"] = True
+            try:
+                _, pc, lp, lst, detected, detected_snap = process_frame(
+                    frame,
+                    st["plate_counter"],
+                    st["last_plate"],
+                    st["last_seen_time"],
+                    prefix,
+                    ser,
+                    lock,
+                    direction,
+                )
+                st["plate_counter"] = pc
+                st["last_plate"] = lp
+                st["last_seen_time"] = lst
+
+                if direction == "in":
+                    plate_counter_in = pc
+                    last_plate_in = lp
+                    last_seen_time_in = lst
+                    if detected_snap:
+                        last_snapshot_in = detected_snap
+                else:
+                    plate_counter_out = pc
+                    last_plate_out = lp
+                    last_seen_time_out = lst
+                    if detected_snap:
+                        last_snapshot_out = detected_snap
+
+                _handle_ocr_side_effects(direction, prev_last_plate, detected, detected_snap)
+            except Exception as e:
+                print(f"[OCR][SCHED][ERROR] {direction}: {type(e).__name__}: {e}")
+                if "not enough memory" in str(e).lower() or "out of memory" in str(e).lower():
+                    _set_memory_degraded("oom")
+            finally:
+                _ai_metrics["ocr_busy"] = False
+                try:
+                    del frame
+                except Exception:
+                    pass
+
+
+_ocr_scheduler = None  # init sau khi model/serial sẵn sàng (trong camera_loop / main)
 
 
 def camera_loop():
@@ -1145,7 +1897,7 @@ def camera_loop():
     global last_frame_in, last_frame_out
     global last_preview_write_in, last_preview_write_out
     global last_detected_plate_in, last_detected_plate_out
-    global cap_in, cap_out
+    global cap_in, cap_out, _ocr_scheduler
 
     # Thư mục đã được tạo ở boot. Reset interval để lần đầu tiên ghi ngay.
     last_preview_write_in = 0.0
@@ -1159,9 +1911,18 @@ def camera_loop():
     last_ocr_in = 0.0
     last_ocr_out = 0.0
 
-    # Thread OCR đang chạy (1 thread mỗi hướng, tránh đè nhau)
-    ocr_thread_in = None
-    ocr_thread_out = None
+    use_single = OCR_SCHEDULER_MODE == "single-worker" and OCR_ENABLED
+    if use_single:
+        if _ocr_scheduler is None:
+            _ocr_scheduler = OcrScheduler()
+        ocr_thread_in = None
+        ocr_thread_out = None
+        print("[OCR] camera_loop using single-worker scheduler")
+    else:
+        # legacy: 1 thread OCR mỗi hướng
+        ocr_thread_in = None
+        ocr_thread_out = None
+        print(f"[OCR] camera_loop using legacy dual-thread mode (mode={OCR_SCHEDULER_MODE})")
 
     while True:
         # ===== BƯỚC 1: Đọc frame NHANH — không OCR, không chặn stream =====
@@ -1172,12 +1933,12 @@ def camera_loop():
             camera_loop.fail_in += 1
             if cap_in is not None and camera_loop.fail_in >= 30:
                 cap_in.release()
-                cap_in = _reconnect(CAMERA_INDEX_IN)
+                cap_in = _reconnect(_CAM_INDEX_IN_RESOLVED)
                 if cap_in is not None:
                     print("[CAM_IN] Reconnected after fail streak")
                 camera_loop.fail_in = 0
             elif cap_in is None and camera_loop.fail_in >= 300:
-                cap_in = _reconnect(CAMERA_INDEX_IN)
+                cap_in = _reconnect(_CAM_INDEX_IN_RESOLVED)
                 camera_loop.fail_in = 0
 
         ret_out, frame_out = _safe_read(cap_out)
@@ -1187,12 +1948,12 @@ def camera_loop():
             camera_loop.fail_out += 1
             if cap_out is not None and camera_loop.fail_out >= 30:
                 cap_out.release()
-                cap_out = _reconnect(CAMERA_INDEX_OUT)
+                cap_out = _reconnect(_CAM_INDEX_OUT_RESOLVED)
                 if cap_out is not None:
                     print("[CAM_OUT] Reconnected after fail streak")
                 camera_loop.fail_out = 0
             elif cap_out is None and camera_loop.fail_out >= 300:
-                cap_out = _reconnect(CAMERA_INDEX_OUT)
+                cap_out = _reconnect(_CAM_INDEX_OUT_RESOLVED)
                 camera_loop.fail_out = 0
 
         now = time.time()
@@ -1213,51 +1974,59 @@ def camera_loop():
                 _safe_imwrite(os.path.join(STATIC_DIR, "cam_out.jpg"), frame_out)
                 last_preview_write_out = now
 
-        # ===== BƯỚC 3: OCR chạy trên bản copy — KHÔNG block stream =====
+        # ===== BƯỚC 3: OCR — single-worker scheduler hoặc legacy dual-thread =====
         if OCR_ENABLED:
-            # Cổng VÀO: chạy OCR nếu interval đủ lớn VÀ thread trước đã xong
-            if (ret_in and now - last_ocr_in >= OCR_INTERVAL_SEC
-                    and (ocr_thread_in is None or not ocr_thread_in.is_alive())):
-                last_ocr_in = now
-                frame_copy = frame_in.copy()
-                ocr_thread_in = threading.Thread(
-                    target=_ocr_worker,
-                    args=(frame_copy, dict(plate_counter_in), last_plate_in,
-                          last_seen_time_in, "IN:", arduino_in, serial_lock_in, "in"),
-                    daemon=True,
-                )
-                ocr_thread_in.start()
+            if use_single and _ocr_scheduler is not None:
+                if ret_in and now - last_ocr_in >= OCR_INTERVAL_SEC:
+                    last_ocr_in = now
+                    _ocr_scheduler.submit("in", frame_in)
+                if ret_out and now - last_ocr_out >= OCR_INTERVAL_SEC:
+                    last_ocr_out = now
+                    _ocr_scheduler.submit("out", frame_out)
+            else:
+                # legacy: 1 thread OCR mỗi hướng (có thể overlap → peak RAM)
+                if (ret_in and now - last_ocr_in >= OCR_INTERVAL_SEC
+                        and (ocr_thread_in is None or not ocr_thread_in.is_alive())
+                        and not _check_memory_pressure()):
+                    last_ocr_in = now
+                    frame_copy = frame_in.copy()
+                    ocr_thread_in = threading.Thread(
+                        target=_ocr_worker,
+                        args=(frame_copy, dict(plate_counter_in), last_plate_in,
+                              last_seen_time_in, "IN:", arduino_in, serial_lock_in, "in"),
+                        daemon=True,
+                    )
+                    ocr_thread_in.start()
 
-            # Cổng RA
-            if (ret_out and now - last_ocr_out >= OCR_INTERVAL_SEC
-                    and (ocr_thread_out is None or not ocr_thread_out.is_alive())):
-                last_ocr_out = now
-                frame_copy = frame_out.copy()
-                ocr_thread_out = threading.Thread(
-                    target=_ocr_worker,
-                    args=(frame_copy, dict(plate_counter_out), last_plate_out,
-                          last_seen_time_out, "OUT:", arduino_out, serial_lock_out, "out"),
-                    daemon=True,
-                )
-                ocr_thread_out.start()
+                if (ret_out and now - last_ocr_out >= OCR_INTERVAL_SEC
+                        and (ocr_thread_out is None or not ocr_thread_out.is_alive())
+                        and not _check_memory_pressure()):
+                    last_ocr_out = now
+                    frame_copy = frame_out.copy()
+                    ocr_thread_out = threading.Thread(
+                        target=_ocr_worker,
+                        args=(frame_copy, dict(plate_counter_out), last_plate_out,
+                              last_seen_time_out, "OUT:", arduino_out, serial_lock_out, "out"),
+                        daemon=True,
+                    )
+                    ocr_thread_out.start()
 
-            # Thu thập kết quả OCR từ worker threads
-            for key in ("in", "out"):
-                res = _ocr_worker.results.pop(key, None)
-                if res is not None:
-                    pc, lp, lst, detected, detected_snap = res
-                    if key == "in":
-                        plate_counter_in = pc
-                        last_plate_in = lp
-                        last_seen_time_in = lst
-                        if detected_snap:
-                            last_snapshot_in = detected_snap
-                    else:
-                        plate_counter_out = pc
-                        last_plate_out = lp
-                        last_seen_time_out = lst
-                        if detected_snap:
-                            last_snapshot_out = detected_snap
+                for key in ("in", "out"):
+                    res = _ocr_worker.results.pop(key, None)
+                    if res is not None:
+                        pc, lp, lst, detected, detected_snap = res
+                        if key == "in":
+                            plate_counter_in = pc
+                            last_plate_in = lp
+                            last_seen_time_in = lst
+                            if detected_snap:
+                                last_snapshot_in = detected_snap
+                        else:
+                            plate_counter_out = pc
+                            last_plate_out = lp
+                            last_seen_time_out = lst
+                            if detected_snap:
+                                last_snapshot_out = detected_snap
 
         # Đọc serial (RFID / DATA từ ESP32)
         read_from_arduino(arduino_in, ser_out=arduino_out, direction="in")
@@ -1424,12 +2193,34 @@ def api_cameras():
 
 @app.route("/api/cameras/health")
 def api_cameras_health():
-    """Health check cho camera bridge."""
+    """Health check cho camera bridge + trạng thái AI/RAM."""
+    rss = _process_rss_mb()
+    _ai_metrics["rss_mb"] = round(rss, 1)
+    degraded = _is_ai_degraded()
+    status = "degraded" if degraded else "ok"
     return jsonify({
-        "ok": True,
+        "ok": not degraded,
+        "status": status,
         "bridge_url": request.host_url.rstrip("/"),
         "backend_url": BACKEND_URL,
         "backend_healthy": backend.health(),
+        "ocr_enabled": OCR_ENABLED,
+        "plate_detector": PLATE_DETECTOR,
+        "yolo_loaded": yolo_model is not None,
+        "scheduler_mode": OCR_SCHEDULER_MODE,
+        "ai": {
+            "rss_mb": _ai_metrics.get("rss_mb", 0),
+            "frames_dropped": _ai_metrics.get("frames_dropped", 0),
+            "inferences": _ai_metrics.get("inferences", 0),
+            "last_inference_ms": _ai_metrics.get("last_inference_ms", 0),
+            "bg_submitted": _ai_metrics.get("bg_submitted", 0),
+            "bg_dropped": _ai_metrics.get("bg_dropped", 0),
+            "bg_pending": _ai_metrics.get("bg_pending", 0),
+            "ocr_busy": _ai_metrics.get("ocr_busy", False),
+            "degraded": degraded,
+            "degraded_reason": _ai_degraded_reason if degraded else "",
+            "memory_soft_limit_mb": AI_MEMORY_SOFT_LIMIT_MB,
+        },
     })
 
 
@@ -1808,6 +2599,8 @@ if __name__ == "__main__":
         print("[BOOT][WARN] Cannot create folders:", e)
 
     threading.Thread(target=camera_loop, daemon=True).start()
+    if AI_METRIC_INTERVAL_SEC > 0:
+        threading.Thread(target=_metric_logger_loop, name="ai-metric", daemon=True).start()
 
     def delayed_sync():
         try:
@@ -1826,5 +2619,11 @@ if __name__ == "__main__":
     })
     print(f"[BOOT] Camera routes: {cam_routes}")
     print(f"[BOOT] Test MJPEG: curl http://localhost:{FLASK_PORT}/video_feed/in")
+    print(
+        f"[BOOT] AI detector={PLATE_DETECTOR} scheduler={OCR_SCHEDULER_MODE} "
+        f"yolo_loaded={yolo_model is not None} "
+        f"yolo_max_w={YOLO_MAX_WIDTH} imgsz={YOLO_IMGSZ} "
+        f"snapshot_valid_only={SNAPSHOT_ON_VALID_PLATE_ONLY}"
+    )
 
     app.run(debug=False, host="0.0.0.0", port=FLASK_PORT)

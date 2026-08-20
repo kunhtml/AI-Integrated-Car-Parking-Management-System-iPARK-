@@ -95,6 +95,17 @@ type DashboardOverview = {
   registeredVehicleCount: number;
 };
 
+
+const EMPTY_STAFF_SESSIONS: ParkingSession[] = [];
+
+type StaffDashboardOverview = {
+  sessions: ParkingSession[];
+  entryCount: number;
+  exitCount: number;
+  activeCount: number;
+  revenue: number;
+};
+
 interface StatCardProps {
   icon: React.ReactNode;
   label: string;
@@ -294,10 +305,11 @@ function ShiftCalendar({ schedules, currentUserId }: ShiftCalendarProps) {
 interface MyShiftsListProps {
   schedules: ShiftScheduleItem[];
   currentUserId: string | undefined;
-  currentUserName: string | undefined;
+  onCheckIn: (scheduleId: string) => Promise<ShiftScheduleItem>;
 }
 
-function MyShiftsList({ schedules, currentUserId, currentUserName }: MyShiftsListProps) {
+function MyShiftsList({ schedules, currentUserId, onCheckIn }: MyShiftsListProps) {
+  const [checkingInId, setCheckingInId] = useState<string | null>(null);
   const mySchedules = useMemo(
     () =>
       schedules
@@ -318,6 +330,17 @@ function MyShiftsList({ schedules, currentUserId, currentUserName }: MyShiftsLis
   const today = todayStr();
   const upcoming = mySchedules.filter((s) => s.date >= today && s.status === "scheduled").slice(0, 3);
   const past = mySchedules.filter((s) => s.date < today || s.status !== "scheduled").slice(0, 5);
+
+  async function handleCheckIn(scheduleId: string) {
+    setCheckingInId(scheduleId);
+    try {
+      await onCheckIn(scheduleId);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Không thể điểm danh ca.");
+    } finally {
+      setCheckingInId(null);
+    }
+  }
 
   if (!mySchedules.length) {
     return (
@@ -369,9 +392,21 @@ function MyShiftsList({ schedules, currentUserId, currentUserName }: MyShiftsLis
                 <strong>{SHIFT_LABELS[s.shiftType]}</strong>
                 <span>{s.date} · {s.startTime} – {s.endTime}</span>
               </div>
-              <span className="staff-shift-status-badge" style={{ background: STATUS_COLORS[s.status]?.bg, color: STATUS_COLORS[s.status]?.color }}>
-                {STATUS_LABELS[s.status]}
-              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span className="staff-shift-status-badge" style={{ background: STATUS_COLORS[s.status]?.bg, color: STATUS_COLORS[s.status]?.color }}>
+                  {STATUS_LABELS[s.status]}
+                </span>
+                {s.date.slice(0, 10) === today && (
+                  <button
+                    type="button"
+                    className="small-button primary"
+                    disabled={checkingInId === s.id}
+                    onClick={() => void handleCheckIn(s.id)}
+                  >
+                    {checkingInId === s.id ? "Đang điểm danh..." : "Điểm danh ca"}
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </>
@@ -602,24 +637,45 @@ function ZoneBarChart({
 function StaffDashboard() {
   const {
     currentUser,
-    sessions,
     shiftScheduleList,
+    checkInShift,
     zoneList,
     slotList,
     userList,
     registeredVehicles,
   } = useParkingApp();
+  const [staffOverview, setStaffOverview] = useState<StaffDashboardOverview | null>(null);
+
+  const loadStaffOverview = useCallback(async () => {
+    try {
+      const response = await apiFetch("/dashboard/staff-overview");
+      if (!response.ok) throw new Error("Không thể tải dữ liệu ca làm.");
+      const data = await response.json();
+      setStaffOverview(data.overview ?? null);
+    } catch {
+      setStaffOverview(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => void loadStaffOverview(), 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [loadStaffOverview]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => void loadStaffOverview(), 30_000);
+    return () => window.clearInterval(intervalId);
+  }, [loadStaffOverview]);
+
+  const staffSessions = staffOverview?.sessions ?? EMPTY_STAFF_SESSIONS;
 
   // Today's stats
   const todayStats = useMemo(() => {
     const today = todayStr();
-    const todaySessions = sessions.filter((s) => {
-      const d = sessionDateKey(s);
-      return d === today;
-    });
+    const todaySessions = staffSessions.filter((s) => sessionDateKey(s) === today);
     const entryCount = todaySessions.filter((s) => s.status !== "Hủy").length;
     const exitCount = todaySessions.filter((s) => s.status === "Đã hoàn thành").length;
-    const activeNow = sessions.filter((s) => s.status === "Đang gửi").length;
+    const activeNow = staffSessions.filter((s) => s.status === "Đang gửi").length;
     const todayRevenue = todaySessions.reduce((sum, s) => sum + (s.fee || 0), 0);
     const myTodayShifts = shiftScheduleList.filter(
       (s) => s.staffId === currentUser?.id && s.date === today,
@@ -628,7 +684,7 @@ function StaffDashboard() {
     const myUpcomingShift = myTodayShifts.find((s) => s.status === "scheduled");
 
     return { entryCount, exitCount, activeNow, todayRevenue, myTodayShifts, myActiveShift, myUpcomingShift };
-  }, [sessions, shiftScheduleList, currentUser]);
+  }, [staffSessions, shiftScheduleList, currentUser]);
 
   const totalSlots = slotList.length || 30;
   const freeSlots = slotList.filter((s) => s.status === "empty").length;
@@ -651,7 +707,7 @@ function StaffDashboard() {
             <BarChart3 size={22} />
           </div>
           <div>
-            <h1 className="staff-title">{greeting}, {userName.split(" ").pop()}</h1>
+            <h1 className="staff-title">{greeting}, Nhân viên {userName}</h1>
             <p className="staff-subtitle">
               {new Date().toLocaleDateString("vi-VN", {
                 weekday: "long",
@@ -750,7 +806,7 @@ function StaffDashboard() {
             <MyShiftsList
               schedules={shiftScheduleList}
               currentUserId={currentUser?.id == null ? undefined : String(currentUser.id)}
-              currentUserName={currentUser?.name}
+              onCheckIn={checkInShift}
             />
           </div>
         </div>
@@ -782,12 +838,12 @@ function StaffDashboard() {
                 </div>
                 <div>
                   <p className="staff-panel-kicker">Phiên gửi xe</p>
-                  <h2 className="staff-panel-title">Hoạt động hôm nay</h2>
+                  <h2 className="staff-panel-title">Ca làm hôm nay</h2>
                 </div>
               </div>
-              <span className="staff-panel-count">{sessions.filter((s) => sessionDateKey(s) === todayStr()).length}</span>
+              <span className="staff-panel-count">{staffSessions.length}</span>
             </div>
-            <RecentSessions sessions={sessions} />
+            <RecentSessions sessions={staffSessions} />
           </div>
         </div>
       </div>

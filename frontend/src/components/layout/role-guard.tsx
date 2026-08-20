@@ -34,8 +34,10 @@ export function RoleGuard({ allowedRoles, children }: RoleGuardProps) {
       ? "customer"
       : currentUser.role;
 
-    if (allowedRoles && !allowedRoles.includes(effectiveRole)) {
-      targetPath = getDefaultPathForRole(currentUser.role);
+    if (allowedRoles) {
+      if (!allowedRoles.includes(effectiveRole)) {
+        targetPath = getDefaultPathForRole(currentUser.role);
+      }
     } else if (
       adminOnlyPaths.includes(pathname) &&
       currentUser.role !== "admin"

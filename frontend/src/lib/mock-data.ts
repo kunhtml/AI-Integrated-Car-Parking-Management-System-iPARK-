@@ -149,7 +149,7 @@ export const devices = [
 
 export const shiftRows = [
   { name: "Ca sáng", staff: "nv.1@ipark.vn", time: "06:00 - 14:00", status: "Đang làm" },
-  { name: "Ca chiều", staff: "nv.2@ipark.vn", time: "14:00 - 22:00", status: "Chưa bắt đầu" },
+  { name: "Ca chiều", staff: "nv.2@ipark.vn", time: "14:00 - 18:00", status: "Chưa bắt đầu" },
   { name: "Ca đêm", staff: "nv.3@ipark.vn", time: "22:00 - 06:00", status: "Chưa bắt đầu" },
 ];
 

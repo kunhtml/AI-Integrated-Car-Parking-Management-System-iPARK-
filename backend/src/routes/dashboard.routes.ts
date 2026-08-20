@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   getDashboardOverview,
+  getStaffDashboardOverview,
   getPublicOverview,
   getPublicPricing,
 } from "../controllers/dashboard.controller.js";
@@ -18,4 +19,10 @@ dashboardRoutes.get(
   "/overview",
   requireRole("admin", "staff"),
   asyncHandler(getDashboardOverview),
+);
+
+dashboardRoutes.get(
+  "/staff-overview",
+  requireRole("staff"),
+  asyncHandler(getStaffDashboardOverview),
 );

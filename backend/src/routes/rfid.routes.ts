@@ -34,6 +34,8 @@ rfidRoutes.post("/:id/replace", requireRole("admin", "staff"), asyncHandler(repl
 rfidRoutes.get("/", requireRole("admin", "staff"), asyncHandler(listRfidCards));
 rfidRoutes.get("/assignments", requireRole("admin", "staff"), asyncHandler(listRfidAssignments));
 rfidRoutes.get("/unassigned-residents", requireRole("admin", "staff"), asyncHandler(listUnassignedResidents));
+// Staff desk lookup after a plate is entered manually.
+rfidRoutes.get("/by-plate/:plate", requireRole("admin", "staff"), asyncHandler(lookupByPlate));
 rfidRoutes.post("/", requireRole("admin", "staff"), asyncHandler(createRfidCard));
 rfidRoutes.get("/:id", requireRole("admin", "staff"), asyncHandler(getRfidCard));
 rfidRoutes.patch("/:id", requireRole("admin", "staff"), asyncHandler(updateRfidCard));

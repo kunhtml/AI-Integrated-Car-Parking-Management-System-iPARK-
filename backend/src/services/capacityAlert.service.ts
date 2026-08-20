@@ -1,6 +1,6 @@
 import { ParkingSession } from "../models/ParkingSession.js";
 import { Notification } from "../models/Notification.js";
-import { createNotification } from "./notification.service.js";
+import { createNotificationsForRoles } from "./notification.service.js";
 import { parkingConfig } from "../config/parking.js";
 
 /**
@@ -34,19 +34,19 @@ export async function checkCapacityAlerts(): Promise<{
   });
 
   if (!recentAlert && occupancy > 90) {
-    await createNotification({
+    await createNotificationsForRoles({
       title: "Cảnh báo: Bãi đỗ xe gần đầy",
       content: `Mức sử dụng bãi đỗ xe đã đạt ${occupancy}% (${activeCount}/${totalCapacity} chỗ). Cần ưu tiên xe thành viên và hạn chế xe vãng lai.`,
       type: "warning",
-      targetRole: "admin",
+      roles: ["admin"],
     });
     alertSent = true;
   } else if (!recentAlert && occupancy > 80) {
-    await createNotification({
+    await createNotificationsForRoles({
       title: "Thông báo: Bãi đỗ xe đang đông",
       content: `Mức sử dụng bãi đỗ xe đã đạt ${occupancy}% (${activeCount}/${totalCapacity} chỗ). Vui lòng theo dõi tình hình.`,
       type: "capacity-warning",
-      targetRole: "admin",
+      roles: ["admin"],
     });
     alertSent = true;
   }

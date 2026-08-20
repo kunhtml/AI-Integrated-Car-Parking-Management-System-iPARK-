@@ -1,4 +1,4 @@
-import { createNotification } from "./notification.service.js";
+import { createNotification, createNotificationsForRoles } from "./notification.service.js";
 
 /**
  * CU-22: Notify user on successful registration.
@@ -38,9 +38,9 @@ export async function notifyPenalty(userId: string, plate: string, overdueMinute
  * CU-26: Send promotional notification to all customers.
  */
 export async function notifyPromotion(title: string, content: string) {
-  await createNotification({
+  await createNotificationsForRoles({
     title,
     content,
-    targetRole: "customer",
+    roles: ["customer"],
   });
 }

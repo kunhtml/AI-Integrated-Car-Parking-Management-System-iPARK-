@@ -17,10 +17,14 @@ function serializeCard(card: RfidCardDocument) {
   return {
     id: card._id.toString(),
     uid: card.uid,
+    cardId: card.cardId,
     ownerName: card.ownerName,
     plate: card.plate,
     userType: card.userType,
+    cardType: card.cardType,
     status: card.status,
+    userId: card.userId?.toString(),
+    vehicleId: card.vehicleId?.toString(),
     notes: card.notes,
     createdAt: card.createdAt,
     updatedAt: card.updatedAt,
@@ -317,7 +321,10 @@ export async function lookupByPlate(request: Request, response: Response) {
     response.status(400).json({ ok: false, message: "Biển số không hợp lệ." });
     return;
   }
-  const card = await RfidCard.findOne({ plate, status: "active" });
+  const card = await RfidCard.findOne({
+    plate,
+    status: { $in: ["active", "in-use"] },
+  });
 
   // Check xem biển số có thuộc subscriber (gói active) hay không
   const now = new Date();

@@ -30,14 +30,57 @@ const updateScheduleSchema = z.object({
 // Default shift times by type
 const DEFAULT_SHIFT_TIMES: Record<string, { start: string; end: string }> = {
   morning: { start: "06:00", end: "14:00" },
-  afternoon: { start: "14:00", end: "22:00" },
+  afternoon: { start: "14:00", end: "18:00" },
   evening: { start: "18:00", end: "02:00" },
   night: { start: "22:00", end: "06:00" },
 };
 
+function shiftDateTime(date: Date, time: string) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((item) => item.type === type)?.value);
+  const [hour, minute] = time.split(":").map(Number);
+  if (!Number.isInteger(hour) || !Number.isInteger(minute)) return null;
+  return new Date(Date.UTC(part("year"), part("month") - 1, part("day"), hour, minute) - 7 * 60 * 60 * 1000);
+}
+
+function shiftEndAt(schedule: { date: Date; startTime: string; endTime: string }) {
+  const start = shiftDateTime(schedule.date, schedule.startTime);
+  const end = shiftDateTime(schedule.date, schedule.endTime);
+  if (!start || !end) return null;
+  if (end <= start) end.setUTCDate(end.getUTCDate() + 1);
+  return end;
+}
+
+// A shift that has passed its scheduled end cannot remain checked in indefinitely.
+async function closeExpiredCheckedInShifts(now = new Date()) {
+  const activeSchedules = await ShiftSchedule.find({ status: "checked_in" })
+    .select("date startTime endTime")
+    .lean();
+  const expiredIds = activeSchedules
+    .filter((schedule) => {
+      const end = shiftEndAt(schedule);
+      return end !== null && end <= now;
+    })
+    .map((schedule) => schedule._id);
+
+  if (expiredIds.length > 0) {
+    await ShiftSchedule.updateMany(
+      { _id: { $in: expiredIds }, status: "checked_in" },
+      { $set: { status: "completed" } },
+    );
+  }
+}
+
 // GET /api/shift-schedules - List schedules
 export async function listShiftSchedules(request: Request, response: Response) {
   try {
+    await closeExpiredCheckedInShifts();
     const { staffId, fromDate, toDate, month, year } = request.query;
 
     const query: Record<string, unknown> = {};
@@ -76,6 +119,7 @@ export async function listShiftSchedules(request: Request, response: Response) {
 // GET /api/shift-schedules/my - Get my schedule (for staff view)
 export async function getMySchedule(request: Request, response: Response) {
   try {
+    await closeExpiredCheckedInShifts();
     const { fromDate, toDate, month, year } = request.query;
 
     const query: Record<string, unknown> = { staffId: request.user?.id };
@@ -108,9 +152,33 @@ export async function getMySchedule(request: Request, response: Response) {
   }
 }
 
+// GET /api/shift-schedules/my/current - Check whether the staff member is on duty now.
+export async function getMyCurrentShift(request: Request, response: Response) {
+  await closeExpiredCheckedInShifts();
+
+  const now = new Date();
+  const schedules = await ShiftSchedule.find({
+    staffId: request.user?.id,
+    status: "checked_in",
+  })
+    .sort({ date: -1, startTime: -1 })
+    .limit(10);
+  const activeSchedule = schedules.find((schedule) => {
+    const start = shiftDateTime(schedule.date, schedule.startTime);
+    const end = shiftEndAt(schedule);
+    return start !== null && end !== null && now >= start && now < end;
+  });
+
+  response.json({
+    active: Boolean(activeSchedule),
+    schedule: activeSchedule ? serializeShiftSchedule(activeSchedule) : null,
+  });
+}
+
 // GET /api/shift-schedules/week - Get weekly schedule
 export async function getWeeklySchedule(request: Request, response: Response) {
   try {
+    await closeExpiredCheckedInShifts();
     const { weekStart } = request.query;
 
     let startDate: Date;
@@ -374,6 +442,7 @@ export async function deleteShiftSchedule(request: Request, response: Response) 
 // POST /api/shift-schedules/:id/check-in - Staff check-in
 export async function checkInShift(request: Request, response: Response) {
   try {
+    await closeExpiredCheckedInShifts();
     const schedule = await ShiftSchedule.findById(request.params.id);
 
     if (!schedule) {
@@ -394,11 +463,12 @@ export async function checkInShift(request: Request, response: Response) {
 
     // Check if it's within the scheduled time (allow 30 min before)
     const now = new Date();
-    const scheduleDate = new Date(schedule.date);
-    const [startHour, startMin] = schedule.startTime.split(":").map(Number);
-
-    const scheduledStart = new Date(scheduleDate);
-    scheduledStart.setHours(startHour, startMin, 0, 0);
+    const scheduledStart = shiftDateTime(schedule.date, schedule.startTime);
+    const scheduledEnd = shiftEndAt(schedule);
+    if (!scheduledStart || !scheduledEnd) {
+      response.status(400).json({ message: "Thời gian ca làm không hợp lệ" });
+      return;
+    }
 
     const earlyThreshold = new Date(scheduledStart);
     earlyThreshold.setMinutes(earlyThreshold.getMinutes() - 30);
@@ -406,6 +476,13 @@ export async function checkInShift(request: Request, response: Response) {
     if (now < earlyThreshold) {
       response.status(400).json({
         message: `Chưa đến giờ check-in. Vui lòng check-in sau ${earlyThreshold.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}`,
+      });
+      return;
+    }
+
+    if (now >= scheduledEnd) {
+      response.status(400).json({
+        message: "Ca làm đã kết thúc, không thể check-in.",
       });
       return;
     }
@@ -459,7 +536,7 @@ export async function getShiftTypes(request: Request, response: Response) {
   response.json({
     shiftTypes: [
       { key: "morning", label: "Ca sáng", startTime: "06:00", endTime: "14:00" },
-      { key: "afternoon", label: "Ca chiều", startTime: "14:00", endTime: "22:00" },
+      { key: "afternoon", label: "Ca chiều", startTime: "14:00", endTime: "18:00" },
       { key: "evening", label: "Ca tối", startTime: "18:00", endTime: "02:00" },
       { key: "night", label: "Ca đêm", startTime: "22:00", endTime: "06:00" },
     ],

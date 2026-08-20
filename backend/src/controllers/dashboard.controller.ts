@@ -7,6 +7,7 @@ import { PricingConfig } from "../models/PricingConfig.js";
 import { User } from "../models/User.js";
 import { Vehicle } from "../models/Vehicle.js";
 import { Zone } from "../models/Zone.js";
+import { ShiftSchedule } from "../models/ShiftSchedule.js";
 import { serializeParkingSession } from "../utils/serializers.js";
 
 type DashboardRange = "today" | "7d" | "30d";
@@ -136,6 +137,68 @@ export async function getDashboardOverview(
     },
   });
 }
+
+
+type ShiftWindow = { start: Date; end: Date };
+
+function getShiftDateTime(date: Date, time: string) {
+  const { year, month, day } = getVietnamDateParts(date);
+  const [hour, minute] = time.split(":").map(Number);
+  if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+    return null;
+  }
+  return new Date(Date.UTC(year, month - 1, day, hour, minute) - 7 * 60 * 60 * 1000);
+}
+
+function getShiftWindow(schedule: { date: Date; startTime: string; endTime: string }): ShiftWindow | null {
+  const start = getShiftDateTime(schedule.date, schedule.startTime);
+  const end = getShiftDateTime(schedule.date, schedule.endTime);
+  if (!start || !end) return null;
+  if (end <= start) end.setUTCDate(end.getUTCDate() + 1);
+  return { start, end };
+}
+
+export async function getStaffDashboardOverview(request: Request, response: Response) {
+  if (mongoose.connection.readyState !== 1) {
+    response.json({ overview: { sessions: [], entryCount: 0, exitCount: 0, activeCount: 0, revenue: 0 } });
+    return;
+  }
+
+  const { start, end } = getDashboardRange("today");
+  const scheduleSearchStart = new Date(start.getTime() - 48 * 60 * 60 * 1000);
+  const schedules = await ShiftSchedule.find({
+    staffId: request.user!.id,
+    date: { $gte: scheduleSearchStart, $lte: end },
+    status: { $in: ["checked_in", "completed"] },
+  }).lean();
+  const shiftWindows = schedules
+    .map(getShiftWindow)
+    .filter((window): window is ShiftWindow => Boolean(window && window.end >= start && window.start <= end));
+
+  const ownedSessionCriteria: Array<Record<string, unknown>> = [
+    { checkInStaff: request.user!.id },
+    ...shiftWindows.map((window) => ({ checkInAt: { $gte: window.start, $lt: window.end } })),
+  ];
+  const sessions = await ParkingSession.find({
+    status: { $ne: "Đã hủy" },
+    checkInAt: { $gte: start, $lte: end },
+    $or: ownedSessionCriteria,
+  })
+    .sort({ checkInAt: -1 })
+    .limit(100);
+
+  const completedSessions = sessions.filter((session) => session.status === "Đã hoàn thành");
+  response.json({
+    overview: {
+      sessions: sessions.map(serializeParkingSession),
+      entryCount: sessions.length,
+      exitCount: completedSessions.length,
+      activeCount: sessions.filter((session) => session.status === "Đang gửi").length,
+      revenue: completedSessions.reduce((total, session) => total + (session.fee || 0), 0),
+    },
+  });
+}
+
 
 /** Public endpoint – không yêu cầu đăng nhập, dùng cho trang chủ */
 export async function getPublicOverview(_request: Request, response: Response) {

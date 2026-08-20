@@ -73,7 +73,7 @@ export async function updateActivePricingConfig(
  * Tính phí theo ngày cho khách vãng lai:
  * - Giờ ra trong [dayStartHour, nightStartHour)  → day rate
  * - Giờ ra ngoài khoảng đó (>= nightStartHour hoặc < dayStartHour) → night rate
- * Mỗi calendar day gửi xe được tính phí 1 lần. Các mốc giờ do admin cấu hình.
+ * Mỗi chu kỳ 24 giờ tính một lần, bắt đầu từ lúc xe vào bãi.
  */
 export function calculateParkingFee(
   checkInAt: Date,
@@ -88,42 +88,33 @@ export function calculateParkingFee(
   const dayStartHour = config.dayStartHour ?? 6;
   const nightStartHour = config.nightStartHour ?? 22;
 
-  // Adjust checkInAt to the start of its calendar day
-  const checkInDay = startOfCalendarDay(checkInAt);
-  const checkOutDay = startOfCalendarDay(checkOutAt);
+  const totalMinutes = Math.max(
+    0,
+    Math.ceil((checkOutAt.getTime() - checkInAt.getTime()) / 60000),
+  );
+  const freeMinutes = config.gracePeriod ?? config.freeMinutes ?? 20;
+  const exitHour = checkOutAt.getHours() + checkOutAt.getMinutes() / 60;
+  const rateType: DailyRateType =
+    exitHour >= dayStartHour && exitHour < nightStartHour ? "day" : "night";
+  const fee = rateType === "day" ? dayRate : nightRate;
+  const billingDays = totalMinutes <= freeMinutes ? 0 : Math.ceil(totalMinutes / (24 * 60));
 
-  let dayIndex = 0;
-  let currentDay = new Date(checkInDay);
-
-  while (currentDay <= checkOutDay) {
-    // Determine exit hour for this calendar day
-    // If checkout is on this day, use checkout hour; otherwise use 23:59
-    const isCheckoutDay = currentDay.getTime() === checkOutDay.getTime();
-    const exitHour = isCheckoutDay
-      ? checkOutAt.getHours() + checkOutAt.getMinutes() / 60
-      : 24; // treat full-day stays as exiting at midnight (charged as night)
-
-    const rateType: DailyRateType =
-      exitHour >= dayStartHour && exitHour < nightStartHour ? "day" : "night";
-    const fee = rateType === "day" ? dayRate : nightRate;
-
+  for (let dayIndex = 0; dayIndex < billingDays; dayIndex++) {
+    const billingEnd = new Date(
+      Math.min(
+        checkInAt.getTime() + (dayIndex + 1) * 24 * 60 * 60 * 1000,
+        checkOutAt.getTime(),
+      ),
+    );
     dailyBreakdown.push({
       dayIndex,
-      date: `${currentDay.getFullYear()}-${String(currentDay.getMonth() + 1).padStart(2, "0")}-${String(currentDay.getDate()).padStart(2, "0")}`,
+      date: `${billingEnd.getFullYear()}-${String(billingEnd.getMonth() + 1).padStart(2, "0")}-${String(billingEnd.getDate()).padStart(2, "0")}`,
       rateType,
       fee,
       checkOutHour: exitHour,
     });
-
-    dayIndex++;
-    currentDay.setDate(currentDay.getDate() + 1);
   }
 
-  const totalMinutes = Math.max(
-    0,
-    Math.round((checkOutAt.getTime() - checkInAt.getTime()) / 60000),
-  );
-  const freeMinutes = config.gracePeriod ?? config.freeMinutes ?? 20;
   const totalFee = totalMinutes <= freeMinutes
     ? 0
     : dailyBreakdown.reduce((sum, d) => sum + d.fee, 0);
@@ -139,12 +130,6 @@ export function calculateParkingFee(
     totalFee,
     dailyBreakdown,
   };
-}
-
-function startOfCalendarDay(date: Date): Date {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
 }
 
 
