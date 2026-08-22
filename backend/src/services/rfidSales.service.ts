@@ -286,7 +286,9 @@ export async function changeRfidCardStatus(id: string, status: Extract<RfidCardS
   if (status === "blocked") { card.blockedAt = new Date(); card.blockedReason = reason?.trim() || "Khóa theo yêu cầu vận hành"; }
   if (status === "damaged") { card.damagedAt = new Date(); card.damagedReason = reason?.trim() || "Thẻ hỏng"; }
   await card.save();
-  await writeAudit(card.cardId ?? card.uid, status, "success", actorId, { reason });
+  // Scan-log uses the historical `block` action name while card status is `blocked`.
+  const auditAction = status === "blocked" ? "block" : status;
+  await writeAudit(card.cardId ?? card.uid, auditAction, "success", actorId, { reason });
   return card;
 }
 

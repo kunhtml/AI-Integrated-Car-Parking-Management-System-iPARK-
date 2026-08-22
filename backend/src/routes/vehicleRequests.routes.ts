@@ -7,5 +7,5 @@ export const vehicleRequestsRoutes = Router();
 
 vehicleRequestsRoutes.use(requireAuth);
 vehicleRequestsRoutes.get("/", asyncHandler(listVehicleRequests));
-vehicleRequestsRoutes.post("/", asyncHandler(createVehicleRequest));
+vehicleRequestsRoutes.post("/", requireRole("customer"), asyncHandler(createVehicleRequest));
 vehicleRequestsRoutes.patch("/:id/resolve", requireRole("admin"), asyncHandler(resolveVehicleRequest));

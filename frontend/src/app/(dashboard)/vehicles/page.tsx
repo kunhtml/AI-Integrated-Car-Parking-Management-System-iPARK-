@@ -5,7 +5,7 @@ import { VehiclesView } from "@/features/vehicles/vehicles-view";
 
 export default function VehiclesPage() {
   return (
-    <RoleGuard allowedRoles={["admin", "customer"]}>
+    <RoleGuard allowedRoles={["admin", "staff", "customer"]}>
       <VehiclesView />
     </RoleGuard>
   );

@@ -110,7 +110,9 @@ export function VehiclePickerModal({
               const ineligible = v.status === "Blacklist" || v.status === "Cần duyệt";
               const disabled = !!activeSub || ineligible;
               const subLabel = activeSub
-                ? `Đã có vé tháng đến ${new Date(activeSub.endDate).toLocaleDateString("vi-VN")}`
+                ? activeSub.status === "pending_payment"
+                  ? "Đang chờ thanh toán gói đăng ký"
+                  : `Đã có vé tháng đến ${new Date(activeSub.endDate).toLocaleDateString("vi-VN")}`
                 : ineligible
                   ? `Trạng thái: ${v.status}`
                   : "Sẽ tự liên kết RFID Member của xe";

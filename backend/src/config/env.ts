@@ -44,9 +44,31 @@ if (!isProduction) {
   );
 }
 
+function readMongoUri() {
+  const raw = (process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/bai-do-xe").trim();
+  const looksPlaceholder =
+    /<host>|<username>|<password>|changeme|your-cluster|example\.mongodb/i.test(raw) ||
+    (!raw.startsWith("mongodb://") && !raw.startsWith("mongodb+srv://"));
+
+  if (looksPlaceholder) {
+    throw new Error(
+      [
+        "MONGODB_URI khong hop le (con placeholder hoac thieu mongodb://).",
+        `Gia tri hien tai: ${JSON.stringify(raw)}`,
+        "Sua backend/.env, vi du local:",
+        "  MONGODB_URI=mongodb://127.0.0.1:27017/bai-do-xe",
+        "Hoac Atlas:",
+        "  MONGODB_URI=mongodb+srv://USER:PASSWORD@cluster0.xxxxx.mongodb.net/bai-do-xe",
+        "Luu y: password co @ : / # ? phai URL-encode. Can MongoDB dang chay truoc khi start backend.",
+      ].join("\n"),
+    );
+  }
+  return raw;
+}
+
 export const env = {
   port: Number(process.env.PORT || 4000),
-  mongoUri: process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/bai-do-xe",
+  mongoUri: readMongoUri(),
   mongoDb: process.env.MONGODB_DB || "bai-do-xe",
   jwtSecret: readSecret("JWT_SECRET", localJwtSecret),
   frontendUrl: process.env.FRONTEND_URL || "http://localhost:3000",

@@ -143,8 +143,11 @@ export async function validateEntry(
     status: "Đang gửi",
   });
   if (activeSession) {
-    await logScan({ cardId, action: "entry", status: "failed", failureReason: "Thẻ đang có phiên gửi xe chưa checkout", performedBy, deviceId });
-    throw new AppError("Thẻ này đang có phiên gửi xe chưa checkout. Không thể vào lại.", 409);
+    const uid = card.uid || card.cardId || cardId;
+    const attemptedPlate = plateDetected?.trim().toUpperCase() || "mới";
+    const reason = `RFID Guest UID ${uid} đã được cấp cho xe ${activeSession.plate} lúc ${activeSession.checkInAt.toLocaleString("vi-VN")}. Thẻ đang gắn với phiên này nên không thể cấp tiếp cho xe ${attemptedPlate}.`;
+    await logScan({ cardId, action: "entry", status: "failed", failureReason: reason, performedBy, deviceId });
+    throw new AppError(reason, 409);
   }
 
   const normalizedPlate = plateDetected?.trim().toUpperCase();

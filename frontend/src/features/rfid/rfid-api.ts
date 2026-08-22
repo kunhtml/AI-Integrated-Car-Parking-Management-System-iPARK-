@@ -100,6 +100,10 @@ export async function assignRfidCard(body: {
   });
 }
 
+export async function replaceActiveSessionRfid(body: { plate: string; cardId: string }) {
+  return apiFetch("/rfid/replace-active", { method: "POST", body: JSON.stringify(body) });
+}
+
 export async function returnRfidCard(body: {
   cardId: string;
   sessionId: string;

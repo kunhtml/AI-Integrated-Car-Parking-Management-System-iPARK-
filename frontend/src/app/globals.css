@@ -3108,6 +3108,14 @@ tr:hover td {
   gap: 5px;
 }
 
+.staff-desk__rfid-conflict { display: grid; gap: 10px; margin-top: 10px; padding: 12px; border: 1px solid #fecaca; border-radius: 9px; background: #fff7f7; color: #991b1b; }
+.staff-desk__rfid-conflict-title { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 800; }
+.staff-desk__rfid-conflict-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.staff-desk__rfid-conflict-grid > div { display: grid; gap: 4px; min-width: 0; padding: 9px; border: 1px solid #fecaca; border-radius: 7px; background: #fff; }
+.staff-desk__rfid-conflict-grid span { color: #b45309; font-size: 10px; }
+.staff-desk__rfid-conflict-grid strong { overflow: hidden; color: #7f1d1d; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.staff-desk__rfid-conflict p { margin: 0; font-size: 12px; line-height: 1.45; }
+
 .staff-desk__chip {
   display: inline-flex;
   align-items: center;
@@ -11378,7 +11386,9 @@ tr:hover td {
 }
 
 .rfid-actions .small-button {
-  padding: 4px 7px;
+  padding: 5px 8px;
+  gap: 5px;
+  white-space: nowrap;
 }
 
 /* Modal */
@@ -12678,6 +12688,18 @@ textarea.form-input {
   transition: background var(--transition);
   cursor: pointer;
 }
+
+/* Compact RFID inventory layout */
+.rfid-sales-section { margin: 18px 0 24px; padding: 16px; border-radius: 10px; background: #fff; box-shadow: 0 4px 14px rgba(15,23,42,.04); }
+.rfid-sales-heading { padding-bottom: 10px; border-bottom: 0; }
+.rfid-sales-heading h3 { font-size: 16px; }
+.rfid-sales-heading p:not(.rfid-eyebrow) { display: none; }
+.rfid-sales-kpis { grid-template-columns: repeat(5,minmax(0,1fr)); gap: 8px; margin: 4px 0 10px; }
+.rfid-sales-kpi { padding: 9px 10px; border-radius: 6px; background: #f7f9fc; }
+.rfid-sales-kpi.total { background:#f3f5f9; }
+.rfid-sales-kpi.customer { background:#f7f0ff; border-color:#e6d3ff; }
+.rfid-sales-kpi.customer strong { color:#8b30e8; }
+@media (max-width:880px) { .rfid-sales-kpis { grid-template-columns: repeat(3,minmax(0,1fr)); } }
 
 .staff-desk__manual-vehicle-details {
   width: min(100%, 360px);
@@ -18874,6 +18896,24 @@ textarea.form-input {
   color: #64748b;
   font-size: 0.9rem;
 }
+
+.subscription-history {
+  margin-top: 28px;
+  padding-top: 22px;
+  border-top: 1px solid #e2e8f0;
+}
+.subscription-history h3 { margin: 0 0 14px; color: #334155; font-size: 1rem; }
+.subscription-history-list { display: grid; gap: 8px; }
+.subscription-history-row {
+  display: flex; justify-content: space-between; gap: 16px; align-items: center;
+  padding: 13px 15px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc;
+}
+.subscription-history-row > div { display: flex; flex-direction: column; gap: 4px; }
+.subscription-history-row span { color: #64748b; font-size: .8rem; }
+.subscription-history-row b { font-size: .78rem; }
+.history-expired { color: #dc2626; }
+.history-cancelled { color: #64748b; }
+@media (max-width: 640px) { .subscription-history-row { align-items: flex-start; flex-direction: column; } }
 
 .staff-desk__manual-rfid-entry textarea {
   width: min(100%, 430px);

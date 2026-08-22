@@ -67,6 +67,38 @@ export async function updatePlan(
 }
 
 const PURCHASE_STATUS_IN_USE: SubscriptionDocument["status"][] = ["pending_payment", "active", "cancelled"];
+const PENDING_PAYMENT_TIMEOUT_MS = 10 * 60 * 1000;
+
+/**
+ * Hủy các đơn mua gói chưa thanh toán sau 10 phút. Subscription tạm được xóa
+ * để xe có thể tạo đơn mua mới; Transaction được giữ lại làm lịch sử audit.
+ */
+export async function expirePendingSubscriptionPayments(now = new Date()): Promise<number> {
+  const expiresBefore = new Date(now.getTime() - PENDING_PAYMENT_TIMEOUT_MS);
+  const staleSubscriptions = await Subscription.find({
+    status: "pending_payment",
+    createdAt: { $lte: expiresBefore },
+  }).select("_id transactionId");
+
+  if (staleSubscriptions.length === 0) return 0;
+
+  const subscriptionIds = staleSubscriptions.map((sub) => sub._id);
+  const transactionIds = staleSubscriptions
+    .map((sub) => sub.transactionId)
+    .filter((id): id is mongoose.Types.ObjectId => Boolean(id));
+
+  await Transaction.updateMany(
+    { _id: { $in: transactionIds }, status: "pending" },
+    {
+      $set: {
+        status: "cancelled",
+        refundReason: "Hết thời hạn thanh toán gói đăng ký (10 phút)",
+      },
+    },
+  );
+  await Subscription.deleteMany({ _id: { $in: subscriptionIds }, status: "pending_payment" });
+  return subscriptionIds.length;
+}
 
 /**
  * Mua gói mới — bắt buộc truyền vehicleId.
@@ -84,6 +116,9 @@ export async function purchaseSubscription(params: {
   baseUrl?: string;
   frontendUrl?: string;
 }): Promise<{ subscription: HydratedSubscription; payos?: Record<string, unknown> }> {
+  // Do not let an expired unpaid order block a new purchase before the scheduler runs.
+  await expirePendingSubscriptionPayments();
+
   const plan = await SubscriptionPlan.findById(params.planId);
   if (!plan || !plan.isActive) {
     const err = new Error("Gói không tồn tại hoặc đã ngừng.") as Error & { status: number };
@@ -509,6 +544,17 @@ export async function cancelSubscription(subscriptionId: string): Promise<Subscr
   }
 
   if (sub.status === "pending_payment") {
+    if (sub.transactionId) {
+      await Transaction.updateOne(
+        { _id: sub.transactionId, status: "pending" },
+        {
+          $set: {
+            status: "cancelled",
+            refundReason: "Người dùng hủy yêu cầu thanh toán gói",
+          },
+        },
+      );
+    }
     await Subscription.findByIdAndDelete(sub._id);
     console.log("[cancelSubscription] Deleted pending_payment subscription:", sub._id);
     return null;
@@ -729,6 +775,28 @@ export async function findActiveSubscriptionByPlate(plate: string): Promise<{
   };
 }
 
+/**
+ * Lấy mốc hết hạn gần nhất của gói gắn với biển số, kể cả khi gói đã hết hạn.
+ * Dùng để chỉ tính phí cho phần thời gian sau khi quyền lợi subscription kết thúc.
+ */
+export async function findLatestSubscriptionEndByPlate(plate: string): Promise<Date | null> {
+  const normPlate = normalizePlate(plate);
+  if (!normPlate) return null;
+
+  const vehicle = await Vehicle.findOne({ plate: normPlate }).select("_id");
+  if (!vehicle) return null;
+
+  const sub = await Subscription.findOne({
+    primaryVehicleId: vehicle._id,
+    status: { $in: ["active", "expired", "cancelled"] },
+  })
+    .sort({ endDate: -1 })
+    .select("endDate")
+    .lean();
+
+  return sub?.endDate ?? null;
+}
+
 export async function getOwnerInfoFromPlate(
   plate: string,
   providedEmail?: string,
@@ -807,10 +875,32 @@ export async function checkSubscriptionDiscountForPlate(
 }
 
 export async function expireSubscriptions(): Promise<number> {
+  const now = new Date();
+  const expiredSubscriptions = await Subscription.find({
+    status: "active",
+    endDate: { $lt: now },
+  }).select("_id userId planName endDate").lean();
+  if (expiredSubscriptions.length === 0) return 0;
+
   const result = await Subscription.updateMany(
-    { status: "active", endDate: { $lt: new Date() } },
+    { _id: { $in: expiredSubscriptions.map((sub) => sub._id) }, status: "active" },
     { $set: { status: "expired" } },
   );
+  const { createNotification, createNotificationsForRoles } = await import("./notification.service.js");
+  for (const sub of expiredSubscriptions) {
+    await createNotification({
+      title: "Gói gửi xe đã hết hạn",
+      content: `Gói ${sub.planName} của bạn đã hết hạn. Vui lòng gia hạn để tiếp tục sử dụng quyền thành viên.`,
+      type: "subscription_expired",
+      userId: sub.userId.toString(),
+    });
+  }
+  await createNotificationsForRoles({
+    title: "Có gói gửi xe vừa hết hạn",
+    content: `Hệ thống vừa phát hiện ${expiredSubscriptions.length} gói gửi xe hết hạn và đã gửi thông báo cho khách hàng.`,
+    type: "subscription_expired_staff",
+    roles: ["admin", "staff"],
+  });
   if (result.modifiedCount > 0) await (await import("./parkingQuota.service.js")).syncDynamicMemberSlotReservation();
   return result.modifiedCount;
 }

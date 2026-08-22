@@ -60,6 +60,10 @@ export function SubscriptionsView() {
       ),
     [subscriptionList, now],
   );
+  const subscriptionHistory = useMemo(
+    () => subscriptionList.filter((s) => s.status === "expired" || s.status === "cancelled"),
+    [subscriptionList],
+  );
   if (!currentUser) return null;
 
   async function refreshSubscriptionList() {
@@ -247,7 +251,7 @@ export function SubscriptionsView() {
     setCancellingId(id);
     try {
       await cancelSubscription(id);
-      setFeedback({ type: "info", text: "Đã hủy gói. Sub còn hiệu lực tới endDate." });
+      setFeedback({ type: "info", text: "Đã hủy yêu cầu thanh toán gói." });
       await refreshSubscriptionList();
     } finally {
       setCancellingId(null);
@@ -334,7 +338,7 @@ export function SubscriptionsView() {
               Gói của bạn
             </h2>
 
-            {myActiveSubs.length === 0 ? (
+            {myActiveSubs.length === 0 && subscriptionHistory.length === 0 ? (
               <PlanGrid
                 plans={visiblePlans}
                 purchasing={purchasing}
@@ -349,8 +353,10 @@ export function SubscriptionsView() {
                       key={sub.id}
                       subscription={sub}
                       renewing={purchasing}
+                      cancelling={cancellingId === sub.id}
                       onRenew={handleRenew}
                       onContinuePayment={handleContinuePayment}
+                      onCancel={handleCancel}
                       onViewVehicle={handleViewVehicle}
                     />
                   ))}
@@ -374,6 +380,27 @@ export function SubscriptionsView() {
                           >
                             {purchasing && activePlanId === plan.id ? "Đang tạo..." : "Mua gói này"}
                           </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {subscriptionHistory.length > 0 && (
+                  <div className="subscription-history">
+                    <h3>Lịch sử gói đã mua</h3>
+                    <div className="subscription-history-list">
+                      {subscriptionHistory.map((sub) => (
+                        <div className="subscription-history-row" key={sub.id}>
+                          <div>
+                            <strong>{sub.planName}</strong>
+                            <span>{sub.memberCode || "Không có mã thành viên"}</span>
+                          </div>
+                          <div>
+                            <span>{new Date(sub.startDate).toLocaleDateString("vi-VN")} - {new Date(sub.endDate).toLocaleDateString("vi-VN")}</span>
+                            <b className={sub.status === "expired" ? "history-expired" : "history-cancelled"}>
+                              {sub.status === "expired" ? "Đã hết hạn" : "Đã hủy"}
+                            </b>
+                          </div>
                         </div>
                       ))}
                     </div>

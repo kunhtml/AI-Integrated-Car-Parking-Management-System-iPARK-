@@ -713,6 +713,8 @@ export function SessionsView() {
               <div className="session-detail-grid">
                 <div><span>Mã phiên</span><strong>#{detailSession.id.slice(-8).toUpperCase()}</strong></div>
                 <div><span>Chủ xe</span><strong>{detailSession.owner || "Khách vãng lai"}</strong></div>
+                <div><span>UID RFID lúc vào</span><strong>{detailSession.entryRfidUid || detailSession.rfidCardId || "Chưa ghi nhận"}</strong></div>
+                <div><span>UID RFID lúc ra</span><strong>{detailSession.exitRfidUid || "Chưa ghi nhận"}</strong></div>
                 <div><span>Vị trí</span><strong>{detailSession.slot || "—"}</strong></div>
                 <div><span>Thời gian vào</span><strong>{detailSession.checkInDate} {detailSession.checkIn}</strong></div>
                 <div><span>Thời gian ra</span><strong>{detailSession.checkOut ? `${detailSession.checkOutDate ?? ""} ${detailSession.checkOut}`.trim() : "Chưa ra bãi"}</strong></div>

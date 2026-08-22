@@ -137,6 +137,10 @@ export type ParkingSession = {
   manualEntryReason?: string;
   manualExitReason?: string;
   exitRfidManualVerified?: boolean;
+  entryRfidUid?: string;
+  expectedExitRfidUid?: string;
+  exitRfidUid?: string;
+  rfidCardId?: string;
   transactionId?: string;
   ownerEmail?: string;
   feeBreakdown?: FeeBreakdown;

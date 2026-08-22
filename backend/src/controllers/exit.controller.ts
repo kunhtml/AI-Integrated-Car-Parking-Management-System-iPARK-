@@ -3,7 +3,10 @@ import mongoose from "mongoose";
 import { ParkingSession } from "../models/ParkingSession.js";
 import { RfidCard } from "../models/RfidCard.js";
 import { ParkingCameraLog } from "../models/ParkingCameraLog.js";
-import { findActiveSubscriptionByPlate } from "../services/subscription.service.js";
+import {
+  findActiveSubscriptionByPlate,
+  findLatestSubscriptionEndByPlate,
+} from "../services/subscription.service.js";
 import { calculateParkingFee } from "../services/pricing.service.js";
 import { getActivePricingConfig } from "../services/pricing.service.js";
 import { env } from "../config/env.js";
@@ -118,18 +121,27 @@ export async function openGate(request: Request, response: Response) {
 
   const ownerUserId =
     session.ownerUserId || (await session.populate("ownerUserId")).ownerUserId;
-  const isMemberSession = session.customerType === "member";
-  const activeSubscription = isMemberSession ? null : await findActiveSubscriptionByPlate(session.plate);
+  const activeSubscription = await findActiveSubscriptionByPlate(session.plate);
 
   let amountDue = 0;
-  if (isMemberSession || activeSubscription) {
+  if (!activeSubscription && session.paymentMethod === "subscription") {
+    // Entry marked the member session as free; revalidate at exit because the
+    // subscription may have expired while the vehicle was parked.
+    session.paymentStatus = "unpaid";
+    session.paymentMethod = undefined;
+  }
+  if (activeSubscription) {
     amountDue = 0;
   } else {
     if (session.fee == null || session.fee === 0) {
       const checkInAt = new Date(session.checkInAt);
       const now = new Date();
       const pricing = await getActivePricingConfig();
-      const feeBreakdown = calculateParkingFee(checkInAt, now, pricing);
+      const subscriptionEnd = await findLatestSubscriptionEndByPlate(session.plate);
+      const billableFrom = subscriptionEnd && subscriptionEnd > checkInAt && subscriptionEnd < now
+        ? subscriptionEnd
+        : checkInAt;
+      const feeBreakdown = calculateParkingFee(billableFrom, now, pricing);
       session.fee = feeBreakdown.totalFee;
       session.feeBreakdown = feeBreakdown;
       await session.save();
@@ -234,13 +246,13 @@ export async function openGate(request: Request, response: Response) {
 
 /**
  * GET /api/exit/pending
- * Trả về phiên xe ra gần nhất đang chờ RFID (exitState = "waiting_rfid")
+ * Trả về phiên xe ra gần nhất đang chờ RFID hoặc staff xác minh thủ công
  * để frontend restore state khi mount hoặc SSE kết nối lại.
  */
 export async function getPendingExit(request: Request, response: Response) {
   // Tìm phiên đang chờ xác minh RFID, mới nhất
   const session = await ParkingSession.findOne({
-    exitState: "waiting_rfid",
+    exitState: { $in: ["waiting_rfid", "waiting_manual_verification"] },
     status: "Đang gửi",
   })
     .sort({ exitDetectedAt: -1 })
@@ -303,6 +315,9 @@ export async function getPendingExit(request: Request, response: Response) {
           session.entryRfidUid ||
           session.entryExpectedRfidUid ||
           entryCard?.uid ||
+          (typeof session.rfidCardId === "string" && session.rfidCardId.length > 0
+            ? session.rfidCardId
+            : null) ||
           entryLog?.rfidUid ||
           null,
         entryRfidExpected: Boolean(
@@ -344,6 +359,7 @@ export async function dismissPendingExit(request: Request, response: Response) {
 
   const dismissable = new Set([
     "waiting_rfid",
+    "waiting_manual_verification",
     "rfid_verified",
     "payment_pending",
     "gate_authorizing",
@@ -405,11 +421,21 @@ export async function prepareManualExit(request: Request, response: Response) {
   }
 
   // Tính phí dự kiến nếu chưa fully_paid
+  const activeSubscription = await findActiveSubscriptionByPlate(session.plate);
+  if (!activeSubscription && session.paymentMethod === "subscription") {
+    session.paymentStatus = "unpaid";
+    session.paymentMethod = undefined;
+  }
   if (session.paymentStatus !== "fully_paid") {
     const pricing = await getActivePricingConfig();
+    const checkOutAt = new Date();
+    const subscriptionEnd = await findLatestSubscriptionEndByPlate(session.plate);
+    const billableFrom = subscriptionEnd && subscriptionEnd > session.checkInAt && subscriptionEnd < checkOutAt
+      ? subscriptionEnd
+      : session.checkInAt;
     const feeBreakdown = calculateParkingFee(
-      session.checkInAt,
-      new Date(),
+      billableFrom,
+      checkOutAt,
       pricing,
     );
     session.fee = feeBreakdown.totalFee;
@@ -458,8 +484,8 @@ export async function prepareManualExit(request: Request, response: Response) {
       sessionId: session._id.toString(),
       checkInAt: session.checkInAt.toISOString(),
       sessionStatus: "Đang gửi",
-      exitState: "waiting_rfid",
-      action: "waiting_rfid",
+      exitState: session.exitState || "waiting_rfid",
+      action: session.exitState || "waiting_rfid",
       sessionPaymentStatus: session.paymentStatus ?? "pending",
       fee: session.fee ?? null,
       userType:
@@ -518,7 +544,7 @@ export async function resolveExitMismatch(request: Request, response: Response) 
   }
 
   if (exceptionType === "wrong_card" || exceptionType === "two_vehicles") {
-    if (action !== "retry" && action !== "reject") {
+    if (action !== "retry" && action !== "reject" && action !== "manual_missing_entry_rfid") {
       response.status(400).json({
         ok: false,
         message: "Thẻ đang gắn xe khác. Chỉ được quẹt lại hoặc từ chối.",
@@ -547,15 +573,12 @@ export async function resolveExitMismatch(request: Request, response: Response) 
   }
 
   if (action === "manual_missing_entry_rfid") {
-    if (!session.entryRfidUnverified) {
-      response.status(409).json({
-        ok: false,
-        message: "Phiên này không được đánh dấu RFID chưa xác minh lúc vào; vui lòng quét đúng thẻ để xác minh.",
-      });
-      return;
-    }
     session.verificationNote = note;
     session.exitRfidManualVerified = true;
+    session.exitState = "rfid_verified";
+    // Manual RFID exception is an authorized verification path; the gate
+    // guard checks this timestamp before allowing a manual/payment exit.
+    session.exitRfidVerifiedAt = new Date();
     session.verifiedBy = actorId(request);
     session.verifiedAt = new Date();
     const settled = await settleExitAfterVerify(session);

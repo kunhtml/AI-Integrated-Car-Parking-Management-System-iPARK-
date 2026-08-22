@@ -2,7 +2,10 @@ import mongoose from "mongoose";
 import { ParkingSession, ParkingSessionDocument } from "../models/ParkingSession.js";
 import { RfidCard } from "../models/RfidCard.js";
 import { ParkingCameraLog } from "../models/ParkingCameraLog.js";
-import { findActiveSubscriptionByPlate } from "./subscription.service.js";
+import {
+  findActiveSubscriptionByPlate,
+  findLatestSubscriptionEndByPlate,
+} from "./subscription.service.js";
 import { calculateParkingFee, getActivePricingConfig } from "./pricing.service.js";
 
 type SessionDoc = mongoose.HydratedDocument<ParkingSessionDocument>;
@@ -184,6 +187,9 @@ export async function classifyExitMismatch(params: {
 
   session.matchStatus = "Không khớp";
   session.verificationStatus = "Chờ duyệt";
+  // Keep the normal checkout/payment/gate path intact while making the
+  // exception explicit for staff and polling clients.
+  session.exitState = "waiting_manual_verification";
   session.exitRfidUid = uid;
   session.exceptionType = exceptionType;
   session.exceptionEvidence = evidence;
@@ -208,25 +214,33 @@ export async function classifyExitMismatch(params: {
 }
 
 export async function settleExitAfterVerify(session: SessionDoc) {
-  const isMemberSession = session.customerType === "member";
-  const activeSubscription = isMemberSession
-    ? null
-    : await findActiveSubscriptionByPlate(session.plate);
+  const activeSubscription = await findActiveSubscriptionByPlate(session.plate);
 
   let amountDue = 0;
   let isSubscriber = false;
   let paymentStatus = session.paymentStatus || "unpaid";
 
-  if (isMemberSession || activeSubscription) {
+  if (activeSubscription) {
     isSubscriber = true;
     amountDue = 0;
     paymentStatus = "fully_paid";
     session.paymentStatus = "fully_paid";
     session.paymentMethod = session.paymentMethod || "subscription";
   } else {
+    if (session.paymentMethod === "subscription") {
+      session.paymentStatus = "unpaid";
+      session.paymentMethod = undefined;
+    }
+    paymentStatus = session.paymentStatus || "unpaid";
     if (session.fee == null || session.fee === 0) {
       const pricing = await getActivePricingConfig();
-      const feeBreakdown = calculateParkingFee(session.checkInAt, new Date(), pricing);
+      const checkOutAt = new Date();
+      const subscriptionEnd = await findLatestSubscriptionEndByPlate(session.plate);
+      // A lapsed subscription covers only the period before its end date.
+      const billableFrom = subscriptionEnd && subscriptionEnd > session.checkInAt && subscriptionEnd < checkOutAt
+        ? subscriptionEnd
+        : session.checkInAt;
+      const feeBreakdown = calculateParkingFee(billableFrom, checkOutAt, pricing);
       session.fee = feeBreakdown.totalFee;
       session.feeBreakdown = feeBreakdown;
     }

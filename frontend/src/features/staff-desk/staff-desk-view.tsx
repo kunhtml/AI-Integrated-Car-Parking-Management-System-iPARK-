@@ -50,6 +50,14 @@ function formatTime(iso?: string | null) {
   return new Date(iso).toLocaleTimeString("vi-VN");
 }
 
+function parseRfidConflict(message: string) {
+  const match = message.match(
+    /^RFID Guest UID (.+?) đã được cấp cho xe (.+?) lúc (.+?)\. Thẻ đang gắn với phiên này nên không thể cấp tiếp cho xe (.+?)\.$/,
+  );
+  if (!match) return null;
+  return { uid: match[1], assignedPlate: match[2], checkInAt: match[3], attemptedPlate: match[4] };
+}
+
 function statusLabel(s: CameraStreamStatus) {
   if (s === "open") return "Đã kết nối";
   if (s === "connecting") return "Đang kết nối…";
@@ -249,6 +257,9 @@ export function StaffDeskView() {
             stopScanPolling();
             setScanUid(data.uid || "");
             setScanPhase("success");
+            if (pendingManualEntryRfid && manualPlate && data.uid) {
+              void createSessionManual(data.uid, manualPlate);
+            }
             await bridgeFetch("/api/rfid/scan/cancel", {
               method: "POST",
               body: JSON.stringify({ direction: "in" }),
@@ -366,10 +377,12 @@ export function StaffDeskView() {
             ? "photo_captured"
             : "camera_unavailable",
           manualEntryReason: opts?.manualRfidReason
-            ? opts.manualRfidReason
+            ? (/camera/i.test(opts.manualRfidReason)
+              ? opts.manualRfidReason
+              : `Camera lỗi, ${opts.manualRfidReason}`)
             : opts?.fromIngestCorrection
-            ? "AI nhận diện sai/không đọc được; staff nhập biển thủ công"
-            : "Camera cổng vào không nhận diện; staff nhập biển thủ công",
+            ? "Camera lỗi, AI nhận diện sai/không đọc được; staff nhập biển thủ công"
+            : "Camera lỗi, không nhận diện được; staff nhập biển thủ công",
           visualConfirmed: true,
           entryRfidUnverified: !uid,
         };
@@ -473,13 +486,15 @@ export function StaffDeskView() {
       setShowManualEntryForm(false);
       setShowEntryRfidExceptionForm(false);
       setPendingManualEntryRfid(true);
+      // The member still presents the physical card at the gate; scan it to
+      // verify the UID before creating the session and opening the barrier.
       await startScan();
     } catch {
       setManualEntryError("Không thể tra cứu thông tin biển số.");
     } finally {
       setManualEntryLoading(false);
     }
-  }, [manualEntryPlate, startScan]);
+  }, [manualEntryPlate, startScan, createSessionManual]);
 
   const handleEntryRfidException = useCallback(() => {
     void cancelScan();
@@ -930,8 +945,11 @@ export function StaffDeskView() {
               paymentStatus: data.sessionPaymentStatus || "fully_paid",
               isSubscriber: false,
               canOpenGate: true,
-            },
+          },
       );
+      // Payment is persisted first. The gate endpoint reloads the session and
+      // enforces verification/payment guards before authorizing the barrier.
+      await openExitBarrier();
     } catch {
       setExitScanError("Lỗi kết nối khi thu tiền mặt.");
       setExitScanPhase("error");
@@ -941,6 +959,7 @@ export function StaffDeskView() {
     activeExit?.action,
     activeExit?.fee,
     exitVerifyData?.amountDue,
+    openExitBarrier,
   ]);
 
   const retryExitScan = useCallback(() => {
@@ -1244,6 +1263,7 @@ export function StaffDeskView() {
                     type="button"
                     className="btn btn-primary"
                     disabled={entryRfidExceptionReason.trim().length < 8}
+                    disabled={/đang có phiên|chưa checkout/i.test(entryRfidExceptionReason)}
                     onClick={() => void createSessionManual(undefined, manualPlate, { manualRfidReason: entryRfidExceptionReason.trim() })}
                   >
                     Xác nhận cho xe vào
@@ -1314,6 +1334,7 @@ export function StaffDeskView() {
                   setManualEntryError("");
                 }}
                 onSubmitManualEntry={() => void startManualEntryRfidFlow()}
+                onOpenVerifiedMember={() => void createSessionManual(manualEntryVehicle?.cardUid, manualEntryPlate)}
               />
             ) : (
               <IngestCard
@@ -1462,6 +1483,7 @@ function WaitingCard({
   onToggleManualEntryForm,
   onManualEntryPlateChange,
   onSubmitManualEntry,
+  onOpenVerifiedMember,
 }: {
   direction: "in" | "out";
   scanPhase?: "idle" | "starting" | "waiting" | "success" | "timeout" | "error";
@@ -1484,6 +1506,7 @@ function WaitingCard({
   onToggleManualEntryForm?: () => void;
   onManualEntryPlateChange?: (value: string) => void;
   onSubmitManualEntry?: () => void;
+  onOpenVerifiedMember?: () => void;
 }) {
   const isEntry = direction === "in";
   const showManualForm = isEntry ? showManualEntryForm : showManualExitForm;
@@ -1587,6 +1610,11 @@ function WaitingCard({
       ) : null}
 
       <div className="staff-desk__exit-idle-actions">
+        {isEntry && manualEntryVehicle?.cardUid && !showManualForm ? (
+          <button type="button" className="btn btn-primary staff-desk__exit-manual-btn" onClick={onOpenVerifiedMember} disabled={Boolean(manualLoading)}>
+            Mở barie cho xe thành viên
+          </button>
+        ) : null}
         {!showManualForm ? (
           <button
             type="button"
@@ -1853,6 +1881,7 @@ function IngestCard(props: {
       event.sessionStatus === "Đã hoàn thành");
   const aiPlateMissing = !event.plate;
   const showManual = Boolean(props.showManualEntry) || aiPlateMissing;
+  const rfidConflict = parseRfidConflict(props.scanError);
   const canConfirmManual =
     (props.manualPlate || "").trim().replace(/[\s-]+/g, "").length >= 5 &&
     props.phase !== "creating" &&
@@ -2030,7 +2059,7 @@ function IngestCard(props: {
                     className="btn btn-primary btn-lg"
                     onClick={props.onStartScan}
                   >
-                    <Nfc size={18} /> Quét thẻ nhân viên
+                    <Nfc size={18} /> {props.scanPhase === "error" ? "Quét lại RFID" : "Quét thẻ nhân viên"}
                   </button>
                   {props.scanPhase === "timeout" && (
                     <p className="staff-desk__hint staff-desk__hint--warn">
@@ -2038,9 +2067,19 @@ function IngestCard(props: {
                     </p>
                   )}
                   {props.scanPhase === "error" && props.scanError && (
-                    <p className="staff-desk__hint staff-desk__hint--danger">
-                      <CircleAlert size={14} /> {props.scanError}
-                    </p>
+                    rfidConflict ? (
+                      <div className="staff-desk__rfid-conflict" role="alert">
+                        <div className="staff-desk__rfid-conflict-title"><CircleAlert size={15} /> Không thể cấp RFID Guest cho xe này</div>
+                        <div className="staff-desk__rfid-conflict-grid">
+                          <div><span>UID RFID</span><strong>{rfidConflict.uid}</strong></div>
+                          <div><span>Đã cấp cho xe</span><strong>{rfidConflict.assignedPlate}</strong></div>
+                          <div><span>Thời gian vào</span><strong>{rfidConflict.checkInAt}</strong></div>
+                        </div>
+                        <p>Thẻ đang gắn với phiên của xe <strong>{rfidConflict.assignedPlate}</strong>, nên không thể cấp tiếp cho xe <strong>{rfidConflict.attemptedPlate}</strong>.</p>
+                      </div>
+                    ) : (
+                      <p className="staff-desk__hint staff-desk__hint--danger"><CircleAlert size={14} /> {props.scanError}</p>
+                    )
                   )}
                 </div>
               )}
@@ -2201,7 +2240,7 @@ function ExitCard({
   const entryRfidUid =
     typeof event.metadata?.entryRfidUid === "string"
       ? event.metadata.entryRfidUid
-      : event.rfidUid;
+      : event.rfidUid || scanUid;
   const entryRfidIsExpected = event.metadata?.entryRfidExpected === true;
   const exitRfidManualNote =
     typeof event.metadata?.exitRfidManualNote === "string"
@@ -2210,11 +2249,13 @@ function ExitCard({
   const exitRfidManuallyVerified =
     event.metadata?.exitRfidManualVerified === true;
   const [showManualRfidForm, setShowManualRfidForm] = useState(false);
-  const [manualRfidNote, setManualRfidNote] = useState("");
   const [showCashForm, setShowCashForm] = useState(false);
   const [cashReceived, setCashReceived] = useState("");
+  const [manualRfidNote, setManualRfidNote] = useState("");
+  // Older camera events may not include `entryRfidUnverified`; the absence of
+  // an entry UID itself is the authoritative condition for manual review.
   const canHandleMissingEntryRfid =
-    event.metadata?.entryRfidUnverified === true && !didCheckout && !event.barrierOpened;
+    !entryRfidUid && !didCheckout && !event.barrierOpened;
 
   const amountDue = exitVerifyData?.amountDue ?? event.fee ?? 0;
   const receivedAmount = Number(cashReceived.replace(/[^0-9]/g, "")) || 0;
@@ -2268,7 +2309,13 @@ function ExitCard({
     };
 
     if (didCheckout) return "Đã thanh toán";
-    if (isSubscriber) return "Miễn phí (thành viên)";
+    // A valid member package has no payable balance, even if the legacy
+    // session status was not updated from `unpaid`.
+    // Owning an RFID card does not grant a free package; only an active
+    // subscription should be labeled as free.
+    if (isSubscriber) {
+      return "Miễn phí (thành viên)";
+    }
 
     const fromVerify = statusFrom(exitVerifyData?.paymentStatus);
     if (fromVerify) return fromVerify;
@@ -2460,7 +2507,18 @@ function ExitCard({
       {!mismatch ? (
         <div className="staff-desk__exit-rfid">
           <div className="staff-desk__exit-rfid-card">
-            <p className="staff-desk__exit-rfid-prompt">{rfidPrompt}</p>
+            {!entryRfidUid && (exitRfidManuallyVerified || Boolean(exitRfidManualNote)) && (event.fee ?? 0) <= 0 ? (
+              <button
+                type="button"
+                className="btn btn-primary btn-lg"
+                onClick={onOpenGate || onOpenBarrier}
+                disabled={didCheckout || event.barrierOpened}
+              >
+                <ArrowUpFromLine size={18} /> Mở barie
+              </button>
+            ) : (
+              <p className="staff-desk__exit-rfid-prompt">{rfidPrompt}</p>
+            )}
 
             {noSession ? (
               <div className="staff-desk__alert staff-desk__alert--danger">
@@ -2576,6 +2634,39 @@ function ExitCard({
               ) : null}
               </>
             ) : hasPaymentData ? (
+              showCashForm ? (
+                <div className="staff-desk__cash-form">
+                  <strong>Thu tiền mặt</strong>
+                  <span>Phí cần thu: {amountDue.toLocaleString("vi-VN")}đ</span>
+                  <label htmlFor="cash-received-payos">Khách đưa</label>
+                  <input
+                    id="cash-received-payos"
+                    inputMode="numeric"
+                    value={cashReceived}
+                    onChange={(event) => setCashReceived(event.target.value)}
+                    placeholder="VD: 50000"
+                    autoFocus
+                  />
+                  {receivedAmount >= amountDue ? (
+                    <span>Tiền thừa trả khách: {cashChange.toLocaleString("vi-VN")}đ</span>
+                  ) : cashReceived ? (
+                    <span className="staff-desk__cash-form-error">Số tiền khách đưa chưa đủ.</span>
+                  ) : null}
+                  <div>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={!onPayCash || receivedAmount < amountDue}
+                      onClick={() => onPayCash?.(receivedAmount)}
+                    >
+                      Xác nhận đã thu tiền
+                    </button>
+                    <button type="button" className="btn btn-ghost" onClick={() => setShowCashForm(false)}>
+                      Hủy
+                    </button>
+                  </div>
+                </div>
+              ) : (
               <div className="staff-desk__qr-box">
                 <p className="staff-desk__qr-amount">
                   {(paymentData?.amount || amountDue).toLocaleString("vi-VN")}đ
@@ -2604,20 +2695,33 @@ function ExitCard({
                     </button>
                   ) : null}
                   {onPayCash ? (
-                    <button className="btn btn-primary" onClick={() => setShowCashForm(true)}>
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => setShowCashForm(true)}
+                    >
                       Đổi sang tiền mặt
                     </button>
                   ) : null}
                 </div>
                 <p className="staff-desk__hint">Đang chờ thanh toán PayOS…</p>
               </div>
+              )
             ) : scanPhase === "starting" || scanPhase === "waiting" ? (
-              <div className="staff-desk__exit-rfid-waiting">
+              entryRfidUid ? <div className="staff-desk__exit-rfid-waiting">
                 <div className="staff-desk__scan-pulse">
                   <Nfc size={32} className="animate-pulse" />
                 </div>
                 <span>Đang chờ quét thẻ…</span>
-              </div>
+                {onManualMissingEntryRfid && entryRfidUid ? (
+                  <div className="staff-desk__manual-rfid-form">
+                    <label htmlFor="manual-rfid-note-waiting">Đầu đọc không hoạt động?</label>
+                    <textarea id="manual-rfid-note-waiting" value={manualRfidNote} onChange={(event) => setManualRfidNote(event.target.value)} rows={2} placeholder="Nhập lý do xử lý thủ công (tối thiểu 8 ký tự)" />
+                    <button className="btn btn-ghost btn-lg" disabled={manualRfidNote.trim().length < 8} onClick={() => onManualMissingEntryRfid(manualRfidNote.trim())}>
+                      Xử lý thủ công lỗi RFID
+                    </button>
+                  </div>
+                ) : null}
+              </div> : null
             ) : scanPhase === "error" || scanPhase === "timeout" ? (
               <div className="staff-desk__exit-rfid-waiting">
                 <div className="staff-desk__alert staff-desk__alert--danger">
@@ -2632,6 +2736,25 @@ function ExitCard({
                   <button className="btn btn-primary btn-lg" onClick={onScanRfid}>
                     <Nfc size={18} /> Quét lại thẻ RFID
                   </button>
+                ) : null}
+                {onOpenBarrier ? (
+                  <div className="staff-desk__manual-rfid-form">
+                    <label htmlFor="manual-rfid-note">Lý do xử lý thủ công</label>
+                    <textarea
+                      id="manual-rfid-note"
+                      value={manualRfidNote}
+                      onChange={(event) => setManualRfidNote(event.target.value)}
+                      placeholder="Ví dụ: Đầu đọc RFID không nhận thẻ..."
+                      rows={3}
+                    />
+                    <button
+                      className="btn btn-ghost btn-lg"
+                      disabled={manualRfidNote.trim().length < 8 || !onManualMissingEntryRfid}
+                      onClick={() => onManualMissingEntryRfid?.(manualRfidNote.trim())}
+                    >
+                      Xử lý thủ công lỗi RFID
+                    </button>
+                  </div>
                 ) : null}
               </div>
             ) : scanPhase === "success" && !exitVerifyData ? (

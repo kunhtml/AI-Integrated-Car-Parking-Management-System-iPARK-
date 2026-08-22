@@ -8,8 +8,10 @@ import { StatusBadge } from "./status-badge";
 type Props = {
   subscription: Subscription;
   renewing: boolean;
+  cancelling: boolean;
   onRenew: (id: string) => void;
   onContinuePayment: (id: string) => Promise<boolean> | void;
+  onCancel: (id: string) => void;
   onViewVehicle: (vehicleId: string) => void;
 };
 
@@ -18,7 +20,7 @@ function describeVehicle(v: SubscriptionVehicle): string {
   return parts.length > 0 ? parts.join(" · ") : "Chưa cập nhật thông tin xe";
 }
 
-export function SubscriptionCard({ subscription, renewing, onRenew, onContinuePayment, onViewVehicle }: Props) {
+export function SubscriptionCard({ subscription, renewing, cancelling, onRenew, onContinuePayment, onCancel, onViewVehicle }: Props) {
   const s = subscription;
   const days = daysRemaining(s.endDate);
   const canRenew = s.status === "active" || s.status === "expired";
@@ -223,6 +225,34 @@ export function SubscriptionCard({ subscription, renewing, onRenew, onContinuePa
             >
               <CreditCard size={14} />
               {renewing ? "Đang mở QR..." : "Tiếp tục thanh toán"}
+            </button>
+          )}
+          {canContinuePayment && (
+            <button
+              type="button"
+              onClick={() => onCancel(s.id)}
+              disabled={renewing || cancelling}
+              style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                padding: "10px 16px",
+                borderRadius: 10,
+                border: "1.5px solid #fecaca",
+                background: "#fff1f2",
+                color: "#be123c",
+                fontWeight: 700,
+                fontSize: "0.85rem",
+                cursor: renewing || cancelling ? "not-allowed" : "pointer",
+                opacity: renewing || cancelling ? 0.6 : 1,
+                transition: "all 0.15s",
+                minHeight: 40,
+              }}
+            >
+              <XCircle size={14} />
+              {cancelling ? "Đang hủy..." : "Hủy yêu cầu"}
             </button>
           )}
           {canRenew && (

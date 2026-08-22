@@ -525,6 +525,26 @@ def _scale_boxes_to_original(boxes, scale: float):
     return out
 
 
+def _dedupe_plate_boxes(boxes, iou_threshold=0.5):
+    """Keep the strongest box when YOLO returns overlapping plate boxes."""
+    kept = []
+    for candidate in sorted(boxes, key=lambda b: b[4], reverse=True):
+        x1, y1, x2, y2, _ = candidate[:5]
+        area = max(1, (x2 - x1) * (y2 - y1))
+        duplicate = False
+        for prior in kept:
+            px1, py1, px2, py2, _ = prior[:5]
+            inter = max(0, min(x2, px2) - max(x1, px1)) * max(0, min(y2, py2) - max(y1, py1))
+            prior_area = max(1, (px2 - px1) * (py2 - py1))
+            union = area + prior_area - inter
+            if (inter / union if union else 0) >= iou_threshold:
+                duplicate = True
+                break
+        if not duplicate:
+            kept.append(candidate)
+    return kept
+
+
 def _metric_logger_loop():
     """Log RSS + OCR metrics định kỳ."""
     while True:
@@ -1307,6 +1327,7 @@ def process_frame(frame, plate_counter, last_plate, last_seen_time, prefix, ser,
                 except Exception:
                     pass
             boxes = _scale_boxes_to_original(boxes, yolo_scale)
+            boxes = _dedupe_plate_boxes(boxes)
             if boxes:
                 max_conf = max(b[4] for b in boxes)
                 if max_conf < 0.5:

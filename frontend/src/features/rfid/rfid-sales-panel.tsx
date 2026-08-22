@@ -509,8 +509,8 @@ export function RfidSalesPanel() {
     <section className="rfid-sales-section" aria-label="Bán và quản lý vòng đời thẻ RFID">
       <div className="rfid-sales-heading">
         <div>
-          <p className="rfid-eyebrow">QUẢN LÝ RFID</p>
-          <h3>Quản lý hệ thống thẻ RFID</h3>
+          <p className="rfid-eyebrow">RFID</p>
+          <h3>Quản lý thẻ RFID</h3>
           <p>Thẻ Guest ở kho được cấp và thu hồi tại cổng; thẻ Member được bán đứt, liên kết duy nhất với một xe và có thể dùng để mua gói.</p>
         </div>
         <div className="rfid-sales-heading-actions">
@@ -539,6 +539,9 @@ export function RfidSalesPanel() {
       )}
 
       <div className="rfid-sales-kpis">
+        <button type="button" className="rfid-sales-kpi total" onClick={() => { setTab("inventory"); setInventoryStatus("all"); }}>
+          <span><small>TỔNG THỂ</small><strong>{inventory.length}</strong></span>
+        </button>
         <button type="button" className="rfid-sales-kpi available" onClick={() => { setTab("inventory"); setInventoryStatus("available"); }}>
           <PackageCheck size={19} />
           <span><small>Thẻ đang có sẵn</small><strong>{summaryCount("available")}</strong></span>
@@ -551,6 +554,9 @@ export function RfidSalesPanel() {
         <button type="button" className="rfid-sales-kpi issue" onClick={() => { setTab("inventory"); setInventoryStatus("lost"); }}>
           <ShieldAlert size={19} />
           <span><small>Mất / hỏng / khóa</small><strong>{summaryCount("lost") + summaryCount("damaged") + summaryCount("blocked")}</strong></span>
+        </button>
+        <button type="button" className="rfid-sales-kpi customer" onClick={() => { setTab("inventory"); setInventoryStatus("in-use"); }}>
+          <span><small>KHÁCH</small><strong>{guestCardsInUse.length}</strong></span>
         </button>
       </div>
 

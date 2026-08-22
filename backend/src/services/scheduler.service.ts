@@ -1,5 +1,9 @@
 import { Cron } from "croner";
-import { expireSubscriptions, renewSubscription } from "./subscription.service.js";
+import {
+  expirePendingSubscriptionPayments,
+  expireSubscriptions,
+  renewSubscription,
+} from "./subscription.service.js";
 import { Subscription } from "../models/Subscription.js";
 import { expireOverdueReservations } from "./reservation.service.js";
 import { checkOfflineDevices } from "./deviceMaintenance.service.js";
@@ -62,6 +66,10 @@ export function initScheduler() {
   // Every minute: reconcile paid RFID sales when PayOS webhook cannot reach localhost.
   new Cron("* * * * *", { protect: true, unref: true }, async () => {
     try {
+      const expiredPending = await expirePendingSubscriptionPayments();
+      if (expiredPending > 0) {
+        console.log(`[Scheduler] Expired ${expiredPending} unpaid subscription order(s)`);
+      }
       const result = await reconcilePendingRfidSales();
       if (result.updated > 0) {
         console.log(`[Scheduler] Activated ${result.updated} paid RFID sales (checked=${result.checked})`);

@@ -360,11 +360,7 @@ export async function createParkingSession(
         plate: cardPlate,
       });
       const subscription = await findActiveSubscriptionByPlate(cardPlate);
-      if (
-        !vehicle ||
-        !subscription ||
-        subscription.primaryVehicleId !== card.vehicleId.toString()
-      ) {
+      if (!vehicle) {
         response.status(409).json({
           message:
             "RFID Member ch\u01B0a c\u00F3 xe ho\u1EB7c g\u00F3i th\u00E0nh vi\u00EAn c\u00F2n hi\u1EC7u l\u1EF1c.",
@@ -372,7 +368,10 @@ export async function createParkingSession(
         return;
       }
 
-      quotaAccess = { customerType: "member", quotaType: "member" };
+      // RFID ownership is valid even when the subscription has expired.
+      quotaAccess = subscription
+        ? { customerType: "member", quotaType: "member" }
+        : { customerType: "guest", quotaType: "walk_in" };
       isMember = true;
       ownerUserId = card.userId;
       plateCheck = { warn: undefined, discount: 0 };
@@ -430,11 +429,12 @@ export async function createParkingSession(
     return;
   }
 
-  const { name: ownerName, email: ownerEmail } = rfidCard
-    ? isMember
-      ? await getOwnerInfoFromPlate(body.plate)
-      : { name: "Guest RFID", email: "" }
-    : await getOwnerInfoFromPlate(body.plate);
+  // Resolve the vehicle owner independently from RFID type. A customer may
+  // use a Guest/replacement card while still being a registered vehicle owner.
+  const ownerInfo = await getOwnerInfoFromPlate(body.plate);
+  const { name: ownerName, email: ownerEmail } = ownerInfo?.name
+    ? ownerInfo
+    : { name: rfidCard ? "Guest RFID" : "Khách vãng lai", email: "" };
 
   if (plateCheck.warn) {
     await createNotification({

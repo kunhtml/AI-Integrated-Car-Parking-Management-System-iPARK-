@@ -368,6 +368,22 @@ export async function lookupByPlate(request: Request, response: Response) {
   });
 }
 
+export async function replaceActiveSessionRfid(request: Request, response: Response) {
+  const body = z.object({ plate: z.string().min(3), cardId: z.string().min(1) }).parse(request.body);
+  const plate = normalizePlate(body.plate);
+  const session = await ParkingSession.findOne({ plate, status: "Đang gửi" }).sort({ checkInAt: -1 });
+  if (!session) { response.status(404).json({ ok: false, message: "Không tìm thấy phiên đang gửi của biển số này." }); return; }
+  const card = await RfidCard.findOne({ $or: [{ _id: body.cardId }, { cardId: body.cardId }, { uid: body.cardId }], status: "available" });
+  if (!card) { response.status(409).json({ ok: false, message: "Thẻ RFID không tồn tại hoặc không còn sẵn sàng." }); return; }
+  session.rfidCardId = card.cardId || card.uid;
+  session.rfidAssignedAt = new Date();
+  await session.save();
+  card.status = "in-use";
+  card.plate = plate;
+  await card.save();
+  response.json({ ok: true, session, card: serializeCard(card) });
+}
+
 /**
  * Trả thẻ RFID thuộc về user đang đăng nhập (customer).
  * Match theo biển số: thẻ nào có plate khớp với một Vehicle của user hiện tại.

@@ -17,6 +17,7 @@ import {
 import {
   checkSubscriptionDiscountForPlate,
   findActiveSubscriptionByPlate,
+  findLatestSubscriptionEndByPlate,
   getOwnerInfoFromPlate,
 } from "../services/subscription.service.js";
 import { createNotification } from "../services/notification.service.js";
@@ -135,11 +136,23 @@ async function buildSessionForEntry(
       }
       // Guest RFID always consumes a walk-in slot, even for a registered plate.
       if (!["available", "active"].includes(rfidCard.status)) {
+        const activeSession = await ParkingSession.findOne({
+          status: "Đang gửi",
+          $or: [
+            { rfidCardId: rfidCard.uid },
+            ...(rfidCard.cardId ? [{ rfidCardId: rfidCard.cardId }] : []),
+          ],
+        })
+          .select("plate checkInAt")
+          .sort({ checkInAt: -1 })
+          .lean();
+        const uid = rfidCard.uid || rfidCard.cardId || "không xác định";
         return {
           duplicate: false,
           invalidRfid: true,
-          message:
-            "Th\u1EBB RFID Guest ch\u01B0a s\u1EB5n s\u00E0ng \u0111\u1EC3 c\u1EA5p t\u1EA1i c\u1ED5ng.",
+          message: activeSession
+            ? `RFID Guest UID ${uid} đã được cấp cho xe ${activeSession.plate} lúc ${activeSession.checkInAt.toLocaleString("vi-VN")}. Thẻ đang gắn với phiên này nên không thể cấp tiếp cho xe ${plate}.`
+            : `RFID Guest UID ${uid} đang ở trạng thái ${rfidCard.status}, chưa sẵn sàng để cấp cho xe ${plate}.`,
         };
       }
       quotaAccess = { customerType: "guest", quotaType: "walk_in" };
@@ -362,7 +375,17 @@ export async function pushCameraLog(request: Request, response: Response) {
     );
   } else if (body.direction !== "in") {
     // OUT: tìm phiên đang mở gần nhất theo biển số
-    openSession = await ParkingSession.findOne({ $or: [{ plate }, { entryDetectedPlate: plate }, { manualPlate: plate }], status: "Đang gửi" }).sort({ checkInAt: -1 });
+    openSession = await ParkingSession.findOne({
+      $or: [
+        ...(sessionId && mongoose.Types.ObjectId.isValid(sessionId)
+          ? [{ _id: new mongoose.Types.ObjectId(sessionId) }]
+          : []),
+        { plate },
+        { entryDetectedPlate: plate },
+        { manualPlate: plate },
+      ],
+      status: "Đang gửi",
+    }).sort({ checkInAt: -1 });
     console.log(
       `[pushCameraLog] direction=out plate=${plate} openSession=${openSession?._id ?? "NOT FOUND"}`,
     );
@@ -392,11 +415,21 @@ export async function pushCameraLog(request: Request, response: Response) {
       openSession.exitState = "waiting_rfid";
       openSession.exitDetectedAt = new Date();
       // Tính phí dự kiến (hiển thị trên UI)
+      if (!activeMembership && openSession.paymentMethod === "subscription") {
+        // Gói đã hết hạn sau lúc xe vào: bỏ trạng thái miễn phí đã gán lúc check-in.
+        openSession.paymentStatus = "unpaid";
+        openSession.paymentMethod = undefined;
+      }
       if (openSession.paymentStatus !== "fully_paid") {
         const pricing = await getActivePricingConfig();
+        const checkOutAt = new Date();
+        const subscriptionEnd = await findLatestSubscriptionEndByPlate(plate);
+        const billableFrom = subscriptionEnd && subscriptionEnd > openSession.checkInAt && subscriptionEnd < checkOutAt
+          ? subscriptionEnd
+          : openSession.checkInAt;
         const feeBreakdown = calculateParkingFee(
-          openSession.checkInAt,
-          new Date(),
+          billableFrom,
+          checkOutAt,
           pricing,
         );
         openSession.fee = feeBreakdown.totalFee;

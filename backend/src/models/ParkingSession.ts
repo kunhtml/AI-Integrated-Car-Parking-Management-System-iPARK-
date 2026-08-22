@@ -55,6 +55,7 @@ export type ParkingSessionDocument = {
   exitImageUrl?: string;
   exitState?:
     | "waiting_rfid"
+    | "waiting_manual_verification"
     | "rfid_verified"
     | "payment_pending"
     | "gate_authorizing"
@@ -178,6 +179,7 @@ const parkingSessionSchema = new Schema<ParkingSessionDocument>(
       type: String,
       enum: [
         "waiting_rfid",
+        "waiting_manual_verification",
         "rfid_verified",
         "payment_pending",
         "gate_authorizing",

@@ -2279,10 +2279,12 @@ export function VehiclesView() {
   const [requestSubmitting, setRequestSubmitting] = useState(false);
 
   const isAdmin = currentUser?.role === "admin";
+  const isCustomer = currentUser?.role === "customer";
+  const canViewRequests = isAdmin || isCustomer;
 
   useEffect(() => {
-    loadVehicleRequests({ includeResolved: true });
-  }, [isAdmin]);
+    if (canViewRequests) loadVehicleRequests({ includeResolved: true });
+  }, [canViewRequests]);
 
   // Map vehicleId → active subscriptionId của customer (1 xe 1 sub)
   const vehicleSubscriptionMap = useMemo(() => {
@@ -2651,12 +2653,12 @@ export function VehiclesView() {
           processing={resolvingId === detailVehicle.id}
           isAdmin={isAdmin}
           onEdit={
-            !isAdmin && detailVehicle.id && detailVehicle.status === "Blacklist"
+            isCustomer && detailVehicle.id && detailVehicle.status === "Blacklist"
               ? () => {
                   setDetailVehicle(null);
                   setResubmitTarget(detailVehicle);
                 }
-              : !isAdmin &&
+                : isCustomer &&
                   detailVehicle.id &&
                   vehicleSubscriptionMap.has(detailVehicle.id)
                 ? () => {
@@ -3279,7 +3281,7 @@ export function VehiclesView() {
             <div className="veh-stat-label">Từ chối</div>
             <div className="veh-stat-value">{stats.blacklist}</div>
           </div>
-          <div
+          {canViewRequests && <div
             className={`veh-stat${activeTab === "requests" ? " active" : ""}`}
             onClick={() => setActiveTab("requests")}
             style={{ cursor: "pointer", position: "relative" }}
@@ -3301,7 +3303,7 @@ export function VehiclesView() {
                 </span>
               )}
             </div>
-          </div>
+          </div>}
         </div>
 
         {activeTab !== "requests" && (
@@ -3404,7 +3406,7 @@ export function VehiclesView() {
                     </button>
                   </>
                 )}
-                {!isAdmin && (
+                {isCustomer && (
                   <button
                     className="small-button primary"
                     onClick={() => {
@@ -3569,7 +3571,7 @@ export function VehiclesView() {
                       <Trash2 size={13} />
                     </button>
                   )}
-                  {!isAdmin &&
+                  {isCustomer &&
                     vehicle.id &&
                     vehicleSubscriptionMap.has(vehicle.id) && (
                       <button
