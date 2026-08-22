@@ -384,8 +384,31 @@ export async function createParkingSession(
         return;
       }
       if (!["available", "active"].includes(card.status)) {
+        // Chi tiết hóa lý do: thẻ đang gắn phiên nào, hoặc trạng thái thẻ là gì.
+        const busySession = await ParkingSession.findOne({
+          status: "Đang gửi",
+          $or: [
+            ...(card.uid ? [{ rfidCardId: card.uid }] : []),
+            ...(card.cardId ? [{ rfidCardId: card.cardId }] : []),
+          ],
+        })
+          .select("plate checkInAt")
+          .sort({ checkInAt: -1 })
+          .lean();
+        const statusReasons: Record<string, string> = {
+          "in-use": "thẻ đang được cấp cho một phiên gửi xe khác",
+          "pending-sale": "thẻ đang chờ hoàn tất giao dịch bán",
+          lost: "thẻ đã được báo mất",
+          blocked: card.blockedReason || "thẻ đã bị khóa",
+          damaged: "thẻ đã được ghi nhận hỏng",
+          returned: "thẻ đã được trả về kho nhưng chưa kích hoạt lại",
+          inactive: "thẻ chưa được kích hoạt",
+        };
+        const reason = busySession
+          ? `Thẻ đang gắn với phiên của xe ${busySession.plate} vào lúc ${busySession.checkInAt.toLocaleString("vi-VN")}. Cho xe đó ra (hoàn tất phiên) trước khi cấp thẻ này cho xe ${body.plate}.`
+          : `Trạng thái thẻ hiện tại là "${card.status}" (${statusReasons[card.status] || "không đủ điều kiện cấp"}). Hãy đổi thẻ Guest khác hoặc đưa thẻ về trạng thái "available".`;
         response.status(409).json({
-          message: "RFID Guest ch\u01B0a s\u1EB5n s\u00E0ng \u0111\u1EC3 c\u1EA5p phi\u00EAn g\u1EEDi xe.",
+          message: `RFID Guest UID ${card.uid || card.cardId} chưa sẵn sàng để cấp phiên gửi xe — ${reason}`,
         });
         return;
       }

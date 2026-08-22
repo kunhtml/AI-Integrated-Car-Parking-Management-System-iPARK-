@@ -495,6 +495,13 @@ export async function prepareManualExit(request: Request, response: Response) {
       createdAt: (session.exitDetectedAt ?? new Date()).toISOString(),
       metadata: {
         manualExit: true,
+        // Mirror the fallback chain of GET /exit/pending so a manual-plate exit
+        // still surfaces the card the vehicle checked in with.
+        entryRfidUid:
+          session.entryRfidUid ||
+          session.entryExpectedRfidUid ||
+          (session.rfidCardId ? session.rfidCardId : null) ||
+          null,
         entryRfidUnverified: Boolean(session.entryRfidUnverified),
         vehicleType: session.vehicleType,
         customerType: session.customerType,

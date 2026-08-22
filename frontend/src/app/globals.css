@@ -12689,6 +12689,41 @@ textarea.form-input {
   cursor: pointer;
 }
 
+/* Device management layout */
+.devices-toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
+.devices-toolbar > .text-input { flex: 1 1 280px; min-width: 220px; height: 38px; padding: 0 11px; border: 1px solid #d9e2ee; border-radius: 9px; background: #fff; }
+.select-field { display: grid; gap: 4px; min-width: 150px; color: #66758b; font-size: 12px; font-weight: 700; }
+.select-field select { width: 100%; height: 38px; padding: 0 28px 0 10px; border: 1px solid #d9e2ee; border-radius: 9px; background: #fff; color: #243247; }
+.select-field svg { display: none; }
+.devices-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+.device-card { display: grid; gap: 13px; padding: 16px; border: 1px solid #dce5ef; border-radius: 13px; background: #fff; box-shadow: 0 3px 10px rgba(15, 35, 60, .04); }
+.device-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.device-card-title { display: flex; align-items: center; gap: 9px; color: #155fa9; }
+.device-card-title strong, .device-card-title span { display: block; }
+.device-card-title span { margin-top: 3px; color: #718096; font-size: 12px; }
+.device-bridge-preview { overflow: hidden; aspect-ratio: 16 / 9; border-radius: 9px; background: #172033; }
+.device-bridge-preview img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.devices-test-modal { width: min(680px, calc(100vw - 32px)); }
+.device-test-stream { overflow: hidden; aspect-ratio: 16 / 9; border-radius: 10px; background: #172033; }
+.device-test-stream img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.device-test-results { display: grid; gap: 8px; margin: 15px 0; padding: 12px; border-radius: 9px; background: #f6f9fc; color: #42536a; font-size: 13px; }
+.device-test-results p { margin: 0; }
+.device-test-crop { display: grid; gap: 8px; margin: 0 0 15px; padding: 12px; border: 1px solid #dce5ef; border-radius: 9px; color: #42536a; font-size: 13px; }
+.device-test-crop img { width: min(100%, 300px); max-height: 120px; object-fit: contain; border-radius: 7px; background: #172033; }
+.device-test-crop span { color: #718096; }
+.device-test-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.device-test-gate-status { margin: 10px 0 0; color: #53657c; font-size: 13px; }
+.device-card-meta { display: grid; gap: 7px; color: #617188; font-size: 12px; }
+.device-card-meta strong { color: #314158; }
+.device-card-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.device-create-form { display: grid; gap: 14px; margin: 0 0 18px; padding: 17px; border: 1px solid #dce5ef; border-radius: 13px; background: #f8fbfe; }
+.device-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
+.device-form-grid label { display: grid; gap: 5px; color: #596a81; font-size: 12px; font-weight: 700; }
+.device-form-grid input, .device-form-grid select { height: 38px; padding: 0 10px; border: 1px solid #d9e2ee; border-radius: 8px; background: #fff; }
+.device-form-wide { grid-column: 1 / -1; }
+.device-form-actions { display: flex; justify-content: flex-end; gap: 8px; }
+@media (max-width: 640px) { .device-form-grid { grid-template-columns: 1fr; } .devices-toolbar > * { width: 100%; } }
+
 /* Compact RFID inventory layout */
 .rfid-sales-section { margin: 18px 0 24px; padding: 16px; border-radius: 10px; background: #fff; box-shadow: 0 4px 14px rgba(15,23,42,.04); }
 .rfid-sales-heading { padding-bottom: 10px; border-bottom: 0; }

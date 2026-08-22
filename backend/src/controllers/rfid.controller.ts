@@ -315,8 +315,84 @@ export async function registerScannedCard(
 /**
  * Tra cứu RFID theo biển số (phục vụ kiểm tra khi camera vào/ra).
  */
-export async function lookupByPlate(request: Request, response: Response) {
-  const plate = normalizePlate(String(request.params.plate || ""));
+// Staff desk lookup sau khi quét thẻ: trả toàn bộ thông tin thẻ + xe + gói.
+export async function lookupByUid(request: Request, response: Response) {
+  const uid = String(request.params.uid || "").trim().toUpperCase();
+  if (!uid) {
+    response.status(400).json({ ok: false, message: "UID không được để trống." });
+    return;
+  }
+  const card = await RfidCard.findOne({ $or: [{ uid }, { cardId: uid }] });
+  if (!card) {
+    response.json({ ok: true, card: null, vehicle: null, subscription: null });
+    return;
+  }
+  const plate = card.plate ? normalizePlate(card.plate) : "";
+  const now = new Date();
+  const vehicle = plate ? await Vehicle.findOne({ plate }) : null;
+  const subscription = vehicle
+    ? await Subscription.findOne({
+        primaryVehicleId: vehicle._id,
+        status: "active",
+        endDate: { $gt: now },
+      })
+    : null;
+  // Thẻ đang gắn phiên nào thì báo luôn để staff khỏi phải thử.
+  const activeSession =
+    card.status === "in-use"
+      ? await ParkingSession.findOne({
+          status: "Đang gửi",
+          $or: [
+            ...(card.uid ? [{ rfidCardId: card.uid }] : []),
+            ...(card.cardId ? [{ rfidCardId: card.cardId }] : []),
+          ],
+        })
+          .select("plate checkInAt")
+          .sort({ checkInAt: -1 })
+          .lean()
+      : null;
+  // Anti-passback theo biển: xe của thẻ này còn phiên đang gửi (vào bằng đường khác).
+  const plateActiveSession = plate
+    ? await ParkingSession.findOne({
+        status: "Đang gửi",
+        $or: [
+          { plate },
+          { entryDetectedPlate: plate },
+          { manualPlate: plate },
+        ],
+      })
+        .select("plate checkInAt")
+        .sort({ checkInAt: -1 })
+        .lean()
+    : null;
+  response.json({
+    ok: true,
+    card: serializeCard(card),
+    vehicle: vehicle
+      ? {
+          id: vehicle._id.toString(),
+          plate: vehicle.plate,
+          ownerName: vehicle.ownerName,
+          status: vehicle.status,
+        }
+      : null,
+    isSubscriber: !!subscription,
+    subscription: subscription
+      ? { planName: subscription.planName, endDate: subscription.endDate }
+      : null,
+    activeSession: activeSession
+      ? { plate: activeSession.plate, checkInAt: activeSession.checkInAt }
+      : null,
+    plateActiveSession: plateActiveSession
+      ? {
+          plate: plateActiveSession.plate,
+          checkInAt: plateActiveSession.checkInAt,
+        }
+      : null,
+  });
+}
+
+export async function lookupByPlate(request: Request, response: Response) {  const plate = normalizePlate(String(request.params.plate || ""));
   if (!plate) {
     response.status(400).json({ ok: false, message: "Biển số không hợp lệ." });
     return;

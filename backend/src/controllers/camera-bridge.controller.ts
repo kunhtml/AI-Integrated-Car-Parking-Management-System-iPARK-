@@ -330,6 +330,11 @@ export async function pushCameraLog(request: Request, response: Response) {
 
   const plate = normalizePlate(body.plate || body.detectedPlate);
   const detectedPlate = normalizePlate(body.detectedPlate);
+  // The bridge reports its physical channel. Resolve it to the current
+  // business role so a lane swap also redirects new OCR events safely.
+  const { Device } = await import("../models/Device.js");
+  const laneDevice = await Device.findOne({ lane: body.direction });
+  const direction: "in" | "out" = laneDevice?.gate === "exit" ? "out" : "in";
 
   // Tìm RfidCard nếu có
   let rfidCard = null as null | { _id: any; uid: string };
@@ -345,7 +350,7 @@ export async function pushCameraLog(request: Request, response: Response) {
   let failureMessage = "";
   let openSession: typeof ParkingSession.prototype | null = null;
 
-  if (body.direction === "in" && plate) {
+  if (direction === "in" && plate) {
     // Chỉ tự tạo phiên khi có biển số — guest chưa có biển sẽ tạo phiên qua ManualPlateCard
     const result = await buildSessionForEntry(
       plate,
@@ -373,7 +378,7 @@ export async function pushCameraLog(request: Request, response: Response) {
     console.log(
       `[pushCameraLog] direction=in plate=${plate} rfidUid=${body.rfidUid ?? "none"} action=${action} sessionId=${sessionId ?? "none"}`,
     );
-  } else if (body.direction !== "in") {
+  } else if (direction !== "in") {
     // OUT: tìm phiên đang mở gần nhất theo biển số
     openSession = await ParkingSession.findOne({
       $or: [
@@ -444,7 +449,7 @@ export async function pushCameraLog(request: Request, response: Response) {
   }
 
   const log = await ParkingCameraLog.create({
-    direction: body.direction,
+    direction,
     detectedPlate,
     confidence: body.confidence,
     rfidUid: body.rfidUid,
@@ -500,10 +505,10 @@ export async function pushCameraLog(request: Request, response: Response) {
     entryRfidUid,
   };
   const isExitWaiting =
-    body.direction === "out" && action === "skipped" && sessionId;
+    direction === "out" && action === "skipped" && sessionId;
   cameraEventBus.emitIngest({
     id: log._id.toString(),
-    direction: body.direction,
+    direction,
     plate,
     detectedPlate,
     confidence: body.confidence,
@@ -654,4 +659,22 @@ export async function bridgeHealth(_request: Request, response: Response) {
     backend: "ipark-backend",
     timestamp: new Date().toISOString(),
   });
+}
+
+/**
+ * GET /api/bridge/roi
+ * Python ai-service lấy ROI từng cổng để crop frame trước khi detect.
+ */
+export async function bridgeRoi(_request: Request, response: Response) {
+  const { Device } = await import("../models/Device.js");
+  const devices = await Device.find({ gate: { $in: ["entry", "exit"] } })
+    .select("gate roi")
+    .lean();
+  const rois: Record<string, unknown> = {};
+  for (const device of devices) {
+    if (device.roi) {
+      rois[device.gate] = device.roi;
+    }
+  }
+  response.json({ ok: true, rois });
 }

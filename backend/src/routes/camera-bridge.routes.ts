@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   bridgeGateControl,
   bridgeHealth,
+  bridgeRoi,
   clearCameraLogs,
   listCameraLogs,
   pushCameraLog,
@@ -15,6 +16,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 export const cameraBridgeRoutes = Router();
 cameraBridgeRoutes.use(requireServiceToken);
 cameraBridgeRoutes.get("/health", asyncHandler(bridgeHealth));
+cameraBridgeRoutes.get("/roi", asyncHandler(bridgeRoi));
 cameraBridgeRoutes.post("/log", asyncHandler(pushCameraLog));
 cameraBridgeRoutes.post(
   "/gate/:direction/:action",

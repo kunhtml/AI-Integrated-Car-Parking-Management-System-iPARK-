@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createRfidCard, deleteRfidCard, exportAllCards, getRfidCard, listMyRfidCards, listRfidCards, listRfidAssignments, listUnassignedResidents, lookupByPlate, replaceActiveSessionRfid, lookupRfidCardByUid, registerScannedCard, setRfidCardStatus, updateRfidCard } from "../controllers/rfid.controller.js";
+import { createRfidCard, deleteRfidCard, exportAllCards, getRfidCard, listMyRfidCards, listRfidCards, listRfidAssignments, listUnassignedResidents, lookupByPlate, lookupByUid, replaceActiveSessionRfid, lookupRfidCardByUid, registerScannedCard, setRfidCardStatus, updateRfidCard } from "../controllers/rfid.controller.js";
 import { confirmSale, inventory, replaceCard, returnCard, sell, sellForCustomer, reconcilePending, reconcileCustomerSale, cardDetails, transactions, updateStatus } from "../controllers/rfidSales.controller.js";
 import { requireAuth, requireRole } from "../middlewares/auth.middleware.js";
 import { listMyRfidIssues, createRfidIssue, listRfidIssues, updateRfidIssue } from "../controllers/rfidIssue.controller.js";
@@ -36,6 +36,7 @@ rfidRoutes.get("/assignments", requireRole("admin", "staff"), asyncHandler(listR
 rfidRoutes.get("/unassigned-residents", requireRole("admin", "staff"), asyncHandler(listUnassignedResidents));
 // Staff desk lookup after a plate is entered manually.
 rfidRoutes.get("/by-plate/:plate", requireRole("admin", "staff"), asyncHandler(lookupByPlate));
+rfidRoutes.get("/by-uid/:uid", requireRole("admin", "staff"), asyncHandler(lookupByUid));
 rfidRoutes.post("/replace-active", requireRole("admin", "staff"), asyncHandler(replaceActiveSessionRfid));
 // Card identity, owner, and vehicle association are administrative data.
 // Staff may view cards and perform permitted operational status actions only.

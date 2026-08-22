@@ -305,6 +305,7 @@ export type DeviceItem = {
   id: string;
   name: string;
   gate: "entry" | "exit";
+  lane?: "in" | "out";
   rtspUrl: string;
   httpUrl?: string;
   deviceType?: string;

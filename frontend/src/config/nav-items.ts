@@ -5,6 +5,7 @@ import {
   Briefcase,
   Car,
   CalendarDays,
+  Camera,
   CircleAlert,
   CreditCard,
   LayoutDashboard,
@@ -101,6 +102,13 @@ export const navItems: NavItem[] = [
     label: "Thẻ RFID",
     icon: Radio,
     roles: ["admin", "staff"],
+  },
+  {
+    id: "devices",
+    path: "/devices",
+    label: "Camera & thiết bị",
+    icon: Camera,
+    roles: ["admin"],
   },
   {
     id: "parking-slots",

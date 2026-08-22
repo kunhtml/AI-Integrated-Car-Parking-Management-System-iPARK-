@@ -266,6 +266,18 @@ class BackendClient:
             print("[BACKEND][HEALTH] error:", e)
             return False
 
+    def fetch_rois(self):
+        """Lấy ROI từng cổng (entry/exit) từ backend — hệ 640x360 của editor."""
+        try:
+            r = self.session.get(self._url("/api/bridge/roi"), timeout=5)
+            if r.ok:
+                return r.json().get("rois") or {}
+            print("[BACKEND][ROI][ERROR]", r.status_code, r.text[:200])
+            return {}
+        except Exception as e:
+            print(f"[BACKEND][ROI][ERROR] {type(e).__name__}: {e}")
+            return {}
+
     def rfid_export(self):
         try:
             r = self.session.get(self._url("/api/rfid-bridge/export"), timeout=10)
@@ -1272,6 +1284,57 @@ def _join_plate_parts(parts: list[str]) -> str | None:
     return parts[0] + "".join(parts[1:])
 
 
+# ==== ROI (Region of Interest) ====
+# ROI theo hướng "in"/"out" (tọa độ hệ 640x360 của editor). None = xử lý toàn frame.
+ROI_STATE = {"in": None, "out": None}
+ROI_LAST_FETCH = 0.0
+ROI_REFRESH_SEC = 30.0
+ROI_EDITOR_W = 640
+ROI_EDITOR_H = 360
+
+
+def _refresh_rois():
+    """Làm mới ROI từ backend mỗi ROI_REFRESH_SEC giây (gọi trong process_frame)."""
+    global ROI_LAST_FETCH
+    now = time.time()
+    if now - ROI_LAST_FETCH < ROI_REFRESH_SEC:
+        return
+    ROI_LAST_FETCH = now
+    if backend is None:
+        return
+    rois = backend.fetch_rois()
+    if isinstance(rois, dict):
+        ROI_STATE["in"] = rois.get("entry") or None
+        ROI_STATE["out"] = rois.get("exit") or None
+        print("[ROI] updated:", {k: v for k, v in ROI_STATE.items() if v})
+
+
+def _apply_roi(frame, direction):
+    """Trả (work, roi_x, roi_y) — work là vùng crop theo ROI hoặc nguyên frame.
+
+    Tọa độ ROI từ editor là hệ 640x360; scale theo kích thước frame thật.
+    Vùng crop quá nhỏ (<40x20) bị coi như không có ROI.
+    """
+    roi = ROI_STATE.get(direction)
+    if not roi:
+        return frame, 0, 0
+    h_f, w_f = frame.shape[:2]
+    try:
+        rx = int(roi.get("x", 0) * w_f / ROI_EDITOR_W)
+        ry = int(roi.get("y", 0) * h_f / ROI_EDITOR_H)
+        rw = int(roi.get("width", 0) * w_f / ROI_EDITOR_W)
+        rh = int(roi.get("height", 0) * h_f / ROI_EDITOR_H)
+    except (TypeError, AttributeError):
+        return frame, 0, 0
+    rx = max(0, min(rx, w_f - 20))
+    ry = max(0, min(ry, h_f - 15))
+    rw = min(rw, w_f - rx)
+    rh = min(rh, h_f - ry)
+    if rw < 40 or rh < 20:
+        return frame, 0, 0
+    return frame[ry:ry + rh, rx:rx + rw], rx, ry
+
+
 def process_frame(frame, plate_counter, last_plate, last_seen_time, prefix, ser, lock=None, direction="in"):
     global last_boxes_in, last_boxes_out, _ai_metrics
     # OCR tắt -> trả frame nguyên bản, không tốn CPU.
@@ -1287,12 +1350,20 @@ def process_frame(frame, plate_counter, last_plate, last_seen_time, prefix, ser,
     if PLATE_DETECTOR == "yolo" and yolo_model is None:
         detector = "opencv"
 
+    # ROI: chỉ detect trong vùng admin vẽ; ngoài vùng bị bỏ qua hoàn toàn.
+    _refresh_rois()
+    work, roi_x, roi_y = _apply_roi(frame, direction)
+    has_roi = work is not frame
+    if has_roi:
+        h_roi, w_roi = work.shape[:2]
+        cv2.rectangle(frame, (roi_x, roi_y), (roi_x + w_roi, roi_y + h_roi), (0, 255, 136), 2)
+
     # Mọi YOLO/PaddleOCR đi qua 1 lock — chặn peak RAM khi 2 cam cùng inference.
     with _inference_lock:
         boxes = []
         # ---- BƯỚC 1: tìm bbox ứng viên ----
         if detector == "yolo" and yolo_model is not None:
-            yolo_frame, yolo_scale = _resize_for_yolo(frame, YOLO_MAX_WIDTH)
+            yolo_frame, yolo_scale = _resize_for_yolo(work, YOLO_MAX_WIDTH)
             predict_kwargs = {
                 "conf": YOLO_CONF_THR,
                 "verbose": False,
@@ -1328,13 +1399,25 @@ def process_frame(frame, plate_counter, last_plate, last_seen_time, prefix, ser,
                     pass
             boxes = _scale_boxes_to_original(boxes, yolo_scale)
             boxes = _dedupe_plate_boxes(boxes)
+            if has_roi and boxes:
+                # Boxes đang là tọa độ trong vùng ROI → dịch về tọa độ frame gốc
+                # để overlay/snapshot downstream khớp ảnh hiển thị.
+                boxes = [
+                    (x1 + roi_x, y1 + roi_y, x2 + roi_x, y2 + roi_y, conf)
+                    for (x1, y1, x2, y2, conf) in boxes
+                ]
             if boxes:
                 max_conf = max(b[4] for b in boxes)
                 if max_conf < 0.5:
                     print(f"[YOLO][{direction}] confs={[b[4] for b in boxes]} (max={max_conf:.2f})")
 
         elif detector == "opencv":
-            boxes = _find_plate_boxes_opencv(frame)
+            boxes = _find_plate_boxes_opencv(work)
+            if has_roi and boxes:
+                boxes = [
+                    (x1 + roi_x, y1 + roi_y, x2 + roi_x, y2 + roi_y, conf)
+                    for (x1, y1, x2, y2, conf) in boxes
+                ]
 
         # fullframe hoặc không có box -> OCR toàn frame (đã resize)
         if detector == "fullframe" or not boxes:
@@ -1343,7 +1426,7 @@ def process_frame(frame, plate_counter, last_plate, last_seen_time, prefix, ser,
                     last_boxes_in = []
                 else:
                     last_boxes_out = []
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            gray = cv2.cvtColor(work, cv2.COLOR_BGR2GRAY)
             if OCR_MAX_WIDTH > 0 and gray.shape[1] > OCR_MAX_WIDTH:
                 sc = OCR_MAX_WIDTH / gray.shape[1]
                 gray = cv2.resize(

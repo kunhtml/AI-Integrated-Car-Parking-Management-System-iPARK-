@@ -15,6 +15,8 @@ export type DeviceDocument = {
   _id: mongoose.Types.ObjectId;
   name: string;
   gate: "entry" | "exit";
+  // Physical bridge channel; never changes when business roles are swapped.
+  lane?: "in" | "out";
   rtspUrl: string;
   username?: string;
   password?: string;
@@ -38,6 +40,7 @@ const deviceSchema = new Schema<DeviceDocument>(
   {
     name: { type: String, required: true, trim: true },
     gate: { type: String, enum: ["entry", "exit"], required: true, index: true },
+    lane: { type: String, enum: ["in", "out"], index: true },
     rtspUrl: { type: String, required: true, trim: true },
     username: { type: String },
     password: { type: String },

@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { z } from "zod";
 import { Device } from "../models/Device.js";
+import { ParkingSession } from "../models/ParkingSession.js";
 import { captureDeviceSnapshot } from "../services/device.service.js";
 import { serializeDevice } from "../utils/serializers.js";
 
@@ -16,6 +17,13 @@ const deviceSchema = z.object({
 export async function listDevices(_request: Request, response: Response) {
   const devices = await Device.find().sort({ gate: 1, createdAt: -1 });
   response.json({ devices: devices.map(serializeDevice) });
+}
+
+export async function getLaneRoles(_request: Request, response: Response) {
+  const devices = await Device.find({ lane: { $in: ["in", "out"] } });
+  const entry = devices.find((device) => device.gate === "entry");
+  const exit = devices.find((device) => device.gate === "exit");
+  response.json({ entryLane: entry?.lane || "in", exitLane: exit?.lane || "out" });
 }
 
 export async function createDevice(request: Request, response: Response) {
@@ -35,6 +43,80 @@ export async function updateDevice(request: Request, response: Response) {
     return;
   }
 
+  response.json({ device: serializeDevice(device) });
+}
+
+export async function deleteDevice(request: Request, response: Response) {
+  const device = await Device.findById(request.params.id);
+  if (!device) {
+    response.status(404).json({ message: "Không tìm thấy thiết bị." });
+    return;
+  }
+  const inProgressExit = device.gate === "exit" && await ParkingSession.exists({
+    status: "Đang gửi",
+    exitState: { $in: ["waiting_rfid", "waiting_manual_verification", "rfid_verified", "payment_pending", "gate_authorizing"] },
+  });
+  if (inProgressExit) {
+    response.status(409).json({ message: "Không thể xóa camera khi đang có xe xử lý tại cổng ra." });
+    return;
+  }
+  await device.deleteOne();
+  response.json({ ok: true, message: `Đã xóa ${device.name}.` });
+}
+
+/** Swap the single entry and exit camera without ever leaving duplicate roles. */
+export async function swapCameraRoles(_request: Request, response: Response) {
+  const inProgressExit = await ParkingSession.exists({
+    status: "Đang gửi",
+    exitState: { $in: ["waiting_rfid", "waiting_manual_verification", "rfid_verified", "payment_pending", "gate_authorizing"] },
+  });
+  if (inProgressExit) {
+    response.status(409).json({
+      message: "Không thể hoán đổi camera khi đang có xe xử lý tại cổng ra. Vui lòng hoàn tất hoặc hủy phiên trước.",
+    });
+    return;
+  }
+
+  const devices = await Device.find({ gate: { $in: ["entry", "exit"] } }).sort({ createdAt: 1 });
+  const entry = devices.find((device) => device.gate === "entry");
+  const exit = devices.find((device) => device.gate === "exit");
+  if (!entry || !exit || devices.length !== 2) {
+    response.status(409).json({
+      message: "Cần đúng một camera Cổng vào và một camera Cổng ra để hoán đổi.",
+    });
+    return;
+  }
+
+  const laneFor = (device: typeof entry) =>
+    device.lane || (/cổng\s*ra/i.test(device.name) ? "out" : "in");
+  await Device.bulkWrite([
+    { updateOne: { filter: { _id: entry._id }, update: { $set: { gate: "exit", lane: laneFor(entry) } } } },
+    { updateOne: { filter: { _id: exit._id }, update: { $set: { gate: "entry", lane: laneFor(exit) } } } },
+  ]);
+  const swapped = await Device.find({ _id: { $in: [entry._id, exit._id] } }).sort({ gate: 1 });
+  response.json({ devices: swapped.map(serializeDevice), message: "Đã hoán đổi vai trò hai camera. Chỉ sự kiện nhận diện mới dùng vai trò mới." });
+}
+
+// ROI theo hệ tọa độ 640x360 của editor frontend; ai-service scale theo frame thật.
+const roiSchema = z.object({
+  x: z.number().min(0),
+  y: z.number().min(0),
+  width: z.number().min(20),
+  height: z.number().min(15),
+  label: z.string().trim().max(100).optional(),
+});
+
+export async function updateDeviceRoi(request: Request, response: Response) {
+  const roi = roiSchema.parse(request.body);
+  const device = await Device.findByIdAndUpdate(
+    request.params.id,
+    { roi, roiNote: roi.label || "" },
+    { returnDocument: "after" },
+  );
+  if (!device) {
+    response.status(404).json({ message: "Không tìm thấy thiết bị." });
+    return;
+  }
   response.json({ device: serializeDevice(device) });
 }
 
