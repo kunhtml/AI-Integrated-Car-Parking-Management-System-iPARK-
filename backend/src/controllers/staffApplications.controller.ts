@@ -19,6 +19,7 @@ import {
   submitExistingApplication,
   type ApplicationPayload,
 } from "../services/staffApplications.service.js";
+import { fingerprintField } from "../utils/crypto.util.js";
 import { serializeStaffApplication } from "../utils/serializers.js";
 
 const applicationInputSchema = z
@@ -299,10 +300,20 @@ export async function listStaffApplications(
     const users = await User.find({
       $or: [{ name: regex }, { email: regex }, { phone: regex }],
     }).select("_id");
+
+    const normalizedSearch = search.replace(/\s+/g, "");
+    const isIdCardSearch = /^\d{9}$|^\d{12}$/.test(normalizedSearch);
+
     filter.$or = [
       { phone: regex },
       { userId: { $in: users.map((user) => user._id) } },
     ];
+
+    if (isIdCardSearch) {
+      filter.$or.push({
+        idCardNumberFingerprint: fingerprintField(normalizedSearch),
+      });
+    }
   }
 
   const [applications, total] = await Promise.all([

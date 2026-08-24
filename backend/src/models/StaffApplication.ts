@@ -25,6 +25,7 @@ export type StaffApplicationDocument = {
   userId: mongoose.Types.ObjectId;
   phone?: string;
   idCardNumber?: string;
+  idCardNumberFingerprint?: string;
   address?: string;
   experience?: string;
   reason?: string;
@@ -50,7 +51,8 @@ const staffApplicationSchema = new Schema<StaffApplicationDocument>(
       required: true,
     },
     phone: { type: String, trim: true, maxlength: 20 },
-    idCardNumber: { type: String, trim: true, maxlength: 12 },
+    idCardNumber: { type: String, trim: true, maxlength: 255 },
+    idCardNumberFingerprint: { type: String, index: true },
     address: { type: String, trim: true, maxlength: 255 },
     experience: { type: String, trim: true, maxlength: 1000 },
     reason: { type: String, trim: true, maxlength: 1000 },

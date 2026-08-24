@@ -9,8 +9,12 @@ const isProduction = process.env.NODE_ENV === "production";
 const localJwtSecret =
   "local-development-secret-for-bai-do-xe-please-change-in-production";
 const localServiceToken = "smart-parking-rut-gon-service-token-change-me";
+const localEncryptionKey = Buffer.from("0123456789abcdef0123456789abcdef").toString("base64");
 
-function readSecret(name: "JWT_SECRET" | "SERVICE_TOKEN", localDefault: string) {
+function readSecret(
+  name: "JWT_SECRET" | "SERVICE_TOKEN" | "ENCRYPTION_KEY",
+  localDefault: string,
+) {
   const value = process.env[name]?.trim();
   const normalized = value?.toLowerCase() ?? "";
   const isWeak =
@@ -71,6 +75,7 @@ export const env = {
   mongoUri: readMongoUri(),
   mongoDb: process.env.MONGODB_DB || "bai-do-xe",
   jwtSecret: readSecret("JWT_SECRET", localJwtSecret),
+  encryptionKey: readSecret("ENCRYPTION_KEY", localEncryptionKey),
   frontendUrl: process.env.FRONTEND_URL || "http://localhost:3000",
   corsOrigins: [...new Set(corsOrigins)],
   aiServiceUrl: process.env.AI_SERVICE_URL || "http://127.0.0.1:5000",

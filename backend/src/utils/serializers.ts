@@ -19,6 +19,7 @@ import { ShiftScheduleDocument } from "../models/ShiftSchedule.js";
 import { StaffApplicationDocument } from "../models/StaffApplication.js";
 import { StaffApplicationHistoryDocument } from "../models/StaffApplicationHistory.js";
 import { TransactionDocument } from "../models/Transaction.js";
+import { decryptField } from "./crypto.util.js";
 import { ZoneDocument } from "../models/Zone.js";
 import type { ZoneStats } from "../services/zone.service.js";
 
@@ -522,13 +523,17 @@ export function serializeStaffApplication(
       : application.reviewedBy.toString()
     : null;
 
+  const decryptedIdCard = application.idCardNumber
+    ? decryptField(application.idCardNumber)
+    : "";
+
   return {
     id: application._id.toString(),
     userId,
     phone: application.phone,
     idCardNumber: options.maskIdCard
-      ? maskIdCard(application.idCardNumber ?? "")
-      : (application.idCardNumber ?? ""),
+      ? maskIdCard(decryptedIdCard)
+      : decryptedIdCard,
     address: application.address,
     experience: application.experience ?? null,
     reason: application.reason,

@@ -13,6 +13,7 @@ import {
   type StaffApplicationSnapshot,
 } from "../models/StaffApplicationHistory.js";
 import { User } from "../models/User.js";
+import { encryptField, fingerprintField } from "../utils/crypto.util.js";
 
 export type ApplicationPayload = {
   phone?: string;
@@ -37,7 +38,11 @@ export function snapshotOf(value: Partial<ApplicationPayload>): StaffApplication
   for (const field of applicationFields) {
     const fieldValue = value[field];
     if (fieldValue !== undefined && fieldValue !== "") {
-      snapshot[field] = fieldValue as never;
+      if (field === "idCardNumber" && typeof fieldValue === "string") {
+        snapshot[field] = `***${fieldValue.slice(-4)}` as never;
+      } else {
+        snapshot[field] = fieldValue as never;
+      }
     }
   }
   return snapshot;
@@ -118,6 +123,17 @@ export async function assertActiveCustomer(userId: string) {
   return user;
 }
 
+function prepareApplicationPayload(payload: ApplicationPayload) {
+  const next = { ...payload };
+
+  if (payload.idCardNumber) {
+    next.idCardNumber = encryptField(payload.idCardNumber);
+    (next as any).idCardNumberFingerprint = fingerprintField(payload.idCardNumber);
+  }
+
+  return next;
+}
+
 export async function createApplication(
   userId: string,
   payload: ApplicationPayload,
@@ -129,10 +145,12 @@ export async function createApplication(
     throw Object.assign(new Error("Bạn đã có đơn đang chờ duyệt."), { status: 409 });
   }
 
+  const preparedPayload = prepareApplicationPayload(payload);
+
   let application: StaffApplicationDocument;
   try {
     application = await StaffApplication.create({
-      ...payload,
+      ...preparedPayload,
       userId,
       status: mode === "draft" ? "draft" : "pending",
       submittedAt: mode === "submit" ? new Date() : undefined,
@@ -174,7 +192,7 @@ export async function saveDraft(
 
   const before = getApplicationPayload(application);
   const oldStatus = application.status;
-  Object.assign(application, payload, { status: "draft" });
+  Object.assign(application, prepareApplicationPayload(payload), { status: "draft" });
   const after = getApplicationPayload(application);
   await application.save();
   await appendHistory({
