@@ -3,6 +3,7 @@ import {
   cancelTransaction,
   confirmTransaction,
   createSessionTransaction,
+  getTransaction,
   listTransactions,
   payCashForSession,
 } from "../controllers/transactions.controller.js";
@@ -23,6 +24,7 @@ transactionsRoutes.get("/check-payos/:orderCode", asyncHandler(async (req, res) 
 
 transactionsRoutes.use(requireAuth);
 transactionsRoutes.get("/", asyncHandler(listTransactions));
+transactionsRoutes.get("/:id", asyncHandler(getTransaction));
 transactionsRoutes.post("/session/:sessionId/cash", requireRole("admin", "staff"), asyncHandler(payCashForSession));
 transactionsRoutes.post("/:id/confirm", requireRole("admin"), asyncHandler(confirmTransaction));
 transactionsRoutes.post("/:id/cancel", asyncHandler(cancelTransaction));
