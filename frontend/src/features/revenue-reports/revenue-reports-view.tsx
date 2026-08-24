@@ -99,7 +99,7 @@ export function RevenueReportsView() {
     setMessage(null);
     try {
       const params = new URLSearchParams({ dateRange, parkingArea, vehicleType });
-      const response = await apiFetch(`/reports/revenue?${params.toString()}`);
+      const response = await apiFetch(`/revenue-reports?${params.toString()}`);
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
@@ -146,7 +146,7 @@ export function RevenueReportsView() {
   async function handleExport(format: "PDF" | "Excel") {
     setMessage(null);
     try {
-      const response = await apiFetch("/reports/revenue/exports", {
+      const response = await apiFetch("/revenue-reports/exports", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ format, period: periodLabel(dateRange) }),
