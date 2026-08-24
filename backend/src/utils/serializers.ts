@@ -207,7 +207,44 @@ export function serializePaymentConfig(config: PaymentConfigDocument) {
 export function serializeTransaction(
   transaction: TransactionDocument,
   session?: ParkingSessionDocument | null,
+  subscription?: SubscriptionDocument | null,
 ) {
+  const hasRelated = Boolean(transaction.sessionId || transaction.subscriptionId);
+  const sessionDetails = session
+    ? {
+        id: session._id.toString(),
+        checkIn: session.checkInAt ? session.checkInAt.toISOString() : undefined,
+        checkOut: session.checkOutAt ? session.checkOutAt.toISOString() : undefined,
+        durationMinutes:
+          session.checkInAt && session.checkOutAt
+            ? Math.max(0, Math.round((session.checkOutAt.getTime() - session.checkInAt.getTime()) / (1000 * 60)))
+            : undefined,
+        plate: session.plate,
+        slot: session.slot,
+        fee: session.fee,
+        paidAmount: session.paidAmount,
+        paymentStatus: session.paymentStatus,
+      }
+    : undefined;
+
+  const subscriptionDetails = subscription
+    ? {
+        id: subscription._id.toString(),
+        name: subscription.planName,
+        planCode: subscription.planId?.toString(),
+        startDate: subscription.startDate?.toISOString(),
+        endDate: subscription.endDate?.toISOString(),
+        price: subscription.transactionId ? undefined : undefined,
+        status: subscription.status,
+      }
+    : undefined;
+
+  const reconciliation = !hasRelated
+    ? "not_applicable"
+    : session || subscription
+      ? "reconciled"
+      : "unresolved";
+
   return {
     id: transaction._id.toString(),
     sessionId: transaction.sessionId?.toString(),
@@ -234,6 +271,9 @@ export function serializeTransaction(
     sessionPaymentStatus: session?.paymentStatus,
     sessionFee: session?.fee ?? 0,
     sessionPaidAmount: session?.paidAmount ?? 0,
+    session: sessionDetails,
+    subscription: subscriptionDetails,
+    reconciliation,
   };
 }
 

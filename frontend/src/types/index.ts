@@ -309,6 +309,25 @@ export type TransactionItem = {
   sessionPaymentStatus?: "unpaid" | "partial_paid" | "fully_paid";
   sessionFee?: number;
   sessionPaidAmount?: number;
+  session?: {
+    id?: string;
+    checkIn?: string;
+    checkOut?: string;
+    durationMinutes?: number;
+    fee?: number;
+    paidAmount?: number;
+    paymentStatus?: string;
+  };
+  subscription?: {
+    id?: string;
+    name?: string;
+    planCode?: string;
+    startDate?: string;
+    endDate?: string;
+    price?: number;
+    status?: string;
+  };
+  reconciliation?: "reconciled" | "unresolved" | "not_applicable";
 };
 
 export type NotificationItem = {

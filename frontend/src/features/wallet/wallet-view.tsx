@@ -539,6 +539,28 @@ export function WalletView() {
                 <span>Vị trí: {detailTransaction.slot || "—"}</span>
               </div>
               <div className="wallet-invoice-block">
+                <strong>Đối chiếu</strong>
+                {detailTransaction.reconciliation === "not_applicable" && <span>Không liên quan đến phiên/gói</span>}
+                {detailTransaction.reconciliation === "unresolved" && (
+                  <span style={{ color: "var(--danger)" }}>⚠ Chưa đối chiếu được</span>
+                )}
+                {detailTransaction.reconciliation === "reconciled" && detailTransaction.session && (
+                  <>
+                    <span>Phiên: #{detailTransaction.session.id || detailTransaction.sessionId}</span>
+                    <span>Vào: {detailTransaction.session.checkIn ? formatTransactionDate(detailTransaction.session.checkIn) : "—"}</span>
+                    <span>Ra: {detailTransaction.session.checkOut ? formatTransactionDate(detailTransaction.session.checkOut) : "—"}</span>
+                    <span>Phí: {currency.format(detailTransaction.session.fee ?? detailTransaction.sessionFee ?? 0)}</span>
+                  </>
+                )}
+                {detailTransaction.reconciliation === "reconciled" && detailTransaction.subscription && (
+                  <>
+                    <span>Gói: {detailTransaction.subscription.name || "Gói thuê bao"}</span>
+                    <span>Kỳ hạn: {detailTransaction.subscription.startDate ? formatTransactionDate(detailTransaction.subscription.startDate) : "—"} → {detailTransaction.subscription.endDate ? formatTransactionDate(detailTransaction.subscription.endDate) : "—"}</span>
+                    <span>Giá: {currency.format(detailTransaction.subscription.price ?? detailTransaction.amount)}</span>
+                  </>
+                )}
+              </div>
+              <div className="wallet-invoice-block">
                 <strong>Phương thức thanh toán</strong>
                 <span>{methodLabel(detailTransaction.method)}</span>
                 {detailTransaction.payosOrderCode && <span>Mã PayOS: {detailTransaction.payosOrderCode}</span>}
