@@ -28,14 +28,21 @@ import {
 import { DataTable } from "@/components/ui/data-table";
 import { useParkingApp } from "@/context/parking-app-context";
 import { apiFetch, bridgeFetch } from "@/lib/client-api";
+import { RfidIssueManagerPanel } from "./rfid-issue-manager-panel";
 
 type RfidCardItem = {
   id: string;
   uid: string;
   ownerName: string;
+  userId?: string;
+  vehicleId?: string;
   plate: string;
   userType: "resident" | "guest";
   status: string;
+  activeSession?: {
+    plate: string;
+    checkInAt?: string;
+  } | null;
   notes?: string;
   blockedReason?: string;
   createdAt: string;
@@ -55,7 +62,14 @@ type Resident = {
   memberCode: string | null;
 };
 
-type StatusFilter = "all" | "active" | "inactive" | "blocked";
+type StatusFilter =
+  | "all"
+  | "active"
+  | "inuse"
+  | "inactive"
+  | "blocked"
+  | "lost"
+  | "damaged";
 type UserTypeFilter = "all" | "resident" | "guest";
 
 type EditState = {
@@ -67,32 +81,41 @@ type EditState = {
 };
 
 function userTypeLabel(type: string) {
-  if (type === "resident") return "Cư dân";
+  if (type === "resident") return "Thành viên";
   if (type === "guest") return "Khách";
   return type;
 }
 
 function statusBadgeClass(status: string) {
-  return ["active", "available", "in-use"].includes(status) ? "badge success" : "badge warning";
+  return ["active", "available", "in-use"].includes(status)
+    ? "badge success"
+    : "badge warning";
 }
 
 function isOperationalStatus(status: string) {
   return ["active", "available", "in-use"].includes(status);
 }
 
+function isInUse(card: RfidCardItem) {
+  return card.status === "in-use" || !!card.activeSession;
+}
+
 function statusLabel(status: string) {
   if (isOperationalStatus(status)) return "Hoạt động";
   if (status === "inactive") return "Không hoạt động";
   if (status === "lost") return "Báo mất";
-  if (status === "damaged") return "Hỏng";
+  if (status === "damaged") return "Bị hỏng";
   return "Đã khóa";
+}
+
+function cardStatusLabel(card: RfidCardItem) {
+  return isInUse(card) ? "Đang dùng" : statusLabel(card.status);
 }
 
 function formatDate(dateStr: string | null | undefined) {
   if (!dateStr) return "—";
   return new Date(dateStr).toLocaleString("vi-VN");
 }
-
 
 export function RfidCardsView() {
   const { currentUser } = useParkingApp();
@@ -110,8 +133,9 @@ export function RfidCardsView() {
       <section className="rfid-view">
         <h1 className="rfid-view-title">Thẻ RFID</h1>
         <p style={{ color: "#dc2626", marginTop: 16 }}>
-          Tài khoản hiện tại (role: <strong>{role ?? "—"}</strong>) không có quyền truy cập trang này.
-          Vui lòng đăng nhập bằng tài khoản admin hoặc staff.
+          Tài khoản hiện tại (role: <strong>{role ?? "—"}</strong>) không có
+          quyền truy cập trang này. Vui lòng đăng nhập bằng tài khoản admin hoặc
+          staff.
         </p>
       </section>
     );
@@ -128,7 +152,13 @@ export function RfidCardsView() {
   const [editing, setEditing] = useState<EditState | null>(null);
   const [lockingCard, setLockingCard] = useState<RfidCardItem | null>(null);
   const [lockReason, setLockReason] = useState("");
+  const [reportLostCard, setReportLostCard] = useState<RfidCardItem | null>(
+    null,
+  );
+  const [reportDamagedCard, setReportDamagedCard] =
+    useState<RfidCardItem | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<RfidCardItem | null>(null);
+  const [restoreCard, setRestoreCard] = useState<RfidCardItem | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkClear, setBulkClear] = useState<{
@@ -144,7 +174,14 @@ export function RfidCardsView() {
 
   // Scan mode state
   type AddMode = "manual" | "scan";
-  type ScanPhase = "idle" | "starting" | "waiting" | "success" | "duplicate" | "error" | "timeout";
+  type ScanPhase =
+    | "idle"
+    | "starting"
+    | "waiting"
+    | "success"
+    | "duplicate"
+    | "error"
+    | "timeout";
   const [addMode, setAddMode] = useState<AddMode>("manual");
   const [scanPhase, setScanPhase] = useState<ScanPhase>("idle");
   const [scanUid, setScanUid] = useState("");
@@ -218,7 +255,7 @@ export function RfidCardsView() {
       // trong list (vì đã gán thẻ rồi → endpoint loại trừ) → tạo 1 entry tạm
       // từ dữ liệu hiện tại của card để dropdown hiển thị đúng người đang sửa.
       const matched = residents.find(
-        (r) => r.plate && editing.plate && r.plate === editing.plate
+        (r) => r.plate && editing.plate && r.plate === editing.plate,
       );
       if (matched) {
         setEditSelectedResidentId(matched.subscriptionId);
@@ -245,7 +282,9 @@ export function RfidCardsView() {
       // option khác trừ khi user chọn 1 resident khác.
       return;
     }
-    const r = residents.find((x) => x.subscriptionId === editSelectedResidentId);
+    const r = residents.find(
+      (x) => x.subscriptionId === editSelectedResidentId,
+    );
     if (!r) return;
     setEditing({
       ...editing,
@@ -301,11 +340,14 @@ export function RfidCardsView() {
       scanStartTimeRef.current = Date.now();
       setScanPhase("waiting");
       stopScanPolling();
-      scanIntervalRef.current = window.setInterval(pollScanStatus, SCAN_POLL_MS);
+      scanIntervalRef.current = window.setInterval(
+        pollScanStatus,
+        SCAN_POLL_MS,
+      );
     } catch (e) {
       setScanPhase("error");
       setScanError(
-        "Không kết nối được bridge service (port 5050). Chuyển sang nhập tay."
+        "Không kết nối được bridge service (port 5050). Chuyển sang nhập tay.",
       );
     }
   }
@@ -375,14 +417,18 @@ export function RfidCardsView() {
     // Sau khi re-render, các input sẽ mount lại — dùng timeout để set UID
     window.setTimeout(() => {
       const formEl = document.querySelector<HTMLFormElement>(
-        'form[data-add-rfid-form]'
+        "form[data-add-rfid-form]",
       );
       if (formEl) {
-        const uidInput = formEl.elements.namedItem("uid") as HTMLInputElement | null;
+        const uidInput = formEl.elements.namedItem(
+          "uid",
+        ) as HTMLInputElement | null;
         if (uidInput) {
           uidInput.value = scanUid;
         }
-        const userTypeSelect = formEl.elements.namedItem("userType") as HTMLSelectElement | null;
+        const userTypeSelect = formEl.elements.namedItem(
+          "userType",
+        ) as HTMLSelectElement | null;
         if (userTypeSelect) userTypeSelect.value = "guest";
       }
     }, 0);
@@ -398,14 +444,20 @@ export function RfidCardsView() {
     // Sau khi React re-render select, ta set value cho input/select của form thủ công
     window.setTimeout(() => {
       const formEl = document.querySelector<HTMLFormElement>(
-        'form[data-add-rfid-form]'
+        "form[data-add-rfid-form]",
       );
       if (!formEl) return;
-      const ownerInput = formEl.elements.namedItem("ownerName") as HTMLInputElement | null;
+      const ownerInput = formEl.elements.namedItem(
+        "ownerName",
+      ) as HTMLInputElement | null;
       if (ownerInput) ownerInput.value = r.ownerName || "";
-      const plateInput = formEl.elements.namedItem("plate") as HTMLInputElement | null;
+      const plateInput = formEl.elements.namedItem(
+        "plate",
+      ) as HTMLInputElement | null;
       if (plateInput) plateInput.value = r.plate || "";
-      const userTypeSelect = formEl.elements.namedItem("userType") as HTMLSelectElement | null;
+      const userTypeSelect = formEl.elements.namedItem(
+        "userType",
+      ) as HTMLSelectElement | null;
       if (userTypeSelect) userTypeSelect.value = "resident";
     }, 0);
   }
@@ -430,9 +482,33 @@ export function RfidCardsView() {
     const total = cards.length;
     const active = cards.filter((c) => isOperationalStatus(c.status)).length;
     const inactive = cards.filter((c) => !isOperationalStatus(c.status)).length;
-    const resident = cards.filter((c) => c.userType === "resident").length;
+    const lost = cards.filter((c) => c.status === "lost").length;
+    const damaged = cards.filter((c) => c.status === "damaged").length;
+    // Thẻ đang được dùng cho một phiên gửi xe đang mở (có phiên "Đang gửi").
+    const inUse = cards.filter(isInUse).length;
+    const activeOnly = active - inUse;
+    // Đếm số THÀNH VIÊN duy nhất (một người có thể sở hữu nhiều thẻ: thẻ
+    // đang dùng + thẻ bị hỏng/mất/thay thế). Nhận diện bằng userId nếu có,
+    // fallback sang biển số. Không đếm trùng theo số thẻ.
+    const memberKey = (c: RfidCardItem) =>
+      c.userId || `plate:${(c.plate || "").toUpperCase().trim()}`;
+    const resident = new Set(
+      cards
+        .filter((c) => c.userType === "resident")
+        .map(memberKey)
+        .filter((k) => k && k !== "plate:"),
+    ).size;
     const guest = cards.filter((c) => c.userType === "guest").length;
-    return { total, active, inactive, resident, guest };
+    return {
+      total,
+      active: activeOnly,
+      inUse,
+      inactive,
+      lost,
+      damaged,
+      resident,
+      guest,
+    };
   }, [cards]);
 
   const filtered = useMemo(() => {
@@ -442,8 +518,24 @@ export function RfidCardsView() {
       q !== "" || statusFilter !== "all" || userTypeFilter !== "all";
     if (!hasFilter) return cards;
     return cards.filter((c) => {
-      if (statusFilter !== "all" && c.status !== statusFilter) return false;
-      if (userTypeFilter !== "all" && c.userType !== userTypeFilter) return false;
+      if (statusFilter !== "all") {
+        // "Đang dùng" = thẻ đang gắn phiên gửi xe đang mở.
+        if (statusFilter === "inuse") {
+          if (!isInUse(c)) return false;
+        } else if (statusFilter === "active") {
+          // "Hoạt động" gồm cả thẻ đang được dùng cho một phiên.
+          if (!isOperationalStatus(c.status)) return false;
+        } else {
+        // "Đã khóa" bao gồm cả thẻ blocked lẫn inactive (thẻ ngừng hoạt động)
+          const statusOk =
+            statusFilter === "blocked"
+              ? c.status === "blocked" || c.status === "inactive"
+              : c.status === statusFilter;
+          if (!statusOk) return false;
+        }
+      }
+      if (userTypeFilter !== "all" && c.userType !== userTypeFilter)
+        return false;
       if (!q) return true;
       return (
         c.uid.toLowerCase().includes(q) ||
@@ -459,7 +551,8 @@ export function RfidCardsView() {
   // Form Sửa: khóa field Biển số/Loại khi đã chọn 1 cư dân THẬT (không phải pseudo
   // "__current__" hiển thị cư dân hiện tại đang gán cho thẻ, không phải "" rỗng).
   const editIsResidentLocked =
-    !!editSelectedResidentId && !editSelectedResidentId.startsWith("__current__");
+    !!editSelectedResidentId &&
+    !editSelectedResidentId.startsWith("__current__");
 
   // Form Thêm: tương tự
   const addIsResidentLocked = !!selectedResidentId;
@@ -484,8 +577,13 @@ export function RfidCardsView() {
       const body = {
         uid,
         ownerName: String(form.get("ownerName") || "").trim(),
-        plate: String(form.get("plate") || "").trim().toUpperCase().replace(/[\s-]+/g, ""),
-        userType: (String(form.get("userType") || "guest") as "resident" | "guest"),
+        plate: String(form.get("plate") || "")
+          .trim()
+          .toUpperCase()
+          .replace(/[\s-]+/g, ""),
+        userType: String(form.get("userType") || "guest") as
+          | "resident"
+          | "guest",
         notes: String(form.get("notes") || "").trim() || undefined,
       };
       const res = await apiFetch("/rfid", {
@@ -513,7 +611,10 @@ export function RfidCardsView() {
         method: "PATCH",
         body: JSON.stringify({
           ownerName: editing.ownerName.trim(),
-          plate: editing.plate.trim().toUpperCase().replace(/[\s-]+/g, ""),
+          plate: editing.plate
+            .trim()
+            .toUpperCase()
+            .replace(/[\s-]+/g, ""),
           userType: editing.userType,
           notes: editing.notes.trim() || undefined,
         }),
@@ -535,7 +636,9 @@ export function RfidCardsView() {
     if (!confirmDelete || submitting) return;
     setSubmitting(true);
     try {
-      const res = await apiFetch(`/rfid/${confirmDelete.id}`, { method: "DELETE" });
+      const res = await apiFetch(`/rfid/${confirmDelete.id}`, {
+        method: "DELETE",
+      });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setMsg(`Đã xóa thẻ ${confirmDelete.uid}`);
@@ -554,16 +657,96 @@ export function RfidCardsView() {
     const nextStatus = isOperationalStatus(card.status) ? "inactive" : "active";
     setSubmitting(true);
     try {
-      const res = await apiFetch(isOperationalStatus(card.status) ? `/rfid/${card.id}/blocked` : `/rfid/${card.id}/status`, {
-        method: "POST",
-        body: JSON.stringify(card.status === "active" ? { reason: reason?.trim() } : { status: nextStatus }),
-      });
+      const res = await apiFetch(
+        isOperationalStatus(card.status)
+          ? `/rfid/${card.id}/blocked`
+          : `/rfid/${card.id}/status`,
+        {
+          method: "POST",
+          body: JSON.stringify(
+            card.status === "active"
+              ? { reason: reason?.trim() }
+              : { status: nextStatus },
+          ),
+        },
+      );
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setMsg(`Đã ${nextStatus === "active" ? "mở khóa" : "khóa"} thẻ ${card.uid}`);
+        setMsg(
+          `Đã ${nextStatus === "active" ? "mở khóa" : "khóa"} thẻ ${card.uid}`,
+        );
         await loadCards();
       } else {
         setMsg(data.message || "Không đổi được trạng thái.");
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleReportLost() {
+    if (!reportLostCard || submitting) return;
+    setSubmitting(true);
+    try {
+      const res = await apiFetch(`/rfid/${reportLostCard.id}/lost`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setMsg(
+          `Đã đánh dấu mất thẻ ${reportLostCard.uid} và gỡ khỏi gói dịch vụ.`,
+        );
+        setReportLostCard(null);
+        await loadCards();
+      } else {
+        setMsg(data.message || "Không cập nhật được trạng thái thẻ.");
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleReportDamaged() {
+    if (!reportDamagedCard || submitting) return;
+    setSubmitting(true);
+    try {
+      const res = await apiFetch(`/rfid/${reportDamagedCard.id}/damaged`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setMsg(
+          `Đã đánh dấu hỏng thẻ ${reportDamagedCard.uid} và gỡ khỏi gói dịch vụ.`,
+        );
+        setReportDamagedCard(null);
+        await loadCards();
+      } else {
+        setMsg(data.message || "Không cập nhật được trạng thái thẻ.");
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleRestore() {
+    if (!restoreCard || submitting) return;
+    setSubmitting(true);
+    try {
+      const res = await apiFetch(`/rfid/${restoreCard.id}/restore`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setMsg(
+          `Đã khôi phục thẻ ${restoreCard.uid} về loại Khách, làm mới thông tin.`,
+        );
+        setRestoreCard(null);
+        await loadCards();
+      } else {
+        setMsg(data.message || "Không khôi phục được thẻ.");
       }
     } finally {
       setSubmitting(false);
@@ -582,7 +765,8 @@ export function RfidCardsView() {
   function toggleSelectAllVisible() {
     setSelectedIds((prev) => {
       const allIds = filtered.map((c) => c.id);
-      const allSelected = allIds.length > 0 && allIds.every((id) => prev.has(id));
+      const allSelected =
+        allIds.length > 0 && allIds.every((id) => prev.has(id));
       if (allSelected) return new Set();
       return new Set(allIds);
     });
@@ -594,7 +778,11 @@ export function RfidCardsView() {
       setMsg("Vui lòng nhập đúng chuỗi xác nhận.");
       return;
     }
-    const payload: { mode: "reset" | "delete"; ids?: string[]; confirm: string } = {
+    const payload: {
+      mode: "reset" | "delete";
+      ids?: string[];
+      confirm: string;
+    } = {
       mode: bulkClear.mode,
       confirm: "RESET_ALL_RFID_DATA",
     };
@@ -642,8 +830,11 @@ export function RfidCardsView() {
         <div className="rfid-stats">
           <StatCard color="slate" label="Tổng thẻ" value={stats.total} />
           <StatCard color="green" label="Đang hoạt động" value={stats.active} />
+          <StatCard color="blue" label="Đang dùng" value={stats.inUse} />
           <StatCard color="amber" label="Đã khóa" value={stats.inactive} />
-          <StatCard color="blue" label="Cư dân" value={stats.resident} />
+          <StatCard color="rose" label="Bị mất" value={stats.lost} />
+          <StatCard color="orange" label="Bị hỏng" value={stats.damaged} />
+          <StatCard color="blue" label="Thành viên" value={stats.resident} />
           <StatCard color="purple" label="Khách" value={stats.guest} />
         </div>
 
@@ -669,11 +860,34 @@ export function RfidCardsView() {
                   Hoạt động
                 </SegBtn>
                 <SegBtn
-                  active={statusFilter === "inactive" || statusFilter === "blocked"}
+                  active={statusFilter === "inuse"}
+                  onClick={() => setStatusFilter("inuse")}
+                  tone="blue"
+                >
+                  Đang dùng
+                </SegBtn>
+                <SegBtn
+                  active={
+                    statusFilter === "inactive" || statusFilter === "blocked"
+                  }
                   onClick={() => setStatusFilter("blocked")}
                   tone="amber"
                 >
                   Đã khóa
+                </SegBtn>
+                <SegBtn
+                  active={statusFilter === "lost"}
+                  onClick={() => setStatusFilter("lost")}
+                  tone="rose"
+                >
+                  Bị mất
+                </SegBtn>
+                <SegBtn
+                  active={statusFilter === "damaged"}
+                  onClick={() => setStatusFilter("damaged")}
+                  tone="orange"
+                >
+                  Bị hỏng
                 </SegBtn>
               </div>
             </div>
@@ -692,7 +906,7 @@ export function RfidCardsView() {
                   onClick={() => setUserTypeFilter("resident")}
                   tone="blue"
                 >
-                  Cư dân
+                  Thành viên
                 </SegBtn>
                 <SegBtn
                   active={userTypeFilter === "guest"}
@@ -705,7 +919,11 @@ export function RfidCardsView() {
             </div>
 
             {hasActiveFilter && (
-              <button className="rfid-link-btn" onClick={resetFilters} type="button">
+              <button
+                className="rfid-link-btn"
+                onClick={resetFilters}
+                type="button"
+              >
                 <X size={13} /> Xóa bộ lọc
               </button>
             )}
@@ -732,7 +950,12 @@ export function RfidCardsView() {
               )}
             </div>
 
-            <button className="small-button" onClick={loadCards} disabled={loading} type="button">
+            <button
+              className="small-button"
+              onClick={loadCards}
+              disabled={loading}
+              type="button"
+            >
               <RefreshCcw size={13} className={loading ? "spin" : ""} /> Tải lại
             </button>
 
@@ -825,7 +1048,16 @@ export function RfidCardsView() {
           </p>
         ) : (
           <DataTable
-            headers={["", "UID", "Chủ thẻ", "Biển số", "Loại", "Trạng thái", "Cập nhật", "Thao tác"]}
+            headers={[
+              "",
+              "UID",
+              "Chủ thẻ",
+              "Biển số",
+              "Loại",
+              "Trạng thái",
+              "Cập nhật",
+              "Thao tác",
+            ]}
             rows={filtered.map((card) => [
               isAdmin ? (
                 <button
@@ -858,13 +1090,18 @@ export function RfidCardsView() {
                 {card.ownerName || "—"}
               </span>,
               <span key="plate" className="plate-cell">
-                {card.plate || "—"}
+                {card.plate || card.activeSession?.plate || "—"}
               </span>,
-              <span key="type" className={card.userType === "resident" ? "badge" : "badge warning"}>
+              <span
+                key="type"
+                className={
+                  card.userType === "resident" ? "badge" : "badge warning"
+                }
+              >
                 {userTypeLabel(card.userType)}
               </span>,
               <span key="status" className={statusBadgeClass(card.status)}>
-                {statusLabel(card.status)}
+                {cardStatusLabel(card)}
               </span>,
               <span key="updated" className="cell-muted-tiny">
                 {formatDate(card.updatedAt)}
@@ -873,30 +1110,89 @@ export function RfidCardsView() {
                 {isAdmin && (
                   <button
                     className="small-button"
-                    onClick={() => setEditing({
-                      card,
-                      ownerName: card.ownerName,
-                      plate: card.plate,
-                      userType: card.userType,
-                      notes: card.notes || "",
-                    })}
+                    onClick={() =>
+                      setEditing({
+                        card,
+                        ownerName: card.ownerName,
+                        plate: card.plate,
+                        userType: card.userType,
+                        notes: card.notes || "",
+                      })
+                    }
                     title="Sửa thẻ"
                     type="button"
                   >
                     <Edit size={13} /> Sửa
                   </button>
                 )}
-                <button
-                  className="small-button"
-                  onClick={() => isOperationalStatus(card.status) ? (setLockingCard(card), setLockReason("")) : toggleStatus(card)}
-                  disabled={submitting}
-                  title={isOperationalStatus(card.status) ? "Khóa thẻ" : "Mở khóa thẻ"}
-                  type="button"
-                  style={{ color: isOperationalStatus(card.status) ? "#f59e0b" : "#16a34a" }}
-                >
-                  {isOperationalStatus(card.status) ? <XCircle size={13} /> : <CheckCircle2 size={13} />}
-                  {isOperationalStatus(card.status) ? "Khóa" : "Mở khóa"}
-                </button>
+                {card.status !== "lost" &&
+                  (isOperationalStatus(card.status) ||
+                    card.status === "blocked") && (
+                    <button
+                      className="small-button"
+                      onClick={() =>
+                        isOperationalStatus(card.status)
+                          ? (setLockingCard(card), setLockReason(""))
+                          : toggleStatus(card)
+                      }
+                      disabled={submitting}
+                      title={
+                        isOperationalStatus(card.status)
+                          ? "Khóa thẻ"
+                          : "Mở khóa thẻ"
+                      }
+                      type="button"
+                      style={{
+                        color: isOperationalStatus(card.status)
+                          ? "#f59e0b"
+                          : "#16a34a",
+                      }}
+                    >
+                      {isOperationalStatus(card.status) ? (
+                        <XCircle size={13} />
+                      ) : (
+                        <CheckCircle2 size={13} />
+                      )}
+                      {isOperationalStatus(card.status) ? "Khóa" : "Mở khóa"}
+                    </button>
+                  )}
+                {isOperationalStatus(card.status) && (
+                  <button
+                    className="small-button"
+                    onClick={() => setReportLostCard(card)}
+                    disabled={submitting}
+                    title="Đánh dấu thẻ bị mất và gỡ khỏi gói dịch vụ"
+                    type="button"
+                    style={{ color: "#e11d48" }}
+                  >
+                    <AlertTriangle size={13} /> Báo mất
+                  </button>
+                )}
+                {isOperationalStatus(card.status) && (
+                  <button
+                    className="small-button"
+                    onClick={() => setReportDamagedCard(card)}
+                    disabled={submitting}
+                    title="Đánh dấu thẻ bị hỏng và gỡ khỏi gói dịch vụ"
+                    type="button"
+                    style={{ color: "#ea580c" }}
+                  >
+                    <AlertTriangle size={13} /> Báo hỏng
+                  </button>
+                )}
+                {isAdmin &&
+                  (card.status === "damaged" || card.status === "lost") && (
+                    <button
+                      className="small-button"
+                      onClick={() => setRestoreCard(card)}
+                      disabled={submitting}
+                      title="Khôi phục thẻ về loại Khách và làm mới thông tin"
+                      type="button"
+                      style={{ color: "#0891b2" }}
+                    >
+                      <RefreshCcw size={13} /> Khôi phục
+                    </button>
+                  )}
                 {isAdmin && (
                   <button
                     className="small-button"
@@ -924,7 +1220,11 @@ export function RfidCardsView() {
               <>
                 <Search size={32} />
                 <p>Không có thẻ nào khớp bộ lọc.</p>
-                <button className="small-button" onClick={resetFilters} type="button">
+                <button
+                  className="small-button"
+                  onClick={resetFilters}
+                  type="button"
+                >
                   <X size={13} /> Xóa bộ lọc
                 </button>
               </>
@@ -937,7 +1237,9 @@ export function RfidCardsView() {
       {showAddForm && (
         <div
           className="modal-overlay"
-          onClick={(e) => { if (e.target === e.currentTarget) setShowAddForm(false); }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowAddForm(false);
+          }}
         >
           <div className="modal-card">
             <div className="modal-header">
@@ -945,7 +1247,11 @@ export function RfidCardsView() {
                 <Plus size={22} />
                 <h2>Thêm thẻ RFID</h2>
               </div>
-              <button onClick={() => setShowAddForm(false)} className="modal-close" type="button">
+              <button
+                onClick={() => setShowAddForm(false)}
+                className="modal-close"
+                type="button"
+              >
                 <X size={20} />
               </button>
             </div>
@@ -1003,15 +1309,20 @@ export function RfidCardsView() {
                     />
                   </div>
 
-                  {/* Auto-fill từ cư dân đã đăng ký gói */}
+                  {/* Auto-fill từ thành viên đã đăng ký gói */}
                   <div className="form-field">
                     <label className="form-label">
-                      <UserCheck size={13} style={{ verticalAlign: "middle", marginRight: 4 }} />
-                      Gán cho cư dân đã đăng ký gói
+                      <UserCheck
+                        size={13}
+                        style={{ verticalAlign: "middle", marginRight: 4 }}
+                      />
+                      Gán cho thành viên đã đăng ký gói
                     </label>
                     <select
                       value={selectedResidentId}
-                      onChange={(e) => handleSelectResidentInAddForm(e.target.value)}
+                      onChange={(e) =>
+                        handleSelectResidentInAddForm(e.target.value)
+                      }
                       className="form-input"
                     >
                       <option value="">
@@ -1020,13 +1331,18 @@ export function RfidCardsView() {
                       {residents.map((r) => (
                         <option key={r.subscriptionId} value={r.subscriptionId}>
                           {r.plate} — {r.ownerName}
-                          {r.memberCode ? ` (${r.memberCode})` : ""} · {r.planName}
+                          {r.memberCode ? ` (${r.memberCode})` : ""} ·{" "}
+                          {r.planName}
                         </option>
                       ))}
                     </select>
                     {residents.length === 0 && (
-                      <p className="form-hint muted-cell" style={{ fontSize: "0.78rem", marginTop: 4 }}>
-                        Chưa có cư dân nào có gói active mà chưa được gán thẻ.
+                      <p
+                        className="form-hint muted-cell"
+                        style={{ fontSize: "0.78rem", marginTop: 4 }}
+                      >
+                        Chưa có thành viên nào có gói active mà chưa được gán
+                        thẻ.
                       </p>
                     )}
                   </div>
@@ -1043,26 +1359,33 @@ export function RfidCardsView() {
                     <div className="form-field">
                       <label className="form-label">Biển số</label>
                       {/* Luôn giữ input thật trong DOM để FormData submit đúng.
-                          Khi đã gán cư dân → ẩn input, hiện badge read-only lên trên. */}
+                          Khi đã gán thành viên → ẩn input, hiện badge read-only lên trên. */}
                       {addIsResidentLocked && (
                         <div className="form-input form-input-readonly mono">
-                          {residents.find((r) => r.subscriptionId === selectedResidentId)?.plate || "—"}
+                          {residents.find(
+                            (r) => r.subscriptionId === selectedResidentId,
+                          )?.plate || "—"}
                         </div>
                       )}
                       <input
                         name="plate"
                         placeholder="29A12345"
                         className="form-input mono"
-                        style={addIsResidentLocked ? { display: "none" } : undefined}
+                        style={
+                          addIsResidentLocked ? { display: "none" } : undefined
+                        }
                       />
                     </div>
                     <div className="form-field">
                       <label className="form-label">Loại</label>
                       {addIsResidentLocked && (
                         <div className="form-input form-input-readonly">
-                          <span className="badge">Cư dân</span>
-                          <span className="muted-cell" style={{ fontSize: "0.78rem", marginLeft: 6 }}>
-                            (đã gán theo cư dân)
+                          <span className="badge">Thành viên</span>
+                          <span
+                            className="muted-cell"
+                            style={{ fontSize: "0.78rem", marginLeft: 6 }}
+                          >
+                            (đã gán theo thành viên)
                           </span>
                         </div>
                       )}
@@ -1070,15 +1393,21 @@ export function RfidCardsView() {
                         name="userType"
                         defaultValue="guest"
                         className="form-input"
-                        style={addIsResidentLocked ? { display: "none" } : undefined}
+                        style={
+                          addIsResidentLocked ? { display: "none" } : undefined
+                        }
                         onChange={(e) => {
                           if (e.target.value === "guest") {
                             // Clear biển số + tên chủ thẻ khi chọn Khách
                             const formEl = e.currentTarget.form;
                             if (formEl) {
-                              const owner = formEl.elements.namedItem("ownerName") as HTMLInputElement | null;
+                              const owner = formEl.elements.namedItem(
+                                "ownerName",
+                              ) as HTMLInputElement | null;
                               if (owner) owner.value = "";
-                              const plate = formEl.elements.namedItem("plate") as HTMLInputElement | null;
+                              const plate = formEl.elements.namedItem(
+                                "plate",
+                              ) as HTMLInputElement | null;
                               if (plate) plate.value = "";
                             }
                             // Nếu đang chọn cư dân → bỏ chọn để không còn locked
@@ -1087,7 +1416,7 @@ export function RfidCardsView() {
                         }}
                       >
                         <option value="guest">Khách</option>
-                        <option value="resident">Cư dân</option>
+                        <option value="resident">Thành viên</option>
                       </select>
                     </div>
                   </div>
@@ -1103,10 +1432,18 @@ export function RfidCardsView() {
                 </div>
 
                 <div className="modal-actions">
-                  <button className="small-button" onClick={() => setShowAddForm(false)} type="button">
+                  <button
+                    className="small-button"
+                    onClick={() => setShowAddForm(false)}
+                    type="button"
+                  >
                     Hủy
                   </button>
-                  <button className="small-button primary" disabled={submitting} type="submit">
+                  <button
+                    className="small-button primary"
+                    disabled={submitting}
+                    type="submit"
+                  >
                     {submitting ? <Loader2 size={14} /> : <Plus size={14} />}
                     {submitting ? "Đang lưu..." : "Thêm thẻ"}
                   </button>
@@ -1118,14 +1455,200 @@ export function RfidCardsView() {
       )}
 
       {lockingCard && (
-        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setLockingCard(null); }}>
+        <div
+          className="modal-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setLockingCard(null);
+          }}
+        >
           <div className="modal-card narrow">
-            <h3 className="confirm-title"><AlertTriangle size={18} color="#b45309" /> Khóa thẻ RFID</h3>
-            <p className="confirm-text">Nhập lý do khóa thẻ. Lý do này sẽ hiển thị tại bàn nhân viên khi quét thẻ.</p>
-            <textarea value={lockReason} onChange={(e) => setLockReason(e.target.value)} rows={4} maxLength={500} placeholder="Ví dụ: Chủ thẻ báo mất, vi phạm quy định..." autoFocus />
+            <h3 className="confirm-title">
+              <AlertTriangle size={18} color="#b45309" /> Khóa thẻ RFID
+            </h3>
+            <p className="confirm-text">
+              Nhập lý do khóa thẻ. Lý do này sẽ hiển thị tại bàn nhân viên khi
+              quét thẻ.
+            </p>
+            <textarea
+              value={lockReason}
+              onChange={(e) => setLockReason(e.target.value)}
+              rows={4}
+              maxLength={500}
+              placeholder="Ví dụ: Chủ thẻ báo mất, vi phạm quy định..."
+              autoFocus
+            />
             <div className="modal-actions">
-              <button className="small-button" type="button" onClick={() => setLockingCard(null)}>Hủy</button>
-              <button className="small-button danger" type="button" disabled={!lockReason.trim() || submitting} onClick={() => { void toggleStatus(lockingCard, lockReason).then(() => setLockingCard(null)); }}>Khóa thẻ</button>
+              <button
+                className="small-button"
+                type="button"
+                onClick={() => setLockingCard(null)}
+              >
+                Hủy
+              </button>
+              <button
+                className="small-button danger"
+                type="button"
+                disabled={!lockReason.trim() || submitting}
+                onClick={() => {
+                  void toggleStatus(lockingCard, lockReason).then(() =>
+                    setLockingCard(null),
+                  );
+                }}
+              >
+                Khóa thẻ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {reportLostCard && (
+        <div
+          className="modal-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setReportLostCard(null);
+          }}
+        >
+          <div className="modal-card narrow">
+            <h3 className="confirm-title">
+              <AlertTriangle size={18} color="#e11d48" /> Đánh dấu mất thẻ RFID
+            </h3>
+            <p className="confirm-text">
+              Thẻ{" "}
+              <strong className="mono">
+                {reportLostCard.uid}
+                {reportLostCard.plate ? ` (${reportLostCard.plate})` : ""}
+              </strong>{" "}
+              sẽ được đánh dấu <strong>Bị mất</strong> và tự động gỡ khỏi gói
+              dịch vụ đang gán. Thẻ sẽ bị từ chối khi quét tại cổng. Bạn có chắc
+              chắn muốn tiếp tục?
+            </p>
+            <div className="modal-actions">
+              <button
+                className="small-button"
+                type="button"
+                onClick={() => setReportLostCard(null)}
+              >
+                Hủy
+              </button>
+              <button
+                className="small-button danger"
+                type="button"
+                disabled={submitting}
+                onClick={() => {
+                  void handleReportLost();
+                }}
+              >
+                {submitting ? (
+                  <Loader2 size={14} />
+                ) : (
+                  <AlertTriangle size={14} />
+                )}
+                Đánh dấu mất
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {reportDamagedCard && (
+        <div
+          className="modal-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setReportDamagedCard(null);
+          }}
+        >
+          <div className="modal-card narrow">
+            <h3 className="confirm-title">
+              <AlertTriangle size={18} color="#ea580c" /> Đánh dấu hỏng thẻ RFID
+            </h3>
+            <p className="confirm-text">
+              Thẻ{" "}
+              <strong className="mono">
+                {reportDamagedCard.uid}
+                {reportDamagedCard.plate ? ` (${reportDamagedCard.plate})` : ""}
+              </strong>{" "}
+              sẽ được đánh dấu <strong>Bị hỏng</strong>, không được sử dụng tại
+              cổng và tự động gỡ khỏi gói dịch vụ đang gán. Thành viên sẽ trở
+              lại trạng thái chưa có RFID để được cấp thẻ thay thế. Bạn có chắc
+              chắn muốn tiếp tục?
+            </p>
+            <div className="modal-actions">
+              <button
+                className="small-button"
+                type="button"
+                onClick={() => setReportDamagedCard(null)}
+              >
+                Hủy
+              </button>
+              <button
+                className="small-button danger"
+                type="button"
+                disabled={submitting}
+                onClick={() => {
+                  void handleReportDamaged();
+                }}
+              >
+                {submitting ? (
+                  <Loader2 size={14} />
+                ) : (
+                  <AlertTriangle size={14} />
+                )}
+                Đánh dấu hỏng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {restoreCard && (
+        <div
+          className="modal-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setRestoreCard(null);
+          }}
+        >
+          <div className="modal-card narrow">
+            <h3 className="confirm-title">
+              <RefreshCcw size={18} color="#0891b2" /> Khôi phục thẻ RFID
+            </h3>
+            <p className="confirm-text">
+              Thẻ{" "}
+              <strong className="mono">
+                {restoreCard.uid}
+                {restoreCard.plate ? ` (${restoreCard.plate})` : ""}
+              </strong>{" "}
+              sẽ được chuyển về <strong>loại Khách</strong>, chuyển sang trạng
+              thái <strong>hoạt động</strong> và <strong>làm mới toàn bộ thông
+              tin</strong> (chủ thẻ, biển số, liên kết thành viên/thay thế):
+              chủ thẻ trở thành{" "}
+              <strong className="mono">Guest</strong>, biển số trống. Thẻ
+              cũng sẽ được gỡ khỏi gói dịch vụ đang gán. Bạn có chắc chắn muốn
+              tiếp tục?
+            </p>
+            <div className="modal-actions">
+              <button
+                className="small-button"
+                type="button"
+                onClick={() => setRestoreCard(null)}
+              >
+                Hủy
+              </button>
+              <button
+                className="small-button danger"
+                type="button"
+                disabled={submitting}
+                onClick={() => {
+                  void handleRestore();
+                }}
+              >
+                {submitting ? (
+                  <Loader2 size={14} />
+                ) : (
+                  <RefreshCcw size={14} />
+                )}
+                Khôi phục
+              </button>
             </div>
           </div>
         </div>
@@ -1135,7 +1658,9 @@ export function RfidCardsView() {
       {editing && (
         <div
           className="modal-overlay"
-          onClick={(e) => { if (e.target === e.currentTarget) setEditing(null); }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setEditing(null);
+          }}
         >
           <div className="modal-card narrow">
             <div className="modal-header">
@@ -1143,7 +1668,11 @@ export function RfidCardsView() {
                 <Edit size={22} />
                 <h2>Sửa thẻ RFID</h2>
               </div>
-              <button onClick={() => setEditing(null)} className="modal-close" type="button">
+              <button
+                onClick={() => setEditing(null)}
+                className="modal-close"
+                type="button"
+              >
                 <X size={20} />
               </button>
             </div>
@@ -1156,16 +1685,19 @@ export function RfidCardsView() {
             <div className="form-grid">
               <div className="form-field">
                 <label className="form-label">
-                  <UserCheck size={13} style={{ verticalAlign: "middle", marginRight: 4 }} />
-                  Gán cho cư dân đã đăng ký gói
+                  <UserCheck
+                    size={13}
+                    style={{ verticalAlign: "middle", marginRight: 4 }}
+                  />
+                  Gán cho thành viên đã đăng ký gói
                 </label>
                 <select
                   value={editSelectedResidentId}
                   onChange={(e) => setEditSelectedResidentId(e.target.value)}
                   className="form-input"
                 >
-                  <option value="">— Giữ nguyên / bỏ gán cư dân —</option>
-                  {/* Hiển thị cư dân hiện tại đang gán cho thẻ này nếu có */}
+                  <option value="">— Giữ nguyên / bỏ gán thành viên —</option>
+                  {/* Hiển thị thành viên hiện tại đang gán cho thẻ này nếu có */}
                   {editing.userType === "resident" &&
                     editing.plate &&
                     !residents.some((r) => r.plate === editing.plate) && (
@@ -1180,8 +1712,12 @@ export function RfidCardsView() {
                     </option>
                   ))}
                 </select>
-                <p className="form-hint muted-cell" style={{ fontSize: "0.78rem", marginTop: 4 }}>
-                  Chọn 1 cư dân để tự điền lại biển số, tên chủ thẻ và đánh dấu là cư dân.
+                <p
+                  className="form-hint muted-cell"
+                  style={{ fontSize: "0.78rem", marginTop: 4 }}
+                >
+                  Chọn 1 thành viên để tự điền lại biển số, tên chủ thẻ và đánh
+                  dấu là thành viên.
                 </p>
               </div>
 
@@ -1189,7 +1725,9 @@ export function RfidCardsView() {
                 <label className="form-label">Tên chủ thẻ</label>
                 <input
                   value={editing.ownerName}
-                  onChange={(e) => setEditing({ ...editing, ownerName: e.target.value })}
+                  onChange={(e) =>
+                    setEditing({ ...editing, ownerName: e.target.value })
+                  }
                   className="form-input"
                 />
               </div>
@@ -1203,19 +1741,26 @@ export function RfidCardsView() {
                   )}
                   <input
                     value={editing.plate}
-                    onChange={(e) => setEditing({ ...editing, plate: e.target.value })}
+                    onChange={(e) =>
+                      setEditing({ ...editing, plate: e.target.value })
+                    }
                     className="form-input mono"
                     placeholder="29A12345"
-                    style={editIsResidentLocked ? { display: "none" } : undefined}
+                    style={
+                      editIsResidentLocked ? { display: "none" } : undefined
+                    }
                   />
                 </div>
                 <div className="form-field">
                   <label className="form-label">Loại</label>
                   {editIsResidentLocked && (
                     <div className="form-input form-input-readonly">
-                      <span className="badge">Cư dân</span>
-                      <span className="muted-cell" style={{ fontSize: "0.78rem", marginLeft: 6 }}>
-                        (đã gán theo cư dân)
+                      <span className="badge">Thành viên</span>
+                      <span
+                        className="muted-cell"
+                        style={{ fontSize: "0.78rem", marginLeft: 6 }}
+                      >
+                        (đã gán theo thành viên)
                       </span>
                     </div>
                   )}
@@ -1225,16 +1770,23 @@ export function RfidCardsView() {
                       const next = e.target.value as "resident" | "guest";
                       // Đổi sang Khách → clear tên chủ thẻ và biển số
                       if (next === "guest") {
-                        setEditing({ ...editing, userType: next, ownerName: "", plate: "" });
+                        setEditing({
+                          ...editing,
+                          userType: next,
+                          ownerName: "",
+                          plate: "",
+                        });
                       } else {
                         setEditing({ ...editing, userType: next });
                       }
                     }}
                     className="form-input"
-                    style={editIsResidentLocked ? { display: "none" } : undefined}
+                    style={
+                      editIsResidentLocked ? { display: "none" } : undefined
+                    }
                   >
                     <option value="guest">Khách</option>
-                    <option value="resident">Cư dân</option>
+                    <option value="resident">Thành viên</option>
                   </select>
                 </div>
               </div>
@@ -1242,7 +1794,9 @@ export function RfidCardsView() {
                 <label className="form-label">Ghi chú</label>
                 <textarea
                   value={editing.notes}
-                  onChange={(e) => setEditing({ ...editing, notes: e.target.value })}
+                  onChange={(e) =>
+                    setEditing({ ...editing, notes: e.target.value })
+                  }
                   rows={2}
                   className="form-input"
                 />
@@ -1250,10 +1804,19 @@ export function RfidCardsView() {
             </div>
 
             <div className="modal-actions">
-              <button className="small-button" onClick={() => setEditing(null)} type="button">
+              <button
+                className="small-button"
+                onClick={() => setEditing(null)}
+                type="button"
+              >
                 Hủy
               </button>
-              <button className="small-button primary" disabled={submitting} onClick={handleSaveEdit} type="button">
+              <button
+                className="small-button primary"
+                disabled={submitting}
+                onClick={handleSaveEdit}
+                type="button"
+              >
                 {submitting ? <Loader2 size={14} /> : <Edit size={14} />}
                 {submitting ? "Đang lưu..." : "Lưu thay đổi"}
               </button>
@@ -1266,7 +1829,9 @@ export function RfidCardsView() {
       {confirmDelete && (
         <div
           className="modal-overlay"
-          onClick={(e) => { if (e.target === e.currentTarget) setConfirmDelete(null); }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setConfirmDelete(null);
+          }}
         >
           <div className="modal-card narrow">
             <h3 className="confirm-title">
@@ -1274,11 +1839,16 @@ export function RfidCardsView() {
               Xác nhận xóa thẻ
             </h3>
             <p className="confirm-text">
-              Bạn có chắc muốn xóa thẻ <strong className="mono">{confirmDelete.uid}</strong>?
-              Hành động này không thể hoàn tác.
+              Bạn có chắc muốn xóa thẻ{" "}
+              <strong className="mono">{confirmDelete.uid}</strong>? Hành động
+              này không thể hoàn tác.
             </p>
             <div className="modal-actions">
-              <button className="small-button" onClick={() => setConfirmDelete(null)} type="button">
+              <button
+                className="small-button"
+                onClick={() => setConfirmDelete(null)}
+                type="button"
+              >
                 Hủy
               </button>
               <button
@@ -1312,7 +1882,9 @@ export function RfidCardsView() {
               ) : (
                 <Trash2 size={18} color="#ef4444" />
               )}
-              {bulkClear.mode === "reset" ? "Reset dữ liệu thẻ" : "Xóa thẻ vĩnh viễn"}
+              {bulkClear.mode === "reset"
+                ? "Reset dữ liệu thẻ"
+                : "Xóa thẻ vĩnh viễn"}
             </h3>
 
             <div
@@ -1328,16 +1900,22 @@ export function RfidCardsView() {
                 gap: 10,
               }}
             >
-              <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 2 }} />
+              <AlertTriangle
+                size={16}
+                style={{ flexShrink: 0, marginTop: 2 }}
+              />
               <div>
                 {bulkClear.mode === "reset" ? (
                   <>
-                    <strong>Reset</strong> sẽ xóa hết chủ thẻ, biển số, subscription, userId — đưa thẻ về
-                    trạng thái <strong>guest / active / trống</strong>. UID và lịch sử tạo được giữ lại.
+                    <strong>Reset</strong> sẽ xóa hết chủ thẻ, biển số,
+                    subscription, userId — đưa thẻ về trạng thái{" "}
+                    <strong>guest / active / trống</strong>. UID và lịch sử tạo
+                    được giữ lại.
                   </>
                 ) : (
                   <>
-                    <strong>Xóa vĩnh viễn</strong> sẽ xóa hoàn toàn thẻ khỏi hệ thống. Hành động này
+                    <strong>Xóa vĩnh viễn</strong> sẽ xóa hoàn toàn thẻ khỏi hệ
+                    thống. Hành động này
                     <strong> không thể hoàn tác</strong>.
                   </>
                 )}
@@ -1361,7 +1939,16 @@ export function RfidCardsView() {
                 color: "#475569",
               }}
             >
-              Nhập chính xác <code style={{ background: "#f1f5f9", padding: "2px 6px", borderRadius: 4 }}>RESET_ALL_RFID_DATA</code>{" "}
+              Nhập chính xác{" "}
+              <code
+                style={{
+                  background: "#f1f5f9",
+                  padding: "2px 6px",
+                  borderRadius: 4,
+                }}
+              >
+                RESET_ALL_RFID_DATA
+              </code>{" "}
               để xác nhận:
             </label>
             <input
@@ -1394,12 +1981,24 @@ export function RfidCardsView() {
                 Hủy
               </button>
               <button
-                className={bulkClear.mode === "reset" ? "small-button" : "small-button danger"}
+                className={
+                  bulkClear.mode === "reset"
+                    ? "small-button"
+                    : "small-button danger"
+                }
                 onClick={executeBulkClear}
-                disabled={submitting || bulkConfirmText !== "RESET_ALL_RFID_DATA"}
+                disabled={
+                  submitting || bulkConfirmText !== "RESET_ALL_RFID_DATA"
+                }
                 type="button"
               >
-                {submitting ? <Loader2 size={14} /> : bulkClear.mode === "reset" ? <Eraser size={14} /> : <Trash2 size={14} />}
+                {submitting ? (
+                  <Loader2 size={14} />
+                ) : bulkClear.mode === "reset" ? (
+                  <Eraser size={14} />
+                ) : (
+                  <Trash2 size={14} />
+                )}
                 {submitting
                   ? "Đang xử lý..."
                   : bulkClear.mode === "reset"
@@ -1410,15 +2009,37 @@ export function RfidCardsView() {
           </div>
         </div>
       )}
+
+      {/* Yêu cầu mua & cấp thẻ RFID (admin) */}
+      {isAdmin && (
+        <div style={{ marginTop: 24 }}>
+          <RfidIssueManagerPanel />
+        </div>
+      )}
     </section>
   );
 }
 
 /* ============================== Sub components ============================== */
 
-type StatColor = "slate" | "green" | "amber" | "blue" | "purple";
+type StatColor =
+  | "slate"
+  | "green"
+  | "amber"
+  | "blue"
+  | "purple"
+  | "rose"
+  | "orange";
 
-function StatCard({ color, label, value }: { color: StatColor; label: string; value: number }) {
+function StatCard({
+  color,
+  label,
+  value,
+}: {
+  color: StatColor;
+  label: string;
+  value: number;
+}) {
   return (
     <div className={`rfid-stat rfid-stat-${color}`}>
       <div className="rfid-stat-label">{label}</div>
@@ -1427,7 +2048,14 @@ function StatCard({ color, label, value }: { color: StatColor; label: string; va
   );
 }
 
-type SegTone = "default" | "green" | "amber" | "blue" | "purple";
+type SegTone =
+  | "default"
+  | "green"
+  | "amber"
+  | "blue"
+  | "purple"
+  | "rose"
+  | "orange";
 
 function SegBtn({
   active,
@@ -1453,7 +2081,14 @@ function SegBtn({
 }
 
 type ScanPanelProps = {
-  phase: "idle" | "starting" | "waiting" | "success" | "duplicate" | "error" | "timeout";
+  phase:
+    | "idle"
+    | "starting"
+    | "waiting"
+    | "success"
+    | "duplicate"
+    | "error"
+    | "timeout";
   uid: string;
   error: string;
   onStart: () => void;
@@ -1462,9 +2097,21 @@ type ScanPanelProps = {
   onRetry: () => void;
 };
 
-function ScanPanel({ phase, uid, error, onStart, onCancel, onAccept, onRetry }: ScanPanelProps) {
+function ScanPanel({
+  phase,
+  uid,
+  error,
+  onStart,
+  onCancel,
+  onAccept,
+  onRetry,
+}: ScanPanelProps) {
   const isWaiting = phase === "starting" || phase === "waiting";
-  const isDone = phase === "success" || phase === "duplicate" || phase === "error" || phase === "timeout";
+  const isDone =
+    phase === "success" ||
+    phase === "duplicate" ||
+    phase === "error" ||
+    phase === "timeout";
 
   return (
     <div className="rfid-scan">
@@ -1472,7 +2119,11 @@ function ScanPanel({ phase, uid, error, onStart, onCancel, onAccept, onRetry }: 
         {isWaiting ? (
           <>
             <div className="rfid-scan-icon">
-              <ScanLine size={48} className="spin" style={{ animationDuration: "2s" }} />
+              <ScanLine
+                size={48}
+                className="spin"
+                style={{ animationDuration: "2s" }}
+              />
             </div>
             <p className="rfid-scan-title primary">Đang chờ quét thẻ...</p>
             <p className="rfid-scan-sub">
@@ -1481,10 +2132,16 @@ function ScanPanel({ phase, uid, error, onStart, onCancel, onAccept, onRetry }: 
           </>
         ) : phase === "success" ? (
           <>
-            <CheckCircle2 size={48} className="rfid-scan-big-icon" color="#16a34a" />
+            <CheckCircle2
+              size={48}
+              className="rfid-scan-big-icon"
+              color="#16a34a"
+            />
             <p className="rfid-scan-title green">Quét thành công</p>
             <div className="rfid-scan-uid">{uid}</div>
-            <p className="rfid-scan-sub">Bấm "Dùng UID này" để tự điền vào form.</p>
+            <p className="rfid-scan-sub">
+              Bấm "Dùng UID này" để tự điền vào form.
+            </p>
           </>
         ) : phase === "duplicate" ? (
           <>
@@ -1492,7 +2149,8 @@ function ScanPanel({ phase, uid, error, onStart, onCancel, onAccept, onRetry }: 
             <p className="rfid-scan-title amber">Thẻ đã tồn tại</p>
             <div className="rfid-scan-uid">{uid}</div>
             <p className="rfid-scan-sub">
-              Thẻ này đã được đăng ký trong hệ thống. Quay lại danh sách chính để xem.
+              Thẻ này đã được đăng ký trong hệ thống. Quay lại danh sách chính
+              để xem.
             </p>
           </>
         ) : phase === "timeout" ? (
@@ -1500,15 +2158,21 @@ function ScanPanel({ phase, uid, error, onStart, onCancel, onAccept, onRetry }: 
             <XCircle size={48} className="rfid-scan-big-icon" color="#ca8a04" />
             <p className="rfid-scan-title amber">Hết thời gian chờ</p>
             <p className="rfid-scan-sub">
-              ESP32 không gửi UID nào trong 15 giây. Kiểm tra kết nối serial hoặc thử lại.
+              ESP32 không gửi UID nào trong 15 giây. Kiểm tra kết nối serial
+              hoặc thử lại.
             </p>
           </>
         ) : (
           <>
-            <Zap size={48} className="rfid-scan-big-icon" color="var(--muted)" />
+            <Zap
+              size={48}
+              className="rfid-scan-big-icon"
+              color="var(--muted)"
+            />
             <p className="rfid-scan-title">Quét thẻ qua ESP32</p>
             <p className="rfid-scan-sub">
-              Bridge service sẽ bật chế độ SCAN_ON trên cả 2 ESP32. Đặt thẻ RFID lên đầu đọc.
+              Bridge service sẽ bật chế độ SCAN_ON trên cả 2 ESP32. Đặt thẻ RFID
+              lên đầu đọc.
             </p>
           </>
         )}
@@ -1520,7 +2184,11 @@ function ScanPanel({ phase, uid, error, onStart, onCancel, onAccept, onRetry }: 
 
       <div className="modal-actions">
         {phase === "idle" || phase === "error" || phase === "timeout" ? (
-          <button className="small-button primary" onClick={onStart} type="button">
+          <button
+            className="small-button primary"
+            onClick={onStart}
+            type="button"
+          >
             <Zap size={14} /> Bắt đầu quét
           </button>
         ) : null}
@@ -1536,13 +2204,17 @@ function ScanPanel({ phase, uid, error, onStart, onCancel, onAccept, onRetry }: 
             <button className="small-button" onClick={onRetry} type="button">
               <RefreshCcw size={14} /> Quét lại
             </button>
-            <button className="small-button success" onClick={onAccept} type="button">
+            <button
+              className="small-button success"
+              onClick={onAccept}
+              type="button"
+            >
               <CheckCircle2 size={14} /> Dùng UID này
             </button>
           </>
         ) : null}
 
-        {(phase === "duplicate" || phase === "timeout") ? (
+        {phase === "duplicate" || phase === "timeout" ? (
           <button className="small-button" onClick={onRetry} type="button">
             <RefreshCcw size={14} /> Quét lại
           </button>

@@ -23,7 +23,10 @@ import {
 import { createNotification } from "../services/notification.service.js";
 import { createPendingTransactionForSession } from "../services/transaction.service.js";
 import { serializeParkingSession } from "../utils/serializers.js";
-import { calculateParkingFee, getActivePricingConfig } from "../services/pricing.service.js";
+import {
+  calculateParkingFee,
+  getActivePricingConfig,
+} from "../services/pricing.service.js";
 import { classifyVehicleByPlate } from "../services/parkingQuota.service.js";
 
 function normalizePlate(plate: string): string {
@@ -114,24 +117,33 @@ async function buildSessionForEntry(
       }
       const subscription = await findActiveSubscriptionByPlate(memberPlate);
       if (
-        !subscription ||
-        subscription.primaryVehicleId !== rfidCard.vehicleId.toString()
+        subscription &&
+        subscription.primaryVehicleId === rfidCard.vehicleId.toString()
       ) {
-        return {
-          duplicate: false,
-          invalidRfid: true,
-          message:
-            "RFID Member ch\u01B0a c\u00F3 g\u00F3i c\u00F2n hi\u1EC7u l\u1EF1c cho xe n\u00E0y.",
+        // Thành viên có gói: dùng quota member, miễn phí.
+        quotaAccess = {
+          customerType: "member",
+          quotaType: "member",
+          isRegistered: true,
+        };
+      } else {
+        // Thành viên đã đăng ký RFID nhưng chưa mua gói tháng:
+        // vẫn cho vào (nhận diện là thành viên) nhưng dùng quota vãng lai
+        // và tính phí như khách -> UI hiển thị "Thành viên (chưa có gói)".
+        quotaAccess = {
+          customerType: "member",
+          quotaType: "walk_in",
+          isRegistered: true,
         };
       }
-      quotaAccess = { customerType: "member", quotaType: "member" };
     } else {
       const memberSubscription = await findActiveSubscriptionByPlate(plate);
       if (memberSubscription) {
         return {
           duplicate: false,
           invalidRfid: true,
-          message: "Xe này đã đăng ký gói thành viên. Vui lòng dùng đúng RFID Member đã liên kết với xe.",
+          message:
+            "Xe này đã đăng ký gói thành viên. Vui lòng dùng đúng RFID Member đã liên kết với xe.",
         };
       }
       // Guest RFID always consumes a walk-in slot, even for a registered plate.
@@ -155,11 +167,17 @@ async function buildSessionForEntry(
             : `RFID Guest UID ${uid} đang ở trạng thái ${rfidCard.status}, chưa sẵn sàng để cấp cho xe ${plate}.`,
         };
       }
-      quotaAccess = { customerType: "guest", quotaType: "walk_in" };
+      quotaAccess = {
+        customerType: "guest",
+        quotaType: "walk_in",
+        isRegistered: !!(await ownerFromPlate(plate)),
+      };
     }
   }
 
-  const isSubscriber = quotaAccess.customerType === "member";
+  // Thành viên CÓ GÓI mới dùng quota member; thành viên chưa mua gói vẫn
+  // dùng quota walk_in (tính phí như khách).
+  const isSubscriber = quotaAccess.quotaType === "member";
   const slotDoc = await allocateSlot("\u00D4 t\u00F4", undefined, {
     isSubscriber,
     quotaType: quotaAccess.quotaType,
@@ -190,7 +208,11 @@ async function buildSessionForEntry(
     });
   }
 
-  if (rfidCard && !isMember && (rfidCard.plate || rfidCard.userId || rfidCard.vehicleId)) {
+  if (
+    rfidCard &&
+    !isMember &&
+    (rfidCard.plate || rfidCard.userId || rfidCard.vehicleId)
+  ) {
     // RFID Guest dùng chung theo lượt; không mang theo biển/chủ xe của phiên cũ.
     rfidCard.plate = "";
     rfidCard.ownerName = "Guest";
@@ -208,6 +230,7 @@ async function buildSessionForEntry(
     slotId: slotDoc._id,
     customerType: quotaAccess.customerType,
     quotaType: quotaAccess.quotaType,
+    isRegisteredMember: quotaAccess.isRegistered,
     ...(ownerUserId ? { ownerUserId } : {}),
     ...(rfidCard
       ? {
@@ -220,7 +243,7 @@ async function buildSessionForEntry(
     entryDetectedPlate: plate,
     entryConfidence: source === "rfid" ? 1 : 0.9,
     ...(imagePath ? { entryImageUrl: imagePath } : {}),
-    ...(isMember
+    ...(isSubscriber
       ? {
           paymentStatus: "fully_paid",
           paymentMethod: "subscription",
@@ -346,7 +369,13 @@ export async function pushCameraLog(request: Request, response: Response) {
   const vehicle = await Vehicle.findOne({ plate });
 
   let sessionId: any = undefined;
-  let action: "created" | "completed" | "skipped" | "no_session" | "invalid_rfid" | "duplicate" = "skipped";
+  let action:
+    | "created"
+    | "completed"
+    | "skipped"
+    | "no_session"
+    | "invalid_rfid"
+    | "duplicate" = "skipped";
   let failureMessage = "";
   let openSession: typeof ParkingSession.prototype | null = null;
 
@@ -429,9 +458,12 @@ export async function pushCameraLog(request: Request, response: Response) {
         const pricing = await getActivePricingConfig();
         const checkOutAt = new Date();
         const subscriptionEnd = await findLatestSubscriptionEndByPlate(plate);
-        const billableFrom = subscriptionEnd && subscriptionEnd > openSession.checkInAt && subscriptionEnd < checkOutAt
-          ? subscriptionEnd
-          : openSession.checkInAt;
+        const billableFrom =
+          subscriptionEnd &&
+          subscriptionEnd > openSession.checkInAt &&
+          subscriptionEnd < checkOutAt
+            ? subscriptionEnd
+            : openSession.checkInAt;
         const feeBreakdown = calculateParkingFee(
           billableFrom,
           checkOutAt,
@@ -465,11 +497,27 @@ export async function pushCameraLog(request: Request, response: Response) {
   });
 
   // Realtime push tới /staff-desk qua SSE bus cho cả cổng vào và cổng ra.
-  const activeMemberSubscription = plate ? await findActiveSubscriptionByPlate(plate) : null;
-  const memberCardForPlate = activeMemberSubscription ? await RfidCard.findOne({ plate, cardType: "member", status: { $in: ["active", "in-use"] } }).select("uid") : null;
-  const eventUserType = openSession?.customerType === "member" || activeMemberSubscription ? "resident" : body.userType;
-  const eventOwnerName = openSession?.ownerName || body.ownerName || vehicle?.ownerName || "Chưa xác định";
-  const expectedRfidUid = openSession?.expectedExitRfidUid || memberCardForPlate?.uid || null;
+  const activeMemberSubscription = plate
+    ? await findActiveSubscriptionByPlate(plate)
+    : null;
+  const memberCardForPlate = activeMemberSubscription
+    ? await RfidCard.findOne({
+        plate,
+        cardType: "member",
+        status: { $in: ["active", "in-use"] },
+      }).select("uid")
+    : null;
+  const eventUserType =
+    openSession?.customerType === "member" || activeMemberSubscription
+      ? "resident"
+      : body.userType;
+  const eventOwnerName =
+    openSession?.ownerName ||
+    body.ownerName ||
+    vehicle?.ownerName ||
+    "Chưa xác định";
+  const expectedRfidUid =
+    openSession?.expectedExitRfidUid || memberCardForPlate?.uid || null;
   const entryCardId = String(openSession?.rfidCardId || "");
   const entryCard = entryCardId
     ? await RfidCard.findOne({
@@ -480,14 +528,19 @@ export async function pushCameraLog(request: Request, response: Response) {
           { uid: entryCardId },
           { cardId: entryCardId },
         ],
-      }).select("uid").lean()
+      })
+        .select("uid")
+        .lean()
     : null;
   const entryLog = openSession?._id
     ? await ParkingCameraLog.findOne({
         sessionId: openSession._id,
         direction: "in",
         rfidUid: { $exists: true, $nin: [null, ""] },
-      }).sort({ createdAt: -1 }).select("rfidUid").lean()
+      })
+        .sort({ createdAt: -1 })
+        .select("rfidUid")
+        .lean()
     : null;
   const entryRfidUid =
     openSession?.entryRfidUid ||
@@ -497,12 +550,21 @@ export async function pushCameraLog(request: Request, response: Response) {
     null;
   const eventMetadata = {
     ...(body.metadata ?? {}),
-    ...(activeMemberSubscription ? { isSubscriber: true, expectedRfidUid } : {}),
+    ...(activeMemberSubscription
+      ? { isSubscriber: true, expectedRfidUid }
+      : {}),
     entryRfidUnverified: Boolean(openSession?.entryRfidUnverified),
     entryRfidExpected: Boolean(
       !openSession?.entryRfidUid && openSession?.entryExpectedRfidUid,
     ),
     entryRfidUid,
+    // Thẻ thay thế (đổi thẻ mới khi thẻ cũ hỏng/mất) — hiển thị để nhân viên
+    // biết xe dùng thẻ mới thay cho thẻ đã quét lúc vào.
+    replacementCardUid:
+      openSession?.expectedExitRfidUid &&
+      openSession.expectedExitRfidUid !== openSession.entryRfidUid
+        ? openSession.expectedExitRfidUid
+        : null,
   };
   const isExitWaiting =
     direction === "out" && action === "skipped" && sessionId;
@@ -531,13 +593,20 @@ export async function pushCameraLog(request: Request, response: Response) {
     action: isExitWaiting ? "waiting_rfid" : action,
     sessionPaymentStatus: isExitWaiting ? "pending" : null,
     duplicateSession: action === "duplicate",
-    metadata: { ...eventMetadata, customerType: openSession?.customerType ?? (activeMemberSubscription ? "member" : "guest") },
+    metadata: {
+      ...eventMetadata,
+      customerType:
+        openSession?.customerType ??
+        (activeMemberSubscription ? "member" : "guest"),
+      quotaType: openSession?.quotaType ?? null,
+    },
 
     fee: isExitWaiting ? ((openSession as any)?.fee ?? null) : null,
     createdAt: log.createdAt.toISOString(),
   });
 
-  const rejected = action === "invalid_rfid" || action === "duplicate" || action === "skipped";
+  const rejected =
+    action === "invalid_rfid" || action === "duplicate" || action === "skipped";
   response.status(rejected ? 409 : 201).json({
     ok: !rejected,
     log: {
@@ -554,12 +623,13 @@ export async function pushCameraLog(request: Request, response: Response) {
         : (action as string) === "completed"
           ? `Đã checkout phiên cho biển ${plate}`
           : (action as string) === "duplicate"
-          ? `Xe ${plate} đang có phiên gửi trong bãi. Từ chối vào.` 
-          : (action as string) === "invalid_rfid"
-          ? failureMessage || "RFID không hợp lệ với biển số hoặc gói thành viên của xe này."
-          : (action as string) === "no_session"
-            ? `Không tìm thấy phiên đang gửi cho biển ${plate}`
-        : `Không thể tạo phiên cho biển ${plate}: bãi có thể đã hết chỗ phù hợp.`,
+            ? `Xe ${plate} đang có phiên gửi trong bãi. Từ chối vào.`
+            : (action as string) === "invalid_rfid"
+              ? failureMessage ||
+                "RFID không hợp lệ với biển số hoặc gói thành viên của xe này."
+              : (action as string) === "no_session"
+                ? `Không tìm thấy phiên đang gửi cho biển ${plate}`
+                : `Không thể tạo phiên cho biển ${plate}: bãi có thể đã hết chỗ phù hợp.`,
   });
 }
 

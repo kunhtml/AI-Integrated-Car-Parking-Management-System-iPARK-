@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import { RfidCard, type RfidCardDocument } from "../models/RfidCard.js";
 import { RfidScanLog } from "../models/RfidScanLog.js";
 import { ParkingSession } from "../models/ParkingSession.js";
+import { Subscription } from "../models/Subscription.js";
 import { AppError } from "../utils/AppError.js";
 import { allocateSlot, occupySlot } from "./parkingSlot.service.js";
 import { classifyVehicleByPlate } from "./parkingQuota.service.js";
@@ -23,7 +24,11 @@ function releaseGuestCard(card: RfidCardDocument, returnedAt: Date) {
 
 // ───────────────── Card CRUD ─────────────────
 
-export async function registerCard(cardId: string, notes?: string, createdBy?: string) {
+export async function registerCard(
+  cardId: string,
+  notes?: string,
+  createdBy?: string,
+) {
   const existing = await RfidCard.findOne({ cardId: cardId.toUpperCase() });
   if (existing) {
     throw new AppError("Thẻ RFID này đã tồn tại.", 409);
@@ -98,6 +103,12 @@ export async function updateCardStatus(
   card.status = status;
   if (status === "lost") {
     card.lostAt = new Date();
+    // Gỡ liên kết với gói dịch vụ (Subscription.rfidCardId) để thẻ không còn
+    // được coi là đang gán cho thành viên nào.
+    await Subscription.updateMany(
+      { rfidCardId: card._id },
+      { $unset: { rfidCardId: 1 } },
+    );
   }
   if (status === "blocked") {
     card.blockedAt = new Date();
@@ -120,21 +131,62 @@ export async function validateEntry(
 ) {
   const card = await RfidCard.findOne({ cardId: cardId.toUpperCase() });
   if (!card) {
-    await logScan({ cardId, action: "entry", status: "failed", failureReason: "Thẻ không tồn tại", performedBy, deviceId });
+    await logScan({
+      cardId,
+      action: "entry",
+      status: "failed",
+      failureReason: "Thẻ không tồn tại",
+      performedBy,
+      deviceId,
+    });
     throw new AppError("Thẻ RFID không tồn tại.", 404);
   }
 
-  const blockedEntryStatuses = ["inactive", "pending-sale", "lost", "blocked", "damaged", "returned"];
+  const blockedEntryStatuses = [
+    "inactive",
+    "pending-sale",
+    "lost",
+    "blocked",
+    "damaged",
+    "returned",
+  ];
   if (blockedEntryStatuses.includes(card.status)) {
-    const reason = card.status === "blocked" ? (card.blockedReason || "Thẻ đã bị khóa") : card.status === "lost" ? "Thẻ đã bị báo mất" : card.status === "damaged" ? "Thẻ đã được ghi nhận hỏng" : card.status === "pending-sale" ? "Thẻ đang chờ hoàn tất giao dịch bán" : "Thẻ RFID chưa sẵn sàng sử dụng";
-    await logScan({ cardId, action: "entry", status: "blocked", failureReason: reason, performedBy, deviceId });
+    const reason =
+      card.status === "blocked"
+        ? card.blockedReason || "Thẻ đã bị khóa"
+        : card.status === "lost"
+          ? "Thẻ đã bị báo mất"
+          : card.status === "damaged"
+            ? "Thẻ đã được ghi nhận hỏng"
+            : card.status === "pending-sale"
+              ? "Thẻ đang chờ hoàn tất giao dịch bán"
+              : "Thẻ RFID chưa sẵn sàng sử dụng";
+    await logScan({
+      cardId,
+      action: "entry",
+      status: "blocked",
+      failureReason: reason,
+      performedBy,
+      deviceId,
+    });
     throw new AppError(reason, 403);
   }
   // Thẻ cũ chưa có cardType được tương thích như RFID Guest tạm thời.
-  const canIssueGuestCard = card.cardType !== "member" && card.status === "available";
+  const canIssueGuestCard =
+    card.cardType !== "member" && card.status === "available";
   if (!canIssueGuestCard && !["active", "in-use"].includes(card.status)) {
-    await logScan({ cardId, action: "entry", status: "failed", failureReason: "Thẻ chưa được kích hoạt hoặc cấp tại cổng", performedBy, deviceId });
-    throw new AppError("Thẻ RFID chưa được kích hoạt hoặc chưa sẵn sàng cấp tại cổng.", 403);
+    await logScan({
+      cardId,
+      action: "entry",
+      status: "failed",
+      failureReason: "Thẻ chưa được kích hoạt hoặc cấp tại cổng",
+      performedBy,
+      deviceId,
+    });
+    throw new AppError(
+      "Thẻ RFID chưa được kích hoạt hoặc chưa sẵn sàng cấp tại cổng.",
+      403,
+    );
   }
 
   // Anti-passback: check if card already has an active session
@@ -146,7 +198,14 @@ export async function validateEntry(
     const uid = card.uid || card.cardId || cardId;
     const attemptedPlate = plateDetected?.trim().toUpperCase() || "mới";
     const reason = `RFID Guest UID ${uid} đã được cấp cho xe ${activeSession.plate} lúc ${activeSession.checkInAt.toLocaleString("vi-VN")}. Thẻ đang gắn với phiên này nên không thể cấp tiếp cho xe ${attemptedPlate}.`;
-    await logScan({ cardId, action: "entry", status: "failed", failureReason: reason, performedBy, deviceId });
+    await logScan({
+      cardId,
+      action: "entry",
+      status: "failed",
+      failureReason: reason,
+      performedBy,
+      deviceId,
+    });
     throw new AppError(reason, 409);
   }
 
@@ -164,46 +223,88 @@ export async function validateEntry(
     await card.save();
   }
 
-  let quotaAccess: { customerType: "member" | "guest"; quotaType: "member" | "walk_in"; userId?: string };
+  let quotaAccess: {
+    customerType: "member" | "guest";
+    quotaType: "member" | "walk_in";
+    userId?: string;
+  };
   if (isMemberCard) {
     if (!card.userId || !card.vehicleId || !memberPlate) {
-      throw new AppError("RFID Member chưa được liên kết đầy đủ với xe và tài khoản.", 409);
+      throw new AppError(
+        "RFID Member chưa được liên kết đầy đủ với xe và tài khoản.",
+        409,
+      );
     }
     if (normalizedPlate && normalizedPlate !== memberPlate) {
-      throw new AppError("Biển số nhận diện không khớp với xe gắn trên RFID Member.", 409);
+      throw new AppError(
+        "Biển số nhận diện không khớp với xe gắn trên RFID Member.",
+        409,
+      );
     }
     const activeSubscription = await findActiveSubscriptionByPlate(memberPlate);
-    if (!activeSubscription || activeSubscription.primaryVehicleId !== card.vehicleId.toString()) {
-      throw new AppError("RFID Member chưa có gói còn hiệu lực cho xe này.", 403);
+    if (
+      !activeSubscription ||
+      activeSubscription.primaryVehicleId !== card.vehicleId.toString()
+    ) {
+      throw new AppError(
+        "RFID Member chưa có gói còn hiệu lực cho xe này.",
+        403,
+      );
     }
-    quotaAccess = { customerType: "member", quotaType: "member", userId: card.userId.toString() };
+    quotaAccess = {
+      customerType: "member",
+      quotaType: "member",
+      userId: card.userId.toString(),
+    };
   } else {
     // Thẻ Guest không được hưởng quota Member ngay cả khi camera đọc trúng biển đã đăng ký.
-    quotaAccess = { customerType: "guest", quotaType: "walk_in", userId: undefined };
+    quotaAccess = {
+      customerType: "guest",
+      quotaType: "walk_in",
+      userId: undefined,
+    };
   }
-  const slotDoc = await allocateSlot("Ô tô", undefined, { quotaType: quotaAccess.quotaType });
+  const slotDoc = await allocateSlot("Ô tô", undefined, {
+    quotaType: quotaAccess.quotaType,
+  });
   if (!slotDoc) {
-    await logScan({ cardId, action: "entry", status: "failed", failureReason: "Không còn slot phù hợp với quota", performedBy, deviceId });
+    await logScan({
+      cardId,
+      action: "entry",
+      status: "failed",
+      failureReason: "Không còn slot phù hợp với quota",
+      performedBy,
+      deviceId,
+    });
     throw new AppError("Bãi xe đã hết slot phù hợp.", 409);
   }
 
   // Tự động tạo phiên gửi xe và gán thẻ
   const session = await ParkingSession.create({
-    plate: isMemberCard ? memberPlate : (normalizedPlate || cardId.toUpperCase()),
+    plate: isMemberCard ? memberPlate : normalizedPlate || cardId.toUpperCase(),
     ownerName: isMemberCard ? card.ownerName : "Khách vãng lai (RFID)",
     vehicleType: "Ô tô",
-     slot: slotDoc.slotCode,
-     slotId: slotDoc._id,
-     customerType: quotaAccess.customerType,
-     quotaType: quotaAccess.quotaType,
+    slot: slotDoc.slotCode,
+    slotId: slotDoc._id,
+    customerType: quotaAccess.customerType,
+    quotaType: quotaAccess.quotaType,
     rfidCardId: cardId.toUpperCase(),
     rfidAssignedAt: new Date(),
     rfidGate: "entry",
     entryDetectedPlate: plateDetected ? plateDetected.toUpperCase() : undefined,
-    ...(isMemberCard ? { ownerUserId: card.userId, vehicleId: card.vehicleId } : {}),
-    createdBy: performedBy ? new mongoose.Types.ObjectId(performedBy) : undefined,
+    ...(isMemberCard
+      ? { ownerUserId: card.userId, vehicleId: card.vehicleId }
+      : {}),
+    createdBy: performedBy
+      ? new mongoose.Types.ObjectId(performedBy)
+      : undefined,
     ...(quotaAccess.customerType === "member"
-      ? { paymentStatus: "fully_paid", paymentMethod: "subscription", fee: 0, paidAmount: 0 }
+      ? {
+          paymentStatus: "fully_paid",
+          paymentMethod: "subscription",
+          fee: 0,
+          paidAmount: 0,
+        }
       : {}),
   });
 
@@ -223,7 +324,11 @@ export async function validateEntry(
     plateDetected,
   });
 
-  return { card, session, message: "Đã tạo phiên gửi xe và gán thẻ thành công." };
+  return {
+    card,
+    session,
+    message: "Đã tạo phiên gửi xe và gán thẻ thành công.",
+  };
 }
 
 export async function validateExit(
@@ -235,17 +340,50 @@ export async function validateExit(
 ) {
   const card = await RfidCard.findOne({ cardId: cardId.toUpperCase() });
   if (!card) {
-    await logScan({ cardId, action: "exit", status: "failed", failureReason: "Thẻ không tồn tại", performedBy, deviceId });
+    await logScan({
+      cardId,
+      action: "exit",
+      status: "failed",
+      failureReason: "Thẻ không tồn tại",
+      performedBy,
+      deviceId,
+    });
     throw new AppError("Thẻ RFID không tồn tại.", 404);
   }
 
-  const blockedExitStatuses = ["inactive", "pending-sale", "lost", "blocked", "damaged", "returned"];
+  const blockedExitStatuses = [
+    "inactive",
+    "pending-sale",
+    "lost",
+    "blocked",
+    "damaged",
+    "returned",
+  ];
   if (blockedExitStatuses.includes(card.status)) {
-    await logScan({ cardId, action: "exit", status: "blocked", failureReason: card.status === "blocked" ? (card.blockedReason || "Thẻ đã bị khóa") : card.status === "lost" ? "Thẻ đã bị báo mất" : "Thẻ RFID không ở trạng thái hợp lệ", performedBy, deviceId });
+    await logScan({
+      cardId,
+      action: "exit",
+      status: "blocked",
+      failureReason:
+        card.status === "blocked"
+          ? card.blockedReason || "Thẻ đã bị khóa"
+          : card.status === "lost"
+            ? "Thẻ đã bị báo mất"
+            : "Thẻ RFID không ở trạng thái hợp lệ",
+      performedBy,
+      deviceId,
+    });
     throw new AppError("Thẻ RFID không hợp lệ để ra.", 403);
   }
   if (!["active", "in-use"].includes(card.status)) {
-    await logScan({ cardId, action: "exit", status: "failed", failureReason: "Thẻ chưa được bán hoặc kích hoạt", performedBy, deviceId });
+    await logScan({
+      cardId,
+      action: "exit",
+      status: "failed",
+      failureReason: "Thẻ chưa được bán hoặc kích hoạt",
+      performedBy,
+      deviceId,
+    });
     throw new AppError("Thẻ RFID chưa được bán hoặc kích hoạt.", 403);
   }
 
@@ -254,8 +392,18 @@ export async function validateExit(
     status: "Đang gửi",
   });
   if (!activeSession) {
-    await logScan({ cardId, action: "exit", status: "failed", failureReason: "Không tìm thấy phiên gửi xe đang hoạt động", performedBy, deviceId });
-    throw new AppError("Không tìm thấy phiên gửi xe đang hoạt động cho thẻ này.", 404);
+    await logScan({
+      cardId,
+      action: "exit",
+      status: "failed",
+      failureReason: "Không tìm thấy phiên gửi xe đang hoạt động",
+      performedBy,
+      deviceId,
+    });
+    throw new AppError(
+      "Không tìm thấy phiên gửi xe đang hoạt động cho thẻ này.",
+      404,
+    );
   }
 
   // Cross-check plate if detected
@@ -288,11 +436,18 @@ export async function validateExit(
   activeSession.status = "Đã hoàn thành";
   activeSession.checkOutAt = new Date();
   if (card.cardType !== "member") {
-    const { getActivePricingConfig } = await import("../services/pricing.service.js");
-    const { calculateParkingFee } = await import("../services/pricing.service.js");
-    const { createPendingTransactionForSession } = await import("./transaction.service.js");
+    const { getActivePricingConfig } =
+      await import("../services/pricing.service.js");
+    const { calculateParkingFee } =
+      await import("../services/pricing.service.js");
+    const { createPendingTransactionForSession } =
+      await import("./transaction.service.js");
     const pricing = await getActivePricingConfig();
-    const feeBreakdown = calculateParkingFee(activeSession.checkInAt, activeSession.checkOutAt, pricing);
+    const feeBreakdown = calculateParkingFee(
+      activeSession.checkInAt,
+      activeSession.checkOutAt,
+      pricing,
+    );
     activeSession.fee = feeBreakdown.totalFee;
     activeSession.feeBreakdown = feeBreakdown;
     const returnedAt = new Date();
@@ -360,11 +515,18 @@ export async function confirmExitWithMismatch(
   session.status = "Đã hoàn thành";
   session.checkOutAt = new Date();
   if (card.cardType !== "member") {
-    const { getActivePricingConfig } = await import("../services/pricing.service.js");
-    const { calculateParkingFee } = await import("../services/pricing.service.js");
-    const { createPendingTransactionForSession } = await import("./transaction.service.js");
+    const { getActivePricingConfig } =
+      await import("../services/pricing.service.js");
+    const { calculateParkingFee } =
+      await import("../services/pricing.service.js");
+    const { createPendingTransactionForSession } =
+      await import("./transaction.service.js");
     const pricing = await getActivePricingConfig();
-    const feeBreakdown = calculateParkingFee(session.checkInAt, session.checkOutAt, pricing);
+    const feeBreakdown = calculateParkingFee(
+      session.checkInAt,
+      session.checkOutAt,
+      pricing,
+    );
     session.fee = feeBreakdown.totalFee;
     session.feeBreakdown = feeBreakdown;
     const returnedAt = new Date();
@@ -450,7 +612,10 @@ export async function returnCard(
   }
 
   if (card.cardType === "member") {
-    throw new AppError("RFID Member là thẻ sở hữu riêng, không được trả về kho.", 409);
+    throw new AppError(
+      "RFID Member là thẻ sở hữu riêng, không được trả về kho.",
+      409,
+    );
   }
 
   const returnedAt = new Date();
@@ -480,6 +645,12 @@ export async function reportLostCard(id: string, performedBy?: string) {
   card.status = "lost";
   card.lostAt = new Date();
   await card.save();
+
+  // Gỡ liên kết với gói dịch vụ (Subscription.rfidCardId) khi báo mất.
+  await Subscription.updateMany(
+    { rfidCardId: card._id },
+    { $unset: { rfidCardId: 1 } },
+  );
 
   await logScan({
     cardId: card.cardId ?? card.uid,
@@ -520,7 +691,14 @@ export async function unblockCard(id: string, performedBy?: string) {
 
 export async function logScan(data: {
   cardId: string;
-  action: "entry" | "exit" | "assign" | "return" | "block" | "unblock" | "report-lost";
+  action:
+    | "entry"
+    | "exit"
+    | "assign"
+    | "return"
+    | "block"
+    | "unblock"
+    | "report-lost";
   sessionId?: string;
   deviceId?: string;
   performedBy?: string;
@@ -532,9 +710,15 @@ export async function logScan(data: {
   return RfidScanLog.create({
     cardId: data.cardId.toUpperCase(),
     action: data.action,
-    sessionId: data.sessionId ? new mongoose.Types.ObjectId(data.sessionId) : undefined,
-    deviceId: data.deviceId ? new mongoose.Types.ObjectId(data.deviceId) : undefined,
-    performedBy: data.performedBy ? new mongoose.Types.ObjectId(data.performedBy) : undefined,
+    sessionId: data.sessionId
+      ? new mongoose.Types.ObjectId(data.sessionId)
+      : undefined,
+    deviceId: data.deviceId
+      ? new mongoose.Types.ObjectId(data.deviceId)
+      : undefined,
+    performedBy: data.performedBy
+      ? new mongoose.Types.ObjectId(data.performedBy)
+      : undefined,
     status: data.status,
     failureReason: data.failureReason,
     plateDetected: data.plateDetected?.toUpperCase(),

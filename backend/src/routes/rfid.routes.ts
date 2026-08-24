@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createRfidCard, deleteRfidCard, exportAllCards, getRfidCard, listMyRfidCards, listRfidCards, listRfidAssignments, listUnassignedResidents, lookupByPlate, lookupByUid, replaceActiveSessionRfid, lookupRfidCardByUid, registerScannedCard, setRfidCardStatus, updateRfidCard } from "../controllers/rfid.controller.js";
+import { createRfidCard, deleteRfidCard, exportAllCards, getRfidCard, listMyRfidCards, listRfidCards, listRfidAssignments, listUnassignedResidents, lookupByPlate, lookupByUid, replaceActiveSessionRfid, lookupRfidCardByUid, registerScannedCard, restoreRfidCard, setRfidCardStatus, updateRfidCard } from "../controllers/rfid.controller.js";
 import { confirmSale, inventory, replaceCard, returnCard, sell, sellForCustomer, reconcilePending, reconcileCustomerSale, cardDetails, transactions, updateStatus } from "../controllers/rfidSales.controller.js";
 import { requireAuth, requireRole } from "../middlewares/auth.middleware.js";
 import { listMyRfidIssues, createRfidIssue, listRfidIssues, updateRfidIssue } from "../controllers/rfidIssue.controller.js";
@@ -44,6 +44,7 @@ rfidRoutes.post("/", requireRole("admin"), asyncHandler(createRfidCard));
 rfidRoutes.get("/:id", requireRole("admin", "staff"), asyncHandler(getRfidCard));
 rfidRoutes.patch("/:id", requireRole("admin"), asyncHandler(updateRfidCard));
 rfidRoutes.delete("/:id", requireRole("admin"), asyncHandler(deleteRfidCard));
+rfidRoutes.post("/:id/restore", requireRole("admin"), asyncHandler(restoreRfidCard));
 rfidRoutes.post("/:id/status", requireRole("admin", "staff"), asyncHandler(setRfidCardStatus));
 rfidRoutes.post("/:id/:action", requireRole("admin", "staff"), asyncHandler(updateStatus));
 

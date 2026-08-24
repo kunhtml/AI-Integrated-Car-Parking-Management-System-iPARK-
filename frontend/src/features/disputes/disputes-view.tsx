@@ -15,7 +15,11 @@ import {
 import { DataTable } from "@/components/ui/data-table";
 import { useParkingApp } from "@/context/parking-app-context";
 import { apiFetch } from "@/lib/client-api";
-import type { DisputeItem, DisputeSessionRef } from "@/types";
+import type {
+  DisputeItem,
+  DisputeSessionRef,
+  DisputeTransactionRef,
+} from "@/types";
 
 const REASONS = [
   "Sai phí gửi xe",
@@ -69,6 +73,9 @@ export function DisputesView() {
 
   const [disputes, setDisputes] = useState<DisputeItem[]>([]);
   const [sessionRefs, setSessionRefs] = useState<DisputeSessionRef[]>([]);
+  const [transactionRefs, setTransactionRefs] = useState<
+    DisputeTransactionRef[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -77,6 +84,7 @@ export function DisputesView() {
 
   const [form, setForm] = useState({
     sessionId: "",
+    transactionId: "",
     reason: REASONS[0],
     content: "",
     contactName: currentUser?.name ?? "",
@@ -99,6 +107,7 @@ export function DisputesView() {
       if (referenceRes.ok) {
         const data = await referenceRes.json();
         setSessionRefs(data.sessions);
+        setTransactionRefs(data.transactions);
       }
     } catch (error) {
       console.error("[disputes] load failed:", error);
@@ -152,7 +161,11 @@ export function DisputesView() {
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      setErrors((prev) => ({ ...prev, attachments: "Ảnh tối đa 5MB." }));
+      setErrors((prev) => ({
+        ...prev,
+        attachments:
+          "Ảnh vừa upload đã vượt giới hạn 5MB, vui lòng upload lại chỉ hỗ trợ ảnh <=5MB.",
+      }));
       return;
     }
     setUploading(true);
@@ -190,7 +203,10 @@ export function DisputesView() {
 
   function validate() {
     const errs: Record<string, string> = {};
-    if (!form.sessionId) errs.sessionId = "Chọn phiên gửi xe liên quan.";
+    if (!form.sessionId && !form.transactionId) {
+      errs.sessionId = "Chọn phiên gửi xe hoặc giao dịch liên quan.";
+      errs.transactionId = "Chọn phiên gửi xe hoặc giao dịch liên quan.";
+    }
     if (form.content.trim().length < 10)
       errs.content = "Nội dung tối thiểu 10 ký tự.";
     if (!form.contactName.trim()) errs.contactName = "Nhập họ tên liên hệ.";
@@ -212,6 +228,7 @@ export function DisputesView() {
         method: "POST",
         body: JSON.stringify({
           sessionId: form.sessionId,
+          transactionId: form.transactionId,
           reason: form.reason,
           content: form.content.trim(),
           contactName: form.contactName.trim(),
@@ -230,6 +247,7 @@ export function DisputesView() {
       setForm((prev) => ({
         ...prev,
         sessionId: "",
+        transactionId: "",
         content: "",
       }));
       setActionLog(`Đã gửi khiếu nại ${data.dispute.code}.`);
@@ -270,7 +288,10 @@ export function DisputesView() {
             Phiên gửi xe liên quan
             <select
               value={form.sessionId}
-              onChange={(e) => update("sessionId", e.target.value)}
+              onChange={(e) => {
+                update("sessionId", e.target.value);
+                if (e.target.value) update("transactionId", "");
+              }}
             >
               <option value="">— Chọn phiên gửi xe —</option>
               {sessionRefs.map((item) => (
@@ -283,6 +304,31 @@ export function DisputesView() {
             {errors.sessionId && (
               <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>
                 {errors.sessionId}
+              </span>
+            )}
+          </label>
+
+          <label>
+            Hoặc giao dịch liên quan
+            <select
+              value={form.transactionId}
+              onChange={(e) => {
+                update("transactionId", e.target.value);
+                if (e.target.value) update("sessionId", "");
+              }}
+            >
+              <option value="">— Chọn giao dịch —</option>
+              {transactionRefs.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.method} · {formatMoney(item.amount)} · {item.status} ·{" "}
+                  {formatDateTime(item.createdAt)}
+                  {item.plate ? ` · ${item.plate}` : ""}
+                </option>
+              ))}
+            </select>
+            {errors.transactionId && (
+              <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>
+                {errors.transactionId}
               </span>
             )}
           </label>

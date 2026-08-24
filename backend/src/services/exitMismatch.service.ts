@@ -1,12 +1,18 @@
 import mongoose from "mongoose";
-import { ParkingSession, ParkingSessionDocument } from "../models/ParkingSession.js";
+import {
+  ParkingSession,
+  ParkingSessionDocument,
+} from "../models/ParkingSession.js";
 import { RfidCard } from "../models/RfidCard.js";
 import { ParkingCameraLog } from "../models/ParkingCameraLog.js";
 import {
   findActiveSubscriptionByPlate,
   findLatestSubscriptionEndByPlate,
 } from "./subscription.service.js";
-import { calculateParkingFee, getActivePricingConfig } from "./pricing.service.js";
+import {
+  calculateParkingFee,
+  getActivePricingConfig,
+} from "./pricing.service.js";
 
 type SessionDoc = mongoose.HydratedDocument<ParkingSessionDocument>;
 
@@ -126,17 +132,36 @@ export async function classifyExitMismatch(params: {
   const sessionPlate = displayPlate(session.plate);
   const exitPlate = displayPlate(session.exitDetectedPlate) || sessionPlate;
   const expectedUid = await findExpectedEntryUid(session);
-  const { boundPlate } = await findCardBoundPlate(uid, session._id.toString());
+  const { card, boundPlate } = await findCardBoundPlate(
+    uid,
+    session._id.toString(),
+  );
   const uidOk = uidMatchesSession(uid, expectedUid, boundPlate, sessionPlate);
   const exitMatchesSession = platesEqual(exitPlate, sessionPlate);
-  const cardAgreesWithExit = boundPlate ? platesEqual(boundPlate, exitPlate) : false;
-  const cardAgreesWithSession = boundPlate ? platesEqual(boundPlate, sessionPlate) : false;
+  const cardAgreesWithExit = boundPlate
+    ? platesEqual(boundPlate, exitPlate)
+    : false;
+  const cardAgreesWithSession = boundPlate
+    ? platesEqual(boundPlate, sessionPlate)
+    : false;
+  // Thẻ member cùng chủ xe (cùng biển số) là thẻ thay thế hợp lệ khi thẻ cũ
+  // đã bị mất/hỏng và được cấp lại. Nếu camera ra khớp biển phiên thì chấp
+  // nhận ngay, không bắt nhân viên duyệt "accept_uid" thủ công mỗi lần.
+  const isReplacementCard =
+    card?.cardType === "member" && Boolean(boundPlate) && cardAgreesWithSession;
+  if (isReplacementCard && !uidOk && exitMatchesSession) {
+    return null;
+  }
 
   let exceptionType: ExitExceptionType | null = null;
   let reason = "";
   let allowedActions: string[] = [];
 
-  if (boundPlate && !cardAgreesWithSession && !cardAgreesWithExit) {
+  if (isReplacementCard && !uidOk && !exitMatchesSession) {
+    exceptionType = "plate_mismatch";
+    reason = `Thẻ ${uid} là thẻ thay thế của xe ${sessionPlate}, nhưng camera cổng ra đọc ${exitPlate}.`;
+    allowedActions = ["retry", "reject", "confirm", "correct_exit_plate"];
+  } else if (boundPlate && !cardAgreesWithSession && !cardAgreesWithExit) {
     exceptionType = "wrong_card";
     reason = `Thẻ không khớp với biển số xe hiện tại (${sessionPlate || exitPlate}). Thẻ đang sử dụng cho xe ${boundPlate}.`;
     allowedActions = ["retry", "reject"];
@@ -170,7 +195,13 @@ export async function classifyExitMismatch(params: {
   } else if (!uidOk && !exitMatchesSession) {
     exceptionType = "plate_and_uid_mismatch";
     reason = `Biển ra (${exitPlate}) và UID thẻ đều không khớp phiên ${sessionPlate}.`;
-    allowedActions = ["retry", "reject", "confirm", "correct_exit_plate", "accept_uid"];
+    allowedActions = [
+      "retry",
+      "reject",
+      "confirm",
+      "correct_exit_plate",
+      "accept_uid",
+    ];
   }
 
   if (!exceptionType) return null;
@@ -235,12 +266,21 @@ export async function settleExitAfterVerify(session: SessionDoc) {
     if (session.fee == null || session.fee === 0) {
       const pricing = await getActivePricingConfig();
       const checkOutAt = new Date();
-      const subscriptionEnd = await findLatestSubscriptionEndByPlate(session.plate);
+      const subscriptionEnd = await findLatestSubscriptionEndByPlate(
+        session.plate,
+      );
       // A lapsed subscription covers only the period before its end date.
-      const billableFrom = subscriptionEnd && subscriptionEnd > session.checkInAt && subscriptionEnd < checkOutAt
-        ? subscriptionEnd
-        : session.checkInAt;
-      const feeBreakdown = calculateParkingFee(billableFrom, checkOutAt, pricing);
+      const billableFrom =
+        subscriptionEnd &&
+        subscriptionEnd > session.checkInAt &&
+        subscriptionEnd < checkOutAt
+          ? subscriptionEnd
+          : session.checkInAt;
+      const feeBreakdown = calculateParkingFee(
+        billableFrom,
+        checkOutAt,
+        pricing,
+      );
       session.fee = feeBreakdown.totalFee;
       session.feeBreakdown = feeBreakdown;
     }

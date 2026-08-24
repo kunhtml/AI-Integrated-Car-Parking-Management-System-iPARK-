@@ -171,7 +171,11 @@ export async function listParkingSessions(
           ? await ParkingSlot.findById(session.slotId).select("zoneId").lean()
           : null;
         const pricing = await getActivePricingConfigForZone(slot?.zoneId);
-        const feeBreakdown = calculateParkingFee(session.checkInAt, now, pricing);
+        const feeBreakdown = calculateParkingFee(
+          session.checkInAt,
+          now,
+          pricing,
+        );
         serialized.fee = feeBreakdown.totalFee;
         serialized.feeBreakdown = feeBreakdown;
       }
@@ -202,7 +206,9 @@ export async function createParkingSession(
       entryImageUrl: z.string().trim().optional(),
       entrySource: z.enum(["camera", "manual"]).optional(),
       manualEntryReason: z.string().trim().optional(),
-      entryPhotoStatus: z.enum(["photo_captured", "camera_unavailable"]).optional(),
+      entryPhotoStatus: z
+        .enum(["photo_captured", "camera_unavailable"])
+        .optional(),
       visualConfirmed: z.boolean().optional(),
       entryRfidUnverified: z.boolean().optional(),
     })
@@ -220,7 +226,8 @@ export async function createParkingSession(
       }
       if (!body.visualConfirmed) {
         response.status(400).json({
-          message: "Camera hỏng: cần tích xác nhận đã kiểm tra biển số bằng mắt.",
+          message:
+            "Camera hỏng: cần tích xác nhận đã kiểm tra biển số bằng mắt.",
         });
         return;
       }
@@ -233,7 +240,10 @@ export async function createParkingSession(
   }
 
   const normalizeRfidPlate = (value: string) =>
-    value.trim().toUpperCase().replace(/[\s-]+/g, "");
+    value
+      .trim()
+      .toUpperCase()
+      .replace(/[\s-]+/g, "");
 
   if (await checkDuplicatePlate(body.plate)) {
     response.status(409).json({
@@ -274,16 +284,23 @@ export async function createParkingSession(
     });
     if (memberCard) {
       const memberPlate = normalizeRfidPlate(memberCard.plate || "");
-      const vehicle = memberCard.userId && memberCard.vehicleId
-        ? await Vehicle.findOne({
-            _id: memberCard.vehicleId,
-            userId: memberCard.userId,
-            plate: memberPlate,
-          })
-        : null;
-      if (!memberCard.userId || !memberCard.vehicleId || !memberPlate || !vehicle) {
+      const vehicle =
+        memberCard.userId && memberCard.vehicleId
+          ? await Vehicle.findOne({
+              _id: memberCard.vehicleId,
+              userId: memberCard.userId,
+              plate: memberPlate,
+            })
+          : null;
+      if (
+        !memberCard.userId ||
+        !memberCard.vehicleId ||
+        !memberPlate ||
+        !vehicle
+      ) {
         response.status(409).json({
-          message: "Không thể xử lý thủ công vì dữ liệu liên kết của thẻ Member chưa hợp lệ.",
+          message:
+            "Không thể xử lý thủ công vì dữ liệu liên kết của thẻ Member chưa hợp lệ.",
         });
         return;
       }
@@ -303,14 +320,25 @@ export async function createParkingSession(
       };
       ownerUserId = memberCard.userId;
 
-      if (subscription && subscription.primaryVehicleId === memberCard.vehicleId.toString()) {
-        quotaAccess = { customerType: "member", quotaType: "member" };
+      if (
+        subscription &&
+        subscription.primaryVehicleId === memberCard.vehicleId.toString()
+      ) {
+        quotaAccess = {
+          customerType: "member",
+          quotaType: "member",
+          isRegistered: true,
+        };
         isMember = true;
         plateCheck = { warn: undefined, discount: 0 };
       } else {
         // Có thẻ Member nhưng không có gói hiệu lực: không chiếm quota Member
         // và không được miễn phí, song bản ghi vẫn là phiên của Member.
-        quotaAccess = { customerType: "member", quotaType: "walk_in" };
+        quotaAccess = {
+          customerType: "member",
+          quotaType: "walk_in",
+          isRegistered: true,
+        };
         isMember = false;
         plateCheck = { warn: undefined, discount: 0 };
       }
@@ -369,17 +397,23 @@ export async function createParkingSession(
       }
 
       // RFID ownership is valid even when the subscription has expired.
+      // Thành viên CÓ gói: quota member, miễn phí. Có thẻ Member nhưng chưa có
+      // gói: vẫn giữ danh tính Member để truy vết & hiển thị "Thành viên (chưa có
+      // gói)", nhưng tính phí như khách (quotaType walk_in, isMember=false).
       quotaAccess = subscription
-        ? { customerType: "member", quotaType: "member" }
-        : { customerType: "guest", quotaType: "walk_in" };
-      isMember = true;
+        ? { customerType: "member", quotaType: "member", isRegistered: true }
+        : { customerType: "member", quotaType: "walk_in", isRegistered: true };
+      isMember = quotaAccess.quotaType === "member";
       ownerUserId = card.userId;
       plateCheck = { warn: undefined, discount: 0 };
     } else {
-      const memberSubscription = await findActiveSubscriptionByPlate(normalizeRfidPlate(body.plate));
+      const memberSubscription = await findActiveSubscriptionByPlate(
+        normalizeRfidPlate(body.plate),
+      );
       if (memberSubscription) {
         response.status(409).json({
-          message: "Xe này đã đăng ký gói thành viên. Vui lòng dùng đúng RFID Member đã liên kết với xe.",
+          message:
+            "Xe này đã đăng ký gói thành viên. Vui lòng dùng đúng RFID Member đã liên kết với xe.",
         });
         return;
       }
@@ -413,7 +447,11 @@ export async function createParkingSession(
         return;
       }
       // A guest card must never use a member slot or subscription payment.
-      quotaAccess = { customerType: "guest", quotaType: "walk_in" };
+      quotaAccess = {
+        customerType: "guest",
+        quotaType: "walk_in",
+        isRegistered: !!(await ownerFromPlate(body.plate)),
+      };
       isMember = false;
       ownerUserId = undefined;
       plateCheck = { warn: undefined, discount: 0 };
@@ -442,13 +480,15 @@ export async function createParkingSession(
     };
   }
 
-  const isSubscriber = quotaAccess.customerType === "member";
+  const isSubscriber = quotaAccess.quotaType === "member";
   const slotDoc = await allocateSlot("\u00D4 t\u00F4", undefined, {
     isSubscriber,
     quotaType: quotaAccess.quotaType,
   });
   if (!slotDoc) {
-    response.status(409).json({ message: "B\u00E3i xe \u0111\u00E3 h\u1EBFt ch\u1ED7 tr\u1ED1ng." });
+    response.status(409).json({
+      message: "B\u00E3i xe \u0111\u00E3 h\u1EBFt ch\u1ED7 tr\u1ED1ng.",
+    });
     return;
   }
 
@@ -476,9 +516,12 @@ export async function createParkingSession(
     slotId: slotDoc._id,
     customerType: quotaAccess.customerType,
     quotaType: quotaAccess.quotaType,
+    isRegisteredMember: quotaAccess.isRegistered,
     ...(ownerUserId ? { ownerUserId } : {}),
     createdBy: request.user?.id,
-    ...(request.user?.role === "staff" ? { checkInStaff: request.user.id } : {}),
+    ...(request.user?.role === "staff"
+      ? { checkInStaff: request.user.id }
+      : {}),
     ...(rfidCard
       ? {
           rfidCardId: rfidCard.cardId || rfidCard.uid,
@@ -595,7 +638,9 @@ export async function completeParkingSession(
       exitImageHash: z.string().trim().optional(),
       exitSource: z.enum(["camera", "manual"]).optional(),
       manualExitReason: z.string().trim().optional(),
-      exitPhotoStatus: z.enum(["photo_captured", "camera_unavailable"]).optional(),
+      exitPhotoStatus: z
+        .enum(["photo_captured", "camera_unavailable"])
+        .optional(),
       visualConfirmed: z.boolean().optional(),
       exitRfidManualVerified: z.boolean().optional(),
     })
@@ -612,13 +657,15 @@ export async function completeParkingSession(
     if (cameraDown) {
       if (!body.manualExitReason || body.manualExitReason.trim().length < 8) {
         response.status(400).json({
-          message: "Camera hỏng tại cổng ra: cần nhập lý do (tối thiểu 8 ký tự).",
+          message:
+            "Camera hỏng tại cổng ra: cần nhập lý do (tối thiểu 8 ký tự).",
         });
         return;
       }
       if (!body.visualConfirmed) {
         response.status(400).json({
-          message: "Camera hỏng tại cổng ra: cần tích xác nhận biển số bằng mắt.",
+          message:
+            "Camera hỏng tại cổng ra: cần tích xác nhận biển số bằng mắt.",
         });
         return;
       }
@@ -705,7 +752,10 @@ export async function uploadParkingImage(request: Request, response: Response) {
 
     const isSubscriber = await isSubscriberByPlate(detection.plate);
     const quotaAccess = await classifyVehicleByPlate(detection.plate);
-    const slotDoc = await allocateSlot("Ô tô", undefined, { isSubscriber, quotaType: quotaAccess.quotaType });
+    const slotDoc = await allocateSlot("Ô tô", undefined, {
+      isSubscriber,
+      quotaType: quotaAccess.quotaType,
+    });
     if (!slotDoc) {
       response.status(409).json({ message: "Bãi xe đã hết chỗ trống." });
       return;
@@ -739,6 +789,7 @@ export async function uploadParkingImage(request: Request, response: Response) {
       slotId: slotDoc._id,
       customerType: quotaAccess.customerType,
       quotaType: quotaAccess.quotaType,
+      isRegisteredMember: quotaAccess.isRegistered,
       entryImageUrl: imageUrl,
       entryDetectedPlate: detection.plate,
       entryConfidence: detection.confidence,
@@ -910,7 +961,10 @@ export async function cameraEntry(request: Request, response: Response) {
 
   const isSubscriber = await isSubscriberByPlate(detection.plate);
   const quotaAccess = await classifyVehicleByPlate(detection.plate);
-  const slotDoc = await allocateSlot("Ô tô", undefined, { isSubscriber: quotaAccess.customerType === "member", quotaType: quotaAccess.quotaType });
+  const slotDoc = await allocateSlot("Ô tô", undefined, {
+    isSubscriber: quotaAccess.customerType === "member",
+    quotaType: quotaAccess.quotaType,
+  });
   if (!slotDoc) {
     response.status(409).json({ message: "Bãi xe đã hết chỗ trống." });
     return;
@@ -941,8 +995,9 @@ export async function cameraEntry(request: Request, response: Response) {
     vehicleType: "Ô tô",
     slot: slotDoc.slotCode,
     slotId: slotDoc._id,
-      customerType: quotaAccess.customerType,
-      quotaType: quotaAccess.quotaType,
+    customerType: quotaAccess.customerType,
+    quotaType: quotaAccess.quotaType,
+    isRegisteredMember: quotaAccess.isRegistered,
     entryImageUrl: snapshot.imageUrl,
     entrySource: "camera",
     entryPhotoStatus: "photo_captured",

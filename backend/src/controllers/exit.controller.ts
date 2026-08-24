@@ -137,10 +137,13 @@ export async function openGate(request: Request, response: Response) {
       const checkInAt = new Date(session.checkInAt);
       const now = new Date();
       const pricing = await getActivePricingConfig();
-      const subscriptionEnd = await findLatestSubscriptionEndByPlate(session.plate);
-      const billableFrom = subscriptionEnd && subscriptionEnd > checkInAt && subscriptionEnd < now
-        ? subscriptionEnd
-        : checkInAt;
+      const subscriptionEnd = await findLatestSubscriptionEndByPlate(
+        session.plate,
+      );
+      const billableFrom =
+        subscriptionEnd && subscriptionEnd > checkInAt && subscriptionEnd < now
+          ? subscriptionEnd
+          : checkInAt;
       const feeBreakdown = calculateParkingFee(billableFrom, now, pricing);
       session.fee = feeBreakdown.totalFee;
       session.feeBreakdown = feeBreakdown;
@@ -280,7 +283,9 @@ export async function getPendingExit(request: Request, response: Response) {
           { uid: entryCardId },
           { cardId: entryCardId },
         ],
-      }).select("uid").lean()
+      })
+        .select("uid")
+        .lean()
     : null;
   const entryLog = await ParkingCameraLog.findOne({
     sessionId: session._id,
@@ -306,20 +311,33 @@ export async function getPendingExit(request: Request, response: Response) {
       action: "waiting_rfid",
       sessionPaymentStatus: session.paymentStatus ?? "pending",
       fee: session.fee ?? null,
-      userType: "unknown" as const,
+      userType:
+        session.customerType === "member"
+          ? ("resident" as const)
+          : ("guest" as const),
       barrierOpened: false,
       metadata: {
+        customerType: session.customerType,
+        quotaType: session.quotaType ?? null,
         // Manual Member entry has no physical scan UID, but the registered card
         // is still the expected entry card and must be visible to staff.
         entryRfidUid:
           session.entryRfidUid ||
           session.entryExpectedRfidUid ||
           entryCard?.uid ||
-          (typeof session.rfidCardId === "string" && session.rfidCardId.length > 0
+          (typeof session.rfidCardId === "string" &&
+          session.rfidCardId.length > 0
             ? session.rfidCardId
             : null) ||
           entryLog?.rfidUid ||
           null,
+        // Thẻ thay thế (đổi thẻ mới khi thẻ cũ hỏng/mất) — hiển thị để nhân viên
+        // biết xe dùng thẻ mới thay cho thẻ đã quét lúc vào.
+        replacementCardUid:
+          session.expectedExitRfidUid &&
+          session.expectedExitRfidUid !== session.entryRfidUid
+            ? session.expectedExitRfidUid
+            : null,
         entryRfidExpected: Boolean(
           !session.entryRfidUid && session.entryExpectedRfidUid,
         ),
@@ -329,7 +347,6 @@ export async function getPendingExit(request: Request, response: Response) {
     },
   });
 }
-
 
 /**
  * POST /api/exit/dismiss
@@ -341,13 +358,17 @@ export async function dismissPendingExit(request: Request, response: Response) {
   const sessionId = String(body.sessionId || "").trim();
 
   if (!sessionId || !mongoose.Types.ObjectId.isValid(sessionId)) {
-    response.status(400).json({ ok: false, message: "Thiếu sessionId hợp lệ." });
+    response
+      .status(400)
+      .json({ ok: false, message: "Thiếu sessionId hợp lệ." });
     return;
   }
 
   const session = await ParkingSession.findById(sessionId);
   if (!session) {
-    response.status(404).json({ ok: false, message: "Không tìm thấy phiên gửi xe." });
+    response
+      .status(404)
+      .json({ ok: false, message: "Không tìm thấy phiên gửi xe." });
     return;
   }
 
@@ -397,7 +418,9 @@ export async function dismissPendingExit(request: Request, response: Response) {
  */
 export async function prepareManualExit(request: Request, response: Response) {
   const body = request.body as { plate?: string };
-  const plate = String(body.plate || "").trim().toUpperCase();
+  const plate = String(body.plate || "")
+    .trim()
+    .toUpperCase();
 
   if (!plate || plate.length < 5) {
     response.status(400).json({
@@ -429,15 +452,16 @@ export async function prepareManualExit(request: Request, response: Response) {
   if (session.paymentStatus !== "fully_paid") {
     const pricing = await getActivePricingConfig();
     const checkOutAt = new Date();
-    const subscriptionEnd = await findLatestSubscriptionEndByPlate(session.plate);
-    const billableFrom = subscriptionEnd && subscriptionEnd > session.checkInAt && subscriptionEnd < checkOutAt
-      ? subscriptionEnd
-      : session.checkInAt;
-    const feeBreakdown = calculateParkingFee(
-      billableFrom,
-      checkOutAt,
-      pricing,
+    const subscriptionEnd = await findLatestSubscriptionEndByPlate(
+      session.plate,
     );
+    const billableFrom =
+      subscriptionEnd &&
+      subscriptionEnd > session.checkInAt &&
+      subscriptionEnd < checkOutAt
+        ? subscriptionEnd
+        : session.checkInAt;
+    const feeBreakdown = calculateParkingFee(billableFrom, checkOutAt, pricing);
     session.fee = feeBreakdown.totalFee;
     session.feeBreakdown = feeBreakdown;
   }
@@ -447,7 +471,8 @@ export async function prepareManualExit(request: Request, response: Response) {
   session.exitDetectedAt = new Date();
   session.exitSource = session.exitSource || "manual";
   if (!session.manualExitReason) {
-    session.manualExitReason = "Camera cổng ra không nhận diện; staff nhập biển thủ công";
+    session.manualExitReason =
+      "Camera cổng ra không nhận diện; staff nhập biển thủ công";
   }
 
   // Member expected RFID if any
@@ -489,7 +514,9 @@ export async function prepareManualExit(request: Request, response: Response) {
       sessionPaymentStatus: session.paymentStatus ?? "pending",
       fee: session.fee ?? null,
       userType:
-        session.customerType === "member" ? ("resident" as const) : ("guest" as const),
+        session.customerType === "member"
+          ? ("resident" as const)
+          : ("guest" as const),
       barrierOpened: false,
       imagePath: session.exitImageUrl || cameraLog?.imagePath || undefined,
       createdAt: (session.exitDetectedAt ?? new Date()).toISOString(),
@@ -502,9 +529,15 @@ export async function prepareManualExit(request: Request, response: Response) {
           session.entryExpectedRfidUid ||
           (session.rfidCardId ? session.rfidCardId : null) ||
           null,
+        replacementCardUid:
+          session.expectedExitRfidUid &&
+          session.expectedExitRfidUid !== session.entryRfidUid
+            ? session.expectedExitRfidUid
+            : null,
         entryRfidUnverified: Boolean(session.entryRfidUnverified),
         vehicleType: session.vehicleType,
         customerType: session.customerType,
+        quotaType: session.quotaType ?? null,
         expectedRfidUid: session.expectedExitRfidUid,
       },
     },
@@ -515,7 +548,10 @@ export async function prepareManualExit(request: Request, response: Response) {
  * POST /api/exit/resolve-mismatch
  * Nhân viên xác nhận / hiệu chỉnh / từ chối lệch định danh tại cổng ra.
  */
-export async function resolveExitMismatch(request: Request, response: Response) {
+export async function resolveExitMismatch(
+  request: Request,
+  response: Response,
+) {
   const body = request.body as {
     sessionId?: string;
     action?: string;
@@ -525,33 +561,56 @@ export async function resolveExitMismatch(request: Request, response: Response) 
   const sessionId = String(body.sessionId || "").trim();
   const action = String(body.action || "").trim();
   const note = String(body.verificationNote || "").trim();
-  const manualPlate = String(body.manualPlate || "").trim().toUpperCase();
+  const manualPlate = String(body.manualPlate || "")
+    .trim()
+    .toUpperCase();
 
   if (!sessionId || !action) {
-    response.status(400).json({ ok: false, message: "Thiếu sessionId hoặc action" });
+    response
+      .status(400)
+      .json({ ok: false, message: "Thiếu sessionId hoặc action" });
     return;
   }
 
   const session = await ParkingSession.findById(sessionId);
   if (!session) {
-    response.status(404).json({ ok: false, message: "Không tìm thấy phiên gửi xe" });
+    response
+      .status(404)
+      .json({ ok: false, message: "Không tìm thấy phiên gửi xe" });
     return;
   }
   if (session.status !== "Đang gửi") {
-    response.status(400).json({ ok: false, message: "Phiên không còn đang gửi" });
+    response
+      .status(400)
+      .json({ ok: false, message: "Phiên không còn đang gửi" });
     return;
   }
 
   const exceptionType = session.exceptionType || "";
   const scannedUid = session.exitRfidUid || "";
-  const needsNote = ["confirm", "correct_exit_plate", "correct_session_plate", "accept_uid", "manual_missing_entry_rfid"].includes(action);
+  const needsNote = [
+    "confirm",
+    "correct_exit_plate",
+    "correct_session_plate",
+    "accept_uid",
+    "manual_missing_entry_rfid",
+  ].includes(action);
   if (needsNote && note.length < 8) {
-    response.status(400).json({ ok: false, message: "Vui lòng nhập lý do xử lý (tối thiểu 8 ký tự)." });
+    response
+      .status(400)
+      .json({
+        ok: false,
+        message: "Vui lòng nhập lý do xử lý (tối thiểu 8 ký tự).",
+      });
     return;
   }
 
   if (exceptionType === "wrong_card" || exceptionType === "two_vehicles") {
-    if (action !== "retry" && action !== "reject" && action !== "manual_missing_entry_rfid") {
+    if (
+      action !== "retry" &&
+      action !== "reject" &&
+      action !== "manual_missing_entry_rfid"
+    ) {
       response.status(400).json({
         ok: false,
         message: "Thẻ đang gắn xe khác. Chỉ được quẹt lại hoặc từ chối.",
@@ -570,12 +629,17 @@ export async function resolveExitMismatch(request: Request, response: Response) 
 
   if (action === "reject") {
     session.verificationStatus = "Từ chối";
-    session.verificationNote = note || "Từ chối cho xe ra do sai lệch định danh";
+    session.verificationNote =
+      note || "Từ chối cho xe ra do sai lệch định danh";
     session.verifiedBy = actorId(request);
     session.verifiedAt = new Date();
     session.exitState = "waiting_rfid";
     await session.save();
-    response.json({ ok: true, rejected: true, message: "Đã từ chối. Barrier giữ đóng." });
+    response.json({
+      ok: true,
+      rejected: true,
+      message: "Đã từ chối. Barrier giữ đóng.",
+    });
     return;
   }
 
@@ -595,7 +659,9 @@ export async function resolveExitMismatch(request: Request, response: Response) 
 
   if (action === "correct_exit_plate") {
     if (manualPlate.length < 5) {
-      response.status(400).json({ ok: false, message: "Nhập biển số ra đã hiệu chỉnh." });
+      response
+        .status(400)
+        .json({ ok: false, message: "Nhập biển số ra đã hiệu chỉnh." });
       return;
     }
     session.exitDetectedPlate = manualPlate;
@@ -604,7 +670,9 @@ export async function resolveExitMismatch(request: Request, response: Response) 
 
   if (action === "correct_session_plate") {
     if (manualPlate.length < 5) {
-      response.status(400).json({ ok: false, message: "Nhập biển phiên đã hiệu chỉnh." });
+      response
+        .status(400)
+        .json({ ok: false, message: "Nhập biển phiên đã hiệu chỉnh." });
       return;
     }
     const other = await ParkingSession.findOne({
@@ -623,7 +691,12 @@ export async function resolveExitMismatch(request: Request, response: Response) 
     session.manualPlate = manualPlate;
   }
 
-  if (action === "accept_uid" || action === "confirm" || action === "correct_exit_plate" || action === "correct_session_plate") {
+  if (
+    action === "accept_uid" ||
+    action === "confirm" ||
+    action === "correct_exit_plate" ||
+    action === "correct_session_plate"
+  ) {
     session.verificationNote = note;
     session.verifiedBy = actorId(request);
     session.verifiedAt = new Date();
@@ -633,5 +706,7 @@ export async function resolveExitMismatch(request: Request, response: Response) 
     return;
   }
 
-  response.status(400).json({ ok: false, message: `Action không hợp lệ: ${action}` });
+  response
+    .status(400)
+    .json({ ok: false, message: `Action không hợp lệ: ${action}` });
 }

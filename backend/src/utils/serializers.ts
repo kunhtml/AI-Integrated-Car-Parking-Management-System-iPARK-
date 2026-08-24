@@ -72,6 +72,9 @@ export function serializeParkingSession(session: ParkingSessionDocument) {
     plate: session.plate,
     owner: session.ownerName,
     vehicleType: session.vehicleType,
+    customerType: session.customerType ?? "guest",
+    quotaType: session.quotaType ?? "walk_in",
+    isRegisteredMember: session.isRegisteredMember ?? false,
     checkIn: session.checkInAt.toLocaleTimeString("vi-VN", {
       hour: "2-digit",
       minute: "2-digit",
@@ -435,17 +438,21 @@ function maskIdCard(idCard: string) {
 }
 
 type StaffApplicationWithPopulatedUsers = StaffApplicationDocument & {
-  userId?: StaffApplicationDocument["userId"] | {
-    _id: { toString(): string };
-    name?: string;
-    email?: string;
-    phone?: string;
-    avatarUrl?: string;
-  };
-  reviewedBy?: StaffApplicationDocument["reviewedBy"] | {
-    _id: { toString(): string };
-    name?: string;
-  };
+  userId?:
+    | StaffApplicationDocument["userId"]
+    | {
+        _id: { toString(): string };
+        name?: string;
+        email?: string;
+        phone?: string;
+        avatarUrl?: string;
+      };
+  reviewedBy?:
+    | StaffApplicationDocument["reviewedBy"]
+    | {
+        _id: { toString(): string };
+        name?: string;
+      };
 };
 
 export function serializeStaffApplication(
@@ -453,7 +460,9 @@ export function serializeStaffApplication(
   options: { maskIdCard?: boolean } = {},
 ) {
   const user =
-    application.userId && typeof application.userId === "object" && "name" in application.userId
+    application.userId &&
+    typeof application.userId === "object" &&
+    "name" in application.userId
       ? application.userId
       : null;
   const reviewer =
@@ -479,7 +488,7 @@ export function serializeStaffApplication(
     phone: application.phone,
     idCardNumber: options.maskIdCard
       ? maskIdCard(application.idCardNumber ?? "")
-      : application.idCardNumber ?? "",
+      : (application.idCardNumber ?? ""),
     address: application.address,
     experience: application.experience ?? null,
     reason: application.reason,
@@ -507,7 +516,6 @@ export function serializeStaffApplication(
       : null,
   };
 }
-
 
 export function serializeZone(zone: ZoneDocument, stats?: ZoneStats) {
   return {
@@ -537,6 +545,10 @@ export function serializeParkingSlot(slot: ParkingSlotDocument) {
     status: slot.status,
     currentPlate: (slot as any).currentPlate ?? null,
     currentSessionId: slot.currentSessionId?.toString(),
+    ownerName: (slot as any).ownerName ?? null,
+    ownerEmail: (slot as any).ownerEmail ?? null,
+    customerType: (slot as any).customerType ?? null,
+    isRegisteredMember: (slot as any).isRegisteredMember ?? false,
     floor: slot.floor,
     notes: slot.notes,
     accessPolicy: slot.accessPolicy ?? "shared",
@@ -719,19 +731,32 @@ export function serializeCapacityChangeLog(log: CapacityChangeLogPopulated) {
 export function serializeMembershipPackage(pkg: any) {
   return {
     id: pkg._id?.toString?.() ?? String(pkg.id ?? ""),
-    name: pkg.name, code: pkg.code, billingCycle: pkg.billingCycle,
-    price: pkg.price, durationDays: pkg.durationDays, maxPlates: pkg.maxPlates,
-    subscriberCount: pkg.subscriberCount, renewalRate: pkg.renewalRate,
-    status: pkg.status, features: pkg.features ?? [], note: pkg.note ?? null,
-    createdAt: pkg.createdAt, updatedAt: pkg.updatedAt,
+    name: pkg.name,
+    code: pkg.code,
+    billingCycle: pkg.billingCycle,
+    price: pkg.price,
+    durationDays: pkg.durationDays,
+    maxPlates: pkg.maxPlates,
+    subscriberCount: pkg.subscriberCount,
+    renewalRate: pkg.renewalRate,
+    status: pkg.status,
+    features: pkg.features ?? [],
+    note: pkg.note ?? null,
+    createdAt: pkg.createdAt,
+    updatedAt: pkg.updatedAt,
   };
 }
 
 export function serializeReportExport(report: any) {
   return {
     id: report._id?.toString?.() ?? String(report.id ?? ""),
-    fileName: report.fileName, reportType: report.reportType, format: report.format,
-    period: report.period, createdBy: report.createdBy?.toString?.(),
-    status: report.status, createdAt: report.createdAt, updatedAt: report.updatedAt,
+    fileName: report.fileName,
+    reportType: report.reportType,
+    format: report.format,
+    period: report.period,
+    createdBy: report.createdBy?.toString?.(),
+    status: report.status,
+    createdAt: report.createdAt,
+    updatedAt: report.updatedAt,
   };
 }

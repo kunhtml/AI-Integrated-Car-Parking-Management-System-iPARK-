@@ -27,7 +27,7 @@ import {
 import { DataTable } from "@/components/ui/data-table";
 import { useParkingApp } from "@/context/parking-app-context";
 import type { FormEvent } from "react";
-import type { RegisteredVehicle, VehicleRequest } from "@/types";
+import type { RfidCard, RegisteredVehicle, VehicleRequest } from "@/types";
 import { apiFetch } from "@/lib/client-api";
 
 type StatusFilter = "all" | "Đã đăng ký" | "Cần duyệt" | "Blacklist";
@@ -71,6 +71,46 @@ function formatDate(dateStr: string | null | undefined) {
   return new Date(dateStr).toLocaleDateString("vi-VN");
 }
 
+function rfidStatusLabel(status: string | undefined) {
+  switch (status) {
+    case "active":
+      return "Hoạt động";
+    case "in-use":
+      return "Đang sử dụng";
+    case "available":
+      return "Sẵn sàng";
+    case "pending-sale":
+      return "Chờ bán";
+    case "inactive":
+      return "Không hoạt động";
+    case "lost":
+      return "Báo mất";
+    case "damaged":
+      return "Hỏng";
+    case "blocked":
+      return "Đã khóa";
+    case "returned":
+      return "Đã trả";
+    default:
+      return status || "—";
+  }
+}
+
+function rfidStatusBadgeClass(status: string | undefined) {
+  switch (status) {
+    case "active":
+    case "in-use":
+    case "available":
+      return "badge success";
+    case "blocked":
+    case "lost":
+    case "damaged":
+      return "badge danger";
+    default:
+      return "badge warning";
+  }
+}
+
 export function VehicleDetailModal({
   vehicle,
   onClose,
@@ -94,6 +134,54 @@ export function VehicleDetailModal({
 }) {
   const isPending = vehicle.status === "Cần duyệt";
   const isRejected = vehicle.status === "Blacklist";
+  const [rfidCards, setRfidCards] = useState<RfidCard[]>([]);
+  const [rfidLoading, setRfidLoading] = useState(false);
+  const [rfidError, setRfidError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadRfid() {
+      if (!vehicle?.plate) return;
+      setRfidLoading(true);
+      setRfidError("");
+      try {
+        // Admin/staff: tra cứu trực tiếp theo biển số (endpoint yêu cầu quyền).
+        const byPlate = await apiFetch(
+          `/rfid/by-plate/${encodeURIComponent(vehicle.plate)}`,
+        );
+        const byPlateData = await byPlate.json().catch(() => ({}));
+        if (cancelled) return;
+        if (byPlate.ok) {
+          setRfidCards(byPlateData.card ? [byPlateData.card] : []);
+          return;
+        }
+
+        // Customer/không có quyền: lấy danh sách thẻ của mình rồi lọc theo biển số.
+        const mine = await apiFetch("/rfid/mine");
+        const mineData = await mine.json().catch(() => ({}));
+        if (cancelled) return;
+        if (mine.ok) {
+          const list: RfidCard[] = mineData.cards || [];
+          const matched = list.filter(
+            (c) =>
+              (c.plate || "").trim().toUpperCase() ===
+              vehicle.plate.trim().toUpperCase(),
+          );
+          setRfidCards(matched);
+        } else {
+          setRfidCards([]);
+        }
+      } catch {
+        if (!cancelled) setRfidError("Không tải được thông tin thẻ RFID.");
+      } finally {
+        if (!cancelled) setRfidLoading(false);
+      }
+    }
+    void loadRfid();
+    return () => {
+      cancelled = true;
+    };
+  }, [vehicle?.plate, vehicle?.id]);
 
   return (
     <div
@@ -360,6 +448,197 @@ export function VehicleDetailModal({
           </div>
         </div>
 
+        {/* Thẻ RFID đã được cấp */}
+        <div style={{ marginBottom: 20 }}>
+          <h3
+            style={{
+              fontSize: "0.85rem",
+              fontWeight: 700,
+              color: "var(--muted)",
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+              marginBottom: 10,
+            }}
+          >
+            Thẻ RFID
+          </h3>
+          {rfidLoading ? (
+            <p className="muted-cell" style={{ fontSize: "0.8rem" }}>
+              <Loader2
+                size={13}
+                className="spin"
+                style={{ verticalAlign: "middle", marginRight: 6 }}
+              />
+              Đang tải thông tin thẻ RFID...
+            </p>
+          ) : rfidError ? (
+            <p style={{ color: "#dc2626", fontSize: "0.8rem" }}>{rfidError}</p>
+          ) : rfidCards.length === 0 ? (
+            <div
+              className="info-box"
+              style={{
+                minWidth: 0,
+                padding: "14px 16px",
+                borderRadius: 12,
+                background: "rgba(148,163,184,0.08)",
+              }}
+            >
+              <span className="muted-cell" style={{ fontSize: "0.72rem" }}>
+                Trạng thái
+              </span>
+              <div>
+                <strong style={{ color: "var(--muted)" }}>
+                  Chưa có thẻ RFID
+                </strong>
+              </div>
+              <p
+                className="muted-cell"
+                style={{ fontSize: "0.72rem", marginTop: 4 }}
+              >
+                {isAdmin
+                  ? "Mua thẻ và gán tại mục Thẻ RFID (Cấp và gắn thẻ)."
+                  : "Liên hệ admin để cấp thẻ RFID cho phương tiện này."}
+              </p>
+            </div>
+          ) : (
+            <div style={{ display: "grid", gap: 12 }}>
+              {rfidCards.map((card) => (
+                <div
+                  key={card.id || card.uid}
+                  className="info-box"
+                  style={{
+                    minWidth: 0,
+                    padding: "14px 16px",
+                    borderRadius: 12,
+                    border: "1px solid var(--border, #e2e6ef)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      flexWrap: "wrap",
+                      marginBottom: 10,
+                    }}
+                  >
+                    <strong
+                      style={{ fontFamily: "monospace", fontSize: "1rem" }}
+                    >
+                      {card.cardId || card.uid}
+                    </strong>
+                    <span className={rfidStatusBadgeClass(card.status)}>
+                      {rfidStatusLabel(card.status)}
+                    </span>
+                  </div>
+                  <div
+                    style={{
+                      display: "grid",
+                      gap: 10,
+                      gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                    }}
+                  >
+                    <div>
+                      <span
+                        className="muted-cell"
+                        style={{ fontSize: "0.72rem" }}
+                      >
+                        UID
+                      </span>
+                      <div style={{ wordBreak: "break-all" }}>
+                        <strong style={{ fontFamily: "monospace" }}>
+                          {card.uid || "—"}
+                        </strong>
+                      </div>
+                    </div>
+                    <div>
+                      <span
+                        className="muted-cell"
+                        style={{ fontSize: "0.72rem" }}
+                      >
+                        Loại thẻ
+                      </span>
+                      <div style={{ wordBreak: "break-all" }}>
+                        <strong>
+                          {card.cardType === "member"
+                            ? "Thành viên (Member)"
+                            : card.cardType === "guest"
+                              ? "Vãng lai (Guest)"
+                              : "—"}
+                        </strong>
+                      </div>
+                    </div>
+                    <div>
+                      <span
+                        className="muted-cell"
+                        style={{ fontSize: "0.72rem" }}
+                      >
+                        Chủ thẻ
+                      </span>
+                      <div style={{ wordBreak: "break-word" }}>
+                        <strong>
+                          {card.ownerName || vehicle.owner || "—"}
+                        </strong>
+                      </div>
+                    </div>
+                    <div>
+                      <span
+                        className="muted-cell"
+                        style={{ fontSize: "0.72rem" }}
+                      >
+                        Biển số
+                      </span>
+                      <div style={{ wordBreak: "break-all" }}>
+                        <strong style={{ fontFamily: "monospace" }}>
+                          {card.plate || vehicle.plate || "—"}
+                        </strong>
+                      </div>
+                    </div>
+                    {card.issuedAt && (
+                      <div>
+                        <span
+                          className="muted-cell"
+                          style={{ fontSize: "0.72rem" }}
+                        >
+                          Ngày cấp
+                        </span>
+                        <div style={{ wordBreak: "break-all" }}>
+                          <strong>{formatDate(card.issuedAt)}</strong>
+                        </div>
+                      </div>
+                    )}
+                    {card.lastUsedAt && (
+                      <div>
+                        <span
+                          className="muted-cell"
+                          style={{ fontSize: "0.72rem" }}
+                        >
+                          Dùng gần nhất
+                        </span>
+                        <div style={{ wordBreak: "break-all" }}>
+                          <strong>{formatDate(card.lastUsedAt)}</strong>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {card.blockedReason && (
+                    <p
+                      style={{
+                        marginTop: 8,
+                        fontSize: "0.75rem",
+                        color: "#b91c1c",
+                      }}
+                    >
+                      Lý do khóa: {card.blockedReason}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {isRejected && (
           <div
             style={{
@@ -491,17 +770,20 @@ function VehicleEditModal({
   vehicle,
   onClose,
   onSave,
+  prefillOwnerName,
 }: {
   vehicle: RegisteredVehicle | null;
   onClose: () => void;
   onSave: (
     data: Parameters<ReturnType<typeof useParkingApp>["editVehicle"]>[1],
   ) => Promise<void>;
+  /** Họ tên tài khoản hiện tại để tự điền khi thêm xe mới. */
+  prefillOwnerName?: string;
 }) {
   const isNew = !vehicle;
   const [form, setForm] = useState({
     plate: vehicle?.plate ?? "",
-    ownerName: vehicle?.owner ?? "",
+    ownerName: vehicle?.owner ?? (isNew ? (prefillOwnerName ?? "") : ""),
     ownerPhone: vehicle?.ownerPhone ?? "",
     ownerAddress: vehicle?.ownerAddress ?? "",
     brand: vehicle?.brand ?? "",
@@ -576,7 +858,9 @@ function VehicleEditModal({
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      setUploadError("Ảnh tối đa 5MB.");
+      setUploadError(
+        "Ảnh vừa upload đã vượt giới hạn 5MB, vui lòng upload lại chỉ hỗ trợ ảnh <=5MB.",
+      );
       return;
     }
     setUploadError(null);
@@ -1082,7 +1366,9 @@ function ResubmitVehicleModal({
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      setUploadError("Ảnh tối đa 5MB.");
+      setUploadError(
+        "Ảnh vừa upload đã vượt giới hạn 5MB, vui lòng upload lại chỉ hỗ trợ ảnh <=5MB.",
+      );
       return;
     }
     setUploadError(null);
@@ -1116,7 +1402,8 @@ function ResubmitVehicleModal({
     const errs: Record<string, string> = {};
     const plate = form.plate.trim().toUpperCase();
     if (!plate) errs.plate = "Vui lòng nhập biển số.";
-    else if (!/^[A-Z0-9]{5,9}$/.test(plate)) errs.plate = "Biển số chỉ gồm chữ và số (5–9 ký tự).";
+    else if (!/^[A-Z0-9]{5,9}$/.test(plate))
+      errs.plate = "Biển số chỉ gồm chữ và số (5–9 ký tự).";
     if (form.ownerName.trim() && form.ownerName.trim().length < 2)
       errs.ownerName = "Họ tên phải có ít nhất 2 ký tự.";
     const phone = form.ownerPhone.trim();
@@ -1542,7 +1829,9 @@ function CustomerEditRequestModal({
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      setUploadError("Ảnh tối đa 5MB.");
+      setUploadError(
+        "Ảnh vừa upload đã vượt giới hạn 5MB, vui lòng upload lại chỉ hỗ trợ ảnh <=5MB.",
+      );
       return;
     }
     setUploadError(null);
@@ -2653,12 +2942,14 @@ export function VehiclesView() {
           processing={resolvingId === detailVehicle.id}
           isAdmin={isAdmin}
           onEdit={
-            isCustomer && detailVehicle.id && detailVehicle.status === "Blacklist"
+            isCustomer &&
+            detailVehicle.id &&
+            detailVehicle.status === "Blacklist"
               ? () => {
                   setDetailVehicle(null);
                   setResubmitTarget(detailVehicle);
                 }
-                : isCustomer &&
+              : isCustomer &&
                   detailVehicle.id &&
                   vehicleSubscriptionMap.has(detailVehicle.id)
                 ? () => {
@@ -2673,6 +2964,7 @@ export function VehiclesView() {
       {(editingVehicle !== null || showAddForm) && (
         <VehicleEditModal
           vehicle={editingVehicle}
+          prefillOwnerName={isCustomer ? currentUser?.name : undefined}
           onClose={() => {
             setEditingVehicle(null);
             setShowAddForm(false);
@@ -3281,29 +3573,31 @@ export function VehiclesView() {
             <div className="veh-stat-label">Từ chối</div>
             <div className="veh-stat-value">{stats.blacklist}</div>
           </div>
-          {canViewRequests && <div
-            className={`veh-stat${activeTab === "requests" ? " active" : ""}`}
-            onClick={() => setActiveTab("requests")}
-            style={{ cursor: "pointer", position: "relative" }}
-          >
-            <div className="veh-stat-label">
-              {isAdmin ? "Yêu cầu" : "Yêu cầu của tôi"}
-            </div>
+          {canViewRequests && (
             <div
-              className="veh-stat-value"
-              style={{ display: "flex", alignItems: "center", gap: 6 }}
+              className={`veh-stat${activeTab === "requests" ? " active" : ""}`}
+              onClick={() => setActiveTab("requests")}
+              style={{ cursor: "pointer", position: "relative" }}
             >
-              {vehicleRequests.length}
-              {pendingRequests.length > 0 && (
-                <span
-                  className="badge warning"
-                  style={{ fontSize: "0.7rem", padding: "1px 6px" }}
-                >
-                  {pendingRequests.length}
-                </span>
-              )}
+              <div className="veh-stat-label">
+                {isAdmin ? "Yêu cầu" : "Yêu cầu của tôi"}
+              </div>
+              <div
+                className="veh-stat-value"
+                style={{ display: "flex", alignItems: "center", gap: 6 }}
+              >
+                {vehicleRequests.length}
+                {pendingRequests.length > 0 && (
+                  <span
+                    className="badge warning"
+                    style={{ fontSize: "0.7rem", padding: "1px 6px" }}
+                  >
+                    {pendingRequests.length}
+                  </span>
+                )}
+              </div>
             </div>
-          </div>}
+          )}
         </div>
 
         {activeTab !== "requests" && (

@@ -38,21 +38,26 @@ async function findOwnedSessionIds(userId: string) {
   return sessions.map((session) => session._id.toString());
 }
 
-
 async function getDisputeResponsibleStaffId(dispute: {
   sessionId?: mongoose.Types.ObjectId;
   transactionId?: mongoose.Types.ObjectId;
 }) {
   let sessionId = dispute.sessionId;
   if (!sessionId && dispute.transactionId) {
-    sessionId = (await Transaction.findById(dispute.transactionId).select("sessionId"))?.sessionId;
+    sessionId = (
+      await Transaction.findById(dispute.transactionId).select("sessionId")
+    )?.sessionId;
   }
   if (!sessionId) return null;
 
-  const session = await ParkingSession.findById(sessionId).select("checkInAt checkInStaff");
+  const session = await ParkingSession.findById(sessionId).select(
+    "checkInAt checkInStaff",
+  );
   if (!session) return null;
   if (!session.checkInStaff) {
-    const staffId = await findResponsibleStaffAt(session.checkInAt, { includeCompleted: true });
+    const staffId = await findResponsibleStaffAt(session.checkInAt, {
+      includeCompleted: true,
+    });
     if (!staffId) return null;
     session.checkInStaff = staffId;
     await session.save();
@@ -60,10 +65,13 @@ async function getDisputeResponsibleStaffId(dispute: {
   return session.checkInStaff;
 }
 
-async function staffCanHandleDispute(userId: string, dispute: {
-  sessionId?: mongoose.Types.ObjectId;
-  transactionId?: mongoose.Types.ObjectId;
-}) {
+async function staffCanHandleDispute(
+  userId: string,
+  dispute: {
+    sessionId?: mongoose.Types.ObjectId;
+    transactionId?: mongoose.Types.ObjectId;
+  },
+) {
   const staffId = await getDisputeResponsibleStaffId(dispute);
   return staffId?.toString() === userId;
 }
@@ -131,8 +139,16 @@ export async function getDisputeByCode(request: Request, response: Response) {
     response.status(404).json({ message: "Không tìm thấy khiếu nại." });
     return;
   }
-  if (request.user?.role === "staff" && !(await staffCanHandleDispute(request.user.id, dispute))) {
-    response.status(403).json({ message: "Chỉ nhân viên phụ trách phiên gửi xe mới được xem khiếu nại này." });
+  if (
+    request.user?.role === "staff" &&
+    !(await staffCanHandleDispute(request.user.id, dispute))
+  ) {
+    response
+      .status(403)
+      .json({
+        message:
+          "Chỉ nhân viên phụ trách phiên gửi xe mới được xem khiếu nại này.",
+      });
     return;
   }
   response.json({ dispute: serializeDispute(dispute) });
@@ -154,11 +170,21 @@ export async function getDispute(request: Request, response: Response) {
     request.user?.role === "customer" &&
     dispute.userId.toString() !== request.user.id
   ) {
-    response.status(403).json({ message: "Không có quyền xem khiếu nại này." });
+    response
+      .status(403)
+      .json({ message: "Bạn không có quyền xem khiếu nại của người khác." });
     return;
   }
-  if (request.user?.role === "staff" && !(await staffCanHandleDispute(request.user.id, dispute))) {
-    response.status(403).json({ message: "Chỉ nhân viên phụ trách phiên gửi xe mới được xem khiếu nại này." });
+  if (
+    request.user?.role === "staff" &&
+    !(await staffCanHandleDispute(request.user.id, dispute))
+  ) {
+    response
+      .status(403)
+      .json({
+        message:
+          "Chỉ nhân viên phụ trách phiên gửi xe mới được xem khiếu nại này.",
+      });
     return;
   }
 
@@ -227,22 +253,40 @@ export async function createDispute(request: Request, response: Response) {
   );
 
   const transactionSessionId = body.transactionId
-    ? (await Transaction.findById(body.transactionId).select("sessionId"))?.sessionId
+    ? (await Transaction.findById(body.transactionId).select("sessionId"))
+        ?.sessionId
     : undefined;
-  const responsibilitySessionId = body.sessionId || transactionSessionId?.toString();
+  const responsibilitySessionId =
+    body.sessionId || transactionSessionId?.toString();
   if (!responsibilitySessionId) {
-    response.status(409).json({ message: "Yêu cầu khiếu nại phải gắn với một phiên gửi xe có nhân viên phụ trách." });
+    response
+      .status(409)
+      .json({
+        message:
+          "Yêu cầu khiếu nại phải gắn với một phiên gửi xe có nhân viên phụ trách.",
+      });
     return;
   }
 
-  const responsibilitySession = await ParkingSession.findById(responsibilitySessionId);
+  const responsibilitySession = await ParkingSession.findById(
+    responsibilitySessionId,
+  );
   if (!responsibilitySession) {
-    response.status(404).json({ message: "Không tìm thấy phiên gửi xe để phân công xử lý." });
+    response
+      .status(404)
+      .json({ message: "Không tìm thấy phiên gửi xe để phân công xử lý." });
     return;
   }
-  const responsibleStaffId = await getDisputeResponsibleStaffId({ sessionId: responsibilitySession._id });
+  const responsibleStaffId = await getDisputeResponsibleStaffId({
+    sessionId: responsibilitySession._id,
+  });
   if (!responsibleStaffId) {
-    response.status(409).json({ message: "Phiên gửi xe chưa có nhân viên phụ trách. Không thể tạo yêu cầu xử lý." });
+    response
+      .status(409)
+      .json({
+        message:
+          "Phiên gửi xe chưa có nhân viên phụ trách. Không thể tạo yêu cầu xử lý.",
+      });
     return;
   }
 
@@ -312,8 +356,16 @@ export async function updateDispute(request: Request, response: Response) {
     return;
   }
 
-  if (request.user?.role === "staff" && !(await staffCanHandleDispute(request.user.id, dispute))) {
-    response.status(403).json({ message: "Chỉ nhân viên phụ trách phiên gửi xe mới được xử lý khiếu nại này." });
+  if (
+    request.user?.role === "staff" &&
+    !(await staffCanHandleDispute(request.user.id, dispute))
+  ) {
+    response
+      .status(403)
+      .json({
+        message:
+          "Chỉ nhân viên phụ trách phiên gửi xe mới được xử lý khiếu nại này.",
+      });
     return;
   }
 
@@ -409,8 +461,16 @@ export async function addDisputeMessage(request: Request, response: Response) {
     response.status(403).json({ message: "Không có quyền gửi tin nhắn." });
     return;
   }
-  if (user.role === "staff" && !(await staffCanHandleDispute(user.id, dispute))) {
-    response.status(403).json({ message: "Chỉ nhân viên phụ trách phiên gửi xe mới được trao đổi về khiếu nại này." });
+  if (
+    user.role === "staff" &&
+    !(await staffCanHandleDispute(user.id, dispute))
+  ) {
+    response
+      .status(403)
+      .json({
+        message:
+          "Chỉ nhân viên phụ trách phiên gửi xe mới được trao đổi về khiếu nại này.",
+      });
     return;
   }
 
@@ -418,9 +478,7 @@ export async function addDisputeMessage(request: Request, response: Response) {
     "name firstName lastName",
   );
   const senderName =
-    user_doc?.name && ""
-      ? user_doc.name
-      : (user_doc?.name ?? user.id);
+    user_doc?.name && "" ? user_doc.name : (user_doc?.name ?? user.id);
 
   dispute.messages.push({
     senderId: new mongoose.Types.ObjectId(user.id),

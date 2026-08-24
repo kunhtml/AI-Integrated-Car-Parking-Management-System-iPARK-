@@ -1,8 +1,43 @@
 export type StaffGate = "entry" | "exit";
 
-export type RfidCardStatus = "active" | "inactive" | "available" | "pending-sale" | "in-use" | "lost" | "blocked" | "damaged" | "returned";
-export type RfidCard = { id: string; uid: string; cardId?: string; ownerName?: string; plate?: string; userType?: "resident" | "guest"; cardType?: "member" | "guest"; status: RfidCardStatus; notes?: string; createdAt?: string; updatedAt?: string; issuedAt?: string | null; lastUsedAt?: string | null; lostAt?: string | null; blockedAt?: string | null; blockedReason?: string | null; };
-export type RfidScanLog = { id: string; cardId?: string; action: string; status?: string; failureReason?: string; plateDetected?: string; createdAt?: string; performedBy?: string; };
+export type RfidCardStatus =
+  | "active"
+  | "inactive"
+  | "available"
+  | "pending-sale"
+  | "in-use"
+  | "lost"
+  | "blocked"
+  | "damaged"
+  | "returned";
+export type RfidCard = {
+  id: string;
+  uid: string;
+  cardId?: string;
+  ownerName?: string;
+  plate?: string;
+  userType?: "resident" | "guest";
+  cardType?: "member" | "guest";
+  status: RfidCardStatus;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  issuedAt?: string | null;
+  lastUsedAt?: string | null;
+  lostAt?: string | null;
+  blockedAt?: string | null;
+  blockedReason?: string | null;
+};
+export type RfidScanLog = {
+  id: string;
+  cardId?: string;
+  action: string;
+  status?: string;
+  failureReason?: string;
+  plateDetected?: string;
+  createdAt?: string;
+  performedBy?: string;
+};
 
 export type InvoiceItem = {
   id: string;
@@ -488,6 +523,14 @@ export type ParkingSlot = {
   currentSessionId?: string;
   /** Biển số xe hiện đang đỗ tại slot (chỉ có khi status === "occupied"). */
   currentPlate?: string;
+  /** Tên chủ xe đang đỗ (chỉ có khi status === "occupied"). */
+  ownerName?: string | null;
+  /** Email chủ xe đang đỗ (chỉ có khi status === "occupied"). */
+  ownerEmail?: string | null;
+  /** Loại khách đang đỗ: "member" (thành viên) hay "guest" (vãng lai). */
+  customerType?: "member" | "guest" | null;
+  /** Biển số đã đăng ký chủ xe trong hệ thống hay không (thành viên chưa mua gói tháng). */
+  isRegisteredMember?: boolean;
   floor: number;
   notes?: string;
   accessPolicy: SlotAccessPolicy;

@@ -39,17 +39,19 @@ async function scanOnce(device: DeviceDocument): Promise<void> {
     device.lastSnapshotUrl = snapshot.imageUrl;
     device.lastSnapshotAt = new Date();
     await Device.findByIdAndUpdate(device._id, {
-      $set: { status: device.status, lastSnapshotUrl: device.lastSnapshotUrl, lastSnapshotAt: device.lastSnapshotAt },
+      $set: {
+        status: device.status,
+        lastSnapshotUrl: device.lastSnapshotUrl,
+        lastSnapshotAt: device.lastSnapshotAt,
+      },
     });
 
     // 2. OCR nhận diện biển số
-    const detection = await detectVehicleImage(
-      {
-        buffer: snapshot.buffer,
-        mimetype: snapshot.mimetype,
-        originalname: "auto-scan.jpg",
-      } as Express.Multer.File,
-    );
+    const detection = await detectVehicleImage({
+      buffer: snapshot.buffer,
+      mimetype: snapshot.mimetype,
+      originalname: "auto-scan.jpg",
+    } as Express.Multer.File);
 
     if (!detection.plate) {
       // Không nhận diện được → bỏ qua, không log để tránh spam
@@ -70,15 +72,23 @@ async function scanOnce(device: DeviceDocument): Promise<void> {
     // 4. Phân loại quota theo subscription active và cấp slot đúng pool.
     const quotaAccess = await classifyVehicleByPlate(detection.plate);
     const isMember = quotaAccess.customerType === "member";
-    const slotDoc = await allocateSlot("Ô tô", undefined, { quotaType: quotaAccess.quotaType });
+    const slotDoc = await allocateSlot("Ô tô", undefined, {
+      quotaType: quotaAccess.quotaType,
+    });
     if (!slotDoc) {
       await safeCreateRecognitionLog({
-        action: "camera-entry", source: "camera", status: "failed",
-        detectedPlate: detection.plate, confidence: detection.confidence,
-        rawText: detection.rawText, imageHash: detection.imageHash,
-        detectionMethod: "ocr", imageUrl: snapshot.imageUrl,
-        deviceId: device._id, deviceName: device.name,
-        message: "Auto-scan: không còn slot phù hợp với quota."
+        action: "camera-entry",
+        source: "camera",
+        status: "failed",
+        detectedPlate: detection.plate,
+        confidence: detection.confidence,
+        rawText: detection.rawText,
+        imageHash: detection.imageHash,
+        detectionMethod: "ocr",
+        imageUrl: snapshot.imageUrl,
+        deviceId: device._id,
+        deviceName: device.name,
+        message: "Auto-scan: không còn slot phù hợp với quota.",
       });
       return;
     }
@@ -89,9 +99,10 @@ async function scanOnce(device: DeviceDocument): Promise<void> {
       ownerName: isMember ? "Thành viên" : "Khách vãng lai",
       vehicleType: "Ô tô",
       slot: slotDoc.slotCode,
-       slotId: slotDoc._id,
-       customerType: quotaAccess.customerType,
-       quotaType: quotaAccess.quotaType,
+      slotId: slotDoc._id,
+      customerType: quotaAccess.customerType,
+      quotaType: quotaAccess.quotaType,
+      isRegisteredMember: quotaAccess.isRegistered,
       entryImageUrl: snapshot.imageUrl,
       entryDetectedPlate: detection.plate,
       entryConfidence: detection.confidence,
@@ -99,7 +110,12 @@ async function scanOnce(device: DeviceDocument): Promise<void> {
       aiRawText: detection.rawText,
       ownerUserId: await ownerFromPlate(detection.plate),
       ...(quotaAccess.customerType === "member"
-        ? { paymentStatus: "fully_paid", paymentMethod: "subscription", fee: 0, paidAmount: 0 }
+        ? {
+            paymentStatus: "fully_paid",
+            paymentMethod: "subscription",
+            fee: 0,
+            paidAmount: 0,
+          }
         : {}),
       entryGate: device.name,
     });
@@ -183,7 +199,9 @@ export async function initAutoScan(): Promise<void> {
       startDeviceScan(device);
     }
     if (devices.length > 0) {
-      console.log(`[auto-scan] Initialized ${devices.length} entry device(s) for auto-scan`);
+      console.log(
+        `[auto-scan] Initialized ${devices.length} entry device(s) for auto-scan`,
+      );
     }
   } catch (error) {
     console.error("[auto-scan] Error initializing auto-scan:", error);

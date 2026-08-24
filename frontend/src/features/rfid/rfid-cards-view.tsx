@@ -60,7 +60,18 @@ type ConfirmAction = {
   card: RfidCard;
 };
 
-type Assignment = { id: string; uid: string; cardId: string; cardType: "guest" | "member"; status: string; ownerName: string; plate: string; sessionId?: string; sessionStatus: string; updatedAt?: string };
+type Assignment = {
+  id: string;
+  uid: string;
+  cardId: string;
+  cardType: "guest" | "member";
+  status: string;
+  ownerName: string;
+  plate: string;
+  sessionId?: string;
+  sessionStatus: string;
+  updatedAt?: string;
+};
 type TabType = "cards" | "assignments" | "scan-logs";
 
 export function RfidCardsView() {
@@ -123,11 +134,17 @@ export function RfidCardsView() {
     setLoading(true);
     try {
       const res = await rfidApi.fetchRfidAssignments();
-      if (!res.ok) { setError("Không tải được trạng thái gắn thẻ."); return; }
+      if (!res.ok) {
+        setError("Không tải được trạng thái gắn thẻ.");
+        return;
+      }
       const data = await res.json();
       setAssignments(data.assignments || []);
-    } catch { setError("Không kết nối được API."); }
-    finally { setLoading(false); }
+    } catch {
+      setError("Không kết nối được API.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   // ─── Load scan logs ───
@@ -276,8 +293,8 @@ export function RfidCardsView() {
           <CreditCard size={22} />
         </div>
         <p className="muted-text">
-          Quản lý thẻ RFID phát cho khách vãng lai. Theo dõi trạng thái,
-          khóa/mở khóa, báo mất thẻ và xem lịch sử quét.
+          Quản lý thẻ RFID phát cho khách vãng lai. Theo dõi trạng thái, khóa/mở
+          khóa, báo mất thẻ và xem lịch sử quét.
         </p>
         <div className="metric-grid compact">
           <div className="metric-card">
@@ -372,18 +389,18 @@ export function RfidCardsView() {
               <History size={14} /> Lịch sử quét
             </button>
           </div>
-'          <span className="muted-cell">
+          '{" "}
+          <span className="muted-cell">
             {activeTab === "cards"
               ? `${filteredCards.length} thẻ`
               : activeTab === "assignments"
                 ? `${assignments.length} thẻ`
                 : `${scanLogs.length} bản ghi`}
-          </span>'
+          </span>
+          '
         </div>
-
         {error && <p className="muted-text error">{error}</p>}
         {successMsg && <p className="muted-text success">{successMsg}</p>}
-
         {/* ── Cards tab ── */}
         {activeTab === "cards" && (
           <>
@@ -414,7 +431,9 @@ export function RfidCardsView() {
               >
                 <option value="">Tất cả trạng thái</option>
                 {Object.entries(STATUS_LABELS).map(([v, l]) => (
-                  <option key={v} value={v}>{l}</option>
+                  <option key={v} value={v}>
+                    {l}
+                  </option>
                 ))}
               </select>
               <button
@@ -423,7 +442,8 @@ export function RfidCardsView() {
                 onClick={() => void loadCards()}
                 type="button"
               >
-                <RefreshCw className={loading ? "spin" : ""} size={14} /> Làm mới
+                <RefreshCw className={loading ? "spin" : ""} size={14} /> Làm
+                mới
               </button>
             </div>
             <RfidCardTable
@@ -439,27 +459,64 @@ export function RfidCardsView() {
             />
           </>
         )}
-
-'        {activeTab === "assignments" && (
+        '{" "}
+        {activeTab === "assignments" && (
           <div className="table-wrap">
             <table>
-              <thead><tr><th>Thẻ</th><th>Loại</th><th>Khách / chủ xe</th><th>Biển số hiện tại</th><th>Trạng thái phiên</th><th>Cập nhật</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Thẻ</th>
+                  <th>Loại</th>
+                  <th>Khách / chủ xe</th>
+                  <th>Biển số hiện tại</th>
+                  <th>Trạng thái phiên</th>
+                  <th>Cập nhật</th>
+                </tr>
+              </thead>
               <tbody>
-                {assignments.map((item) => <tr key={item.id}>
-                  <td><strong>{item.cardId}</strong><div className="muted-cell">UID: {item.uid}</div></td>
-                  <td><span className={`badge ${item.cardType === "member" ? "success" : "warning"}`}>{item.cardType === "member" ? "Member" : "Guest"}</span></td>
-                  <td>{item.ownerName || "Guest"}</td>
-                  <td>{item.plate || <span className="muted-cell">Không gắn xe</span>}</td>
-                  <td><span className={`badge ${item.sessionId ? "success" : ""}`}>{item.cardType === "member" ? "Bán đứt / cố định" : item.sessionStatus}</span></td>
-                  <td>{fmt(item.updatedAt)}</td>
-                </tr>)}
-                {!assignments.length && <tr><td colSpan={6} className="muted-cell">{loading ? "Đang tải…" : "Chưa có thẻ."}</td></tr>}
+                {assignments.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <strong>{item.cardId}</strong>
+                      <div className="muted-cell">UID: {item.uid}</div>
+                    </td>
+                    <td>
+                      <span
+                        className={`badge ${item.cardType === "member" ? "success" : "warning"}`}
+                      >
+                        {item.cardType === "member" ? "Member" : "Guest"}
+                      </span>
+                    </td>
+                    <td>{item.ownerName || "Guest"}</td>
+                    <td>
+                      {item.plate || (
+                        <span className="muted-cell">Không gắn xe</span>
+                      )}
+                    </td>
+                    <td>
+                      <span
+                        className={`badge ${item.sessionId ? "success" : ""}`}
+                      >
+                        {item.cardType === "member"
+                          ? "Bán đứt / cố định"
+                          : item.sessionStatus}
+                      </span>
+                    </td>
+                    <td>{fmt(item.updatedAt)}</td>
+                  </tr>
+                ))}
+                {!assignments.length && (
+                  <tr>
+                    <td colSpan={6} className="muted-cell">
+                      {loading ? "Đang tải…" : "Chưa có thẻ."}
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
         )}
-
-'        {/* ── Scan logs tab ── */}
+        ' {/* ── Scan logs tab ── */}
         {activeTab === "scan-logs" && (
           <>
             <div className="filter-row">
@@ -470,7 +527,9 @@ export function RfidCardsView() {
               >
                 <option value="">Tất cả hành động</option>
                 {Object.entries(SCAN_ACTION_LABELS).map(([v, l]) => (
-                  <option key={v} value={v}>{l}</option>
+                  <option key={v} value={v}>
+                    {l}
+                  </option>
                 ))}
               </select>
               <button
@@ -479,7 +538,8 @@ export function RfidCardsView() {
                 onClick={() => void loadScanLogs()}
                 type="button"
               >
-                <RefreshCw className={loading ? "spin" : ""} size={14} /> Làm mới
+                <RefreshCw className={loading ? "spin" : ""} size={14} /> Làm
+                mới
               </button>
             </div>
 
@@ -499,15 +559,31 @@ export function RfidCardsView() {
                   {scanLogs.map((log) => (
                     <tr key={log.id}>
                       <td>{fmt(log.createdAt)}</td>
-                      <td><strong>{log.cardId}</strong></td>
+                      <td>
+                        <strong>{log.cardId}</strong>
+                      </td>
                       <td>{SCAN_ACTION_LABELS[log.action] || log.action}</td>
                       <td>
-                        <span className={log.status === "success" ? "badge success" : "badge warning"}>
+                        <span
+                          className={
+                            log.status === "success"
+                              ? "badge success"
+                              : "badge warning"
+                          }
+                        >
                           {log.status}
                         </span>
                       </td>
-                      <td>{log.plateDetected || <span className="muted-cell">—</span>}</td>
-                      <td>{log.failureReason || <span className="muted-cell">—</span>}</td>
+                      <td>
+                        {log.plateDetected || (
+                          <span className="muted-cell">—</span>
+                        )}
+                      </td>
+                      <td>
+                        {log.failureReason || (
+                          <span className="muted-cell">—</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                   {scanLogs.length === 0 && (
@@ -534,7 +610,10 @@ export function RfidCardsView() {
             </div>
             <button
               className="ghost-button"
-              onClick={() => { setHistoryCardId(null); setHistoryLogs([]); }}
+              onClick={() => {
+                setHistoryCardId(null);
+                setHistoryLogs([]);
+              }}
               type="button"
             >
               <X size={14} /> Đóng
@@ -562,12 +641,26 @@ export function RfidCardsView() {
                       <td>{fmt(log.createdAt)}</td>
                       <td>{SCAN_ACTION_LABELS[log.action] || log.action}</td>
                       <td>
-                        <span className={log.status === "success" ? "badge success" : "badge warning"}>
+                        <span
+                          className={
+                            log.status === "success"
+                              ? "badge success"
+                              : "badge warning"
+                          }
+                        >
                           {log.status}
                         </span>
                       </td>
-                      <td>{log.plateDetected || <span className="muted-cell">—</span>}</td>
-                      <td>{log.failureReason || <span className="muted-cell">—</span>}</td>
+                      <td>
+                        {log.plateDetected || (
+                          <span className="muted-cell">—</span>
+                        )}
+                      </td>
+                      <td>
+                        {log.failureReason || (
+                          <span className="muted-cell">—</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -587,9 +680,15 @@ export function RfidCardsView() {
         >
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              {confirm.type === "block" && <ShieldBan className="text-danger" size={24} />}
-              {confirm.type === "report-lost" && <AlertTriangle className="text-warning" size={24} />}
-              {confirm.type === "unblock" && <ShieldCheck className="text-success" size={24} />}
+              {confirm.type === "block" && (
+                <ShieldBan className="text-danger" size={24} />
+              )}
+              {confirm.type === "report-lost" && (
+                <AlertTriangle className="text-warning" size={24} />
+              )}
+              {confirm.type === "unblock" && (
+                <ShieldCheck className="text-success" size={24} />
+              )}
               <h3>
                 {confirm.type === "block"
                   ? "Khóa thẻ RFID"
@@ -600,31 +699,46 @@ export function RfidCardsView() {
             </div>
             <p className="modal-body">
               {confirm.type === "block" && (
-                <>Bạn có muốn khóa thẻ <strong>{confirm.card.cardId}</strong> không?</>
+                <>
+                  Bạn có muốn khóa thẻ <strong>{confirm.card.cardId}</strong>{" "}
+                  không?
+                </>
               )}
               {confirm.type === "report-lost" && (
                 <>
-                  Bạn có chắc muốn báo mất thẻ <strong>{confirm.card.cardId}</strong> không?
+                  Bạn có chắc muốn báo mất thẻ{" "}
+                  <strong>{confirm.card.cardId}</strong> không?
                   <br />
                   Thẻ sẽ chuyển sang trạng thái <strong>Mất</strong>.
                 </>
               )}
               {confirm.type === "unblock" && (
                 <>
-                  Mở khóa / khôi phục thẻ <strong>{confirm.card.cardId}</strong> về trạng thái{" "}
-                  <strong>Sẵn sàng</strong>?
+                  Mở khóa / khôi phục thẻ <strong>{confirm.card.cardId}</strong>{" "}
+                  về trạng thái <strong>Sẵn sàng</strong>?
                 </>
               )}
             </p>
             {confirm.type === "block" && (
               <div style={{ padding: "0 1.25rem" }}>
-                <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "0.25rem" }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.85rem",
+                    marginBottom: "0.25rem",
+                  }}
+                >
                   Lý do khóa (tùy chọn)
                 </label>
                 <input
                   onChange={(e) => setBlockReason(e.target.value)}
                   placeholder="Nhập lý do..."
-                  style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid var(--border, #e2e8f0)" }}
+                  style={{
+                    width: "100%",
+                    padding: "0.5rem",
+                    borderRadius: "6px",
+                    border: "1px solid var(--border, #e2e8f0)",
+                  }}
                   type="text"
                   value={blockReason}
                 />
@@ -640,7 +754,11 @@ export function RfidCardsView() {
                 Hủy
               </button>
               <button
-                className={confirm.type === "unblock" ? "success-button" : "danger-button"}
+                className={
+                  confirm.type === "unblock"
+                    ? "success-button"
+                    : "danger-button"
+                }
                 disabled={actionPending}
                 onClick={() => void handleConfirmAction()}
                 type="button"

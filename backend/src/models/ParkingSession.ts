@@ -38,6 +38,8 @@ export type ParkingSessionDocument = {
   // Chốt ngay lúc check-in, không thay đổi khi checkout.
   customerType: CustomerType;
   quotaType: QuotaType;
+  /** Biển số đã đăng ký trong hệ thống hay không (thành viên có hồ sơ nhưng chưa mua gói). */
+  isRegisteredMember?: boolean;
   zone?: string;
   floor?: number;
   slotType?: string;
@@ -130,8 +132,21 @@ const parkingSessionSchema = new Schema<ParkingSessionDocument>(
     expectedCheckOutAt: { type: Date },
     slot: { type: String, required: true },
     slotId: { type: Schema.Types.ObjectId, ref: "ParkingSlot" },
-    customerType: { type: String, enum: ["member", "guest"], default: "guest", required: true, index: true },
-    quotaType: { type: String, enum: ["member", "walk_in"], default: "walk_in", required: true, index: true },
+    customerType: {
+      type: String,
+      enum: ["member", "guest"],
+      default: "guest",
+      required: true,
+      index: true,
+    },
+    quotaType: {
+      type: String,
+      enum: ["member", "walk_in"],
+      default: "walk_in",
+      required: true,
+      index: true,
+    },
+    isRegisteredMember: { type: Boolean, default: false },
     zone: { type: String },
     floor: { type: Number },
     slotType: { type: String },
@@ -193,7 +208,12 @@ const parkingSessionSchema = new Schema<ParkingSessionDocument>(
     exitRfidVerifiedAt: { type: Date },
     rfidCardId: { type: String, index: true },
     entryRfidUid: { type: String, trim: true, uppercase: true, index: true },
-    entryExpectedRfidUid: { type: String, trim: true, uppercase: true, index: true },
+    entryExpectedRfidUid: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      index: true,
+    },
     rfidAssignedAt: { type: Date },
     rfidReturnedAt: { type: Date },
     rfidGate: { type: String, enum: ["entry", "exit"] },
@@ -222,8 +242,14 @@ const parkingSessionSchema = new Schema<ParkingSessionDocument>(
     verifiedAt: { type: Date },
     entrySource: { type: String, enum: ["camera", "manual"], index: true },
     exitSource: { type: String, enum: ["camera", "manual"], index: true },
-    entryPhotoStatus: { type: String, enum: ["photo_captured", "camera_unavailable"] },
-    exitPhotoStatus: { type: String, enum: ["photo_captured", "camera_unavailable"] },
+    entryPhotoStatus: {
+      type: String,
+      enum: ["photo_captured", "camera_unavailable"],
+    },
+    exitPhotoStatus: {
+      type: String,
+      enum: ["photo_captured", "camera_unavailable"],
+    },
     manualEntryReason: { type: String, trim: true },
     manualExitReason: { type: String, trim: true },
     visualConfirmed: { type: Boolean, default: false },
@@ -259,7 +285,9 @@ const parkingSessionSchema = new Schema<ParkingSessionDocument>(
 
 parkingSessionSchema.pre("validate", async function () {
   if (this.isNew && !this.checkInStaff) {
-    this.checkInStaff = await requireResponsibleStaffAt(this.checkInAt || new Date());
+    this.checkInStaff = await requireResponsibleStaffAt(
+      this.checkInAt || new Date(),
+    );
   }
 });
 

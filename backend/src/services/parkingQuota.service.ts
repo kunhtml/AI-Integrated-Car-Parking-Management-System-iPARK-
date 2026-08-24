@@ -1,4 +1,5 @@
 import { ParkingSlot } from "../models/ParkingSlot.js";
+import { ParkingSession } from "../models/ParkingSession.js";
 import { Subscription } from "../models/Subscription.js";
 import { Vehicle } from "../models/Vehicle.js";
 import { Zone } from "../models/Zone.js";
@@ -9,6 +10,8 @@ export type CustomerType = "member" | "guest";
 export type VehicleAccessClassification = {
   customerType: CustomerType;
   quotaType: QuotaType;
+  /** Biển số đã tồn tại trong hệ thống (đã đăng ký chủ xe) hay không. */
+  isRegistered: boolean;
   userId?: string;
   subscriptionId?: string;
   primaryVehicleId?: string;
@@ -40,7 +43,10 @@ export class ParkingQuotaError extends Error {
 }
 
 export function normalizePlate(plate: string): string {
-  return plate.trim().toUpperCase().replace(/[\s-]+/g, "");
+  return plate
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, "");
 }
 
 /** Sức chứa vận hành = số slot không ở maintenance; fallback về capacity zone. */
@@ -65,7 +71,8 @@ async function countAssigned(
   quotaType: QuotaType,
   status: "occupied" | "reserved",
 ): Promise<number> {
-  const quotaFilter: any = quotaType === "walk_in" ? { $in: ["walk_in", null] } : quotaType;
+  const quotaFilter: any =
+    quotaType === "walk_in" ? { $in: ["walk_in", null] } : quotaType;
   return ParkingSlot.countDocuments({ status, quotaType: quotaFilter });
 }
 
@@ -110,9 +117,12 @@ export async function classifyVehicleByPlate(
   plate: string,
 ): Promise<VehicleAccessClassification> {
   const normalizedPlate = normalizePlate(plate);
-  const vehicle = await Vehicle.findOne({ plate: normalizedPlate }).select("_id userId");
+  const vehicle = await Vehicle.findOne({ plate: normalizedPlate }).select(
+    "_id userId",
+  );
 
-  if (!vehicle) return { customerType: "guest", quotaType: "walk_in" };
+  if (!vehicle)
+    return { customerType: "guest", quotaType: "walk_in", isRegistered: false };
 
   const subscription = await Subscription.findOne({
     primaryVehicleId: vehicle._id,
@@ -120,11 +130,15 @@ export async function classifyVehicleByPlate(
     endDate: { $gt: new Date() },
   }).select("_id userId primaryVehicleId");
 
-  if (!subscription) return { customerType: "guest", quotaType: "walk_in" };
+  // Biển đã đăng ký nhưng không có gói hiệu lực: dùng quota vãng lai vì không có gói,
+  // song giữ cờ isRegistered=true để UI phân biệt "thành viên chưa mua gói tháng".
+  if (!subscription)
+    return { customerType: "guest", quotaType: "walk_in", isRegistered: true };
 
   return {
     customerType: "member",
     quotaType: "member",
+    isRegistered: true,
     userId: subscription.userId.toString(),
     subscriptionId: subscription._id.toString(),
     primaryVehicleId: subscription.primaryVehicleId.toString(),
@@ -136,7 +150,8 @@ export async function assertQuotaAvailable(
   quotaType: QuotaType,
 ): Promise<ParkingQuotaSummary> {
   const summary = await getParkingQuotaSummary();
-  const remaining = quotaType === "member" ? summary.memberRemaining : summary.walkInRemaining;
+  const remaining =
+    quotaType === "member" ? summary.memberRemaining : summary.walkInRemaining;
 
   if (remaining <= 0) {
     if (quotaType === "member") {
@@ -152,15 +167,22 @@ export async function assertQuotaAvailable(
   }
 
   const emptySlot = await ParkingSlot.exists({ status: "empty" });
-  if (!emptySlot) throw new ParkingQuotaError("Bãi xe đã hết slot vật lý khả dụng.", "PARKING_FULL");
+  if (!emptySlot)
+    throw new ParkingQuotaError(
+      "Bãi xe đã hết slot vật lý khả dụng.",
+      "PARKING_FULL",
+    );
   return summary;
 }
 
-export function quotaErrorResponse(error: unknown):
-  | { status: number; body: { message: string; code?: string } }
-  | null {
+export function quotaErrorResponse(
+  error: unknown,
+): { status: number; body: { message: string; code?: string } } | null {
   if (!(error instanceof ParkingQuotaError)) return null;
-  return { status: error.status, body: { message: error.message, code: error.code } };
+  return {
+    status: error.status,
+    body: { message: error.message, code: error.code },
+  };
 }
 
 export async function syncLegacySlotQuotaTypes(): Promise<void> {
@@ -179,21 +201,29 @@ export async function syncDynamicMemberSlotReservation(): Promise<void> {
   const capacity = await getOperationalCapacity();
   const effectiveSubscriptions = await countEffectiveMemberSubscriptions();
   const targetMemberSlots = Math.min(capacity, effectiveSubscriptions);
-  const memberSlots = await ParkingSlot.find({ quotaType: "member" }).sort({ slotCode: 1 });
-  const emptyMemberSlots = memberSlots.filter((slot) => slot.status === "empty");
+  const memberSlots = await ParkingSlot.find({ quotaType: "member" }).sort({
+    slotCode: 1,
+  });
+  const emptyMemberSlots = memberSlots.filter(
+    (slot) => slot.status === "empty",
+  );
   const occupiedOrReservedMemberSlots = memberSlots.filter(
     (slot) => slot.status === "occupied" || slot.status === "reserved",
   );
   const needMemberSlots = Math.max(
     0,
-    targetMemberSlots - occupiedOrReservedMemberSlots.length - emptyMemberSlots.length,
+    targetMemberSlots -
+      occupiedOrReservedMemberSlots.length -
+      emptyMemberSlots.length,
   );
 
   if (needMemberSlots > 0) {
     const candidates = await ParkingSlot.find({
       quotaType: "walk_in",
       status: "empty",
-    }).sort({ slotCode: 1 }).limit(needMemberSlots);
+    })
+      .sort({ slotCode: 1 })
+      .limit(needMemberSlots);
     for (const slot of candidates) {
       await ParkingSlot.updateOne(
         { _id: slot._id, status: "empty", quotaType: "walk_in" },
@@ -202,11 +232,16 @@ export async function syncDynamicMemberSlotReservation(): Promise<void> {
     }
   }
 
-  const refreshedMemberSlots = await ParkingSlot.find({ quotaType: "member" }).sort({ slotCode: 1 });
+  const refreshedMemberSlots = await ParkingSlot.find({
+    quotaType: "member",
+  }).sort({ slotCode: 1 });
   const memberInUse = refreshedMemberSlots.filter(
     (slot) => slot.status === "occupied" || slot.status === "reserved",
   ).length;
-  const excess = Math.max(0, refreshedMemberSlots.length - Math.max(targetMemberSlots, memberInUse));
+  const excess = Math.max(
+    0,
+    refreshedMemberSlots.length - Math.max(targetMemberSlots, memberInUse),
+  );
 
   if (excess > 0) {
     const releasable = refreshedMemberSlots
@@ -219,4 +254,75 @@ export async function syncDynamicMemberSlotReservation(): Promise<void> {
       );
     }
   }
+
+  await reconcileMemberSessionsToMemberSlots();
+}
+
+/**
+ * Dời các phiên thành viên đang nằm nhầm ở slot vãng lai về đúng slot thành viên.
+ *
+ * Nguyên nhân gốc: có trường hợp phiên được tạo với `customerType: "member"` nhưng
+ * `quotaType: "walk_in"` (ví dụ nhập thủ công khi thẻ chưa gắn đúng gói, hoặc slot
+ * thành viên chưa được bảo lưu kịp). Sau đó gói thành viên được kích hoạt /
+ * `syncDynamicMemberSlotReservation` bảo lưu slot thành viên, nhưng phiên cũ không
+ * được nhả ra nên xe thành viên vẫn bị tính vào quota vãng lai.
+ *
+ * Chỉ xử lý phiên Đang gửi, có subscription hiệu lực. Nếu tìm được slot member đang
+ * trống, nhả slot vãng lai cũ, chiếm slot member và cập nhật lại phiên.
+ */
+export async function reconcileMemberSessionsToMemberSlots(): Promise<number> {
+  const activeWalkInMemberSessions = await ParkingSession.find({
+    status: "Đang gửi",
+    quotaType: { $ne: "member" },
+    $or: [{ customerType: "member" }, { isRegisteredMember: true }],
+  }).select("_id plate slot slotId customerType").lean();
+
+  let moved = 0;
+  for (const session of activeWalkInMemberSessions) {
+    // Chỉ dời khi có gói thành viên hiệu lực (nếu không thì vẫn là khách trả phí).
+    const access = await classifyVehicleByPlate(session.plate);
+    if (access.quotaType !== "member") continue;
+
+    const memberSlot = await ParkingSlot.findOne({
+      quotaType: "member",
+      status: "empty",
+    }).sort({ slotCode: 1 });
+    if (!memberSlot) continue;
+
+    // Nhả slot vãng lai cũ (nếu có).
+    if (session.slotId) {
+      await ParkingSlot.findByIdAndUpdate(
+        session.slotId,
+        { $set: { status: "empty" }, $unset: { currentSessionId: "" } },
+      );
+    }
+
+    // Chiếm slot member.
+    await ParkingSlot.findByIdAndUpdate(memberSlot._id, {
+      $set: {
+        status: "occupied",
+        currentSessionId: session._id,
+        quotaType: "member",
+      },
+    });
+
+    // Cập nhật phiên về đúng quota + phương thức thanh toán của thành viên có gói.
+    await ParkingSession.updateOne(
+      { _id: session._id },
+      {
+        $set: {
+          quotaType: "member",
+          slot: memberSlot.slotCode,
+          slotId: memberSlot._id,
+          paymentMethod: "subscription",
+          paymentStatus: "fully_paid",
+          fee: 0,
+          paidAmount: 0,
+          discountAmount: 0,
+        },
+      },
+    );
+    moved++;
+  }
+  return moved;
 }

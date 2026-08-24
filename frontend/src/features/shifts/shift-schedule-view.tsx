@@ -1,7 +1,22 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { CalendarDays, Clock3, Users, Plus, Trash2, Edit2, CheckCircle, XCircle, ChevronLeft, ChevronRight, User, Calendar, BarChart3, Download } from "lucide-react";
+import {
+  CalendarDays,
+  Clock3,
+  Users,
+  Plus,
+  Trash2,
+  Edit2,
+  CheckCircle,
+  XCircle,
+  ChevronLeft,
+  ChevronRight,
+  User,
+  Calendar,
+  BarChart3,
+  Download,
+} from "lucide-react";
 import { useParkingApp } from "@/context/parking-app-context";
 import { apiFetch } from "@/lib/client-api";
 import type { ShiftScheduleItem, ShiftType, StaffForSchedule } from "@/types";
@@ -52,8 +67,38 @@ function isSameDay(d1: Date, d2: Date): boolean {
   );
 }
 
+function isShiftAssignable(
+  date: Date,
+  shiftType: string,
+  shiftTypes: ShiftType[],
+): boolean {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  if (d < todayStart) return false; // Quá khứ: không gán được
+  const st = shiftTypes.find((t) => t.key === shiftType);
+  if (!st) return true; // Chưa load được giờ ca -> giữ nguyên hành vi cũ
+  const [startH, startM] = st.startTime.split(":").map(Number);
+  const [endH, endM] = st.endTime.split(":").map(Number);
+  const end = new Date(date);
+  end.setHours(endH, endM, 0, 0);
+  // Ca qua đêm (end <= start) -> kết thúc vào ngày hôm sau
+  if (endH * 60 + endM <= startH * 60 + startM) end.setDate(end.getDate() + 1);
+  return new Date() < end; // Ca chưa kết thúc mới được gán
+}
 export function ShiftScheduleView() {
-  const { currentUser, shiftScheduleList, actionLog, loadSchedules, loadMySchedule, createSchedule, deleteSchedule, checkInShift, completeShiftSchedule } = useParkingApp();
+  const {
+    currentUser,
+    shiftScheduleList,
+    actionLog,
+    loadSchedules,
+    loadMySchedule,
+    createSchedule,
+    deleteSchedule,
+    checkInShift,
+    completeShiftSchedule,
+  } = useParkingApp();
 
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
@@ -65,14 +110,22 @@ export function ShiftScheduleView() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [preselectedDate, setPreselectedDate] = useState<string | null>(null);
-  const [preselectedShiftType, setPreselectedShiftType] = useState<string | null>(null);
+  const [preselectedShiftType, setPreselectedShiftType] = useState<
+    string | null
+  >(null);
   const [activeTab, setActiveTab] = useState<"schedule" | "stats">("schedule");
 
   // Stats state
   const [statsMonth, setStatsMonth] = useState(new Date().getMonth() + 1);
   const [statsYear, setStatsYear] = useState(new Date().getFullYear());
   const [staffStats, setStaffStats] = useState<StaffStats[]>([]);
-  const [statsTotals, setStatsTotals] = useState<{ total: number; completed: number; checkedIn: number; scheduled: number; cancelled: number } | null>(null);
+  const [statsTotals, setStatsTotals] = useState<{
+    total: number;
+    completed: number;
+    checkedIn: number;
+    scheduled: number;
+    cancelled: number;
+  } | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
 
   interface StaffStats {
@@ -97,7 +150,9 @@ export function ShiftScheduleView() {
         const res = await apiFetch("/shift-schedules/types");
         const data = await res.json();
         if (res.ok) setShiftTypes(data.shiftTypes);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
     loadTypes();
   }, []);
@@ -110,7 +165,9 @@ export function ShiftScheduleView() {
         const res = await apiFetch("/shift-schedules/staffs");
         const data = await res.json();
         if (res.ok) setStaffs(data.staffs);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
     loadStaffs();
   }, [isAdmin]);
@@ -123,7 +180,11 @@ export function ShiftScheduleView() {
       const fromDate = formatDate(weekDates[0]);
       const toDate = formatDate(weekDates[6]);
       if (isAdmin) {
-        await loadSchedules({ fromDate, toDate, staffId: selectedStaffId || undefined });
+        await loadSchedules({
+          fromDate,
+          toDate,
+          staffId: selectedStaffId || undefined,
+        });
       } else {
         await loadMySchedule({ fromDate, toDate });
       }
@@ -175,13 +236,17 @@ export function ShiftScheduleView() {
     async function loadStats() {
       setStatsLoading(true);
       try {
-        const res = await apiFetch(`/shift-schedules/stats?month=${statsMonth}&year=${statsYear}`);
+        const res = await apiFetch(
+          `/shift-schedules/stats?month=${statsMonth}&year=${statsYear}`,
+        );
         const data = await res.json();
         if (res.ok) {
           setStaffStats(data.stats);
           setStatsTotals(data.totals);
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       setStatsLoading(false);
     }
     loadStats();
@@ -212,6 +277,7 @@ export function ShiftScheduleView() {
     const d = new Date(date);
     d.setHours(0, 0, 0, 0);
     if (d < today) return; // Don't allow adding past shifts
+    if (!isShiftAssignable(date, shiftType, shiftTypes)) return; // Ca đã qua giờ kết thúc
     setPreselectedDate(formatDate(date));
     setPreselectedShiftType(shiftType);
     setShowAddModal(true);
@@ -240,24 +306,36 @@ export function ShiftScheduleView() {
 
   // Export CSV functions
   function exportScheduleCSV() {
-    const headers = ["Ngày", "Ca", "Nhân viên", "Email", "SĐT", "Giờ bắt đầu", "Giờ kết thúc", "Trạng thái", "Ghi chú"];
+    const headers = [
+      "Ngày",
+      "Ca",
+      "Nhân viên",
+      "Email",
+      "SĐT",
+      "Giờ bắt đầu",
+      "Giờ kết thúc",
+      "Trạng thái",
+      "Ghi chú",
+    ];
 
     const rows = shiftScheduleList.map((schedule) => {
       const date = new Date(schedule.date);
       const formattedDate = date.toLocaleDateString("vi-VN");
       const shiftLabel = SHIFT_LABELS[schedule.shiftType] || schedule.shiftType;
-      const startTime = shiftTypes.find((t) => t.key === schedule.shiftType)?.startTime || "";
-      const endTime = shiftTypes.find((t) => t.key === schedule.shiftType)?.endTime || "";
+      const startTime =
+        shiftTypes.find((t) => t.key === schedule.shiftType)?.startTime || "";
+      const endTime =
+        shiftTypes.find((t) => t.key === schedule.shiftType)?.endTime || "";
       const statusLabel =
         schedule.status === "scheduled"
           ? "Chưa điểm danh"
           : schedule.status === "checked_in"
-          ? "Đã điểm danh"
-          : schedule.status === "completed"
-          ? "Hoàn thành"
-          : schedule.status === "cancelled"
-          ? "Đã hủy"
-          : schedule.status;
+            ? "Đã điểm danh"
+            : schedule.status === "completed"
+              ? "Hoàn thành"
+              : schedule.status === "cancelled"
+                ? "Đã hủy"
+                : schedule.status;
 
       return [
         formattedDate,
@@ -274,15 +352,28 @@ export function ShiftScheduleView() {
 
     const csvContent =
       "\uFEFF" + // BOM for UTF-8
-      [headers.join(","), ...rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))].join(
-        "\n"
-      );
+      [
+        headers.join(","),
+        ...rows.map((row) =>
+          row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","),
+        ),
+      ].join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    const weekStr = weekDates[0].toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" }) + "-" + weekDates[6].toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
+    const weekStr =
+      weekDates[0].toLocaleDateString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+      }) +
+      "-" +
+      weekDates[6].toLocaleDateString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
     link.setAttribute("download", `lich-lam-viec-${weekStr}.csv`);
     link.style.visibility = "hidden";
     document.body.appendChild(link);
@@ -297,7 +388,17 @@ export function ShiftScheduleView() {
       return;
     }
 
-    const headers = ["STT", "Nhân viên", "Email", "SĐT", "Tổng ca", "Hoàn thành", "Đã check-in", "Chờ", "Hủy"];
+    const headers = [
+      "STT",
+      "Nhân viên",
+      "Email",
+      "SĐT",
+      "Tổng ca",
+      "Hoàn thành",
+      "Đã check-in",
+      "Chờ",
+      "Hủy",
+    ];
 
     const rows = staffStats.map((staff, index) => [
       index + 1,
@@ -313,19 +414,35 @@ export function ShiftScheduleView() {
 
     // Add summary row
     rows.push([]);
-    rows.push(["", "TỔNG CỘNG", "", "", statsTotals.total, statsTotals.completed, statsTotals.checkedIn, statsTotals.scheduled, statsTotals.cancelled]);
+    rows.push([
+      "",
+      "TỔNG CỘNG",
+      "",
+      "",
+      statsTotals.total,
+      statsTotals.completed,
+      statsTotals.checkedIn,
+      statsTotals.scheduled,
+      statsTotals.cancelled,
+    ]);
 
     const csvContent =
       "\uFEFF" + // BOM for UTF-8
-      [headers.join(","), ...rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))].join(
-        "\n"
-      );
+      [
+        headers.join(","),
+        ...rows.map((row) =>
+          row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","),
+        ),
+      ].join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", `thong-ke-ca-lam-viec-${statsMonth}-${statsYear}.csv`);
+    link.setAttribute(
+      "download",
+      `thong-ke-ca-lam-viec-${statsMonth}-${statsYear}.csv`,
+    );
     link.style.visibility = "hidden";
     document.body.appendChild(link);
     link.click();
@@ -358,16 +475,36 @@ export function ShiftScheduleView() {
                 >
                   <Calendar size={14} /> Lịch
                 </button>
-                <button className="small-button" onClick={() => setShowBulkModal(true)} type="button">
+                <button
+                  className="small-button"
+                  onClick={() => setShowBulkModal(true)}
+                  type="button"
+                >
                   <Calendar size={14} /> Gán tuần
                 </button>
-                <button className="small-button" onClick={() => setShowMonthModal(true)} type="button">
+                <button
+                  className="small-button"
+                  onClick={() => setShowMonthModal(true)}
+                  type="button"
+                >
                   <CalendarDays size={14} /> Gán tháng
                 </button>
-                <button className="small-button" onClick={() => { setPreselectedDate(null); setPreselectedShiftType(null); setShowAddModal(true); }} type="button">
+                <button
+                  className="small-button"
+                  onClick={() => {
+                    setPreselectedDate(null);
+                    setPreselectedShiftType(null);
+                    setShowAddModal(true);
+                  }}
+                  type="button"
+                >
                   <Plus size={14} /> Gán ca
                 </button>
-                <button className="small-button" onClick={() => setShowExportModal(true)} type="button">
+                <button
+                  className="small-button"
+                  onClick={() => setShowExportModal(true)}
+                  type="button"
+                >
                   <Download size={14} /> Xuất CSV
                 </button>
               </>
@@ -379,14 +516,31 @@ export function ShiftScheduleView() {
         {activeTab === "stats" && isAdmin && (
           <div style={{ padding: "0 0 16px 0" }}>
             {/* Stats month navigation */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-              <button className="small-button" onClick={prevStatsMonth} type="button">
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                marginBottom: 16,
+              }}
+            >
+              <button
+                className="small-button"
+                onClick={prevStatsMonth}
+                type="button"
+              >
                 <ChevronLeft size={16} />
               </button>
-              <span style={{ fontWeight: 500, minWidth: 120, textAlign: "center" }}>
+              <span
+                style={{ fontWeight: 500, minWidth: 120, textAlign: "center" }}
+              >
                 Tháng {statsMonth}/{statsYear}
               </span>
-              <button className="small-button" onClick={nextStatsMonth} type="button">
+              <button
+                className="small-button"
+                onClick={nextStatsMonth}
+                type="button"
+              >
                 <ChevronRight size={16} />
               </button>
             </div>
@@ -397,26 +551,119 @@ export function ShiftScheduleView() {
               <>
                 {/* Summary cards */}
                 {statsTotals && (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: 12, marginBottom: 20 }}>
-                    <div style={{ background: "var(--bg-secondary)", padding: 12, borderRadius: 8, textAlign: "center" }}>
-                      <div style={{ fontSize: 24, fontWeight: 700, color: "var(--primary)" }}>{statsTotals.total}</div>
-                      <div style={{ fontSize: 12, color: "var(--muted)" }}>Tổng cộng</div>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "repeat(auto-fit, minmax(100px, 1fr))",
+                      gap: 12,
+                      marginBottom: 20,
+                    }}
+                  >
+                    <div
+                      style={{
+                        background: "var(--bg-secondary)",
+                        padding: 12,
+                        borderRadius: 8,
+                        textAlign: "center",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 24,
+                          fontWeight: 700,
+                          color: "var(--primary)",
+                        }}
+                      >
+                        {statsTotals.total}
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--muted)" }}>
+                        Tổng cộng
+                      </div>
                     </div>
-                    <div style={{ background: "var(--bg-secondary)", padding: 12, borderRadius: 8, textAlign: "center" }}>
-                      <div style={{ fontSize: 24, fontWeight: 700, color: "#22c55e" }}>{statsTotals.completed}</div>
-                      <div style={{ fontSize: 12, color: "var(--muted)" }}>Hoàn thành</div>
+                    <div
+                      style={{
+                        background: "var(--bg-secondary)",
+                        padding: 12,
+                        borderRadius: 8,
+                        textAlign: "center",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 24,
+                          fontWeight: 700,
+                          color: "#22c55e",
+                        }}
+                      >
+                        {statsTotals.completed}
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--muted)" }}>
+                        Hoàn thành
+                      </div>
                     </div>
-                    <div style={{ background: "var(--bg-secondary)", padding: 12, borderRadius: 8, textAlign: "center" }}>
-                      <div style={{ fontSize: 24, fontWeight: 700, color: "#3b82f6" }}>{statsTotals.checkedIn}</div>
-                      <div style={{ fontSize: 12, color: "var(--muted)" }}>Đã check-in</div>
+                    <div
+                      style={{
+                        background: "var(--bg-secondary)",
+                        padding: 12,
+                        borderRadius: 8,
+                        textAlign: "center",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 24,
+                          fontWeight: 700,
+                          color: "#3b82f6",
+                        }}
+                      >
+                        {statsTotals.checkedIn}
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--muted)" }}>
+                        Đã check-in
+                      </div>
                     </div>
-                    <div style={{ background: "var(--bg-secondary)", padding: 12, borderRadius: 8, textAlign: "center" }}>
-                      <div style={{ fontSize: 24, fontWeight: 700, color: "#f59e0b" }}>{statsTotals.scheduled}</div>
-                      <div style={{ fontSize: 12, color: "var(--muted)" }}>Chờ</div>
+                    <div
+                      style={{
+                        background: "var(--bg-secondary)",
+                        padding: 12,
+                        borderRadius: 8,
+                        textAlign: "center",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 24,
+                          fontWeight: 700,
+                          color: "#f59e0b",
+                        }}
+                      >
+                        {statsTotals.scheduled}
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--muted)" }}>
+                        Chờ
+                      </div>
                     </div>
-                    <div style={{ background: "var(--bg-secondary)", padding: 12, borderRadius: 8, textAlign: "center" }}>
-                      <div style={{ fontSize: 24, fontWeight: 700, color: "#ef4444" }}>{statsTotals.cancelled}</div>
-                      <div style={{ fontSize: 12, color: "var(--muted)" }}>Hủy</div>
+                    <div
+                      style={{
+                        background: "var(--bg-secondary)",
+                        padding: 12,
+                        borderRadius: 8,
+                        textAlign: "center",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 24,
+                          fontWeight: 700,
+                          color: "#ef4444",
+                        }}
+                      >
+                        {statsTotals.cancelled}
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--muted)" }}>
+                        Hủy
+                      </div>
                     </div>
                   </div>
                 )}
@@ -426,45 +673,174 @@ export function ShiftScheduleView() {
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>
                     <thead>
                       <tr style={{ background: "var(--bg-secondary)" }}>
-                        <th style={{ padding: "10px 12px", textAlign: "left", borderBottom: "1px solid var(--border)" }}>Nhân viên</th>
-                        <th style={{ padding: "10px 12px", textAlign: "center", borderBottom: "1px solid var(--border)" }}>Tổng</th>
-                        <th style={{ padding: "10px 12px", textAlign: "center", borderBottom: "1px solid var(--border)", color: "#22c55e" }}>Hoàn thành</th>
-                        <th style={{ padding: "10px 12px", textAlign: "center", borderBottom: "1px solid var(--border)", color: "#3b82f6" }}>Check-in</th>
-                        <th style={{ padding: "10px 12px", textAlign: "center", borderBottom: "1px solid var(--border)", color: "#f59e0b" }}>Chờ</th>
-                        <th style={{ padding: "10px 12px", textAlign: "center", borderBottom: "1px solid var(--border)", color: "#ef4444" }}>Hủy</th>
+                        <th
+                          style={{
+                            padding: "10px 12px",
+                            textAlign: "left",
+                            borderBottom: "1px solid var(--border)",
+                          }}
+                        >
+                          Nhân viên
+                        </th>
+                        <th
+                          style={{
+                            padding: "10px 12px",
+                            textAlign: "center",
+                            borderBottom: "1px solid var(--border)",
+                          }}
+                        >
+                          Tổng
+                        </th>
+                        <th
+                          style={{
+                            padding: "10px 12px",
+                            textAlign: "center",
+                            borderBottom: "1px solid var(--border)",
+                            color: "#22c55e",
+                          }}
+                        >
+                          Hoàn thành
+                        </th>
+                        <th
+                          style={{
+                            padding: "10px 12px",
+                            textAlign: "center",
+                            borderBottom: "1px solid var(--border)",
+                            color: "#3b82f6",
+                          }}
+                        >
+                          Check-in
+                        </th>
+                        <th
+                          style={{
+                            padding: "10px 12px",
+                            textAlign: "center",
+                            borderBottom: "1px solid var(--border)",
+                            color: "#f59e0b",
+                          }}
+                        >
+                          Chờ
+                        </th>
+                        <th
+                          style={{
+                            padding: "10px 12px",
+                            textAlign: "center",
+                            borderBottom: "1px solid var(--border)",
+                            color: "#ef4444",
+                          }}
+                        >
+                          Hủy
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       {staffStats.length === 0 ? (
                         <tr>
-                          <td colSpan={6} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
+                          <td
+                            colSpan={6}
+                            style={{
+                              padding: 24,
+                              textAlign: "center",
+                              color: "var(--muted)",
+                            }}
+                          >
                             Không có dữ liệu
                           </td>
                         </tr>
                       ) : (
                         staffStats.map((staff) => (
-                          <tr key={staff.staffId} style={{ borderBottom: "1px solid var(--border)" }}>
+                          <tr
+                            key={staff.staffId}
+                            style={{ borderBottom: "1px solid var(--border)" }}
+                          >
                             <td style={{ padding: "10px 12px" }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <div style={{
-                                  width: 32, height: 32, borderRadius: "50%",
-                                  background: "var(--primary)", color: "white",
-                                  display: "flex", alignItems: "center", justifyContent: "center",
-                                  fontSize: 12, fontWeight: 600
-                                }}>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 8,
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    width: 32,
+                                    height: 32,
+                                    borderRadius: "50%",
+                                    background: "var(--primary)",
+                                    color: "white",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                  }}
+                                >
                                   {staff.name.charAt(0).toUpperCase()}
                                 </div>
                                 <div>
-                                  <div style={{ fontWeight: 500 }}>{staff.name}</div>
-                                  <div style={{ fontSize: 11, color: "var(--muted)" }}>{staff.email}</div>
+                                  <div style={{ fontWeight: 500 }}>
+                                    {staff.name}
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: 11,
+                                      color: "var(--muted)",
+                                    }}
+                                  >
+                                    {staff.email}
+                                  </div>
                                 </div>
                               </div>
                             </td>
-                            <td style={{ padding: "10px 12px", textAlign: "center", fontWeight: 600 }}>{staff.total}</td>
-                            <td style={{ padding: "10px 12px", textAlign: "center", color: "#22c55e", fontWeight: 500 }}>{staff.completed}</td>
-                            <td style={{ padding: "10px 12px", textAlign: "center", color: "#3b82f6", fontWeight: 500 }}>{staff.checkedIn}</td>
-                            <td style={{ padding: "10px 12px", textAlign: "center", color: "#f59e0b", fontWeight: 500 }}>{staff.scheduled}</td>
-                            <td style={{ padding: "10px 12px", textAlign: "center", color: "#ef4444", fontWeight: 500 }}>{staff.cancelled}</td>
+                            <td
+                              style={{
+                                padding: "10px 12px",
+                                textAlign: "center",
+                                fontWeight: 600,
+                              }}
+                            >
+                              {staff.total}
+                            </td>
+                            <td
+                              style={{
+                                padding: "10px 12px",
+                                textAlign: "center",
+                                color: "#22c55e",
+                                fontWeight: 500,
+                              }}
+                            >
+                              {staff.completed}
+                            </td>
+                            <td
+                              style={{
+                                padding: "10px 12px",
+                                textAlign: "center",
+                                color: "#3b82f6",
+                                fontWeight: 500,
+                              }}
+                            >
+                              {staff.checkedIn}
+                            </td>
+                            <td
+                              style={{
+                                padding: "10px 12px",
+                                textAlign: "center",
+                                color: "#f59e0b",
+                                fontWeight: 500,
+                              }}
+                            >
+                              {staff.scheduled}
+                            </td>
+                            <td
+                              style={{
+                                padding: "10px 12px",
+                                textAlign: "center",
+                                color: "#ef4444",
+                                fontWeight: 500,
+                              }}
+                            >
+                              {staff.cancelled}
+                            </td>
                           </tr>
                         ))
                       )}
@@ -474,8 +850,18 @@ export function ShiftScheduleView() {
 
                 {/* Export button for stats */}
                 {staffStats.length > 0 && (
-                  <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end" }}>
-                    <button className="small-button" onClick={exportStatsCSV} type="button">
+                  <div
+                    style={{
+                      marginTop: 16,
+                      display: "flex",
+                      justifyContent: "flex-end",
+                    }}
+                  >
+                    <button
+                      className="small-button"
+                      onClick={exportStatsCSV}
+                      type="button"
+                    >
                       <Download size={14} /> Xuất CSV thống kê
                     </button>
                   </div>
@@ -493,21 +879,38 @@ export function ShiftScheduleView() {
               <button className="small-button" onClick={prevWeek} type="button">
                 <ChevronLeft size={16} />
               </button>
-              <button className="small-button" onClick={goToToday} type="button">
+              <button
+                className="small-button"
+                onClick={goToToday}
+                type="button"
+              >
                 Hôm nay
               </button>
               <button className="small-button" onClick={nextWeek} type="button">
                 <ChevronRight size={16} />
               </button>
               <span style={{ marginLeft: 12, fontWeight: 500 }}>
-                {weekDates[0].toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })} —{" "}
-                {weekDates[6].toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                {weekDates[0].toLocaleDateString("vi-VN", {
+                  day: "2-digit",
+                  month: "2-digit",
+                })}{" "}
+                —{" "}
+                {weekDates[6].toLocaleDateString("vi-VN", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                })}
               </span>
               {isAdmin && (
                 <select
                   value={selectedStaffId || ""}
                   onChange={(e) => setSelectedStaffId(e.target.value || null)}
-                  style={{ marginLeft: "auto", padding: "6px 12px", borderRadius: 6, border: "1px solid var(--border)" }}
+                  style={{
+                    marginLeft: "auto",
+                    padding: "6px 12px",
+                    borderRadius: 6,
+                    border: "1px solid var(--border)",
+                  }}
                 >
                   <option value="">Tất cả nhân viên</option>
                   {staffs.map((s) => (
@@ -521,14 +924,38 @@ export function ShiftScheduleView() {
 
             {isLoading && <p className="muted-cell">Đang tải...</p>}
 
-            {actionLog && <p className="muted-cell" style={{ marginBottom: 12, color: "var(--success)" }}>{actionLog}</p>}
+            {actionLog && (
+              <p
+                className="muted-cell"
+                style={{ marginBottom: 12, color: "var(--success)" }}
+              >
+                {actionLog}
+              </p>
+            )}
 
             {/* Week view - Timetable style */}
             <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", minWidth: 800 }}>
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  tableLayout: "fixed",
+                  minWidth: 800,
+                }}
+              >
                 <thead>
                   <tr>
-                    <th style={{ padding: 12, textAlign: "left", borderBottom: "2px solid var(--border)", background: "var(--bg-secondary)", width: 120 }}>Ca</th>
+                    <th
+                      style={{
+                        padding: 12,
+                        textAlign: "left",
+                        borderBottom: "2px solid var(--border)",
+                        background: "var(--bg-secondary)",
+                        width: 120,
+                      }}
+                    >
+                      Ca
+                    </th>
                     {weekDates.map((date, i) => (
                       <th
                         key={i}
@@ -536,158 +963,290 @@ export function ShiftScheduleView() {
                           padding: 12,
                           textAlign: "center",
                           borderBottom: "2px solid var(--border)",
-                          background: isSameDay(date, new Date()) ? "rgba(37, 99, 235, 0.1)" : "var(--bg-secondary)",
-                          color: isSameDay(date, new Date()) ? "var(--primary)" : "inherit",
+                          background: isSameDay(date, new Date())
+                            ? "rgba(37, 99, 235, 0.1)"
+                            : "var(--bg-secondary)",
+                          color: isSameDay(date, new Date())
+                            ? "var(--primary)"
+                            : "inherit",
                           fontWeight: isSameDay(date, new Date()) ? 700 : 400,
                         }}
                       >
                         <div>{DAYS_OF_WEEK[i]}</div>
-                        <div style={{ fontSize: 12, opacity: 0.7 }}>{date.getDate()}/{date.getMonth() + 1}</div>
+                        <div style={{ fontSize: 12, opacity: 0.7 }}>
+                          {date.getDate()}/{date.getMonth() + 1}
+                        </div>
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {["morning", "afternoon", "evening", "night"].map((shiftType) => (
-                    <tr key={shiftType}>
-                      <td style={{ padding: 12, borderBottom: "1px solid var(--border)", verticalAlign: "top" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {["morning", "afternoon", "evening", "night"].map(
+                    (shiftType) => (
+                      <tr key={shiftType}>
+                        <td
+                          style={{
+                            padding: 12,
+                            borderBottom: "1px solid var(--border)",
+                            verticalAlign: "top",
+                          }}
+                        >
                           <div
                             style={{
-                              width: 12,
-                              height: 12,
-                              borderRadius: "50%",
-                              background: SHIFT_COLORS[shiftType],
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
                             }}
-                          />
-                          <div>
-                            <div style={{ fontWeight: 500 }}>{SHIFT_LABELS[shiftType]}</div>
-                            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                              {shiftTypes.find((t) => t.key === shiftType)?.startTime || "—"} —{" "}
-                              {shiftTypes.find((t) => t.key === shiftType)?.endTime || "—"}
+                          >
+                            <div
+                              style={{
+                                width: 12,
+                                height: 12,
+                                borderRadius: "50%",
+                                background: SHIFT_COLORS[shiftType],
+                              }}
+                            />
+                            <div>
+                              <div style={{ fontWeight: 500 }}>
+                                {SHIFT_LABELS[shiftType]}
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: 11,
+                                  color: "var(--text-muted)",
+                                }}
+                              >
+                                {shiftTypes.find((t) => t.key === shiftType)
+                                  ?.startTime || "—"}{" "}
+                                —{" "}
+                                {shiftTypes.find((t) => t.key === shiftType)
+                                  ?.endTime || "—"}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </td>
-                      {weekDates.map((date, i) => {
-                        const cellKey = `${formatDate(date)}_${shiftType}`;
-                        const cellSchedules = schedulesByDateAndShift[cellKey] || [];
-                        return (
-                          <td
-                            key={i}
-                            style={{
-                              padding: 4,
-                              borderBottom: "1px solid var(--border)",
-                              borderLeft: "1px solid var(--border)",
-                              minHeight: 90,
-                              overflowWrap: "anywhere",
-                              verticalAlign: "top",
-                              background: isSameDay(date, new Date()) ? "rgba(37, 99, 235, 0.05)" : "transparent",
-                              cursor: isAdmin && date >= new Date(new Date().setHours(0,0,0,0)) ? "pointer" : "default",
-                            }}
-                            onClick={() => handleCellClick(date, shiftType)}
-                          >
-                            {cellSchedules.length === 0 ? (
-                              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", minHeight: 82 }}>
-                                {isAdmin && date >= new Date(new Date().setHours(0,0,0,0)) && (
-                                  <div style={{ color: "var(--text-muted)", fontSize: 11, textAlign: "center", padding: 8, border: "1px dashed var(--border)", borderRadius: 6, width: "100%" }}>
-                                    <Plus size={14} style={{ marginBottom: 2 }} />
-                                    <div>Click để gán</div>
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                                {cellSchedules.map((schedule) => (
-                                  <div
-                                    key={schedule.id}
-                                    style={{
-                                      padding: "6px 8px",
-                                      borderRadius: 6,
-                                      background: SHIFT_COLORS[schedule.shiftType] + "25",
-                                      borderLeft: `3px solid ${SHIFT_COLORS[schedule.shiftType]}`,
-                                      fontSize: 12,
-                                      position: "relative",
-                                    }}
-                                  >
-                                    <div style={{ fontWeight: 500, marginBottom: 2 }}>
-                                      {schedule.staffName || "NV"}
-                                    </div>
-                                    {schedule.staffPhone && (
-                                      <div style={{ fontSize: 10, opacity: 0.7 }}>{schedule.staffPhone}</div>
-                                    )}
-                                    <div style={{ marginTop: 4, display: "flex", gap: 4, flexWrap: "wrap" }}>
-                                      <span
-                                        className={`badge ${
-                                          schedule.status === "scheduled"
-                                            ? "warning"
-                                            : schedule.status === "checked_in"
-                                            ? "info"
-                                            : schedule.status === "completed"
-                                            ? "success"
-                                            : "muted"
-                                        }`}
-                                        style={{ fontSize: 10 }}
+                        </td>
+                        {weekDates.map((date, i) => {
+                          const cellKey = `${formatDate(date)}_${shiftType}`;
+                          const cellSchedules =
+                            schedulesByDateAndShift[cellKey] || [];
+                          return (
+                            <td
+                              key={i}
+                              style={{
+                                padding: 4,
+                                borderBottom: "1px solid var(--border)",
+                                borderLeft: "1px solid var(--border)",
+                                minHeight: 90,
+                                overflowWrap: "anywhere",
+                                verticalAlign: "top",
+                                background: isSameDay(date, new Date())
+                                  ? "rgba(37, 99, 235, 0.05)"
+                                  : "transparent",
+                                cursor:
+                                  isAdmin &&
+                                  isShiftAssignable(date, shiftType, shiftTypes)
+                                    ? "pointer"
+                                    : "default",
+                              }}
+                              onClick={() => handleCellClick(date, shiftType)}
+                            >
+                              {cellSchedules.length === 0 ? (
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    height: "100%",
+                                    minHeight: 82,
+                                  }}
+                                >
+                                  {isAdmin &&
+                                    isShiftAssignable(
+                                      date,
+                                      shiftType,
+                                      shiftTypes,
+                                    ) && (
+                                      <div
+                                        style={{
+                                          color: "var(--text-muted)",
+                                          fontSize: 11,
+                                          textAlign: "center",
+                                          padding: 8,
+                                          border: "1px dashed var(--border)",
+                                          borderRadius: 6,
+                                          width: "100%",
+                                        }}
                                       >
-                                        {schedule.status === "scheduled"
-                                          ? "Chưa điểm danh"
-                                          : schedule.status === "checked_in"
-                                          ? "Đã điểm danh"
-                                          : schedule.status === "completed"
-                                          ? "Hoàn thành"
-                                          : "Đã hủy"}
-                                      </span>
+                                        <Plus
+                                          size={14}
+                                          style={{ marginBottom: 2 }}
+                                        />
+                                        <div>Click để gán</div>
+                                      </div>
+                                    )}
+                                </div>
+                              ) : (
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: 4,
+                                  }}
+                                >
+                                  {cellSchedules.map((schedule) => (
+                                    <div
+                                      key={schedule.id}
+                                      style={{
+                                        padding: "6px 8px",
+                                        borderRadius: 6,
+                                        background:
+                                          SHIFT_COLORS[schedule.shiftType] +
+                                          "25",
+                                        borderLeft: `3px solid ${SHIFT_COLORS[schedule.shiftType]}`,
+                                        fontSize: 12,
+                                        position: "relative",
+                                      }}
+                                    >
+                                      <div
+                                        style={{
+                                          fontWeight: 500,
+                                          marginBottom: 2,
+                                        }}
+                                      >
+                                        {schedule.staffName || "NV"}
+                                      </div>
+                                      {schedule.staffPhone && (
+                                        <div
+                                          style={{ fontSize: 10, opacity: 0.7 }}
+                                        >
+                                          {schedule.staffPhone}
+                                        </div>
+                                      )}
+                                      <div
+                                        style={{
+                                          marginTop: 4,
+                                          display: "flex",
+                                          gap: 4,
+                                          flexWrap: "wrap",
+                                        }}
+                                      >
+                                        <span
+                                          className={`badge ${
+                                            schedule.status === "scheduled"
+                                              ? "warning"
+                                              : schedule.status === "checked_in"
+                                                ? "info"
+                                                : schedule.status ===
+                                                    "completed"
+                                                  ? "success"
+                                                  : "muted"
+                                          }`}
+                                          style={{ fontSize: 10 }}
+                                        >
+                                          {schedule.status === "scheduled"
+                                            ? "Chưa điểm danh"
+                                            : schedule.status === "checked_in"
+                                              ? "Đã điểm danh"
+                                              : schedule.status === "completed"
+                                                ? "Hoàn thành"
+                                                : "Đã hủy"}
+                                        </span>
+                                      </div>
+                                      <div
+                                        style={{
+                                          marginTop: 6,
+                                          display: "flex",
+                                          gap: 4,
+                                        }}
+                                      >
+                                        {schedule.status === "scheduled" && (
+                                          <button
+                                            className="small-button"
+                                            style={{
+                                              fontSize: 10,
+                                              padding: "2px 6px",
+                                            }}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleCheckIn(schedule.id);
+                                            }}
+                                            type="button"
+                                          >
+                                            Điểm danh
+                                          </button>
+                                        )}
+                                        {schedule.status === "checked_in" && (
+                                          <button
+                                            className="small-button"
+                                            style={{
+                                              fontSize: 10,
+                                              padding: "2px 6px",
+                                              background: "var(--success)",
+                                              color: "white",
+                                            }}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleComplete(schedule.id);
+                                            }}
+                                            type="button"
+                                          >
+                                            Hoàn thành
+                                          </button>
+                                        )}
+                                        {isAdmin && (
+                                          <button
+                                            className="small-button"
+                                            style={{
+                                              fontSize: 10,
+                                              padding: "2px 6px",
+                                              color: "var(--danger)",
+                                            }}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleDelete(schedule.id);
+                                            }}
+                                            type="button"
+                                          >
+                                            <Trash2 size={10} />
+                                          </button>
+                                        )}
+                                      </div>
                                     </div>
-                                    <div style={{ marginTop: 6, display: "flex", gap: 4 }}>
-                                      {schedule.status === "scheduled" && (
-                                        <button
-                                          className="small-button"
-                                          style={{ fontSize: 10, padding: "2px 6px" }}
-                                          onClick={(e) => { e.stopPropagation(); handleCheckIn(schedule.id); }}
-                                          type="button"
-                                        >
-                                          Điểm danh
-                                        </button>
-                                      )}
-                                      {schedule.status === "checked_in" && (
-                                        <button
-                                          className="small-button"
-                                          style={{ fontSize: 10, padding: "2px 6px", background: "var(--success)", color: "white" }}
-                                          onClick={(e) => { e.stopPropagation(); handleComplete(schedule.id); }}
-                                          type="button"
-                                        >
-                                          Hoàn thành
-                                        </button>
-                                      )}
-                                      {isAdmin && (
-                                        <button
-                                          className="small-button"
-                                          style={{ fontSize: 10, padding: "2px 6px", color: "var(--danger)" }}
-                                          onClick={(e) => { e.stopPropagation(); handleDelete(schedule.id); }}
-                                          type="button"
-                                        >
-                                          <Trash2 size={10} />
-                                        </button>
-                                      )}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
+                                  ))}
+                                </div>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ),
+                  )}
                 </tbody>
               </table>
             </div>
 
             {/* Legend */}
-            <div style={{ marginTop: 16, display: "flex", gap: 16, flexWrap: "wrap" }}>
+            <div
+              style={{
+                marginTop: 16,
+                display: "flex",
+                gap: 16,
+                flexWrap: "wrap",
+              }}
+            >
               {Object.entries(SHIFT_LABELS).map(([key, label]) => (
-                <div key={key} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <div style={{ width: 12, height: 12, borderRadius: "50%", background: SHIFT_COLORS[key] }} />
+                <div
+                  key={key}
+                  style={{ display: "flex", alignItems: "center", gap: 6 }}
+                >
+                  <div
+                    style={{
+                      width: 12,
+                      height: 12,
+                      borderRadius: "50%",
+                      background: SHIFT_COLORS[key],
+                    }}
+                  />
                   <span style={{ fontSize: 12 }}>{label}</span>
                 </div>
               ))}
@@ -695,8 +1254,18 @@ export function ShiftScheduleView() {
 
             {/* Export button for schedule */}
             {shiftScheduleList.length > 0 && (
-              <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end" }}>
-                <button className="small-button" onClick={exportScheduleCSV} type="button">
+              <div
+                style={{
+                  marginTop: 16,
+                  display: "flex",
+                  justifyContent: "flex-end",
+                }}
+              >
+                <button
+                  className="small-button"
+                  onClick={exportScheduleCSV}
+                  type="button"
+                >
                   <Download size={14} /> Xuất CSV lịch tuần
                 </button>
               </div>
@@ -711,8 +1280,18 @@ export function ShiftScheduleView() {
           staffs={staffs}
           shiftTypes={shiftTypes}
           defaultDate={preselectedDate || formatDate(weekDates[0])}
-          defaultShiftType={preselectedShiftType as "morning" | "afternoon" | "evening" | "night" || "morning"}
-          onClose={() => { setShowAddModal(false); setPreselectedDate(null); setPreselectedShiftType(null); }}
+          defaultShiftType={
+            (preselectedShiftType as
+              | "morning"
+              | "afternoon"
+              | "evening"
+              | "night") || "morning"
+          }
+          onClose={() => {
+            setShowAddModal(false);
+            setPreselectedDate(null);
+            setPreselectedShiftType(null);
+          }}
           onAdd={async (data) => {
             try {
               await createSchedule(data);
@@ -767,7 +1346,9 @@ export function ShiftScheduleView() {
           onClose={() => setShowExportModal(false)}
           onExport={async (fromDate, toDate, staffId) => {
             try {
-              const res = await apiFetch(`/shift-schedules?fromDate=${fromDate}&toDate=${toDate}${staffId ? `&staffId=${staffId}` : ""}`);
+              const res = await apiFetch(
+                `/shift-schedules?fromDate=${fromDate}&toDate=${toDate}${staffId ? `&staffId=${staffId}` : ""}`,
+              );
               const data = await res.json();
               if (res.ok && data.schedules) {
                 exportCSVByData(data.schedules, fromDate, toDate);
@@ -810,7 +1391,9 @@ function AddScheduleModal({
 }) {
   const [staffId, setStaffId] = useState("");
   const [date, setDate] = useState(defaultDate);
-  const [shiftType, setShiftType] = useState<"morning" | "afternoon" | "evening" | "night">(defaultShiftType);
+  const [shiftType, setShiftType] = useState<
+    "morning" | "afternoon" | "evening" | "night"
+  >(defaultShiftType);
   const [startTime, setStartTime] = useState("06:00");
   const [endTime, setEndTime] = useState("14:00");
   const [note, setNote] = useState("");
@@ -848,7 +1431,14 @@ function AddScheduleModal({
     }
     setIsSubmitting(true);
     try {
-      await onAdd({ staffId, date, shiftType, startTime, endTime, note: note || undefined });
+      await onAdd({
+        staffId,
+        date,
+        shiftType,
+        startTime,
+        endTime,
+        note: note || undefined,
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -879,7 +1469,14 @@ function AddScheduleModal({
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 20,
+          }}
+        >
           <h3>Gán ca làm việc</h3>
           <button className="small-button" onClick={onClose} type="button">
             <XCircle size={18} />
@@ -889,7 +1486,11 @@ function AddScheduleModal({
         <form onSubmit={handleSubmit} className="stack-form">
           <label>
             Nhân viên *
-            <select value={staffId} onChange={(e) => setStaffId(e.target.value)} required>
+            <select
+              value={staffId}
+              onChange={(e) => setStaffId(e.target.value)}
+              required
+            >
               <option value="">— Chọn nhân viên —</option>
               {staffs.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -909,12 +1510,20 @@ function AddScheduleModal({
               required
               style={{ borderColor: dateError ? "var(--danger)" : undefined }}
             />
-            {dateError && <span style={{ color: "var(--danger)", fontSize: 12 }}>{dateError}</span>}
+            {dateError && (
+              <span style={{ color: "var(--danger)", fontSize: 12 }}>
+                {dateError}
+              </span>
+            )}
           </label>
 
           <label>
             Ca làm việc *
-            <select value={shiftType} onChange={(e) => setShiftType(e.target.value as typeof shiftType)} required>
+            <select
+              value={shiftType}
+              onChange={(e) => setShiftType(e.target.value as typeof shiftType)}
+              required
+            >
               {shiftTypes.map((t) => (
                 <option key={t.key} value={t.key}>
                   {t.label} ({t.startTime} — {t.endTime})
@@ -923,14 +1532,24 @@ function AddScheduleModal({
             </select>
           </label>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div
+            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}
+          >
             <label>
               Giờ bắt đầu
-              <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+              <input
+                type="time"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+              />
             </label>
             <label>
               Giờ kết thúc
-              <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+              <input
+                type="time"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+              />
             </label>
           </div>
 
@@ -945,7 +1564,11 @@ function AddScheduleModal({
           </label>
 
           <div className="inline-actions" style={{ marginTop: 8 }}>
-            <button className="full-button" type="submit" disabled={isSubmitting || !!dateError}>
+            <button
+              className="full-button"
+              type="submit"
+              disabled={isSubmitting || !!dateError}
+            >
               {isSubmitting ? "Đang lưu..." : "Gán ca"}
             </button>
             <button className="small-button" onClick={onClose} type="button">
@@ -980,7 +1603,9 @@ function BulkAssignModal({
   }) => Promise<void>;
 }) {
   const [staffId, setStaffId] = useState("");
-  const [shiftType, setShiftType] = useState<"morning" | "afternoon" | "evening" | "night">("morning");
+  const [shiftType, setShiftType] = useState<
+    "morning" | "afternoon" | "evening" | "night"
+  >("morning");
   const [startTime, setStartTime] = useState("06:00");
   const [endTime, setEndTime] = useState("14:00");
   const [note, setNote] = useState("");
@@ -999,7 +1624,9 @@ function BulkAssignModal({
 
   // Get indices of future dates
   const futureIndices = futureWeekDates.map((futureDate) => {
-    return weekDates.findIndex((d) => d.toDateString() === futureDate.toDateString());
+    return weekDates.findIndex(
+      (d) => d.toDateString() === futureDate.toDateString(),
+    );
   });
 
   useEffect(() => {
@@ -1017,7 +1644,7 @@ function BulkAssignModal({
     if (d < today) return; // Prevent selecting past dates
 
     setSelectedDays((prev) =>
-      prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index]
+      prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index],
     );
   }
 
@@ -1035,7 +1662,14 @@ function BulkAssignModal({
     try {
       for (const dayIndex of selectedDays) {
         const date = formatDate(weekDates[dayIndex]);
-        await onAdd({ staffId, date, shiftType, startTime, endTime, note: note || undefined });
+        await onAdd({
+          staffId,
+          date,
+          shiftType,
+          startTime,
+          endTime,
+          note: note || undefined,
+        });
       }
       onClose();
     } catch (e) {
@@ -1070,7 +1704,14 @@ function BulkAssignModal({
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 20,
+          }}
+        >
           <h3>Gán ca hàng tuần</h3>
           <button className="small-button" onClick={onClose} type="button">
             <XCircle size={18} />
@@ -1080,7 +1721,11 @@ function BulkAssignModal({
         <form onSubmit={handleSubmit} className="stack-form">
           <label>
             Nhân viên *
-            <select value={staffId} onChange={(e) => setStaffId(e.target.value)} required>
+            <select
+              value={staffId}
+              onChange={(e) => setStaffId(e.target.value)}
+              required
+            >
               <option value="">— Chọn nhân viên —</option>
               {staffs.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -1092,7 +1737,14 @@ function BulkAssignModal({
 
           <label>
             Chọn ngày trong tuần *
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                flexWrap: "wrap",
+                marginTop: 8,
+              }}
+            >
               {weekDates.map((date, i) => {
                 const d = new Date(date);
                 d.setHours(0, 0, 0, 0);
@@ -1108,8 +1760,16 @@ function BulkAssignModal({
                       padding: "8px 12px",
                       borderRadius: 6,
                       border: `1px solid ${isPast ? "var(--border)" : isSelected ? "var(--primary)" : "var(--border)"}`,
-                      background: isSelected ? "var(--primary)" : isPast ? "var(--bg-secondary)" : "transparent",
-                      color: isSelected ? "white" : isPast ? "var(--muted)" : "inherit",
+                      background: isSelected
+                        ? "var(--primary)"
+                        : isPast
+                          ? "var(--bg-secondary)"
+                          : "transparent",
+                      color: isSelected
+                        ? "white"
+                        : isPast
+                          ? "var(--muted)"
+                          : "inherit",
                       cursor: isPast ? "not-allowed" : "pointer",
                       fontSize: 12,
                       opacity: isPast ? 0.5 : 1,
@@ -1117,20 +1777,35 @@ function BulkAssignModal({
                   >
                     {DAYS_OF_WEEK[i]}
                     <br />
-                    <span style={{ fontSize: 10 }}>{date.getDate()}/{date.getMonth() + 1}</span>
-                    {isPast && <div style={{ fontSize: 9, marginTop: 2 }}>Đã qua</div>}
+                    <span style={{ fontSize: 10 }}>
+                      {date.getDate()}/{date.getMonth() + 1}
+                    </span>
+                    {isPast && (
+                      <div style={{ fontSize: 9, marginTop: 2 }}>Đã qua</div>
+                    )}
                   </button>
                 );
               })}
             </div>
-            <span style={{ fontSize: 12, color: "var(--muted)", marginTop: 4, display: "block" }}>
+            <span
+              style={{
+                fontSize: 12,
+                color: "var(--muted)",
+                marginTop: 4,
+                display: "block",
+              }}
+            >
               Chỉ hiển thị ngày từ hôm nay trở đi
             </span>
           </label>
 
           <label>
             Ca làm việc *
-            <select value={shiftType} onChange={(e) => setShiftType(e.target.value as typeof shiftType)} required>
+            <select
+              value={shiftType}
+              onChange={(e) => setShiftType(e.target.value as typeof shiftType)}
+              required
+            >
               {shiftTypes.map((t) => (
                 <option key={t.key} value={t.key}>
                   {t.label} ({t.startTime} — {t.endTime})
@@ -1139,14 +1814,24 @@ function BulkAssignModal({
             </select>
           </label>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div
+            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}
+          >
             <label>
               Giờ bắt đầu
-              <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+              <input
+                type="time"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+              />
             </label>
             <label>
               Giờ kết thúc
-              <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+              <input
+                type="time"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+              />
             </label>
           </div>
 
@@ -1160,14 +1845,26 @@ function BulkAssignModal({
             />
           </label>
 
-          <div style={{ background: "var(--bg-secondary)", padding: 12, borderRadius: 8, marginTop: 8 }}>
+          <div
+            style={{
+              background: "var(--bg-secondary)",
+              padding: 12,
+              borderRadius: 8,
+              marginTop: 8,
+            }}
+          >
             <p style={{ margin: 0, fontSize: 13 }}>
-              <strong>Tổng cộng:</strong> {selectedDays.length} ngày × 1 ca = <strong>{selectedDays.length} lịch</strong>
+              <strong>Tổng cộng:</strong> {selectedDays.length} ngày × 1 ca ={" "}
+              <strong>{selectedDays.length} lịch</strong>
             </p>
           </div>
 
           <div className="inline-actions" style={{ marginTop: 8 }}>
-            <button className="full-button" type="submit" disabled={isSubmitting}>
+            <button
+              className="full-button"
+              type="submit"
+              disabled={isSubmitting}
+            >
               {isSubmitting ? "Đang lưu..." : `Gán ${selectedDays.length} ca`}
             </button>
             <button className="small-button" onClick={onClose} type="button">
@@ -1181,8 +1878,23 @@ function BulkAssignModal({
 }
 
 // Helper function to export CSV from data
-function exportCSVByData(schedules: ShiftScheduleItem[], fromDate: string, toDate: string) {
-  const headers = ["STT", "Ngày", "Ca", "Nhân viên", "Email", "SĐT", "Giờ bắt đầu", "Giờ kết thúc", "Trạng thái", "Ghi chú"];
+function exportCSVByData(
+  schedules: ShiftScheduleItem[],
+  fromDate: string,
+  toDate: string,
+) {
+  const headers = [
+    "STT",
+    "Ngày",
+    "Ca",
+    "Nhân viên",
+    "Email",
+    "SĐT",
+    "Giờ bắt đầu",
+    "Giờ kết thúc",
+    "Trạng thái",
+    "Ghi chú",
+  ];
 
   const SHIFT_LABELS_LOCAL: Record<string, string> = {
     morning: "Ca Sáng",
@@ -1194,17 +1906,18 @@ function exportCSVByData(schedules: ShiftScheduleItem[], fromDate: string, toDat
   const rows = schedules.map((schedule, index) => {
     const date = new Date(schedule.date);
     const formattedDate = date.toLocaleDateString("vi-VN");
-    const shiftLabel = SHIFT_LABELS_LOCAL[schedule.shiftType] || schedule.shiftType;
+    const shiftLabel =
+      SHIFT_LABELS_LOCAL[schedule.shiftType] || schedule.shiftType;
     const statusLabel =
       schedule.status === "scheduled"
         ? "Chưa điểm danh"
         : schedule.status === "checked_in"
-        ? "Đã điểm danh"
-        : schedule.status === "completed"
-        ? "Hoàn thành"
-        : schedule.status === "cancelled"
-        ? "Đã hủy"
-        : schedule.status;
+          ? "Đã điểm danh"
+          : schedule.status === "completed"
+            ? "Hoàn thành"
+            : schedule.status === "cancelled"
+              ? "Đã hủy"
+              : schedule.status;
 
     return [
       index + 1,
@@ -1222,7 +1935,12 @@ function exportCSVByData(schedules: ShiftScheduleItem[], fromDate: string, toDat
 
   const csvContent =
     "\uFEFF" + // BOM for UTF-8
-    [headers.join(","), ...rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))].join("\n");
+    [
+      headers.join(","),
+      ...rows.map((row) =>
+        row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","),
+      ),
+    ].join("\n");
 
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
   const link = document.createElement("a");
@@ -1243,7 +1961,11 @@ function ExportCSVModal({
   staffs,
 }: {
   onClose: () => void;
-  onExport: (fromDate: string, toDate: string, staffId: string | null) => Promise<void>;
+  onExport: (
+    fromDate: string,
+    toDate: string,
+    staffId: string | null,
+  ) => Promise<void>;
   staffs: StaffForSchedule[];
 }) {
   const [fromDate, setFromDate] = useState(() => {
@@ -1251,7 +1973,9 @@ function ExportCSVModal({
     d.setDate(1);
     return d.toISOString().split("T")[0];
   });
-  const [toDate, setToDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [toDate, setToDate] = useState(
+    () => new Date().toISOString().split("T")[0],
+  );
   const [selectedStaffId, setSelectedStaffId] = useState<string>("");
   const [isExporting, setIsExporting] = useState(false);
 
@@ -1295,7 +2019,14 @@ function ExportCSVModal({
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 20,
+          }}
+        >
           <h3>Xuất báo cáo lịch làm việc</h3>
           <button className="small-button" onClick={onClose} type="button">
             <XCircle size={18} />
@@ -1323,7 +2054,10 @@ function ExportCSVModal({
 
           <label>
             Nhân viên (để trống = tất cả)
-            <select value={selectedStaffId} onChange={(e) => setSelectedStaffId(e.target.value)}>
+            <select
+              value={selectedStaffId}
+              onChange={(e) => setSelectedStaffId(e.target.value)}
+            >
               <option value="">— Tất cả nhân viên —</option>
               {staffs.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -1333,14 +2067,26 @@ function ExportCSVModal({
             </select>
           </label>
 
-          <div style={{ background: "var(--bg-secondary)", padding: 12, borderRadius: 8 }}>
+          <div
+            style={{
+              background: "var(--bg-secondary)",
+              padding: 12,
+              borderRadius: 8,
+            }}
+          >
             <p style={{ margin: 0, fontSize: 13, color: "var(--muted)" }}>
-              Xuất file CSV chứa danh sách lịch làm việc trong khoảng thời gian đã chọn. File có thể mở bằng Excel hoặc Google Sheets.
+              Xuất file CSV chứa danh sách lịch làm việc trong khoảng thời gian
+              đã chọn. File có thể mở bằng Excel hoặc Google Sheets.
             </p>
           </div>
 
           <div className="inline-actions" style={{ marginTop: 8 }}>
-            <button className="full-button" onClick={handleExport} disabled={isExporting} type="button">
+            <button
+              className="full-button"
+              onClick={handleExport}
+              disabled={isExporting}
+              type="button"
+            >
               {isExporting ? "Đang xuất..." : "Xuất CSV"}
             </button>
             <button className="small-button" onClick={onClose} type="button">
@@ -1363,20 +2109,24 @@ function MonthAssignModal({
   staffs: StaffForSchedule[];
   shiftTypes: ShiftType[];
   onClose: () => void;
-  onAdd: (data: Array<{
-    staffId: string;
-    date: string;
-    shiftType: "morning" | "afternoon" | "evening" | "night";
-    startTime: string;
-    endTime: string;
-    note?: string;
-  }>) => Promise<void>;
+  onAdd: (
+    data: Array<{
+      staffId: string;
+      date: string;
+      shiftType: "morning" | "afternoon" | "evening" | "night";
+      startTime: string;
+      endTime: string;
+      note?: string;
+    }>,
+  ) => Promise<void>;
 }) {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const [staffId, setStaffId] = useState("");
-  const [shiftType, setShiftType] = useState<"morning" | "afternoon" | "evening" | "night">("morning");
+  const [shiftType, setShiftType] = useState<
+    "morning" | "afternoon" | "evening" | "night"
+  >("morning");
   const [startTime, setStartTime] = useState("06:00");
   const [endTime, setEndTime] = useState("14:00");
   const [note, setNote] = useState("");
@@ -1422,7 +2172,7 @@ function MonthAssignModal({
   function toggleDay(day: number) {
     if (isPastDay(day)) return;
     setSelectedDays((prev) =>
-      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day],
     );
   }
 
@@ -1533,7 +2283,14 @@ function MonthAssignModal({
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 20,
+          }}
+        >
           <h3>Gán ca hàng tháng</h3>
           <button className="small-button" onClick={onClose} type="button">
             <XCircle size={18} />
@@ -1542,11 +2299,26 @@ function MonthAssignModal({
 
         <form onSubmit={handleSubmit} className="stack-form">
           {/* Month selector */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center", marginBottom: 8 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              justifyContent: "center",
+              marginBottom: 8,
+            }}
+          >
             <button className="small-button" onClick={prevMonth} type="button">
               <ChevronLeft size={16} />
             </button>
-            <span style={{ fontWeight: 600, minWidth: 140, textAlign: "center", fontSize: 16 }}>
+            <span
+              style={{
+                fontWeight: 600,
+                minWidth: 140,
+                textAlign: "center",
+                fontSize: 16,
+              }}
+            >
               Tháng {month}/{year}
             </span>
             <button className="small-button" onClick={nextMonth} type="button">
@@ -1559,16 +2331,38 @@ function MonthAssignModal({
             Chọn ngày trong tháng *
             <div style={{ marginTop: 8 }}>
               {/* Weekday headers */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginBottom: 4 }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(7, 1fr)",
+                  gap: 4,
+                  marginBottom: 4,
+                }}
+              >
                 {DAYS_OF_WEEK.map((day) => (
-                  <div key={day} style={{ textAlign: "center", fontSize: 11, fontWeight: 600, color: "var(--muted)", padding: "4px 0" }}>
+                  <div
+                    key={day}
+                    style={{
+                      textAlign: "center",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: "var(--muted)",
+                      padding: "4px 0",
+                    }}
+                  >
                     {day}
                   </div>
                 ))}
               </div>
 
               {/* Calendar grid */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(7, 1fr)",
+                  gap: 4,
+                }}
+              >
                 {/* Empty cells for days before 1st */}
                 {Array.from({ length: firstDayIndex }).map((_, i) => (
                   <div key={`empty-${i}`} />
@@ -1593,17 +2387,17 @@ function MonthAssignModal({
                         background: selected
                           ? "var(--primary)"
                           : past
-                          ? "var(--bg-secondary)"
-                          : weekend
-                          ? "rgba(239, 68, 68, 0.05)"
-                          : "transparent",
+                            ? "var(--bg-secondary)"
+                            : weekend
+                              ? "rgba(239, 68, 68, 0.05)"
+                              : "transparent",
                         color: selected
                           ? "white"
                           : past
-                          ? "var(--muted)"
-                          : weekend
-                          ? "#ef4444"
-                          : "inherit",
+                            ? "var(--muted)"
+                            : weekend
+                              ? "#ef4444"
+                              : "inherit",
                         cursor: past ? "not-allowed" : "pointer",
                         fontSize: 13,
                         fontWeight: selected ? 600 : 400,
@@ -1616,25 +2410,55 @@ function MonthAssignModal({
                       }}
                     >
                       <span>{day}</span>
-                      {weekend && !selected && <span style={{ fontSize: 8, color: "#ef4444" }}>T7/CN</span>}
+                      {weekend && !selected && (
+                        <span style={{ fontSize: 8, color: "#ef4444" }}>
+                          T7/CN
+                        </span>
+                      )}
                     </button>
                   );
                 })}
               </div>
             </div>
-
             {/* Quick select buttons */}
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
-              <button type="button" className="small-button" onClick={selectWeekdays} style={{ fontSize: 11 }}>
+            <div
+              style={{
+                display: "flex",
+                gap: 6,
+                flexWrap: "wrap",
+                marginTop: 8,
+              }}
+            >
+              <button
+                type="button"
+                className="small-button"
+                onClick={selectWeekdays}
+                style={{ fontSize: 11 }}
+              >
                 Tất cả T2-T6
               </button>
-              <button type="button" className="small-button" onClick={selectWeekends} style={{ fontSize: 11 }}>
+              <button
+                type="button"
+                className="small-button"
+                onClick={selectWeekends}
+                style={{ fontSize: 11 }}
+              >
                 T7 + CN
               </button>
-              <button type="button" className="small-button" onClick={selectAll} style={{ fontSize: 11 }}>
+              <button
+                type="button"
+                className="small-button"
+                onClick={selectAll}
+                style={{ fontSize: 11 }}
+              >
                 Tất cả
               </button>
-              <button type="button" className="small-button" onClick={clearAll} style={{ fontSize: 11 }}>
+              <button
+                type="button"
+                className="small-button"
+                onClick={clearAll}
+                style={{ fontSize: 11 }}
+              >
                 Bỏ chọn
               </button>
             </div>
@@ -1643,7 +2467,11 @@ function MonthAssignModal({
           {/* Staff */}
           <label>
             Nhân viên *
-            <select value={staffId} onChange={(e) => setStaffId(e.target.value)} required>
+            <select
+              value={staffId}
+              onChange={(e) => setStaffId(e.target.value)}
+              required
+            >
               <option value="">— Chọn nhân viên —</option>
               {staffs.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -1656,7 +2484,11 @@ function MonthAssignModal({
           {/* Shift type */}
           <label>
             Ca làm việc *
-            <select value={shiftType} onChange={(e) => setShiftType(e.target.value as typeof shiftType)} required>
+            <select
+              value={shiftType}
+              onChange={(e) => setShiftType(e.target.value as typeof shiftType)}
+              required
+            >
               {shiftTypes.map((t) => (
                 <option key={t.key} value={t.key}>
                   {t.label} ({t.startTime} — {t.endTime})
@@ -1666,14 +2498,24 @@ function MonthAssignModal({
           </label>
 
           {/* Time */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div
+            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}
+          >
             <label>
               Giờ bắt đầu
-              <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+              <input
+                type="time"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+              />
             </label>
             <label>
               Giờ kết thúc
-              <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+              <input
+                type="time"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+              />
             </label>
           </div>
 
@@ -1689,14 +2531,25 @@ function MonthAssignModal({
           </label>
 
           {/* Summary */}
-          <div style={{ background: "var(--bg-secondary)", padding: 12, borderRadius: 8 }}>
+          <div
+            style={{
+              background: "var(--bg-secondary)",
+              padding: 12,
+              borderRadius: 8,
+            }}
+          >
             <p style={{ margin: 0, fontSize: 13 }}>
-              <strong>Tổng cộng:</strong> {selectedDays.length} ngày × 1 ca = <strong>{selectedDays.length} lịch</strong>
+              <strong>Tổng cộng:</strong> {selectedDays.length} ngày × 1 ca ={" "}
+              <strong>{selectedDays.length} lịch</strong>
             </p>
           </div>
 
           <div className="inline-actions" style={{ marginTop: 8 }}>
-            <button className="full-button" type="submit" disabled={isSubmitting || selectedDays.length === 0 || !staffId}>
+            <button
+              className="full-button"
+              type="submit"
+              disabled={isSubmitting || selectedDays.length === 0 || !staffId}
+            >
               {isSubmitting ? "Đang lưu..." : `Gán ${selectedDays.length} ca`}
             </button>
             <button className="small-button" onClick={onClose} type="button">

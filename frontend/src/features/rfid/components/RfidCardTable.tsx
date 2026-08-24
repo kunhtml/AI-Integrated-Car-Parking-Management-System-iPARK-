@@ -91,13 +91,11 @@ export function RfidCardTable({
                       </button>
                     </>
                   )}
-                  {(card.status === "blocked" ||
-                    card.status === "lost" ||
-                    card.status === "in-use") && (
+                  {(card.status === "blocked" || card.status === "in-use") && (
                     <button
                       className="small-button success"
                       onClick={() => onUnblock(card)}
-                      title="Mở khóa / Khôi phục"
+                      title="Mở khóa"
                       type="button"
                     >
                       <ShieldCheck size={14} />
