@@ -1306,6 +1306,126 @@ export function ShiftScheduleView() {
                 </button>
               </div>
             )}
+
+            {historyScheduleId && (
+              <div
+                style={{
+                  marginTop: 16,
+                  border: "1px solid var(--border)",
+                  borderRadius: 12,
+                  background: "var(--bg-secondary)",
+                  padding: 16,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
+                    marginBottom: 12,
+                  }}
+                >
+                  <h3 style={{ margin: 0, fontSize: 16 }}>Lịch sử thay đổi ca</h3>
+                  <button
+                    className="small-button"
+                    onClick={() => {
+                      setHistoryScheduleId(null);
+                      setScheduleHistory([]);
+                    }}
+                    type="button"
+                  >
+                    Đóng
+                  </button>
+                </div>
+
+                {historyLoading ? (
+                  <p className="muted-cell">Đang tải lịch sử...</p>
+                ) : scheduleHistory.length === 0 ? (
+                  <p className="muted-cell">Chưa có nhật ký nào cho ca này.</p>
+                ) : (
+                  <div
+                    style={{
+                      display: "grid",
+                      gap: 12,
+                    }}
+                  >
+                    {scheduleHistory.map((entry) => {
+                      const actionLabel: Record<string, string> = {
+                        shift_schedule_assigned: "Gán ca",
+                        shift_schedule_updated: "Cập nhật ca",
+                        shift_schedule_handover: "Chuyển giao ca",
+                        shift_schedule_deleted: "Xóa ca",
+                        shift_schedule_checked_in: "Điểm danh",
+                        shift_schedule_completed: "Hoàn thành ca",
+                      };
+
+                      const renderChangeMap = (changes: Record<string, unknown> | undefined) => {
+                        if (!changes || Object.keys(changes).length === 0) return null;
+                        return (
+                          <ul style={{ margin: "8px 0 0 0", paddingLeft: 18, color: "var(--muted)" }}>
+                            {Object.entries(changes).map(([key, value]) => (
+                              <li key={key}>
+                                <strong style={{ color: "var(--text)" }}>{key}:</strong>{" "}
+                                {value === null || value === undefined || value === "" ? "—" : String(value)}
+                              </li>
+                            ))}
+                          </ul>
+                        );
+                      };
+
+                      return (
+                        <div
+                          key={entry.id}
+                          style={{
+                            border: "1px solid var(--border)",
+                            borderRadius: 10,
+                            background: "white",
+                            padding: 12,
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: 12,
+                              flexWrap: "wrap",
+                              marginBottom: 8,
+                            }}
+                          >
+                            <strong>{actionLabel[entry.action] || entry.action}</strong>
+                            <span style={{ color: "var(--muted)", fontSize: 12 }}>
+                              {entry.createdAt
+                                ? new Date(entry.createdAt).toLocaleString("vi-VN")
+                                : "—"}
+                            </span>
+                          </div>
+
+                          <div style={{ fontSize: 12, color: "var(--muted)" }}>
+                            Người thực hiện: {entry.performedBy?.name || "Hệ thống"}
+                            {entry.performedBy?.email ? ` (${entry.performedBy.email})` : ""}
+                          </div>
+
+                          {entry.changes?.old && (
+                            <div style={{ marginTop: 8 }}>
+                              <div style={{ fontSize: 12, fontWeight: 600 }}>Trước:</div>
+                              {renderChangeMap(entry.changes.old as Record<string, unknown>)}
+                            </div>
+                          )}
+
+                          {entry.changes?.new && (
+                            <div style={{ marginTop: 8 }}>
+                              <div style={{ fontSize: 12, fontWeight: 600 }}>Sau:</div>
+                              {renderChangeMap(entry.changes.new as Record<string, unknown>)}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>
