@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
+import { CapacityConfig } from "../models/CapacityConfig.js";
 import { ParkingSession, ParkingSessionDocument } from "../models/ParkingSession.js";
 import { Transaction } from "../models/Transaction.js";
 import { registerVietnameseFonts } from "../utils/pdfFonts.js";
@@ -66,18 +67,34 @@ function sessionRow(session: ParkingSessionDocument) {
 
 export async function getReportSummary(request: Request, response: Response) {
   const { fromText, toText, from, to } = getDateRange(request);
-  const [entryCount, exitSessions, activeCount] = await Promise.all([
+  const [entryCount, exitSessions, activeCount, capacityConfig] = await Promise.all([
     ParkingSession.countDocuments({ checkInAt: { $gte: from, $lte: to } }),
     ParkingSession.find({
       status: "Đã hoàn thành",
       checkOutAt: { $gte: from, $lte: to },
     }),
     ParkingSession.countDocuments({ status: "Đang gửi" }),
+    CapacityConfig.findOne({ key: "default" }).lean().catch(() => null),
   ]);
+
+  const totalSlots = Number(capacityConfig?.globalCapacity ?? 30);
+  const exceptionSessions = await ParkingSession.find({
+    checkInAt: { $gte: from, $lte: to },
+    $or: [
+      { entrySource: "manual" },
+      { exitSource: "manual" },
+      { entryPhotoStatus: "camera_unavailable" },
+      { exitPhotoStatus: "camera_unavailable" },
+      { entryRfidUnverified: true },
+      { exitRfidManualVerified: true },
+    ],
+  }).select("_id");
 
   const revenue = exitSessions.reduce((sum, session) => sum + session.fee, 0);
   const freeSessionCount = exitSessions.filter((session) => session.fee === 0).length;
   const paidSessionCount = exitSessions.filter((session) => session.fee > 0).length;
+  const exceptionCount = new Set(exceptionSessions.map((session) => session._id.toString())).size;
+  const occupancyRate = totalSlots > 0 ? Math.round((activeCount / totalSlots) * 100) : 0;
 
   response.json({
     summary: {
@@ -89,67 +106,75 @@ export async function getReportSummary(request: Request, response: Response) {
       revenue,
       freeSessionCount,
       paidSessionCount,
+      occupancyRate,
+      totalSlots,
+      exceptionCount,
     },
   });
 }
 
 export async function exportReport(request: Request, response: Response) {
-  const { fromText, toText, from, to } = getDateRange(request);
-  const type = request.query.type === "revenue" ? "revenue" : "sessions";
-  const format = request.query.format === "pdf" ? "pdf" : "xlsx";
-  const sessions =
-    type === "revenue"
-      ? await ParkingSession.find({
-          status: "Đã hoàn thành",
-          checkOutAt: { $gte: from, $lte: to },
-        }).sort({ checkOutAt: -1 })
-      : await ParkingSession.find({ checkInAt: { $gte: from, $lte: to } }).sort({ checkInAt: -1 });
-  const rows = sessions.map(sessionRow);
+  try {
+    const { fromText, toText, from, to } = getDateRange(request);
+    const type = request.query.type === "revenue" ? "revenue" : "sessions";
+    const format = request.query.format === "pdf" ? "pdf" : "xlsx";
+    const sessions =
+      type === "revenue"
+        ? await ParkingSession.find({
+            status: "Đã hoàn thành",
+            checkOutAt: { $gte: from, $lte: to },
+          }).sort({ checkOutAt: -1 })
+        : await ParkingSession.find({ checkInAt: { $gte: from, $lte: to } }).sort({ checkInAt: -1 });
+    const rows = sessions.map(sessionRow);
 
-  if (format === "pdf") {
-    const transactions = await Transaction.find({
-      createdAt: { $gte: from, $lte: to },
-      status: "paid",
-    });
-    const totalPaid = transactions.reduce((sum, transaction) => sum + transaction.amount, 0);
-    const buffer = await buildPdfReport({
-      title: type === "revenue" ? "Báo cáo doanh thu iPARK" : "Báo cáo phiên đỗ xe iPARK",
-      fromText,
-      toText,
-      sessions,
-      totalPaid,
-    });
+    if (format === "pdf") {
+      const transactions = await Transaction.find({
+        createdAt: { $gte: from, $lte: to },
+        status: "paid",
+      });
+      const totalPaid = transactions.reduce((sum, transaction) => sum + transaction.amount, 0);
+      const buffer = await buildPdfReport({
+        title: type === "revenue" ? "Báo cáo doanh thu iPARK" : "Báo cáo phiên đỗ xe iPARK",
+        fromText,
+        toText,
+        sessions,
+        totalPaid,
+      });
+
+      response.setHeader(
+        "Content-Disposition",
+        `attachment; filename="ipark-${type}-${fromText}-${toText}.pdf"`,
+      );
+      response.setHeader("Content-Type", "application/pdf");
+      response.end(buffer);
+      return;
+    }
+
+    const normalizedRows = rows.length ? rows : [{ "Không có dữ liệu": "" }];
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet(type === "revenue" ? "Doanh thu" : "Phiên đỗ xe");
+    worksheet.columns = Object.keys(normalizedRows[0]).map((key) => ({
+      header: key,
+      key,
+      width: Math.max(16, key.length + 4),
+    }));
+    worksheet.addRows(normalizedRows);
+    worksheet.getRow(1).font = { bold: true };
+    const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
 
     response.setHeader(
       "Content-Disposition",
-      `attachment; filename="ipark-${type}-${fromText}-${toText}.pdf"`,
+      `attachment; filename="ipark-${type}-${fromText}-${toText}.xlsx"`,
     );
-    response.setHeader("Content-Type", "application/pdf");
+    response.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
     response.end(buffer);
-    return;
+  } catch (error) {
+    console.error("[reports.exportReport] export failed:", error);
+    response.status(500).json({ message: "Không thể xuất báo cáo. Vui lòng thử lại." });
   }
-
-  const normalizedRows = rows.length ? rows : [{ "Không có dữ liệu": "" }];
-  const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet(type === "revenue" ? "Doanh thu" : "Phiên đỗ xe");
-  worksheet.columns = Object.keys(normalizedRows[0]).map((key) => ({
-    header: key,
-    key,
-    width: Math.max(16, key.length + 4),
-  }));
-  worksheet.addRows(normalizedRows);
-  worksheet.getRow(1).font = { bold: true };
-  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
-
-  response.setHeader(
-    "Content-Disposition",
-    `attachment; filename="ipark-${type}-${fromText}-${toText}.xlsx"`,
-  );
-  response.setHeader(
-    "Content-Type",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  );
-  response.end(buffer);
 }
 
 function buildPdfReport(values: {
