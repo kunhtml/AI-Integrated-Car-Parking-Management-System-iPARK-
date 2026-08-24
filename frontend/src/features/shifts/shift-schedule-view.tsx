@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { useParkingApp } from "@/context/parking-app-context";
 import { apiFetch } from "@/lib/client-api";
-import type { ShiftScheduleItem, ShiftType, StaffForSchedule } from "@/types";
+import type { ShiftScheduleHistoryItem, ShiftScheduleItem, ShiftType, StaffForSchedule } from "@/types";
 
 const SHIFT_COLORS: Record<string, string> = {
   morning: "#f59e0b",
@@ -141,7 +141,8 @@ export function ShiftScheduleView() {
     cancelled: number;
   }
 
-  const isAdmin = currentUser?.role === "admin";
+  const isAdmin = currentUser?.role === "admin" || currentUser?.role === "manager";
+  const canManageSchedules = currentUser?.role === "admin" || currentUser?.role === "manager";
 
   // Load shift types
   useEffect(() => {
@@ -271,7 +272,7 @@ export function ShiftScheduleView() {
   }
 
   function handleCellClick(date: Date, shiftType: string) {
-    if (!isAdmin) return;
+    if (!canManageSchedules) return;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const d = new Date(date);
@@ -296,6 +297,25 @@ export function ShiftScheduleView() {
       await completeShiftSchedule(id);
     } catch (e) {
       console.error(e);
+    }
+  }
+
+  const [historyScheduleId, setHistoryScheduleId] = useState<string | null>(null);
+  const [scheduleHistory, setScheduleHistory] = useState<ShiftScheduleHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  async function loadScheduleHistory(id: string) {
+    setHistoryScheduleId(id);
+    setHistoryLoading(true);
+    try {
+      const response = await apiFetch(`/shift-schedules/${id}/history`);
+      const data = await response.json();
+      if (response.ok) setScheduleHistory(data.history ?? []);
+      else setScheduleHistory([]);
+    } catch {
+      setScheduleHistory([]);
+    } finally {
+      setHistoryLoading(false);
     }
   }
 
@@ -1193,7 +1213,23 @@ export function ShiftScheduleView() {
                                             Hoàn thành
                                           </button>
                                         )}
-                                        {isAdmin && (
+                                        {canManageSchedules && (
+                                          <button
+                                            className="small-button"
+                                            style={{
+                                              fontSize: 10,
+                                              padding: "2px 6px",
+                                            }}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              loadScheduleHistory(schedule.id);
+                                            }}
+                                            type="button"
+                                          >
+                                            Lịch sử
+                                          </button>
+                                        )}
+                                        {canManageSchedules && (
                                           <button
                                             className="small-button"
                                             style={{

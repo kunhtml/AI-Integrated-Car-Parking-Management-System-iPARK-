@@ -413,6 +413,24 @@ export type ShiftScheduleItem = {
   updatedAt?: string;
 };
 
+export type ShiftScheduleHistoryItem = {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId?: string | null;
+  performedBy?: {
+    id?: string | null;
+    name?: string | null;
+    email?: string | null;
+    role?: string | null;
+  } | null;
+  changes?: {
+    old?: Record<string, unknown>;
+    new?: Record<string, unknown>;
+  } | null;
+  createdAt?: string | null;
+};
+
 export type ShiftType = {
   key: string;
   label: string;
