@@ -3,7 +3,7 @@ import mongoose, { Model, Schema } from "mongoose";
 export type ReportExportDocument = {
   _id: mongoose.Types.ObjectId;
   fileName: string;
-  reportType: "revenue";
+  reportType: "revenue" | "sessions" | "exceptions";
   format: "PDF" | "Excel";
   period: string;
   createdBy?: mongoose.Types.ObjectId;
@@ -15,7 +15,11 @@ export type ReportExportDocument = {
 const reportExportSchema = new Schema<ReportExportDocument>(
   {
     fileName: { type: String, required: true, trim: true },
-    reportType: { type: String, enum: ["revenue"], default: "revenue" },
+    reportType: {
+      type: String,
+      enum: ["revenue", "sessions", "exceptions"],
+      default: "revenue",
+    },
     format: { type: String, enum: ["PDF", "Excel"], required: true },
     period: { type: String, required: true, trim: true },
     createdBy: { type: Schema.Types.ObjectId, ref: "User" },
