@@ -7,6 +7,7 @@ import {
   deleteShiftSchedule,
   getMySchedule,
   getMyCurrentShift,
+  getScheduleHistory,
   getShiftStats,
   getShiftTypes,
   getStaffsForSchedule,
@@ -30,13 +31,14 @@ shiftScheduleRoutes.get("/my", asyncHandler(getMySchedule));
 shiftScheduleRoutes.get("/my/current", asyncHandler(getMyCurrentShift));
 shiftScheduleRoutes.get("/week", asyncHandler(getWeeklySchedule));
 
-// Admin only routes
-shiftScheduleRoutes.get("/staffs", requireRole("admin"), asyncHandler(getStaffsForSchedule));
-shiftScheduleRoutes.get("/stats", requireRole("admin"), asyncHandler(getShiftStats));
-shiftScheduleRoutes.get("/", requireRole("admin"), asyncHandler(listShiftSchedules));
-shiftScheduleRoutes.post("/bulk", requireRole("admin"), asyncHandler(bulkCreateShiftSchedules));
+// Management routes for admin + manager
+shiftScheduleRoutes.get("/staffs", requireRole("admin", "manager"), asyncHandler(getStaffsForSchedule));
+shiftScheduleRoutes.get("/stats", requireRole("admin", "manager"), asyncHandler(getShiftStats));
+shiftScheduleRoutes.get("/", requireRole("admin", "manager"), asyncHandler(listShiftSchedules));
+shiftScheduleRoutes.post("/bulk", requireRole("admin", "manager"), asyncHandler(bulkCreateShiftSchedules));
 
-// Routes for both admin and staff
+// Routes for both admin and manager, plus staff actions
+shiftScheduleRoutes.get("/:id/history", requireRole("admin", "manager", "staff"), asyncHandler(getScheduleHistory));
 shiftScheduleRoutes.post("/", asyncHandler(createShiftSchedule));
 shiftScheduleRoutes.patch("/:id", asyncHandler(updateShiftSchedule));
 shiftScheduleRoutes.delete("/:id", asyncHandler(deleteShiftSchedule));

@@ -1,6 +1,6 @@
 import mongoose, { Model, Schema } from "mongoose";
 
-export type UserRole = "admin" | "staff" | "customer";
+export type UserRole = "admin" | "manager" | "staff" | "customer";
 
 export type UserDocument = {
   _id: mongoose.Types.ObjectId;
@@ -34,7 +34,7 @@ const userSchema = new Schema<UserDocument>(
     passwordHash: { type: String, required: true },
     role: {
       type: String,
-      enum: ["admin", "staff", "customer"],
+      enum: ["admin", "manager", "staff", "customer"],
       default: "customer",
     },
     status: {

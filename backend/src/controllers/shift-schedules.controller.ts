@@ -1,8 +1,13 @@
 import { Request, Response } from "express";
 import { z } from "zod";
+import { AuditLog } from "../models/AuditLog.js";
 import { ShiftSchedule } from "../models/ShiftSchedule.js";
 import { User } from "../models/User.js";
-import { serializeShiftSchedule } from "../utils/serializers.js";
+import { serializeAuditLog, serializeShiftSchedule } from "../utils/serializers.js";
+
+function canManageSchedules(user?: { role?: string | null }) {
+  return user?.role === "admin" || user?.role === "manager";
+}
 
 const createScheduleSchema = z.object({
   staffId: z.string().min(1, "ID nhân viên là bắt buộc"),
@@ -222,9 +227,8 @@ export async function getWeeklySchedule(request: Request, response: Response) {
 // POST /api/shift-schedules - Create schedule
 export async function createShiftSchedule(request: Request, response: Response) {
   try {
-    // Only admin can create schedules
-    if (request.user?.role !== "admin") {
-      response.status(403).json({ message: "Chỉ admin mới có quyền gán lịch làm việc" });
+    if (!canManageSchedules(request.user)) {
+      response.status(403).json({ message: "Chỉ admin hoặc manager mới có quyền gán lịch làm việc" });
       return;
     }
 
@@ -272,6 +276,24 @@ export async function createShiftSchedule(request: Request, response: Response) 
     await schedule.populate("staffId", "name email phone avatarUrl");
     await schedule.populate("assignedBy", "name email");
 
+    await AuditLog.create({
+      action: "shift_schedule_assigned",
+      entityType: "ShiftSchedule",
+      entityId: schedule._id,
+      performedBy: request.user!.id,
+      changes: {
+        new: {
+          staffId: schedule.staffId?.toString?.(),
+          date: schedule.date,
+          shiftType: schedule.shiftType,
+          startTime: schedule.startTime,
+          endTime: schedule.endTime,
+          location: schedule.location,
+          note: schedule.note,
+        },
+      },
+    });
+
     response.status(201).json({ schedule: serializeShiftSchedule(schedule) });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -286,8 +308,8 @@ export async function createShiftSchedule(request: Request, response: Response) 
 // POST /api/shift-schedules/bulk - Create multiple schedules
 export async function bulkCreateShiftSchedules(request: Request, response: Response) {
   try {
-    if (request.user?.role !== "admin") {
-      response.status(403).json({ message: "Chỉ admin mới có quyền gán lịch làm việc" });
+    if (!canManageSchedules(request.user)) {
+      response.status(403).json({ message: "Chỉ admin hoặc manager mới có quyền gán lịch làm việc" });
       return;
     }
 
@@ -333,6 +355,28 @@ export async function bulkCreateShiftSchedules(request: Request, response: Respo
       { path: "assignedBy", select: "name email" },
     ]);
 
+    await Promise.all(
+      createdSchedules.map((schedule) =>
+        AuditLog.create({
+          action: "shift_schedule_assigned",
+          entityType: "ShiftSchedule",
+          entityId: schedule._id,
+          performedBy: request.user!.id,
+          changes: {
+            new: {
+              staffId: schedule.staffId?.toString?.(),
+              date: schedule.date,
+              shiftType: schedule.shiftType,
+              startTime: schedule.startTime,
+              endTime: schedule.endTime,
+              location: schedule.location,
+              note: schedule.note,
+            },
+          },
+        }),
+      ),
+    );
+
     response.status(201).json({
       schedules: populatedSchedules.map(serializeShiftSchedule),
       message: `Đã tạo ${createdSchedules.length} lịch ca`,
@@ -350,8 +394,8 @@ export async function bulkCreateShiftSchedules(request: Request, response: Respo
 // PATCH /api/shift-schedules/:id - Update schedule
 export async function updateShiftSchedule(request: Request, response: Response) {
   try {
-    if (request.user?.role !== "admin") {
-      response.status(403).json({ message: "Chỉ admin mới có quyền sửa lịch làm việc" });
+    if (!canManageSchedules(request.user)) {
+      response.status(403).json({ message: "Chỉ admin hoặc manager mới có quyền sửa lịch làm việc" });
       return;
     }
 
@@ -391,6 +435,18 @@ export async function updateShiftSchedule(request: Request, response: Response) 
       }
     }
 
+    const previousValues = {
+      staffId: schedule.staffId?.toString?.(),
+      date: schedule.date,
+      shiftType: schedule.shiftType,
+      startTime: schedule.startTime,
+      endTime: schedule.endTime,
+      status: schedule.status,
+      note: schedule.note,
+      location: schedule.location,
+      deviceId: schedule.deviceId?.toString?.(),
+    };
+
     // Update fields
     if (body.staffId) schedule.staffId = body.staffId as any;
     if (body.date) schedule.date = new Date(body.date);
@@ -406,6 +462,27 @@ export async function updateShiftSchedule(request: Request, response: Response) 
     await schedule.populate("staffId", "name email phone avatarUrl");
     await schedule.populate("assignedBy", "name email");
 
+    await AuditLog.create({
+      action: body.staffId && body.staffId !== previousValues.staffId ? "shift_schedule_handover" : "shift_schedule_updated",
+      entityType: "ShiftSchedule",
+      entityId: schedule._id,
+      performedBy: request.user!.id,
+      changes: {
+        old: previousValues,
+        new: {
+          staffId: schedule.staffId?.toString?.(),
+          date: schedule.date,
+          shiftType: schedule.shiftType,
+          startTime: schedule.startTime,
+          endTime: schedule.endTime,
+          status: schedule.status,
+          note: schedule.note,
+          location: schedule.location,
+          deviceId: schedule.deviceId?.toString?.(),
+        },
+      },
+    });
+
     response.json({ schedule: serializeShiftSchedule(schedule) });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -420,22 +497,61 @@ export async function updateShiftSchedule(request: Request, response: Response) 
 // DELETE /api/shift-schedules/:id - Delete schedule
 export async function deleteShiftSchedule(request: Request, response: Response) {
   try {
-    if (request.user?.role !== "admin") {
-      response.status(403).json({ message: "Chỉ admin mới có quyền xóa lịch làm việc" });
+    if (!canManageSchedules(request.user)) {
+      response.status(403).json({ message: "Chỉ admin hoặc manager mới có quyền xóa lịch làm việc" });
       return;
     }
 
-    const schedule = await ShiftSchedule.findByIdAndDelete(request.params.id);
+    const schedule = await ShiftSchedule.findById(request.params.id);
 
     if (!schedule) {
       response.status(404).json({ message: "Không tìm thấy lịch ca" });
       return;
     }
 
+    await AuditLog.create({
+      action: "shift_schedule_deleted",
+      entityType: "ShiftSchedule",
+      entityId: schedule._id,
+      performedBy: request.user!.id,
+      changes: {
+        old: {
+          staffId: schedule.staffId?.toString?.(),
+          date: schedule.date,
+          shiftType: schedule.shiftType,
+          startTime: schedule.startTime,
+          endTime: schedule.endTime,
+          status: schedule.status,
+          note: schedule.note,
+          location: schedule.location,
+        },
+      },
+    });
+
+    await ShiftSchedule.findByIdAndDelete(request.params.id);
+
     response.json({ message: "Đã xóa lịch ca" });
   } catch (error) {
     console.error("Error deleting shift schedule:", error);
     response.status(500).json({ message: "Lỗi khi xóa lịch ca" });
+  }
+}
+
+export async function getScheduleHistory(request: Request, response: Response) {
+  try {
+    const scheduleId = request.params.id;
+    const logs = await AuditLog.find({
+      entityType: "ShiftSchedule",
+      entityId: scheduleId,
+    })
+      .populate("performedBy", "name email role")
+      .sort({ createdAt: -1 })
+      .limit(50);
+
+    response.json({ history: logs.map((log) => serializeAuditLog(log)) });
+  } catch (error) {
+    console.error("Error getting schedule history:", error);
+    response.status(500).json({ message: "Lỗi khi lấy lịch sử ca làm" });
   }
 }
 
@@ -451,7 +567,7 @@ export async function checkInShift(request: Request, response: Response) {
     }
 
     // Only the assigned staff can check in
-    if (schedule.staffId.toString() !== request.user?.id && request.user?.role !== "admin") {
+    if (schedule.staffId.toString() !== request.user?.id && !canManageSchedules(request.user)) {
       response.status(403).json({ message: "Bạn không có quyền check-in ca này" });
       return;
     }
@@ -509,7 +625,7 @@ export async function completeShift(request: Request, response: Response) {
       return;
     }
 
-    if (schedule.staffId.toString() !== request.user?.id && request.user?.role !== "admin") {
+    if (schedule.staffId.toString() !== request.user?.id && !canManageSchedules(request.user)) {
       response.status(403).json({ message: "Bạn không có quyền hoàn thành ca này" });
       return;
     }
@@ -546,8 +662,8 @@ export async function getShiftTypes(request: Request, response: Response) {
 // GET /api/shift-schedules/staffs - Get list of staff (for admin to select)
 export async function getStaffsForSchedule(request: Request, response: Response) {
   try {
-    if (request.user?.role !== "admin") {
-      response.status(403).json({ message: "Chỉ admin mới có quyền xem danh sách nhân viên" });
+    if (!canManageSchedules(request.user)) {
+      response.status(403).json({ message: "Chỉ admin hoặc manager mới có quyền xem danh sách nhân viên" });
       return;
     }
 
@@ -573,8 +689,8 @@ export async function getStaffsForSchedule(request: Request, response: Response)
 // GET /api/shift-schedules/stats - Get work statistics for all staff (admin only)
 export async function getShiftStats(request: Request, response: Response) {
   try {
-    if (request.user?.role !== "admin") {
-      response.status(403).json({ message: "Chỉ admin mới có quyền xem thống kê" });
+    if (!canManageSchedules(request.user)) {
+      response.status(403).json({ message: "Chỉ admin hoặc manager mới có quyền xem thống kê" });
       return;
     }
 

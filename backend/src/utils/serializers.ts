@@ -736,6 +736,31 @@ type CapacityChangeLogPopulated = CapacityChangeLogDocument & {
   zoneId?: { _id?: unknown; name?: string } | null;
 };
 
+export function serializeAuditLog(log: any) {
+  const performedBy = log.performedBy as
+    | { _id?: { toString(): string }; name?: string; email?: string; role?: string }
+    | string
+    | null
+    | undefined;
+
+  return {
+    id: log._id.toString(),
+    action: log.action,
+    entityType: log.entityType,
+    entityId: log.entityId?.toString?.() ?? null,
+    performedBy: performedBy
+      ? {
+          id: typeof performedBy === "string" ? performedBy : performedBy._id?.toString?.() ?? null,
+          name: typeof performedBy === "string" ? null : performedBy.name ?? null,
+          email: typeof performedBy === "string" ? null : performedBy.email ?? null,
+          role: typeof performedBy === "string" ? null : performedBy.role ?? null,
+        }
+      : null,
+    changes: log.changes ?? null,
+    createdAt: log.createdAt ? log.createdAt.toISOString() : null,
+  };
+}
+
 export function serializeCapacityChangeLog(log: CapacityChangeLogPopulated) {
   const changedByRaw = log.changedBy as unknown as
     | { _id?: unknown; name?: string; email?: string }
