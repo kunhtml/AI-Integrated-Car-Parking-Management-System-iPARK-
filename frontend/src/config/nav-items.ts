@@ -63,7 +63,7 @@ export const navItems: NavItem[] = [
   },
   {
     id: "wallet",
-    path: "/wallet",
+    path: "/transactions",
     label: "Lịch sử giao dịch",
     icon: Wallet,
     roles: ["admin", "customer"],

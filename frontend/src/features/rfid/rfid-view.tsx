@@ -526,7 +526,7 @@ export function RfidCardsView() {
           // "Hoạt động" gồm cả thẻ đang được dùng cho một phiên.
           if (!isOperationalStatus(c.status)) return false;
         } else {
-        // "Đã khóa" bao gồm cả thẻ blocked lẫn inactive (thẻ ngừng hoạt động)
+          // "Đã khóa" bao gồm cả thẻ blocked lẫn inactive (thẻ ngừng hoạt động)
           const statusOk =
             statusFilter === "blocked"
               ? c.status === "blocked" || c.status === "inactive"
@@ -1629,12 +1629,12 @@ export function RfidCardsView() {
                 {restoreCard.plate ? ` (${restoreCard.plate})` : ""}
               </strong>{" "}
               sẽ được chuyển về <strong>loại Khách</strong>, chuyển sang trạng
-              thái <strong>hoạt động</strong> và <strong>làm mới toàn bộ thông
-              tin</strong> (chủ thẻ, biển số, liên kết thành viên/thay thế):
-              chủ thẻ trở thành{" "}
-              <strong className="mono">Guest</strong>, biển số trống. Thẻ
-              cũng sẽ được gỡ khỏi gói dịch vụ đang gán. Bạn có chắc chắn muốn
-              tiếp tục?
+              thái <strong>hoạt động</strong> và{" "}
+              <strong>làm mới toàn bộ thông tin</strong> (chủ thẻ, biển số, liên
+              kết thành viên/thay thế): chủ thẻ trở thành{" "}
+              <strong className="mono">Guest</strong>, biển số trống. Thẻ cũng
+              sẽ được gỡ khỏi gói dịch vụ đang gán. Bạn có chắc chắn muốn tiếp
+              tục?
             </p>
             <div className="modal-actions">
               <button
@@ -1652,11 +1652,7 @@ export function RfidCardsView() {
                   void handleRestore();
                 }}
               >
-                {submitting ? (
-                  <Loader2 size={14} />
-                ) : (
-                  <RefreshCcw size={14} />
-                )}
+                {submitting ? <Loader2 size={14} /> : <RefreshCcw size={14} />}
                 Khôi phục
               </button>
             </div>
@@ -2023,7 +2019,7 @@ export function RfidCardsView() {
       {/* Yêu cầu mua & cấp thẻ RFID (admin) */}
       {isAdmin && (
         <div style={{ marginTop: 24 }}>
-          <RfidIssueManagerPanel />
+          <RfidIssueManagerPanel onCardIssued={() => void loadCards()} />
         </div>
       )}
     </section>

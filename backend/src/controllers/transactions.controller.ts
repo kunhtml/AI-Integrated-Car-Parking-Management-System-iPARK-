@@ -17,48 +17,15 @@ export async function listTransactions(request: Request, response: Response) {
     status,
     method,
     sessionId,
-    plate,
-<<<<<<< Updated upstream
-=======
     transactionType,
->>>>>>> Stashed changes
+    plate,
     from,
     to,
     page = "1",
     limit = "50",
   } = request.query as Record<string, string>;
-<<<<<<< Updated upstream
 
   const filter: Record<string, unknown> = {};
-
-  if (status) filter.status = status;
-  if (method) filter.method = method;
-  if (sessionId) filter.sessionId = sessionId;
-  if (plate) filter.plate = { $regex: plate, $options: "i" };
-
-  if (from || to) {
-    filter.createdAt = {};
-    if (from) (filter.createdAt as Record<string, Date>).$gte = new Date(from);
-    if (to) (filter.createdAt as Record<string, Date>).$lte = new Date(to);
-  }
-
-  if (q) {
-    const regex = new RegExp(q, "i");
-    filter.$or = [
-      { _id: q },
-      { plate: regex },
-      { sessionId: q },
-      { payosOrderCode: q },
-    ];
-  }
-
-  let transactions;
-  let total = 0;
-=======
->>>>>>> Stashed changes
-
-  const filter: Record<string, unknown> = {};
-
   if (status) filter.status = status;
   if (method) filter.method = method;
   if (sessionId) filter.sessionId = sessionId;
@@ -66,9 +33,10 @@ export async function listTransactions(request: Request, response: Response) {
   if (plate) filter.plate = { $regex: plate, $options: "i" };
 
   if (from || to) {
-    filter.createdAt = {} as Record<string, Date>;
-    if (from) (filter.createdAt as Record<string, Date>).$gte = new Date(from);
-    if (to) (filter.createdAt as Record<string, Date>).$lte = new Date(to);
+    const createdAt: Record<string, Date> = {};
+    if (from) createdAt.$gte = new Date(from);
+    if (to) createdAt.$lte = new Date(to);
+    filter.createdAt = createdAt;
   }
 
   if (q) {
@@ -76,7 +44,7 @@ export async function listTransactions(request: Request, response: Response) {
     const orConditions: Record<string, unknown>[] = [
       { plate: regex },
       { note: regex },
-      { payosOrderCode: regex },
+      { payosOrderCode: q },
       { sessionId: q },
     ];
     if (mongoose.isValidObjectId(q)) {
@@ -85,22 +53,21 @@ export async function listTransactions(request: Request, response: Response) {
     filter.$or = orConditions;
   }
 
-  const pageNum = Math.max(1, parseInt(page, 10) || 1);
-  const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
+  const pageNum = Math.max(1, Number.parseInt(page, 10) || 1);
+  const limitNum = Math.min(200, Math.max(1, Number.parseInt(limit, 10) || 50));
   const skip = (pageNum - 1) * limitNum;
 
   let transactions: TransactionDocument[];
   let total: number;
   if (request.user?.role === "customer") {
-<<<<<<< Updated upstream
-=======
-    // Find all sessions owned by this user first.
->>>>>>> Stashed changes
     const user = await User.findById(request.user.id).select("email");
-    const emailMatch = user?.email ? { ownerEmail: user.email.toLowerCase() } : null;
+    const emailMatch = user?.email
+      ? { ownerEmail: user.email.toLowerCase() }
+      : null;
     const userIdMatch = { ownerUserId: request.user.id };
-
-    const sessionFilter = emailMatch ? { $or: [userIdMatch, emailMatch] } : userIdMatch;
+    const sessionFilter = emailMatch
+      ? { $or: [userIdMatch, emailMatch] }
+      : userIdMatch;
     const userSessions = await ParkingSession.find(sessionFilter, { _id: 1 });
     const sessionIds = userSessions.map((s) => s._id);
     const userSubscriptions = await Subscription.find(
@@ -108,13 +75,7 @@ export async function listTransactions(request: Request, response: Response) {
       { _id: 1 },
     );
     const subscriptionIds = userSubscriptions.map((s) => s._id);
-
-<<<<<<< Updated upstream
-    const customerFilter = {
-      ...filter,
-=======
     const accessFilter: Record<string, unknown> = {
->>>>>>> Stashed changes
       $or: [
         ...(Array.isArray(filter.$or) ? filter.$or : []),
         { userId: request.user.id },
@@ -122,30 +83,13 @@ export async function listTransactions(request: Request, response: Response) {
         { subscriptionId: { $in: subscriptionIds } },
       ],
     };
-<<<<<<< Updated upstream
-
-    const pageNum = Math.max(1, Number.parseInt(page, 10) || 1);
-    const limitNum = Math.min(200, Number.parseInt(limit, 10) || 50);
-    const skip = (pageNum - 1) * limitNum;
-
+    const customerFilter = { $and: [accessFilter, filter] };
     [transactions, total] = await Promise.all([
-      Transaction.find(customerFilter).sort({ createdAt: -1 }).skip(skip).limit(limitNum),
-      Transaction.countDocuments(customerFilter),
-    ]);
-  } else {
-    const pageNum = Math.max(1, Number.parseInt(page, 10) || 1);
-    const limitNum = Math.min(200, Number.parseInt(limit, 10) || 50);
-    const skip = (pageNum - 1) * limitNum;
-
-    [transactions, total] = await Promise.all([
-      Transaction.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limitNum),
-=======
-    [transactions, total] = await Promise.all([
-      Transaction.find({ $and: [accessFilter, filter] })
+      Transaction.find(customerFilter)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limitNum),
-      Transaction.countDocuments({ $and: [accessFilter, filter] }),
+      Transaction.countDocuments(customerFilter),
     ]);
   } else {
     [transactions, total] = await Promise.all([
@@ -153,7 +97,6 @@ export async function listTransactions(request: Request, response: Response) {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limitNum),
->>>>>>> Stashed changes
       Transaction.countDocuments(filter),
     ]);
   }
@@ -164,26 +107,18 @@ export async function listTransactions(request: Request, response: Response) {
   const txSubscriptionIds = transactions
     .filter((t) => t.subscriptionId)
     .map((t) => t.subscriptionId as mongoose.Types.ObjectId);
-
   const [sessions, subscriptions] = await Promise.all([
-    txSessionIds.length > 0 ? ParkingSession.find({ _id: { $in: txSessionIds } }) : [],
-    txSubscriptionIds.length > 0 ? (await import("../models/Subscription.js")).Subscription.find({ _id: { $in: txSubscriptionIds } }) : [],
-  ]);
-
-  const sessionMap = new Map(sessions.map((s) => [s._id.toString(), s]));
-  const subscriptionMap = new Map(subscriptions.map((s) => [s._id.toString(), s]));
-
-  const txSubscriptionIds = transactions
-    .filter((t) => t.subscriptionId)
-    .map((t) => t.subscriptionId as mongoose.Types.ObjectId);
-  const subscriptions =
+    txSessionIds.length > 0
+      ? ParkingSession.find({ _id: { $in: txSessionIds } })
+      : [],
     txSubscriptionIds.length > 0
-      ? await Subscription.find({ _id: { $in: txSubscriptionIds } })
-      : [];
+      ? Subscription.find({ _id: { $in: txSubscriptionIds } })
+      : [],
+  ]);
+  const sessionMap = new Map(sessions.map((s) => [s._id.toString(), s]));
   const subscriptionMap = new Map(
     subscriptions.map((s) => [s._id.toString(), s]),
   );
-
   const serialized = transactions.map((t) =>
     serializeTransaction(
       t,
@@ -195,30 +130,6 @@ export async function listTransactions(request: Request, response: Response) {
   response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   response.setHeader("Pragma", "no-cache");
   response.setHeader("Expires", "0");
-<<<<<<< Updated upstream
-  response.json({ transactions: serialized, total, page: Math.max(1, Number.parseInt(page, 10) || 1), limit: Math.min(200, Number.parseInt(limit, 10) || 50) });
-}
-
-export async function getTransaction(request: Request, response: Response) {
-  const { id } = request.params;
-  if (!mongoose.isValidObjectId(id)) {
-    response.status(400).json({ message: "Mã giao dịch không hợp lệ." });
-    return;
-  }
-
-  const transaction = await Transaction.findById(id);
-  if (!transaction) {
-    response.status(404).json({ message: "Không tìm thấy giao dịch." });
-    return;
-  }
-
-  const [session, subscription] = await Promise.all([
-    transaction.sessionId ? ParkingSession.findById(transaction.sessionId) : null,
-    transaction.subscriptionId ? (await import("../models/Subscription.js")).Subscription.findById(transaction.subscriptionId) : null,
-  ]);
-
-  response.json({ transaction: serializeTransaction(transaction, session, subscription) });
-=======
   response.json({
     transactions: serialized,
     pagination: {
@@ -228,8 +139,10 @@ export async function getTransaction(request: Request, response: Response) {
       totalPages: Math.ceil(total / limitNum),
       hasMore: skip + serialized.length < total,
     },
+    total,
+    page: pageNum,
+    limit: limitNum,
   });
->>>>>>> Stashed changes
 }
 
 export async function createSessionTransaction(request: Request, response: Response) {

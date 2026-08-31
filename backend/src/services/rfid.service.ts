@@ -12,7 +12,7 @@ import { findActiveSubscriptionByPlate } from "./subscription.service.js";
  * RFID Guest là thẻ dùng chung theo lượt. Khi xe ra, mọi liên kết phương tiện
  * trên thẻ phải được xóa; lịch sử luôn được giữ ở ParkingSession/RfidScanLog.
  */
-function releaseGuestCard(card: RfidCardDocument, returnedAt: Date) {
+export function releaseGuestCard(card: RfidCardDocument, returnedAt: Date) {
   card.status = "available";
   card.returnedAt = returnedAt;
   card.lastUsedAt = returnedAt;

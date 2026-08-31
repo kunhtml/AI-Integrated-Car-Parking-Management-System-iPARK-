@@ -42,6 +42,24 @@ async function finalizeCheckout(session: ParkingSessionDocument) {
   session.status = "Đã hoàn thành";
   session.checkOutAt = new Date();
 
+  // Trả thẻ RFID guest về kho nếu phiên đang giữ thẻ nhưng được đóng bằng
+  // luồng không quét RFID (ra thủ công / camera checkout). Luồng ra bằng RFID
+  // (rfid.service) đã tự gọi releaseGuestCard nên không vào đây.
+  if (session.rfidCardId) {
+    const rfidCard = await RfidCard.findOne({
+      $or: [{ uid: session.rfidCardId }, { cardId: session.rfidCardId }],
+    });
+    if (
+      rfidCard &&
+      rfidCard.cardType === "guest" &&
+      rfidCard.status === "in-use"
+    ) {
+      const { releaseGuestCard } = await import("../services/rfid.service.js");
+      releaseGuestCard(rfidCard, new Date());
+      await rfidCard.save();
+    }
+  }
+
   // Đã trả đủ trước đó (prepaid) → chỉ hoàn tất + nhả slot, KHÔNG tính lại phí.
   if (session.paymentStatus === "fully_paid") {
     await freeSlot(session.slotId);

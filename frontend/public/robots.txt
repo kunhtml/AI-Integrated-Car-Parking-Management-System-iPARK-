@@ -10,7 +10,7 @@ Disallow: /overview
 Disallow: /staff-desk
 Disallow: /sessions
 Disallow: /vehicles
-Disallow: /wallet
+Disallow: /transactions
 Disallow: /notifications
 Disallow: /shifts
 Disallow: /incidents

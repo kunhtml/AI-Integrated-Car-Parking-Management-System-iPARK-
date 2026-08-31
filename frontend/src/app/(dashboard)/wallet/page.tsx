@@ -1,7 +1,5 @@
-"use client";
-
-import { WalletView } from "@/features/wallet/wallet-view";
+import { redirect } from "next/navigation";
 
 export default function WalletPage() {
-  return <WalletView />;
+  redirect("/transactions");
 }

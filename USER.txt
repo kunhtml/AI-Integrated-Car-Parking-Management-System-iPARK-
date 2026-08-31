@@ -1,0 +1,24 @@
+
+1. Quan tri vien
+   Ho ten:    Super Admin iPARK
+   Email:     admin@ipark.vn
+   Mat khau:  admin
+   Vai tro:   Admin
+
+2. Nhan vien cong 1
+   Ho ten:    Nhan vien cong 1
+   Email:     nv.1@ipark.vn
+   Mat khau:  123456
+   Vai tro:   Staff
+
+3. Nhan vien cong 2
+   Ho ten:    Nhan vien cong 2
+   Email:     nv.2@ipark.vn
+   Mat khau:  123456
+   Vai tro:   Staff
+
+4. Khach hang mau
+   Ho ten:    Khach hang mau
+   Email:     kh.1@gmail.com
+   Mat khau:  123456
+   Vai tro:   Customer

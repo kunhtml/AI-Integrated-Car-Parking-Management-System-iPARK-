@@ -4,9 +4,12 @@ import { useEffect, useState } from "react";
 import {
   Banknote,
   Calendar,
+  ChartLine,
   ChevronDown,
-  CreditCard,
+  Clock3,
   ExternalLink,
+  FileText,
+  FolderSearch,
   Printer,
   Loader2,
   RefreshCw,
@@ -341,9 +344,12 @@ export function WalletView() {
     searchQuery !== "" || statusFilter !== "all" || methodFilter !== "all" || fromDate !== "" || toDate !== "";
 
   const visibleTransactions = filteredTransactions.slice(0, visibleCount);
+  const totalSpend = transactionList.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  const latestTransaction = [...transactionList]
+    .sort((a, b) => (parseTransactionDate(b.createdAt)?.getTime() ?? 0) - (parseTransactionDate(a.createdAt)?.getTime() ?? 0))[0];
 
   return (
-    <section className="content-grid">
+    <section className="wallet-page">
       {/* Session chưa thanh toán */}
       {isCustomer && unpaidSession && (
         <div className="panel">
@@ -415,67 +421,110 @@ export function WalletView() {
       )}
 
       {/* Transaction history */}
-      <div className="panel full">
-        <div className="panel-heading">
+      <div className="wallet-history-panel">
+        <header className="wallet-page-heading">
           <div>
-            <p>Giao dịch</p>
-            <h2>Lịch sử thanh toán</h2>
+            <p className="wallet-eyebrow">Giao dịch</p>
+            <h1>Lịch sử giao dịch</h1>
           </div>
-          <CreditCard size={22} />
+          <div className="wallet-heading-icon" aria-hidden="true">
+            <FileText size={24} strokeWidth={1.7} />
+          </div>
+        </header>
+
+        <div className="wallet-stats" aria-label="Tổng quan giao dịch">
+          <div className="wallet-stat-card">
+            <div className="wallet-stat-icon wallet-stat-icon-blue"><ChartLine size={22} /></div>
+            <div className="wallet-stat-content">
+              <span className="wallet-stat-label">Tổng số</span>
+              <strong>{transactionList.length}</strong>
+              <span className="wallet-stat-caption">giao dịch</span>
+            </div>
+          </div>
+          <div className="wallet-stat-card">
+            <div className="wallet-stat-icon wallet-stat-icon-purple"><Wallet size={22} /></div>
+            <div className="wallet-stat-content">
+              <span className="wallet-stat-label">Tổng chi tiêu</span>
+              <strong>{currency.format(totalSpend)}</strong>
+              <span className="wallet-stat-caption">tất cả giao dịch</span>
+            </div>
+          </div>
+          <div className="wallet-stat-card">
+            <div className="wallet-stat-icon wallet-stat-icon-indigo"><Clock3 size={22} /></div>
+            <div className="wallet-stat-content">
+              <span className="wallet-stat-label">Giao dịch gần đây</span>
+              <strong>{latestTransaction ? currency.format(latestTransaction.amount) : "Không có"}</strong>
+              <span className="wallet-stat-caption">{latestTransaction ? formatTransactionDate(latestTransaction.createdAt) : "Chưa có dữ liệu"}</span>
+            </div>
+          </div>
         </div>
-        <div className="filter-bar">
+
+        <div className="wallet-toolbar">
+          <div className="wallet-toolbar-title">
+            <h2>Tất cả giao dịch</h2>
+            <span>{filteredTransactions.length} kết quả</span>
+          </div>
           <div className="search-box">
-            <Search size={16} />
+            <Search size={16} aria-hidden="true" />
             <input
+              aria-label="Tìm kiếm giao dịch"
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Tìm biển số, chủ xe, email, slot…"
+              placeholder="Tìm kiếm giao dịch..."
               value={searchQuery}
             />
             {searchQuery && (
-              <button className="search-clear" onClick={() => setSearchQuery("")} title="Xóa tìm kiếm" type="button">
+              <button aria-label="Xóa tìm kiếm" className="search-clear" onClick={() => setSearchQuery("")} title="Xóa tìm kiếm" type="button">
                 <X size={14} />
               </button>
             )}
           </div>
-          <select className="filter-select" onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}>
-            <option value="all">Tất cả trạng thái</option>
-            <option value="pending">Chờ thanh toán</option>
-            <option value="paid">Đã thanh toán</option>
-            <option value="fully_paid">Đã thanh toán đủ</option>
-            <option value="partial_paid">Thanh toán một phần</option>
-            <option value="unpaid">Chưa thanh toán</option>
-            <option value="failed">Thất bại</option>
-            <option value="cancelled">Đã hủy</option>
-          </select>
-          <select className="filter-select" onChange={(event) => setMethodFilter(event.target.value)} value={methodFilter}>
-            <option value="all">Tất cả phương thức</option>
-            <option value="payos">PayOS</option>
-            <option value="cash">Tiền mặt</option>
-          </select>
-          <input aria-label="Từ ngày" className="filter-select" onChange={(event) => setFromDate(event.target.value)} title="Từ ngày" type="date" value={fromDate} />
-          <input aria-label="Đến ngày" className="filter-select" min={fromDate || undefined} onChange={(event) => setToDate(event.target.value)} title="Đến ngày" type="date" value={toDate} />
-          {filtersActive && (
-            <button
-              className="small-button"
-              onClick={() => {
-                setSearchQuery("");
-                setStatusFilter("all");
-                setMethodFilter("all");
-                setFromDate("");
-                setToDate("");
-              }}
-              type="button"
-            >
-              <X size={14} /> Xóa lọc
-            </button>
-          )}
-          <span className="filter-count">{filteredTransactions.length} / {transactionList.length} giao dịch</span>
+        </div>
+
+        <div className="wallet-filters">
+          <div className="filter-bar">
+            <select aria-label="Lọc theo trạng thái" className="filter-select" onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}>
+              <option value="all">Tất cả trạng thái</option>
+              <option value="pending">Chờ thanh toán</option>
+              <option value="paid">Đã thanh toán</option>
+              <option value="fully_paid">Đã thanh toán đủ</option>
+              <option value="partial_paid">Thanh toán một phần</option>
+              <option value="unpaid">Chưa thanh toán</option>
+              <option value="failed">Thất bại</option>
+              <option value="cancelled">Đã hủy</option>
+            </select>
+            <select aria-label="Lọc theo phương thức" className="filter-select" onChange={(event) => setMethodFilter(event.target.value)} value={methodFilter}>
+              <option value="all">Tất cả phương thức</option>
+              <option value="payos">PayOS</option>
+              <option value="cash">Tiền mặt</option>
+            </select>
+            <input aria-label="Từ ngày" className="filter-select" onChange={(event) => setFromDate(event.target.value)} title="Từ ngày" type="date" value={fromDate} />
+            <input aria-label="Đến ngày" className="filter-select" min={fromDate || undefined} onChange={(event) => setToDate(event.target.value)} title="Đến ngày" type="date" value={toDate} />
+            {filtersActive && (
+              <button
+                className="small-button"
+                onClick={() => {
+                  setSearchQuery("");
+                  setStatusFilter("all");
+                  setMethodFilter("all");
+                  setFromDate("");
+                  setToDate("");
+                }}
+                type="button"
+              >
+                <X size={14} /> Xóa lọc
+              </button>
+            )}
+          </div>
         </div>
 
         {visibleTransactions.length === 0 ? (
-          <p className="muted-cell" style={{ padding: "1rem 0" }}>
-            {transactionList.length === 0 ? "Chưa có giao dịch nào." : "Không có giao dịch phù hợp bộ lọc."}
-          </p>
+          <div className="wallet-empty-state">
+            <div className="wallet-empty-illustration" aria-hidden="true">
+              <FolderSearch size={68} strokeWidth={1.25} />
+            </div>
+            <h2>{transactionList.length === 0 ? "Bạn chưa có giao dịch nào" : "Không tìm thấy giao dịch"}</h2>
+            <p>{transactionList.length === 0 ? "Các giao dịch thanh toán của bạn sẽ xuất hiện ở đây." : "Hãy thử thay đổi từ khóa hoặc bộ lọc để xem kết quả khác."}</p>
+          </div>
         ) : (
           <>
             <div className="wallet-card-grid">

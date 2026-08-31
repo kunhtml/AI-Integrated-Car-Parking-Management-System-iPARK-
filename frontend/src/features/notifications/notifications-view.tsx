@@ -73,7 +73,10 @@ export function NotificationsView() {
   });
 
   const filtersActive =
-    searchQuery !== "" || statusFilter !== "all" || fromDate !== "" || toDate !== "";
+    searchQuery !== "" ||
+    statusFilter !== "all" ||
+    fromDate !== "" ||
+    toDate !== "";
 
   function clearFilters() {
     setSearchQuery("");
@@ -94,7 +97,7 @@ export function NotificationsView() {
   ];
 
   return (
-    <section className="content-single">
+    <section className="content-single notifications-page">
       <div className="panel">
         <div className="panel-heading notif-header">
           <div className="notif-header-icon">
@@ -164,7 +167,11 @@ export function NotificationsView() {
             value={toDate}
           />
           {filtersActive && (
-            <button className="notif-clear-btn" onClick={clearFilters} type="button">
+            <button
+              className="notif-clear-btn"
+              onClick={clearFilters}
+              type="button"
+            >
               <X size={14} />
               Xóa lọc
             </button>
@@ -185,7 +192,10 @@ export function NotificationsView() {
 
         <div className="notif-list">
           {filteredNotifications.map((item) => (
-            <div className={`notif-card ${item.read ? "read" : "unread"}`} key={item.id}>
+            <div
+              className={`notif-card ${item.read ? "read" : "unread"}`}
+              key={item.id}
+            >
               <div className="notif-card-icon">
                 <Bell size={16} />
               </div>
