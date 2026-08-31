@@ -285,6 +285,7 @@ export type TransactionItem = {
   id: string;
   sessionId?: string;
   subscriptionId?: string;
+  transactionType?: string;
   method: string;
   amount: number;
   status: "pending" | "paid" | "failed" | "cancelled";
@@ -309,6 +310,7 @@ export type TransactionItem = {
   sessionPaymentStatus?: "unpaid" | "partial_paid" | "fully_paid";
   sessionFee?: number;
   sessionPaidAmount?: number;
+<<<<<<< Updated upstream
   session?: {
     id?: string;
     checkIn?: string;
@@ -325,6 +327,26 @@ export type TransactionItem = {
     startDate?: string;
     endDate?: string;
     price?: number;
+=======
+  // Đối chiếu (UC-29)
+  session?: {
+    id: string;
+    checkInAt?: string;
+    checkOutAt?: string;
+    plate?: string;
+    slot?: string;
+    fee?: number;
+    paidAmount?: number;
+    discountAmount?: number;
+    paymentStatus?: string;
+  };
+  subscription?: {
+    id: string;
+    planName?: string;
+    memberCode?: string;
+    startDate?: string;
+    endDate?: string;
+>>>>>>> Stashed changes
     status?: string;
   };
   reconciliation?: "reconciled" | "unresolved" | "not_applicable";

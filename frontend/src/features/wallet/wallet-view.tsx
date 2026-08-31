@@ -319,6 +319,11 @@ export function WalletView() {
       item.id,
       item.payosOrderCode,
       item.content,
+      item.sessionId,
+      item.subscriptionId,
+      item.session?.id,
+      item.subscription?.planName,
+      item.subscription?.memberCode,
     ];
     const matchesQuery =
       !normalizedQuery ||
@@ -569,6 +574,36 @@ export function WalletView() {
                 <strong>Thời gian</strong>
                 <span>Tạo: {formatTransactionDate(detailTransaction.createdAt)}</span>
                 {detailTransaction.paidAt && <span>Thanh toán: {formatTransactionDate(detailTransaction.paidAt)}</span>}
+              </div>
+              <div className="wallet-invoice-block">
+                <strong>Đối chiếu</strong>
+                {detailTransaction.reconciliation === "not_applicable" && (
+                  <span>Không liên quan đến phiên/gói</span>
+                )}
+                {detailTransaction.reconciliation === "unresolved" && (
+                  <span style={{ color: "var(--danger)" }}>⚠ Chưa đối chiếu được</span>
+                )}
+                {detailTransaction.reconciliation === "reconciled" && detailTransaction.sessionId && (
+                  <>
+                    <span>Phiên: #{detailTransaction.session?.id?.slice(-8).toUpperCase() ?? detailTransaction.sessionId.substring(detailTransaction.sessionId.length - 8).toUpperCase()}</span>
+                    {detailTransaction.session?.checkInAt && (
+                      <span>Vào: {formatTransactionDate(detailTransaction.session.checkInAt)}</span>
+                    )}
+                    {detailTransaction.session?.checkOutAt && (
+                      <span>Ra: {formatTransactionDate(detailTransaction.session.checkOutAt)}</span>
+                    )}
+                    <span>Phí: {currency.format(detailTransaction.session?.fee ?? 0)}</span>
+                  </>
+                )}
+                {detailTransaction.reconciliation === "reconciled" && detailTransaction.subscriptionId && detailTransaction.subscription && (
+                  <>
+                    <span>Gói: {detailTransaction.subscription.planName || "—"}</span>
+                    {detailTransaction.subscription.memberCode && <span>Mã: {detailTransaction.subscription.memberCode}</span>}
+                    {detailTransaction.subscription.startDate && (
+                      <span>Kỳ hạn: {formatTransactionDate(detailTransaction.subscription.startDate)} → {detailTransaction.subscription.endDate ? formatTransactionDate(detailTransaction.subscription.endDate) : "—"}</span>
+                    )}
+                  </>
+                )}
               </div>
             </div>
 

@@ -2,7 +2,8 @@ import mongoose from "mongoose";
 import { Request, Response } from "express";
 import { z } from "zod";
 import { ParkingSession } from "../models/ParkingSession.js";
-import { Transaction } from "../models/Transaction.js";
+import { Transaction, TransactionDocument } from "../models/Transaction.js";
+import { Subscription } from "../models/Subscription.js";
 import { User } from "../models/User.js";
 import { createNotification } from "../services/notification.service.js";
 import { objectId } from "../services/transaction.service.js";
@@ -17,11 +18,16 @@ export async function listTransactions(request: Request, response: Response) {
     method,
     sessionId,
     plate,
+<<<<<<< Updated upstream
+=======
+    transactionType,
+>>>>>>> Stashed changes
     from,
     to,
     page = "1",
     limit = "50",
   } = request.query as Record<string, string>;
+<<<<<<< Updated upstream
 
   const filter: Record<string, unknown> = {};
 
@@ -48,8 +54,48 @@ export async function listTransactions(request: Request, response: Response) {
 
   let transactions;
   let total = 0;
+=======
+>>>>>>> Stashed changes
 
+  const filter: Record<string, unknown> = {};
+
+  if (status) filter.status = status;
+  if (method) filter.method = method;
+  if (sessionId) filter.sessionId = sessionId;
+  if (transactionType) filter.transactionType = transactionType;
+  if (plate) filter.plate = { $regex: plate, $options: "i" };
+
+  if (from || to) {
+    filter.createdAt = {} as Record<string, Date>;
+    if (from) (filter.createdAt as Record<string, Date>).$gte = new Date(from);
+    if (to) (filter.createdAt as Record<string, Date>).$lte = new Date(to);
+  }
+
+  if (q) {
+    const regex = new RegExp(q, "i");
+    const orConditions: Record<string, unknown>[] = [
+      { plate: regex },
+      { note: regex },
+      { payosOrderCode: regex },
+      { sessionId: q },
+    ];
+    if (mongoose.isValidObjectId(q)) {
+      orConditions.push({ _id: q }, { userId: q }, { subscriptionId: q });
+    }
+    filter.$or = orConditions;
+  }
+
+  const pageNum = Math.max(1, parseInt(page, 10) || 1);
+  const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
+  const skip = (pageNum - 1) * limitNum;
+
+  let transactions: TransactionDocument[];
+  let total: number;
   if (request.user?.role === "customer") {
+<<<<<<< Updated upstream
+=======
+    // Find all sessions owned by this user first.
+>>>>>>> Stashed changes
     const user = await User.findById(request.user.id).select("email");
     const emailMatch = user?.email ? { ownerEmail: user.email.toLowerCase() } : null;
     const userIdMatch = { ownerUserId: request.user.id };
@@ -57,15 +103,26 @@ export async function listTransactions(request: Request, response: Response) {
     const sessionFilter = emailMatch ? { $or: [userIdMatch, emailMatch] } : userIdMatch;
     const userSessions = await ParkingSession.find(sessionFilter, { _id: 1 });
     const sessionIds = userSessions.map((s) => s._id);
+    const userSubscriptions = await Subscription.find(
+      { userId: request.user.id },
+      { _id: 1 },
+    );
+    const subscriptionIds = userSubscriptions.map((s) => s._id);
 
+<<<<<<< Updated upstream
     const customerFilter = {
       ...filter,
+=======
+    const accessFilter: Record<string, unknown> = {
+>>>>>>> Stashed changes
       $or: [
         ...(Array.isArray(filter.$or) ? filter.$or : []),
         { userId: request.user.id },
         { sessionId: { $in: sessionIds } },
+        { subscriptionId: { $in: subscriptionIds } },
       ],
     };
+<<<<<<< Updated upstream
 
     const pageNum = Math.max(1, Number.parseInt(page, 10) || 1);
     const limitNum = Math.min(200, Number.parseInt(limit, 10) || 50);
@@ -82,6 +139,21 @@ export async function listTransactions(request: Request, response: Response) {
 
     [transactions, total] = await Promise.all([
       Transaction.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limitNum),
+=======
+    [transactions, total] = await Promise.all([
+      Transaction.find({ $and: [accessFilter, filter] })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum),
+      Transaction.countDocuments({ $and: [accessFilter, filter] }),
+    ]);
+  } else {
+    [transactions, total] = await Promise.all([
+      Transaction.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum),
+>>>>>>> Stashed changes
       Transaction.countDocuments(filter),
     ]);
   }
@@ -101,6 +173,17 @@ export async function listTransactions(request: Request, response: Response) {
   const sessionMap = new Map(sessions.map((s) => [s._id.toString(), s]));
   const subscriptionMap = new Map(subscriptions.map((s) => [s._id.toString(), s]));
 
+  const txSubscriptionIds = transactions
+    .filter((t) => t.subscriptionId)
+    .map((t) => t.subscriptionId as mongoose.Types.ObjectId);
+  const subscriptions =
+    txSubscriptionIds.length > 0
+      ? await Subscription.find({ _id: { $in: txSubscriptionIds } })
+      : [];
+  const subscriptionMap = new Map(
+    subscriptions.map((s) => [s._id.toString(), s]),
+  );
+
   const serialized = transactions.map((t) =>
     serializeTransaction(
       t,
@@ -112,6 +195,7 @@ export async function listTransactions(request: Request, response: Response) {
   response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   response.setHeader("Pragma", "no-cache");
   response.setHeader("Expires", "0");
+<<<<<<< Updated upstream
   response.json({ transactions: serialized, total, page: Math.max(1, Number.parseInt(page, 10) || 1), limit: Math.min(200, Number.parseInt(limit, 10) || 50) });
 }
 
@@ -134,6 +218,18 @@ export async function getTransaction(request: Request, response: Response) {
   ]);
 
   response.json({ transaction: serializeTransaction(transaction, session, subscription) });
+=======
+  response.json({
+    transactions: serialized,
+    pagination: {
+      page: pageNum,
+      limit: limitNum,
+      total,
+      totalPages: Math.ceil(total / limitNum),
+      hasMore: skip + serialized.length < total,
+    },
+  });
+>>>>>>> Stashed changes
 }
 
 export async function createSessionTransaction(request: Request, response: Response) {
@@ -390,4 +486,37 @@ export async function cancelTransaction(request: Request, response: Response) {
   }
 
   response.json({ message: "Đã hủy giao dịch." });
+}
+
+export async function getTransaction(request: Request, response: Response) {
+  if (!mongoose.isValidObjectId(request.params.id)) {
+    response.status(400).json({ message: "Mã giao dịch không hợp lệ." });
+    return;
+  }
+
+  const transaction = await Transaction.findById(request.params.id);
+  if (!transaction) {
+    response.status(404).json({ message: "Không tìm thấy giao dịch." });
+    return;
+  }
+
+  // Khách hàng chỉ xem được giao dịch của mình
+  if (
+    request.user?.role === "customer" &&
+    transaction.userId?.toString() !== request.user.id
+  ) {
+    response.status(403).json({ message: "Không có quyền xem giao dịch này." });
+    return;
+  }
+
+  const session = transaction.sessionId
+    ? await ParkingSession.findById(transaction.sessionId)
+    : null;
+  const subscription = transaction.subscriptionId
+    ? await Subscription.findById(transaction.subscriptionId)
+    : null;
+
+  response.json({
+    transaction: serializeTransaction(transaction, session, subscription),
+  });
 }

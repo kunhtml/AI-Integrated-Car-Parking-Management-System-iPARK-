@@ -248,6 +248,7 @@ export function serializeTransaction(
 
   return {
     id: transaction._id.toString(),
+    transactionType: transaction.transactionType,
     sessionId: transaction.sessionId?.toString(),
     subscriptionId: transaction.subscriptionId?.toString(),
     penaltyId: transaction.penaltyId?.toString(),
@@ -272,9 +273,43 @@ export function serializeTransaction(
     sessionPaymentStatus: session?.paymentStatus,
     sessionFee: session?.fee ?? 0,
     sessionPaidAmount: session?.paidAmount ?? 0,
+<<<<<<< Updated upstream
     session: sessionDetails,
     subscription: subscriptionDetails,
     reconciliation,
+=======
+    // Phiên liên quan chi tiết hơn (đúng bước 7-8 của UC-29)
+    session: session
+      ? {
+          id: session._id.toString(),
+          checkInAt: session.checkInAt,
+          checkOutAt: session.checkOutAt,
+          plate: session.plate,
+          slot: session.slot,
+          fee: session.fee ?? 0,
+          paidAmount: session.paidAmount ?? 0,
+          discountAmount: session.discountAmount ?? 0,
+          paymentStatus: session.paymentStatus,
+        }
+      : undefined,
+    // Gói liên quan (nếu có)
+    subscription: subscription
+      ? {
+          id: subscription._id.toString(),
+          planName: subscription.planName,
+          memberCode: subscription.memberCode,
+          startDate: subscription.startDate,
+          endDate: subscription.endDate,
+          status: subscription.status,
+        }
+      : undefined,
+    // Trạng thái đối chiếu (AF-02)
+    reconciliation: transaction.sessionId || transaction.subscriptionId
+      ? session || subscription
+        ? "reconciled"
+        : "unresolved"
+      : "not_applicable",
+>>>>>>> Stashed changes
   };
 }
 
