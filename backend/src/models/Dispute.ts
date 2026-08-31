@@ -35,6 +35,7 @@ export type DisputeDocument = {
   userId: mongoose.Types.ObjectId;
   sessionId?: mongoose.Types.ObjectId;
   transactionId?: mongoose.Types.ObjectId;
+  assignedStaffId?: mongoose.Types.ObjectId;
   plate?: string;
   reason: DisputeReason;
   content: string;
@@ -69,6 +70,11 @@ const disputeSchema = new Schema<DisputeDocument>(
     transactionId: {
       type: Schema.Types.ObjectId,
       ref: "Transaction",
+      index: true,
+    },
+    assignedStaffId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
       index: true,
     },
     plate: { type: String, trim: true, uppercase: true },

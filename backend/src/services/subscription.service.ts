@@ -1,7 +1,10 @@
 import mongoose from "mongoose";
 import type { HydratedDocument } from "mongoose";
 import { Subscription, SubscriptionDocument } from "../models/Subscription.js";
-import { SubscriptionPlan, SubscriptionPlanDocument } from "../models/SubscriptionPlan.js";
+import {
+  SubscriptionPlan,
+  SubscriptionPlanDocument,
+} from "../models/SubscriptionPlan.js";
 import { Transaction } from "../models/Transaction.js";
 import { User } from "../models/User.js";
 import { Vehicle, VehicleDocument } from "../models/Vehicle.js";
@@ -57,7 +60,11 @@ export async function updatePlan(
     isActive: boolean;
   }>,
 ): Promise<SubscriptionPlanDocument> {
-  const plan = await SubscriptionPlan.findByIdAndUpdate(id, { $set: data }, { returnDocument: "after" });
+  const plan = await SubscriptionPlan.findByIdAndUpdate(
+    id,
+    { $set: data },
+    { returnDocument: "after", runValidators: true }
+  );
   if (!plan) {
     const err = new Error("Gói không tồn tại.") as Error & { status: number };
     err.status = 404;
@@ -66,14 +73,20 @@ export async function updatePlan(
   return plan;
 }
 
-const PURCHASE_STATUS_IN_USE: SubscriptionDocument["status"][] = ["pending_payment", "active", "cancelled"];
+const PURCHASE_STATUS_IN_USE: SubscriptionDocument["status"][] = [
+  "pending_payment",
+  "active",
+  "cancelled",
+];
 const PENDING_PAYMENT_TIMEOUT_MS = 10 * 60 * 1000;
 
 /**
  * Hủy các đơn mua gói chưa thanh toán sau 10 phút. Subscription tạm được xóa
  * để xe có thể tạo đơn mua mới; Transaction được giữ lại làm lịch sử audit.
  */
-export async function expirePendingSubscriptionPayments(now = new Date()): Promise<number> {
+export async function expirePendingSubscriptionPayments(
+  now = new Date(),
+): Promise<number> {
   const expiresBefore = new Date(now.getTime() - PENDING_PAYMENT_TIMEOUT_MS);
   const staleSubscriptions = await Subscription.find({
     status: "pending_payment",
@@ -96,7 +109,10 @@ export async function expirePendingSubscriptionPayments(now = new Date()): Promi
       },
     },
   );
-  await Subscription.deleteMany({ _id: { $in: subscriptionIds }, status: "pending_payment" });
+  await Subscription.deleteMany({
+    _id: { $in: subscriptionIds },
+    status: "pending_payment",
+  });
   return subscriptionIds.length;
 }
 
@@ -115,31 +131,44 @@ export async function purchaseSubscription(params: {
   rfidCardId?: string;
   baseUrl?: string;
   frontendUrl?: string;
-}): Promise<{ subscription: HydratedSubscription; payos?: Record<string, unknown> }> {
+}): Promise<{
+  subscription: HydratedSubscription;
+  payos?: Record<string, unknown>;
+}> {
   // Do not let an expired unpaid order block a new purchase before the scheduler runs.
   await expirePendingSubscriptionPayments();
 
   const plan = await SubscriptionPlan.findById(params.planId);
   if (!plan || !plan.isActive) {
-    const err = new Error("Gói không tồn tại hoặc đã ngừng.") as Error & { status: number };
+    const err = new Error("Gói không tồn tại hoặc đã ngừng.") as Error & {
+      status: number;
+    };
     err.status = 404;
     throw err;
   }
 
   if (!params.vehicleId || !mongoose.Types.ObjectId.isValid(params.vehicleId)) {
-    const err = new Error("Vui lòng chọn xe để mua gói.") as Error & { status: number };
+    const err = new Error("Vui lòng chọn xe để mua gói.") as Error & {
+      status: number;
+    };
     err.status = 400;
     throw err;
   }
 
-  const vehicle = await Vehicle.findById(params.vehicleId).select("_id userId status plate");
+  const vehicle = await Vehicle.findById(params.vehicleId).select(
+    "_id userId status plate",
+  );
   if (!vehicle) {
-    const err = new Error("Xe không tồn tại. Vui lòng đăng ký xe trước khi mua gói.") as Error & { status: number };
+    const err = new Error(
+      "Xe không tồn tại. Vui lòng đăng ký xe trước khi mua gói.",
+    ) as Error & { status: number };
     err.status = 404;
     throw err;
   }
   if (vehicle.userId?.toString() !== params.userId) {
-    const err = new Error("Xe này không thuộc tài khoản của bạn.") as Error & { status: number };
+    const err = new Error("Xe này không thuộc tài khoản của bạn.") as Error & {
+      status: number;
+    };
     err.status = 403;
     throw err;
   }
@@ -152,7 +181,9 @@ export async function purchaseSubscription(params: {
         status: { $in: ["active", "in-use"] },
       }).sort({ soldAt: -1 });
   if (!rfidCard) {
-    const err = new Error("Xe chưa có RFID Member. Vui lòng mua thẻ RFID cho xe trước khi đăng ký gói.") as Error & { status: number };
+    const err = new Error(
+      "Xe chưa có RFID Member. Vui lòng mua thẻ RFID cho xe trước khi đăng ký gói.",
+    ) as Error & { status: number };
     err.status = 409;
     throw err;
   }
@@ -162,7 +193,9 @@ export async function purchaseSubscription(params: {
     rfidCard.vehicleId?.toString() !== vehicle._id.toString() ||
     !["active", "in-use"].includes(rfidCard.status)
   ) {
-    const err = new Error("RFID Member không thuộc xe hoặc tài khoản đang mua gói.") as Error & { status: number };
+    const err = new Error(
+      "RFID Member không thuộc xe hoặc tài khoản đang mua gói.",
+    ) as Error & { status: number };
     err.status = 409;
     throw err;
   }
@@ -190,7 +223,9 @@ export async function purchaseSubscription(params: {
   }
 
   const now = new Date();
-  const endDate = new Date(now.getTime() + plan.durationDays * 24 * 60 * 60 * 1000);
+  const endDate = new Date(
+    now.getTime() + plan.durationDays * 24 * 60 * 60 * 1000,
+  );
 
   let subscription;
   try {
@@ -221,8 +256,13 @@ export async function purchaseSubscription(params: {
   let payos: Record<string, unknown> | undefined;
   if (plan.price > 0) {
     const { createPayOSPayment } = await import("./payos.service.js");
-    const baseUrl = params.baseUrl || process.env.API_URL || process.env.BASE_URL || "http://localhost:4000";
-    const frontendUrl = params.frontendUrl || process.env.FRONTEND_URL || "http://localhost:3000";
+    const baseUrl =
+      params.baseUrl ||
+      process.env.API_URL ||
+      process.env.BASE_URL ||
+      "http://localhost:4000";
+    const frontendUrl =
+      params.frontendUrl || process.env.FRONTEND_URL || "http://localhost:3000";
     const payosResult = await createPayOSPayment({
       amount: plan.price,
       sessionId: String(subscription._id),
@@ -288,11 +328,15 @@ function genMemberCode(): string {
  * Kích hoạt gói sau khi thanh toán thành công: set active + gán memberCode per-sub.
  * Idempotent: gọi lại trên gói đã active sẽ không đổi gì.
  */
-export async function activateSubscription(sub: HydratedSubscription): Promise<HydratedSubscription> {
+export async function activateSubscription(
+  sub: HydratedSubscription,
+): Promise<HydratedSubscription> {
   if (sub.status === "active") return sub;
 
   if (!sub.rfidCardId) {
-    const err = new Error("Gói không có RFID Member liên kết. Không thể kích hoạt.") as Error & { status: number };
+    const err = new Error(
+      "Gói không có RFID Member liên kết. Không thể kích hoạt.",
+    ) as Error & { status: number };
     err.status = 409;
     throw err;
   }
@@ -304,7 +348,9 @@ export async function activateSubscription(sub: HydratedSubscription): Promise<H
     status: { $in: ["active", "in-use"] },
   });
   if (!rfidCard) {
-    const err = new Error("RFID Member không còn hợp lệ hoặc không khớp với xe của gói.") as Error & { status: number };
+    const err = new Error(
+      "RFID Member không còn hợp lệ hoặc không khớp với xe của gói.",
+    ) as Error & { status: number };
     err.status = 409;
     throw err;
   }
@@ -360,14 +406,20 @@ export async function verifyMemberCode(
 
   const now = new Date();
   const stillEffective =
-    (sub.status === "active" || sub.status === "cancelled") && sub.endDate > now;
+    (sub.status === "active" || sub.status === "cancelled") &&
+    sub.endDate > now;
   if (!stillEffective) {
-    return { valid: false, message: "Mã thành viên không có gói còn hiệu lực." };
+    return {
+      valid: false,
+      message: "Mã thành viên không có gói còn hiệu lực.",
+    };
   }
 
   let vehicle: VehicleDocument | null = null;
   if (sub.primaryVehicleId) {
-    vehicle = await Vehicle.findById(sub.primaryVehicleId).select("_id plate userId");
+    vehicle = await Vehicle.findById(sub.primaryVehicleId).select(
+      "_id plate userId",
+    );
   }
   const subPlate = vehicle?.plate ? normalizePlate(vehicle.plate) : undefined;
 
@@ -406,7 +458,9 @@ export async function reconcileSubscriptionPayment(
 
   const { checkPayOSPaymentStatus } = await import("./payos.service.js");
   for (const transaction of pending) {
-    const result = await checkPayOSPaymentStatus(String(transaction.payosOrderCode));
+    const result = await checkPayOSPaymentStatus(
+      String(transaction.payosOrderCode),
+    );
     if (result.status !== "paid") continue;
     transaction.status = "paid";
     transaction.paidAt = new Date();
@@ -419,23 +473,32 @@ export async function reconcileSubscriptionPayment(
 export async function renewSubscription(
   subscriptionId: string,
   opts?: { baseUrl?: string; frontendUrl?: string },
-): Promise<{ subscription: HydratedSubscription; payos?: Record<string, unknown> }> {
+): Promise<{
+  subscription: HydratedSubscription;
+  payos?: Record<string, unknown>;
+}> {
   const sub = await Subscription.findById(subscriptionId);
   if (!sub) {
-    const err = new Error("Không tìm thấy gói đăng ký.") as Error & { status: number };
+    const err = new Error("Không tìm thấy gói đăng ký.") as Error & {
+      status: number;
+    };
     err.status = 404;
     throw err;
   }
 
   const plan = await SubscriptionPlan.findById(sub.planId);
   if (!plan) {
-    const err = new Error("Gói gốc không còn tồn tại.") as Error & { status: number };
+    const err = new Error("Gói gốc không còn tồn tại.") as Error & {
+      status: number;
+    };
     err.status = 404;
     throw err;
   }
 
   if (sub.status === "cancelled") {
-    const err = new Error("Gói đã hủy, không thể gia hạn.") as Error & { status: number };
+    const err = new Error("Gói đã hủy, không thể gia hạn.") as Error & {
+      status: number;
+    };
     err.status = 400;
     throw err;
   }
@@ -446,24 +509,35 @@ export async function renewSubscription(
     note: { $regex: /^RENEW-/ },
   });
   if (pendingRenew) {
-    const err = new Error("Đang có yêu cầu gia hạn chờ thanh toán. Hãy hoàn tất trước.") as Error & { status: number };
+    const err = new Error(
+      "Đang có yêu cầu gia hạn chờ thanh toán. Hãy hoàn tất trước.",
+    ) as Error & { status: number };
     err.status = 409;
     throw err;
   }
 
   if (plan.price <= 0) {
     const baseDate = sub.endDate > new Date() ? sub.endDate : new Date();
-    sub.endDate = new Date(baseDate.getTime() + plan.durationDays * 24 * 60 * 60 * 1000);
+    sub.endDate = new Date(
+      baseDate.getTime() + plan.durationDays * 24 * 60 * 60 * 1000,
+    );
     sub.status = "active";
     sub.renewalCount += 1;
     await sub.save();
-  await (await import("./parkingQuota.service.js")).syncDynamicMemberSlotReservation();
+    await (
+      await import("./parkingQuota.service.js")
+    ).syncDynamicMemberSlotReservation();
     return { subscription: sub };
   }
 
   const { createPayOSPayment } = await import("./payos.service.js");
-  const baseUrl = opts?.baseUrl || process.env.API_URL || process.env.BASE_URL || "http://localhost:4000";
-  const frontendUrl = opts?.frontendUrl || process.env.FRONTEND_URL || "http://localhost:3000";
+  const baseUrl =
+    opts?.baseUrl ||
+    process.env.API_URL ||
+    process.env.BASE_URL ||
+    "http://localhost:4000";
+  const frontendUrl =
+    opts?.frontendUrl || process.env.FRONTEND_URL || "http://localhost:3000";
   const payosResult = await createPayOSPayment({
     amount: plan.price,
     sessionId: String(sub._id),
@@ -514,9 +588,10 @@ export async function renewSubscription(
  * - RENEW → cộng thêm số ngày gói.
  * - Mua mới → activate (set status active + sinh memberCode).
  */
-export async function applyPaidSubscriptionTransaction(
-  transaction: { subscriptionId?: mongoose.Types.ObjectId; note?: string },
-): Promise<void> {
+export async function applyPaidSubscriptionTransaction(transaction: {
+  subscriptionId?: mongoose.Types.ObjectId;
+  note?: string;
+}): Promise<void> {
   if (!transaction.subscriptionId) return;
   const sub = await Subscription.findById(transaction.subscriptionId);
   if (!sub) return;
@@ -529,16 +604,22 @@ export async function applyPaidSubscriptionTransaction(
     sub.status = "active";
     sub.renewalCount += 1;
     await sub.save();
-  await (await import("./parkingQuota.service.js")).syncDynamicMemberSlotReservation();
+    await (
+      await import("./parkingQuota.service.js")
+    ).syncDynamicMemberSlotReservation();
   } else {
     await activateSubscription(sub);
   }
 }
 
-export async function cancelSubscription(subscriptionId: string): Promise<SubscriptionDocument | null> {
+export async function cancelSubscription(
+  subscriptionId: string,
+): Promise<SubscriptionDocument | null> {
   const sub = await Subscription.findById(subscriptionId);
   if (!sub) {
-    const err = new Error("Không tìm thấy gói đăng ký.") as Error & { status: number };
+    const err = new Error("Không tìm thấy gói đăng ký.") as Error & {
+      status: number;
+    };
     err.status = 404;
     throw err;
   }
@@ -556,19 +637,26 @@ export async function cancelSubscription(subscriptionId: string): Promise<Subscr
       );
     }
     await Subscription.findByIdAndDelete(sub._id);
-    console.log("[cancelSubscription] Deleted pending_payment subscription:", sub._id);
+    console.log(
+      "[cancelSubscription] Deleted pending_payment subscription:",
+      sub._id,
+    );
     return null;
   }
 
   if (sub.status !== "active") {
-    const err = new Error("Gói không thể hủy ở trạng thái hiện tại.") as Error & { status: number };
+    const err = new Error(
+      "Gói không thể hủy ở trạng thái hiện tại.",
+    ) as Error & { status: number };
     err.status = 400;
     throw err;
   }
 
   sub.status = "cancelled";
   await sub.save();
-  await (await import("./parkingQuota.service.js")).syncDynamicMemberSlotReservation();
+  await (
+    await import("./parkingQuota.service.js")
+  ).syncDynamicMemberSlotReservation();
   return sub;
 }
 
@@ -578,7 +666,9 @@ export async function cancelSubscription(subscriptionId: string): Promise<Subscr
 export async function getSubscriptionPaymentInfo(subscriptionId: string) {
   const sub = await Subscription.findById(subscriptionId);
   if (!sub) {
-    const err = new Error("Không tìm thấy gói đăng ký.") as Error & { status: number };
+    const err = new Error("Không tìm thấy gói đăng ký.") as Error & {
+      status: number;
+    };
     err.status = 404;
     throw err;
   }
@@ -591,18 +681,25 @@ export async function getSubscriptionPaymentInfo(subscriptionId: string) {
 
   const plan = await SubscriptionPlan.findById(sub.planId);
 
-  const needsNewPayment = !transaction || !transaction.payosQrCode || !transaction.payosCheckoutUrl;
+  const needsNewPayment =
+    !transaction || !transaction.payosQrCode || !transaction.payosCheckoutUrl;
   if (needsNewPayment && plan && plan.price > 0) {
-    console.log("[getSubscriptionPaymentInfo] Recreating PayOS payment for sub:", subscriptionId);
+    console.log(
+      "[getSubscriptionPaymentInfo] Recreating PayOS payment for sub:",
+      subscriptionId,
+    );
     try {
       const { createPayOSPayment } = await import("./payos.service.js");
-      const baseUrl = process.env.API_URL || process.env.BASE_URL || "http://localhost:4000";
+      const baseUrl =
+        process.env.API_URL || process.env.BASE_URL || "http://localhost:4000";
       const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
 
       const payosResult = await createPayOSPayment({
         amount: plan.price,
         sessionId: String(sub._id),
-        label: transaction?.note?.startsWith("RENEW-") ? "iPARK SUB-RN" : "iPARK SUB",
+        label: transaction?.note?.startsWith("RENEW-")
+          ? "iPARK SUB-RN"
+          : "iPARK SUB",
         baseUrl,
         frontendUrl,
       });
@@ -636,7 +733,10 @@ export async function getSubscriptionPaymentInfo(subscriptionId: string) {
         }
       }
     } catch (err) {
-      console.error("[getSubscriptionPaymentInfo] Failed to recreate PayOS payment:", err);
+      console.error(
+        "[getSubscriptionPaymentInfo] Failed to recreate PayOS payment:",
+        err,
+      );
     }
   }
 
@@ -664,13 +764,18 @@ export async function getSubscriptionPaymentInfo(subscriptionId: string) {
  * Chuẩn hoá biển số.
  */
 export function normalizePlate(plate: string): string {
-  return plate.trim().toUpperCase().replace(/[\s-]+/g, "");
+  return plate
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, "");
 }
 
 /**
  * Tìm Vehicle theo biển số.
  */
-export async function findVehicleByPlate(plate: string): Promise<VehicleDocument | null> {
+export async function findVehicleByPlate(
+  plate: string,
+): Promise<VehicleDocument | null> {
   const normPlate = normalizePlate(plate);
   if (!normPlate) return null;
   return Vehicle.findOne({ plate: normPlate });
@@ -685,18 +790,25 @@ export async function findOrCreateVehicle(
 ): Promise<VehicleDocument> {
   const normPlate = normalizePlate(input.plate);
   if (!normPlate) {
-    const err = new Error("Biển số không hợp lệ.") as Error & { status: number };
+    const err = new Error("Biển số không hợp lệ.") as Error & {
+      status: number;
+    };
     err.status = 400;
     throw err;
   }
   const PLACEHOLDER = "Chưa cập nhật";
   const isFilled = (v: unknown): boolean => {
     if (v == null) return false;
-    if (typeof v === "string") return v.trim().length > 0 && v.trim() !== PLACEHOLDER;
+    if (typeof v === "string")
+      return v.trim().length > 0 && v.trim() !== PLACEHOLDER;
     if (typeof v === "number") return Number.isFinite(v);
     return true;
   };
-  const tryFill = <K extends keyof VehicleDocument>(target: VehicleDocument, key: K, value: VehicleDocument[K] | undefined) => {
+  const tryFill = <K extends keyof VehicleDocument>(
+    target: VehicleDocument,
+    key: K,
+    value: VehicleDocument[K] | undefined,
+  ) => {
     if (value == null) return;
     if (typeof value === "string" && value.trim() === "") return;
     if (!isFilled(target[key])) {
@@ -779,7 +891,9 @@ export async function findActiveSubscriptionByPlate(plate: string): Promise<{
  * Lấy mốc hết hạn gần nhất của gói gắn với biển số, kể cả khi gói đã hết hạn.
  * Dùng để chỉ tính phí cho phần thời gian sau khi quyền lợi subscription kết thúc.
  */
-export async function findLatestSubscriptionEndByPlate(plate: string): Promise<Date | null> {
+export async function findLatestSubscriptionEndByPlate(
+  plate: string,
+): Promise<Date | null> {
   const normPlate = normalizePlate(plate);
   if (!normPlate) return null;
 
@@ -810,9 +924,14 @@ export async function getOwnerInfoFromPlate(
     if (user) return { name: user.name, email: user.email };
   }
 
-  const vehicle = await Vehicle.findOne({ plate: normPlate }).select("ownerName ownerEmail");
+  const vehicle = await Vehicle.findOne({ plate: normPlate }).select(
+    "ownerName ownerEmail",
+  );
   if (vehicle) {
-    return { name: vehicle.ownerName || "Khách vãng lai", email: vehicle.ownerEmail || providedEmail };
+    return {
+      name: vehicle.ownerName || "Khách vãng lai",
+      email: vehicle.ownerEmail || providedEmail,
+    };
   }
 
   return { name: "Khách vãng lai", email: providedEmail };
@@ -879,14 +998,20 @@ export async function expireSubscriptions(): Promise<number> {
   const expiredSubscriptions = await Subscription.find({
     status: "active",
     endDate: { $lt: now },
-  }).select("_id userId planName endDate").lean();
+  })
+    .select("_id userId planName endDate")
+    .lean();
   if (expiredSubscriptions.length === 0) return 0;
 
   const result = await Subscription.updateMany(
-    { _id: { $in: expiredSubscriptions.map((sub) => sub._id) }, status: "active" },
+    {
+      _id: { $in: expiredSubscriptions.map((sub) => sub._id) },
+      status: "active",
+    },
     { $set: { status: "expired" } },
   );
-  const { createNotification, createNotificationsForRoles } = await import("./notification.service.js");
+  const { createNotification, createNotificationsForRoles } =
+    await import("./notification.service.js");
   for (const sub of expiredSubscriptions) {
     await createNotification({
       title: "Gói gửi xe đã hết hạn",
@@ -901,7 +1026,10 @@ export async function expireSubscriptions(): Promise<number> {
     type: "subscription_expired_staff",
     roles: ["admin", "staff"],
   });
-  if (result.modifiedCount > 0) await (await import("./parkingQuota.service.js")).syncDynamicMemberSlotReservation();
+  if (result.modifiedCount > 0)
+    await (
+      await import("./parkingQuota.service.js")
+    ).syncDynamicMemberSlotReservation();
   return result.modifiedCount;
 }
 

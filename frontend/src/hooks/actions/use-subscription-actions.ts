@@ -1,11 +1,25 @@
 import type { FormEvent } from "react";
 import { apiFetch } from "@/lib/client-api";
-import type { RegisteredVehicle, Subscription, SubscriptionPlan } from "@/types";
+import type {
+  RegisteredVehicle,
+  Subscription,
+  SubscriptionPlan,
+} from "@/types";
 
 type SubscriptionActionsParams = {
-  setPlanList: (items: SubscriptionPlan[] | ((prev: SubscriptionPlan[]) => SubscriptionPlan[])) => void;
-  setSubscriptionList: (items: Subscription[] | ((prev: Subscription[]) => Subscription[])) => void;
-  setRegisteredVehicles: (vehicles: RegisteredVehicle[] | ((prev: RegisteredVehicle[]) => RegisteredVehicle[])) => void;
+  setPlanList: (
+    items:
+      | SubscriptionPlan[]
+      | ((prev: SubscriptionPlan[]) => SubscriptionPlan[]),
+  ) => void;
+  setSubscriptionList: (
+    items: Subscription[] | ((prev: Subscription[]) => Subscription[]),
+  ) => void;
+  setRegisteredVehicles: (
+    vehicles:
+      | RegisteredVehicle[]
+      | ((prev: RegisteredVehicle[]) => RegisteredVehicle[]),
+  ) => void;
   setActionLog: (log: string) => void;
 };
 
@@ -25,9 +39,12 @@ export function createSubscriptionActions({
       duration: String(form.get("duration") || "monthly"),
       durationDays: Number(form.get("durationDays") || 30),
       price: Number(form.get("price") || 0),
-      maxVehicles: Number(form.get("maxVehicles") ?? -1),
+      maxVehicles: Math.max(1, Number(form.get("maxVehicles")) || 1),
     };
-    const response = await apiFetch("/subscriptions/plans", { method: "POST", body: JSON.stringify(body) });
+    const response = await apiFetch("/subscriptions/plans", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
     const data = await response.json();
     if (!response.ok) {
       setActionLog(data.message || "Không tạo được gói.");
@@ -38,13 +55,16 @@ export function createSubscriptionActions({
     formEl.reset();
   }
 
-  async function updatePlan(planId: string, body: {
-    name?: string;
-    description?: string;
-    price?: number;
-    maxVehicles?: number;
-    isActive?: boolean;
-  }) {
+  async function updatePlan(
+    planId: string,
+    body: {
+      name?: string;
+      description?: string;
+      price?: number;
+      maxVehicles?: number;
+      isActive?: boolean;
+    },
+  ) {
     const response = await apiFetch(`/subscriptions/plans/${planId}`, {
       method: "PUT",
       body: JSON.stringify(body),
@@ -60,13 +80,17 @@ export function createSubscriptionActions({
   }
 
   async function deletePlan(planId: string) {
-    const response = await apiFetch(`/subscriptions/plans/${planId}`, { method: "DELETE" });
+    const response = await apiFetch(`/subscriptions/plans/${planId}`, {
+      method: "DELETE",
+    });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
       setActionLog(data.message || "Không xoá được gói.");
       return;
     }
-    setPlanList((items) => items.map((p) => (p.id === planId ? { ...p, isActive: false } : p)));
+    setPlanList((items) =>
+      items.map((p) => (p.id === planId ? { ...p, isActive: false } : p)),
+    );
     setActionLog("Đã ẩn gói khỏi danh sách mua.");
   }
 
@@ -81,30 +105,46 @@ export function createSubscriptionActions({
     });
     const data = await response.json();
     if (!response.ok) {
-      const err = new Error(data.message || "Không mua được gói.") as Error & { status: number };
+      const err = new Error(data.message || "Không mua được gói.") as Error & {
+        status: number;
+      };
       err.status = response.status;
       throw err;
     }
     setSubscriptionList((items) => [data.subscription, ...items]);
     setActionLog(`Đã đăng ký gói "${data.subscription.planName}".`);
-    return data as { subscription: Subscription; payos?: Record<string, unknown> };
+    return data as {
+      subscription: Subscription;
+      payos?: Record<string, unknown>;
+    };
   }
 
   async function renewSubscription(id: string) {
-    const response = await apiFetch(`/subscriptions/${id}/renew`, { method: "POST" });
+    const response = await apiFetch(`/subscriptions/${id}/renew`, {
+      method: "POST",
+    });
     const data = await response.json();
     if (!response.ok) {
-      const err = new Error(data.message || "Không gia hạn được.") as Error & { status: number };
+      const err = new Error(data.message || "Không gia hạn được.") as Error & {
+        status: number;
+      };
       err.status = response.status;
       throw err;
     }
-    setSubscriptionList((items) => items.map((s) => (s.id === id ? data.subscription : s)));
+    setSubscriptionList((items) =>
+      items.map((s) => (s.id === id ? data.subscription : s)),
+    );
     setActionLog("Đã gia hạn gói thành công.");
-    return data as { subscription: Subscription; payos?: Record<string, unknown> };
+    return data as {
+      subscription: Subscription;
+      payos?: Record<string, unknown>;
+    };
   }
 
   async function cancelSubscription(id: string) {
-    const response = await apiFetch(`/subscriptions/${id}/cancel`, { method: "POST" });
+    const response = await apiFetch(`/subscriptions/${id}/cancel`, {
+      method: "POST",
+    });
     const data = await response.json();
     if (!response.ok) {
       setActionLog(data.message || "Không hủy được gói.");
@@ -113,7 +153,9 @@ export function createSubscriptionActions({
     if (data.subscription === null) {
       setSubscriptionList((items) => items.filter((s) => s.id !== id));
     } else {
-      setSubscriptionList((items) => items.map((s) => (s.id === id ? data.subscription : s)));
+      setSubscriptionList((items) =>
+        items.map((s) => (s.id === id ? data.subscription : s)),
+      );
     }
     setActionLog("Đã hủy gói.");
   }
@@ -137,7 +179,9 @@ export function createSubscriptionActions({
     });
     const result = await response.json();
     if (!response.ok) {
-      const err = new Error(result.message || "Không tạo được xe.") as Error & { status: number };
+      const err = new Error(result.message || "Không tạo được xe.") as Error & {
+        status: number;
+      };
       err.status = response.status;
       throw err;
     }

@@ -14,18 +14,18 @@ interface QuickAction {
 const defaultActions: QuickAction[] = [
   {
     label: "Xe mới",
-    href: "/dashboard/vehicles",
+    href: "/vehicles",
     icon: <Car className="h-4 w-4" />,
   },
   {
     label: "Kiểm tra camera",
-    href: "/dashboard/ai",
+    href: "/cameras",
     icon: <Camera className="h-4 w-4" />,
     variant: "outline",
   },
   {
     label: "Xuất báo cáo",
-    href: "/dashboard/revenue-reports",
+    href: "/revenue-reports",
     icon: <FileDown className="h-4 w-4" />,
     variant: "outline",
   },

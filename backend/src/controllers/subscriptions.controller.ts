@@ -38,7 +38,7 @@ export async function createPlanHandler(request: Request, response: Response) {
       duration: z.enum(["monthly", "quarterly", "yearly"]),
       durationDays: z.number().int().min(1),
       price: z.number().min(0),
-      maxVehicles: z.number().int().min(-1).optional(),
+      maxVehicles: z.number().int().min(1).optional(),
     })
     .parse(request.body);
 
@@ -52,7 +52,7 @@ export async function updatePlanHandler(request: Request, response: Response) {
       name: z.string().min(2).optional(),
       description: z.string().optional(),
       price: z.number().min(0).optional(),
-      maxVehicles: z.number().int().min(-1).optional(),
+      maxVehicles: z.number().int().min(1).optional(),
       isActive: z.boolean().optional(),
     })
     .parse(request.body);

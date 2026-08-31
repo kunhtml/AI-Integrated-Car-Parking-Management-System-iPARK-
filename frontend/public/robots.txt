@@ -1,0 +1,44 @@
+# iPARK Parking Management System - Robots.txt
+# Allow all crawlers to access all content
+
+User-agent: *
+Allow: /
+
+# Disallow admin / authenticated areas (route group "(dashboard)" renders at root,
+# so each private path is blocked explicitly)
+Disallow: /overview
+Disallow: /staff-desk
+Disallow: /sessions
+Disallow: /vehicles
+Disallow: /wallet
+Disallow: /notifications
+Disallow: /shifts
+Disallow: /incidents
+Disallow: /disputes
+Disallow: /rfid
+Disallow: /devices
+Disallow: /parking-slots
+Disallow: /subscriptions
+Disallow: /rfid-registration
+Disallow: /users
+Disallow: /pricing
+Disallow: /reports
+Disallow: /staff-applications
+Disallow: /profile
+Disallow: /change-password
+Disallow: /staff
+Disallow: /zones
+Disallow: /cameras
+Disallow: /camera-logs
+Disallow: /capacity-config
+Disallow: /membership-packages
+Disallow: /parking-fee-rules
+Disallow: /revenue-reports
+# Legacy shims (redirect only)
+Disallow: /dashboard/
+Disallow: /api/
+Disallow: /guest-exit
+Disallow: /checkthe
+
+# Sitemap location
+Sitemap: https://ipark.vn/sitemap.xml

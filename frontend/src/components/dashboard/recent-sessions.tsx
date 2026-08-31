@@ -31,7 +31,10 @@ const statusConfig = {
 function formatTime(iso: string): string {
   try {
     const d = new Date(iso);
-    return d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+    return d.toLocaleTimeString("vi-VN", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   } catch {
     return iso;
   }
@@ -49,9 +52,11 @@ export function RecentSessions({
   return (
     <Card className="border-0 shadow-sm">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-        <CardTitle className="text-[15px] font-semibold">Phiên gần đây</CardTitle>
+        <CardTitle className="text-[15px] font-semibold">
+          Phiên gần đây
+        </CardTitle>
         <Link
-          href="/dashboard/sessions"
+          href="/sessions"
           className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
           Xem tất cả
@@ -79,7 +84,9 @@ export function RecentSessions({
                       {session.plate.slice(-3)}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{session.plate}</p>
+                      <p className="text-sm font-medium truncate">
+                        {session.plate}
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         {session.zone && `${session.zone} · `}
                         {formatTime(session.entryTime)}

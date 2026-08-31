@@ -590,6 +590,27 @@ export async function replaceRfidCard(
     actorId,
   );
   oldCard.replacedBy = result.card?._id;
+  // Sau khi cấp thẻ mới thay thế, làm sạch hoàn toàn dữ liệu cá nhân / liên
+  // kết của thẻ cũ và đưa về trạng thái "Khách" sạch để có thể tái sử dụng
+  // (giao cho khách vãng lai) mà không còn dính dáng tới xe cũ / chủ cũ /
+  // gói dịch vụ cũ. Vẫn giữ `replacedBy` để truy vết lịch sử thay thế và
+  // giữ nguyên `replacementOf` / `replacedBy` ở thẻ mới (đã set ở sellRfidCard).
+  oldCard.status = "available";
+  oldCard.cardType = "guest";
+  oldCard.userType = "guest";
+  oldCard.ownerName = "Guest";
+  oldCard.plate = "";
+  oldCard.userId = undefined;
+  oldCard.vehicleId = undefined;
+  oldCard.replacementOf = undefined;
+  oldCard.damagedAt = undefined;
+  oldCard.damagedReason = undefined;
+  oldCard.lostAt = undefined;
+  oldCard.blockedAt = undefined;
+  oldCard.blockedReason = undefined;
+  oldCard.pendingTransactionId = undefined;
+  oldCard.notes = undefined;
+  oldCard.returnedAt = new Date();
   await oldCard.save();
   await writeAudit(
     oldCard.cardId ?? oldCard.uid,

@@ -474,6 +474,8 @@ export type DisputeItem = {
   userId?: string;
   sessionId?: string;
   transactionId?: string;
+  assignedStaffId?: string;
+  assignedStaffName?: string;
   plate?: string;
   reason: string;
   content: string;
@@ -483,6 +485,8 @@ export type DisputeItem = {
   attachments: string[];
   status: DisputeStatus;
   incidentId?: string;
+  sessionRef?: DisputeSessionRef;
+  transactionRef?: DisputeTransactionRef;
   resolutionNote?: string;
   handledBy?: string;
   handledAt?: string | null;
@@ -508,6 +512,7 @@ export type DisputeTransactionRef = {
   method: string;
   amount: number;
   status: string;
+  transactionType?: string;
   createdAt: string;
 };
 
@@ -591,7 +596,6 @@ export type SubscriptionPlan = {
   durationDays: number;
   price: number;
   isActive: boolean;
-  // -1 = không giới hạn (mặc định), >=0 = giới hạn tối đa
   maxVehicles: number;
 };
 

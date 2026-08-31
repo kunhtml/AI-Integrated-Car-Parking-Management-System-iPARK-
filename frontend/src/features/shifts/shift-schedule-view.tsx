@@ -19,7 +19,12 @@ import {
 } from "lucide-react";
 import { useParkingApp } from "@/context/parking-app-context";
 import { apiFetch } from "@/lib/client-api";
-import type { ShiftScheduleHistoryItem, ShiftScheduleItem, ShiftType, StaffForSchedule } from "@/types";
+import type {
+  ShiftScheduleHistoryItem,
+  ShiftScheduleItem,
+  ShiftType,
+  StaffForSchedule,
+} from "@/types";
 
 const SHIFT_COLORS: Record<string, string> = {
   morning: "#f59e0b",
@@ -141,8 +146,8 @@ export function ShiftScheduleView() {
     cancelled: number;
   }
 
-  const isAdmin = currentUser?.role === "admin" || currentUser?.role === "manager";
-  const canManageSchedules = currentUser?.role === "admin" || currentUser?.role === "manager";
+  const isAdmin = currentUser?.role === "admin";
+  const canManageSchedules = currentUser?.role === "admin";
 
   // Load shift types
   useEffect(() => {
@@ -287,21 +292,25 @@ export function ShiftScheduleView() {
   async function handleCheckIn(id: string) {
     try {
       await checkInShift(id);
-    } catch (e) {
-      console.error(e);
+    } catch {
+      // Message already surfaced via setActionLog inside checkInShift; suppress console noise.
     }
   }
 
   async function handleComplete(id: string) {
     try {
       await completeShiftSchedule(id);
-    } catch (e) {
-      console.error(e);
+    } catch {
+      // Message already surfaced via setActionLog inside completeShiftSchedule; suppress console noise.
     }
   }
 
-  const [historyScheduleId, setHistoryScheduleId] = useState<string | null>(null);
-  const [scheduleHistory, setScheduleHistory] = useState<ShiftScheduleHistoryItem[]>([]);
+  const [historyScheduleId, setHistoryScheduleId] = useState<string | null>(
+    null,
+  );
+  const [scheduleHistory, setScheduleHistory] = useState<
+    ShiftScheduleHistoryItem[]
+  >([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
   async function loadScheduleHistory(id: string) {
@@ -1326,7 +1335,9 @@ export function ShiftScheduleView() {
                     marginBottom: 12,
                   }}
                 >
-                  <h3 style={{ margin: 0, fontSize: 16 }}>Lịch sử thay đổi ca</h3>
+                  <h3 style={{ margin: 0, fontSize: 16 }}>
+                    Lịch sử thay đổi ca
+                  </h3>
                   <button
                     className="small-button"
                     onClick={() => {
@@ -1360,14 +1371,29 @@ export function ShiftScheduleView() {
                         shift_schedule_completed: "Hoàn thành ca",
                       };
 
-                      const renderChangeMap = (changes: Record<string, unknown> | undefined) => {
-                        if (!changes || Object.keys(changes).length === 0) return null;
+                      const renderChangeMap = (
+                        changes: Record<string, unknown> | undefined,
+                      ) => {
+                        if (!changes || Object.keys(changes).length === 0)
+                          return null;
                         return (
-                          <ul style={{ margin: "8px 0 0 0", paddingLeft: 18, color: "var(--muted)" }}>
+                          <ul
+                            style={{
+                              margin: "8px 0 0 0",
+                              paddingLeft: 18,
+                              color: "var(--muted)",
+                            }}
+                          >
                             {Object.entries(changes).map(([key, value]) => (
                               <li key={key}>
-                                <strong style={{ color: "var(--text)" }}>{key}:</strong>{" "}
-                                {value === null || value === undefined || value === "" ? "—" : String(value)}
+                                <strong style={{ color: "var(--text)" }}>
+                                  {key}:
+                                </strong>{" "}
+                                {value === null ||
+                                value === undefined ||
+                                value === ""
+                                  ? "—"
+                                  : String(value)}
                               </li>
                             ))}
                           </ul>
@@ -1393,30 +1419,47 @@ export function ShiftScheduleView() {
                               marginBottom: 8,
                             }}
                           >
-                            <strong>{actionLabel[entry.action] || entry.action}</strong>
-                            <span style={{ color: "var(--muted)", fontSize: 12 }}>
+                            <strong>
+                              {actionLabel[entry.action] || entry.action}
+                            </strong>
+                            <span
+                              style={{ color: "var(--muted)", fontSize: 12 }}
+                            >
                               {entry.createdAt
-                                ? new Date(entry.createdAt).toLocaleString("vi-VN")
+                                ? new Date(entry.createdAt).toLocaleString(
+                                    "vi-VN",
+                                  )
                                 : "—"}
                             </span>
                           </div>
 
                           <div style={{ fontSize: 12, color: "var(--muted)" }}>
-                            Người thực hiện: {entry.performedBy?.name || "Hệ thống"}
-                            {entry.performedBy?.email ? ` (${entry.performedBy.email})` : ""}
+                            Người thực hiện:{" "}
+                            {entry.performedBy?.name || "Hệ thống"}
+                            {entry.performedBy?.email
+                              ? ` (${entry.performedBy.email})`
+                              : ""}
                           </div>
 
                           {entry.changes?.old && (
                             <div style={{ marginTop: 8 }}>
-                              <div style={{ fontSize: 12, fontWeight: 600 }}>Trước:</div>
-                              {renderChangeMap(entry.changes.old as Record<string, unknown>)}
+                              <div style={{ fontSize: 12, fontWeight: 600 }}>
+                                Trước:
+                              </div>
+                              {renderChangeMap(
+                                entry.changes.old as Record<string, unknown>,
+                              )}
                             </div>
                           )}
 
                           {entry.changes?.new && (
                             <div style={{ marginTop: 8 }}>
-                              <div style={{ fontSize: 12, fontWeight: 600 }}>Sau:</div>
-                              {renderChangeMap(entry.changes.new as Record<string, unknown>)}
+                              <div style={{ fontSize: 12, fontWeight: 600 }}>
+                                Sau:
+                              </div>
+                              {renderChangeMap(
+                                entry.changes.new as Record<string, unknown>,
+                              )}
                             </div>
                           )}
                         </div>

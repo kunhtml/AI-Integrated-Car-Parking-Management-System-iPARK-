@@ -113,9 +113,30 @@ type ParkingAppContextValue = {
   notificationList: NotificationItem[];
   deviceList: DeviceItem[];
   shiftList: ShiftItem[];
-  shiftScheduleList: ShiftScheduleItem[];  loadSchedules: (params?: { staffId?: string; fromDate?: string; toDate?: string; month?: number; year?: number }) => Promise<ShiftScheduleItem[]>;
-  loadMySchedule: (params?: { fromDate?: string; toDate?: string; month?: number; year?: number }) => Promise<ShiftScheduleItem[]>;
-  createSchedule: (data: { staffId: string; date: string; shiftType: "morning" | "afternoon" | "evening" | "night"; startTime: string; endTime: string; note?: string; location?: string; deviceId?: string }) => Promise<ShiftScheduleItem>;
+  shiftScheduleList: ShiftScheduleItem[];
+  loadSchedules: (params?: {
+    staffId?: string;
+    fromDate?: string;
+    toDate?: string;
+    month?: number;
+    year?: number;
+  }) => Promise<ShiftScheduleItem[]>;
+  loadMySchedule: (params?: {
+    fromDate?: string;
+    toDate?: string;
+    month?: number;
+    year?: number;
+  }) => Promise<ShiftScheduleItem[]>;
+  createSchedule: (data: {
+    staffId: string;
+    date: string;
+    shiftType: "morning" | "afternoon" | "evening" | "night";
+    startTime: string;
+    endTime: string;
+    note?: string;
+    location?: string;
+    deviceId?: string;
+  }) => Promise<ShiftScheduleItem>;
   deleteSchedule: (id: string) => Promise<boolean>;
   checkInShift: (id: string) => Promise<ShiftScheduleItem>;
   completeShiftSchedule: (id: string) => Promise<ShiftScheduleItem>;
@@ -150,7 +171,9 @@ type ParkingAppContextValue = {
     email?: string;
     message?: string;
   }>;
-  resendTwoFactorOtp: (setupTwoFactorId?: string) => Promise<Record<string, unknown>>;
+  resendTwoFactorOtp: (
+    setupTwoFactorId?: string,
+  ) => Promise<Record<string, unknown>>;
   requestDisableTwoFactor: () => Promise<Record<string, unknown>>;
   verifyTwoFactor: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   disableTwoFactor: (event: FormEvent<HTMLFormElement>) => Promise<void>;
@@ -192,7 +215,9 @@ type ParkingAppContextValue = {
     action: "approved" | "rejected",
     adminNote?: string,
   ) => Promise<void>;
-  loadVehicleRequests: (params?: { includeResolved?: boolean }) => Promise<void>;
+  loadVehicleRequests: (params?: {
+    includeResolved?: boolean;
+  }) => Promise<void>;
   loadVehicles: () => Promise<void>;
   addVehicle: (data: {
     plate: string;
@@ -228,7 +253,9 @@ type ParkingAppContextValue = {
   zoneList: Zone[];
   setZoneList: (zones: Zone[] | ((prev: Zone[]) => Zone[])) => void;
   slotList: ParkingSlot[];
-  setSlotList: (slots: ParkingSlot[] | ((prev: ParkingSlot[]) => ParkingSlot[])) => void;
+  setSlotList: (
+    slots: ParkingSlot[] | ((prev: ParkingSlot[]) => ParkingSlot[]),
+  ) => void;
   createZone: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   updateZone: (id: string, updates: Partial<Zone>) => Promise<void>;
   deleteZone: (id: string) => Promise<void>;
@@ -246,6 +273,11 @@ type ParkingAppContextValue = {
   ) => Promise<void>;
   reloadSlots: () => Promise<void>;
   planList: SubscriptionPlan[];
+  setPlanList: (
+    items:
+      | SubscriptionPlan[]
+      | ((prev: SubscriptionPlan[]) => SubscriptionPlan[]),
+  ) => void;
   subscriptionList: Subscription[];
   setSubscriptionList: (
     items: Subscription[] | ((prev: Subscription[]) => Subscription[]),
@@ -964,6 +996,7 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       ...slotActions,
       reloadSlots,
       planList: state.planList,
+      setPlanList,
       subscriptionList: state.subscriptionList,
       setSubscriptionList,
       ...subscriptionActions,

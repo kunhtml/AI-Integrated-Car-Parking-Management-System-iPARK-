@@ -9,10 +9,7 @@ export type SubscriptionPlanDocument = {
   duration: SubscriptionDuration;
   durationDays: number;
   price: number;
-  // null  = không giới hạn (mặc định sau cleanup)
-  // 0     = không cho phép đăng ký biển nào
-  // >= 1  = giới hạn tối đa N biển
-  maxVehicles: number | null;
+  maxVehicles: number;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -25,7 +22,7 @@ const subscriptionPlanSchema = new Schema<SubscriptionPlanDocument>(
     duration: { type: String, enum: ["monthly", "quarterly", "yearly"], required: true },
     durationDays: { type: Number, required: true, min: 1 },
     price: { type: Number, required: true, min: 0 },
-    maxVehicles: { type: Number, default: null, min: 0 },
+    maxVehicles: { type: Number, default: 1, min: 1 },
     isActive: { type: Boolean, default: true, index: true },
   },
   { timestamps: true },

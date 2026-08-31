@@ -72,6 +72,9 @@ next-env.d.ts
 !README.md
 !Tài liệu dev.md
 
+# audit artifacts, plans, reports, and scripts
+*audit*
+
 # log files
 *.log
 *.log.*

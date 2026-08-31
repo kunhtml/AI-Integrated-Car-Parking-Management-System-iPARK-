@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import { z } from "zod";
 import {
   Dispute,
+  DisputeDocument,
   DISPUTE_REASONS,
   DISPUTE_STATUSES,
 } from "../models/Dispute.js";
@@ -76,6 +77,61 @@ async function staffCanHandleDispute(
   return staffId?.toString() === userId;
 }
 
+/** Enrich dispute với thông tin hiển thị của phiên gửi xe / giao dịch liên quan. */
+async function serializeDisputeDetail(dispute: DisputeDocument) {
+  const data = serializeDispute(dispute);
+
+  if (dispute.sessionId) {
+    const session = await ParkingSession.findById(dispute.sessionId);
+    if (session) {
+      (data as any).sessionRef = {
+        id: session._id.toString(),
+        plate: session.plate,
+        slot: session.slot,
+        status: session.status,
+        fee: session.fee,
+        checkInAt: session.checkInAt.toISOString(),
+        checkOutAt: session.checkOutAt
+          ? session.checkOutAt.toISOString()
+          : null,
+      };
+    }
+  }
+
+  if (dispute.transactionId) {
+    const transaction = await Transaction.findById(dispute.transactionId);
+    if (transaction) {
+      const session = transaction.sessionId
+        ? await ParkingSession.findById(transaction.sessionId).select("plate")
+        : null;
+      (data as any).transactionRef = {
+        id: transaction._id.toString(),
+        sessionId: transaction.sessionId?.toString(),
+        plate: session?.plate,
+        method: transaction.method,
+        transactionType: transaction.transactionType,
+        amount: transaction.amount,
+        status: transaction.status,
+        createdAt: transaction.createdAt.toISOString(),
+      };
+    }
+  }
+
+  // Add assigned staff name if available
+  try {
+    if (dispute.assignedStaffId) {
+      const staff = await User.findById(dispute.assignedStaffId);
+      if (staff) {
+        (data as any).assignedStaffName = staff.name;
+      }
+    }
+  } catch {
+    // ignore errors in staff lookup; it's non-critical for rendering
+  }
+
+  return data;
+}
+
 /** GET /api/disputes/references — phiên & giao dịch của khách để chọn khi tạo khiếu nại. */
 export async function listDisputeReferences(
   request: Request,
@@ -115,6 +171,7 @@ export async function listDisputeReferences(
         ? sessionMap.get(transaction.sessionId.toString())?.plate
         : undefined,
       method: transaction.method,
+      transactionType: transaction.transactionType,
       amount: transaction.amount,
       status: transaction.status,
       createdAt: transaction.createdAt.toISOString(),
@@ -143,15 +200,13 @@ export async function getDisputeByCode(request: Request, response: Response) {
     request.user?.role === "staff" &&
     !(await staffCanHandleDispute(request.user.id, dispute))
   ) {
-    response
-      .status(403)
-      .json({
-        message:
-          "Chỉ nhân viên phụ trách phiên gửi xe mới được xem khiếu nại này.",
-      });
+    response.status(403).json({
+      message:
+        "Chỉ nhân viên phụ trách phiên gửi xe mới được xem khiếu nại này.",
+    });
     return;
   }
-  response.json({ dispute: serializeDispute(dispute) });
+  response.json({ dispute: await serializeDisputeDetail(dispute) });
 }
 
 /** GET /api/disputes/:id */
@@ -179,16 +234,14 @@ export async function getDispute(request: Request, response: Response) {
     request.user?.role === "staff" &&
     !(await staffCanHandleDispute(request.user.id, dispute))
   ) {
-    response
-      .status(403)
-      .json({
-        message:
-          "Chỉ nhân viên phụ trách phiên gửi xe mới được xem khiếu nại này.",
-      });
+    response.status(403).json({
+      message:
+        "Chỉ nhân viên phụ trách phiên gửi xe mới được xem khiếu nại này.",
+    });
     return;
   }
 
-  response.json({ dispute: serializeDispute(dispute) });
+  response.json({ dispute: await serializeDisputeDetail(dispute) });
 }
 
 /** POST /api/disputes — khách đăng ký gửi khiếu nại (UC15). */
@@ -259,12 +312,10 @@ export async function createDispute(request: Request, response: Response) {
   const responsibilitySessionId =
     body.sessionId || transactionSessionId?.toString();
   if (!responsibilitySessionId) {
-    response
-      .status(409)
-      .json({
-        message:
-          "Yêu cầu khiếu nại phải gắn với một phiên gửi xe có nhân viên phụ trách.",
-      });
+    response.status(409).json({
+      message:
+        "Yêu cầu khiếu nại phải gắn với một phiên gửi xe có nhân viên phụ trách.",
+    });
     return;
   }
 
@@ -281,12 +332,10 @@ export async function createDispute(request: Request, response: Response) {
     sessionId: responsibilitySession._id,
   });
   if (!responsibleStaffId) {
-    response
-      .status(409)
-      .json({
-        message:
-          "Phiên gửi xe chưa có nhân viên phụ trách. Không thể tạo yêu cầu xử lý.",
-      });
+    response.status(409).json({
+      message:
+        "Phiên gửi xe chưa có nhân viên phụ trách. Không thể tạo yêu cầu xử lý.",
+    });
     return;
   }
 
@@ -295,6 +344,7 @@ export async function createDispute(request: Request, response: Response) {
     userId,
     sessionId: body.sessionId || undefined,
     transactionId: body.transactionId || undefined,
+    assignedStaffId: responsibleStaffId,
     plate,
     reason: body.reason,
     content: body.content,
@@ -360,12 +410,10 @@ export async function updateDispute(request: Request, response: Response) {
     request.user?.role === "staff" &&
     !(await staffCanHandleDispute(request.user.id, dispute))
   ) {
-    response
-      .status(403)
-      .json({
-        message:
-          "Chỉ nhân viên phụ trách phiên gửi xe mới được xử lý khiếu nại này.",
-      });
+    response.status(403).json({
+      message:
+        "Chỉ nhân viên phụ trách phiên gửi xe mới được xử lý khiếu nại này.",
+    });
     return;
   }
 
@@ -465,12 +513,10 @@ export async function addDisputeMessage(request: Request, response: Response) {
     user.role === "staff" &&
     !(await staffCanHandleDispute(user.id, dispute))
   ) {
-    response
-      .status(403)
-      .json({
-        message:
-          "Chỉ nhân viên phụ trách phiên gửi xe mới được trao đổi về khiếu nại này.",
-      });
+    response.status(403).json({
+      message:
+        "Chỉ nhân viên phụ trách phiên gửi xe mới được trao đổi về khiếu nại này.",
+    });
     return;
   }
 

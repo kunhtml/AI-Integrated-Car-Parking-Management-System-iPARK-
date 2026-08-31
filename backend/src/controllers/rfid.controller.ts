@@ -368,13 +368,40 @@ export async function restoreRfidCard(request: Request, response: Response) {
       .json({ ok: false, message: "Không tìm thấy thẻ RFID." });
     return;
   }
-  if (card.status === "in-use") {
+  // Cho phép `force=true` để admin khôi phục thẻ đang gắn với phiên gửi xe
+  // (ví dụ: thẻ cũ đã được thay thế, cần đóng phiên đang mở và làm sạch dữ
+  // liệu để tái sử dụng làm thẻ guest). Mặc định vẫn chặn để tránh xóa nhầm
+  // phiên đang hoạt động.
+  const body = z
+    .object({ force: z.coerce.boolean().optional() })
+    .parse(request.body ?? {});
+  if (card.status === "in-use" && !body.force) {
     response.status(409).json({
       ok: false,
       message:
         "Không thể khôi phục thẻ đang được sử dụng cho xe. Hãy trả thẻ trước.",
     });
     return;
+  }
+  // Nếu force, đóng phiên gửi xe đang mở của thẻ để dọn trạng thái in-use.
+  if (card.status === "in-use" && body.force) {
+    const identifiers = [card.uid, card.cardId].filter(Boolean) as string[];
+    await ParkingSession.updateMany(
+      {
+        status: "Đang gửi",
+        $or: [
+          { rfidCardId: { $in: identifiers } },
+          { exitRfidUid: { $in: identifiers } },
+        ],
+      },
+      {
+        $set: {
+          status: "Đã hoàn thành",
+          checkOutAt: new Date(),
+          rfidReturnedAt: new Date(),
+        },
+      },
+    );
   }
 
   card.status = "available";

@@ -446,6 +446,7 @@ export function serializeDispute(dispute: DisputeDocument) {
     userId: dispute.userId.toString(),
     sessionId: dispute.sessionId?.toString(),
     transactionId: dispute.transactionId?.toString(),
+    assignedStaffId: dispute.assignedStaffId?.toString(),
     plate: dispute.plate,
     reason: dispute.reason,
     content: dispute.content,
@@ -631,8 +632,7 @@ export function serializeSubscriptionPlan(plan: SubscriptionPlanDocument) {
     duration: plan.duration,
     durationDays: plan.durationDays,
     price: plan.price,
-    // null = không giới hạn. Client sẽ check null để hiển thị "Không giới hạn".
-    maxVehicles: plan.maxVehicles,
+    maxVehicles: plan.maxVehicles ?? 1,
     isActive: plan.isActive,
   };
 }

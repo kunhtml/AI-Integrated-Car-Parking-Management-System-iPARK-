@@ -79,6 +79,115 @@
   --surface-2: #f5f6fa;
 }
 
+/* ─── Dark Mode Support ───────────────────────────────────────────── */
+/* Manual override via ThemeToggle: html.dark forces dark,
+     html.light forces light even when the OS prefers dark. */
+:root.dark {
+  /* Core palette - dark theme */
+  --bg: #0f172a;
+  --bg-elevated: #1e293b;
+  --fg: #f1f5f9;
+  --fg-muted: #94a3b8;
+  --fg-subtle: #64748b;
+
+  /* Borders & Lines */
+  --border: #334155;
+  --border-hover: #475569;
+  --ring: rgba(96, 165, 250, 0.4);
+
+  /* Primary */
+  --primary: #60a5fa;
+  --primary-hover: #3b82f6;
+  --primary-fg: #ffffff;
+  --primary-soft: #1e3a8a;
+
+  /* Success / Warning / Danger */
+  --success: #34d399;
+  --success-soft: #064e3b;
+  --warning: #fbbf24;
+  --warning-soft: #78350f;
+  --danger: #f87171;
+  --danger-soft: #7f1d1d;
+
+  /* Sidebar - slightly lighter in dark mode */
+  --sidebar-bg: #1e293b;
+  --sidebar-fg: #e2e8f0;
+  --sidebar-active: #60a5fa;
+  --sidebar-active-fg: #ffffff;
+  --sidebar-hover: rgba(96, 165, 250, 0.15);
+
+  /* Shadows - more subtle in dark mode */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md:
+    0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --shadow-lg:
+    0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
+
+  /* Legacy aliases */
+  --surface: var(--bg-elevated);
+  --surface-2: #334155;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    /* Core palette - dark theme */
+    --bg: #0f172a;
+    --bg-elevated: #1e293b;
+    --fg: #f1f5f9;
+    --fg-muted: #94a3b8;
+    --fg-subtle: #64748b;
+
+    /* Borders & Lines */
+    --border: #334155;
+    --border-hover: #475569;
+    --ring: rgba(96, 165, 250, 0.4);
+
+    /* Primary */
+    --primary: #60a5fa;
+    --primary-hover: #3b82f6;
+    --primary-fg: #ffffff;
+    --primary-soft: #1e3a8a;
+
+    /* Success / Warning / Danger */
+    --success: #34d399;
+    --success-soft: #064e3b;
+    --warning: #fbbf24;
+    --warning-soft: #78350f;
+    --danger: #f87171;
+    --danger-soft: #7f1d1d;
+
+    /* Sidebar - slightly lighter in dark mode */
+    --sidebar-bg: #1e293b;
+    --sidebar-fg: #e2e8f0;
+    --sidebar-active: #60a5fa;
+    --sidebar-active-fg: #ffffff;
+    --sidebar-hover: rgba(96, 165, 250, 0.15);
+
+    /* Shadows - more subtle in dark mode */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md:
+      0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+    --shadow-lg:
+      0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
+
+    /* Legacy aliases */
+    --surface: var(--bg-elevated);
+    --surface-2: #334155;
+  }
+}
+
+/* ─── Reduced Motion Support ──────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* ─── Reset & Base ─────────────────────────────────────────────── */
 *,
 *::before,
@@ -96,6 +205,29 @@ html,
 body {
   max-width: 100vw;
   overflow-x: hidden;
+}
+
+/* ─── Print Styles ─────────────────────────────────────────────── */
+@media print {
+  @page {
+    margin: 2cm;
+  }
+
+  .no-print,
+  .sidebar,
+  .app-header,
+  .skip-link {
+    display: none !important;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  .table-wrap {
+    overflow: visible !important;
+  }
 }
 
 body {
@@ -11483,6 +11615,18 @@ tr:hover td {
   animation: rfid-fade-in 0.15s ease;
 }
 
+.modal {
+  background: var(--surface, #fff);
+  border-radius: 14px;
+  padding: 24px;
+  width: 92vw;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  animation: rfid-pop-in 0.18s ease;
+}
+
 .modal-card {
   background: var(--surface, #fff);
   border-radius: 14px;
@@ -12770,7 +12914,7 @@ textarea.form-input {
 /* Device management layout */
 .devices-toolbar {
   display: flex;
-  align-items: end;
+  align-items: flex-end;
   flex-wrap: wrap;
   gap: 10px;
   margin: 16px 0;
@@ -12853,6 +12997,7 @@ textarea.form-input {
 }
 .devices-test-modal {
   width: min(680px, calc(100vw - 32px));
+  max-width: min(680px, calc(100vw - 32px));
 }
 .device-test-stream {
   overflow: hidden;
@@ -18262,6 +18407,27 @@ textarea.form-input {
   gap: 10px;
   justify-content: flex-end;
   margin-top: 20px;
+}
+
+/* ─── Skip to Content Link (Accessibility) ────────────────────────── */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: var(--primary);
+  color: var(--primary-fg);
+  padding: 8px 16px;
+  text-decoration: none;
+  font-weight: 500;
+  border-radius: 0 0 4px 0;
+  z-index: 10000;
+  transition: top 0.2s;
+}
+
+.skip-link:focus {
+  top: 0;
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
 }
 
 @media print {

@@ -318,13 +318,33 @@ export function DisputesView() {
               }}
             >
               <option value="">— Chọn giao dịch —</option>
-              {transactionRefs.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.method} · {formatMoney(item.amount)} · {item.status} ·{" "}
-                  {formatDateTime(item.createdAt)}
-                  {item.plate ? ` · ${item.plate}` : ""}
-                </option>
-              ))}
+              {transactionRefs.map((item) => {
+                // Map transactionType to human-readable Vietnamese label
+                const tType = item.transactionType ?? "";
+                const typeLabel =
+                  tType === "parking"
+                    ? "Gửi xe"
+                    : tType === "subscription"
+                    ? "Mua gói"
+                    : tType === "penalty"
+                    ? "Phạt"
+                    : tType === "rfid_sale"
+                    ? "Bán thẻ RFID"
+                    : tType === "rfid_deposit"
+                    ? "Đặt cọc RFID"
+                    : tType === "rfid_replacement"
+                    ? "Thay thẻ RFID"
+                    : tType === "rfid_refund"
+                    ? "Hoàn tiền RFID"
+                    : item.transactionType ?? "";
+                return (
+                  <option key={item.id} value={item.id}>
+                    {typeLabel} · {item.method} · {formatMoney(item.amount)} · {item.status} · {" "}
+                    {formatDateTime(item.createdAt)}
+                    {item.plate ? ` · ${item.plate}` : ""}
+                  </option>
+                );
+              })}
             </select>
             {errors.transactionId && (
               <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>

@@ -1181,7 +1181,17 @@ export function RfidCardsView() {
                   </button>
                 )}
                 {isAdmin &&
-                  (card.status === "damaged" || card.status === "lost") && (
+                  (card.status === "damaged" ||
+                    card.status === "lost" ||
+                    // Thẻ guest đang gắn phiên gửi xe nhưng còn dữ liệu cũ
+                    // (biển số, chủ thẻ, liên kết xe) → cần cho phép khôi
+                    // phục sạch để tái sử dụng làm thẻ khách vãng lai.
+                    (card.status === "in-use" &&
+                      !!card.activeSession === false &&
+                      (!!card.plate ||
+                        (card.ownerName && card.ownerName !== "Guest") ||
+                        !!card.userId ||
+                        !!card.vehicleId))) && (
                     <button
                       className="small-button"
                       onClick={() => setRestoreCard(card)}

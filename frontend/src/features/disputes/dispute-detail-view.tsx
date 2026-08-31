@@ -46,6 +46,10 @@ function formatDateTime(value: string | null | undefined) {
   });
 }
 
+function formatMoney(value: number) {
+  return `${value.toLocaleString("vi-VN")}đ`;
+}
+
 const DISPUTE_STATUSES: DisputeStatus[] = [
   "Mới",
   "Đang xử lý",
@@ -217,6 +221,36 @@ export function DisputeDetailView({ id }: { id: string }) {
             <span>Biển số</span>
             <strong>{detail.plate || "—"}</strong>
           </div>
+          {detail.assignedStaffName && (
+            <div className="dispute-sidebar-item">
+              <span>Nhân viên phụ trách</span>
+              <strong>{detail.assignedStaffName}</strong>
+            </div>
+          )}
+          {detail.sessionRef && (
+            <div className="dispute-sidebar-item">
+              <span>Phiên gửi xe liên quan</span>
+              <strong>
+                {detail.sessionRef.plate} ·{" "}
+                {formatDateTime(detail.sessionRef.checkInAt)} ·{" "}
+                {detail.sessionRef.slot} · {formatMoney(detail.sessionRef.fee)}
+              </strong>
+            </div>
+          )}
+          {detail.transactionRef && (
+            <div className="dispute-sidebar-item">
+              <span>Giao dịch liên quan</span>
+              <strong>
+                {detail.transactionRef.method} ·{" "}
+                {formatMoney(detail.transactionRef.amount)} ·{" "}
+                {detail.transactionRef.status} ·{" "}
+                {formatDateTime(detail.transactionRef.createdAt)}
+                {detail.transactionRef.plate
+                  ? ` · ${detail.transactionRef.plate}`
+                  : ""}
+              </strong>
+            </div>
+          )}
           {detail.handledAt && (
             <div className="dispute-sidebar-item">
               <span>Xử lý lúc</span>

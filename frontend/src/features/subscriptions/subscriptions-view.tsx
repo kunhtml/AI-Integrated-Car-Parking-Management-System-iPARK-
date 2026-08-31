@@ -13,20 +13,26 @@ import { PlanGrid } from "./plan-grid";
 import { SubscriptionCard } from "./subscription-card";
 import { VehiclePickerModal } from "./vehicle-picker-modal";
 
-type SubPayos = { qrCode: string; checkoutUrl: string; orderCode: string; amount: number; accountNumber?: string; accountName?: string; bin?: string };
+type SubPayos = {
+  qrCode: string;
+  checkoutUrl: string;
+  orderCode: string;
+  amount: number;
+  accountNumber?: string;
+  accountName?: string;
+  bin?: string;
+};
 
-type PurchaseState =
-  | { open: true; planId: string }
-  | { open: false };
+type PurchaseState = { open: true; planId: string } | { open: false };
 
 type AdminTab = "plans" | "subscriptions";
-
 
 export function SubscriptionsView() {
   const {
     currentUser,
     viewAs,
     planList,
+    setPlanList,
     subscriptionList,
     setSubscriptionList,
     cancelSubscription,
@@ -38,18 +44,34 @@ export function SubscriptionsView() {
 
   const [purchasing, setPurchasing] = useState(false);
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<{ type: "info" | "error" | "success"; text: string } | null>(null);
-  const [payment, setPayment] = useState<{ subId: string; payos: SubPayos; renewMode: boolean; renewBaseEnd: number; plate: string } | null>(null);
-  const [detailVehicle, setDetailVehicle] = useState<RegisteredVehicle | null>(null);
+  const [feedback, setFeedback] = useState<{
+    type: "info" | "error" | "success";
+    text: string;
+  } | null>(null);
+  const [payment, setPayment] = useState<{
+    subId: string;
+    payos: SubPayos;
+    renewMode: boolean;
+    renewBaseEnd: number;
+    plate: string;
+  } | null>(null);
+  const [detailVehicle, setDetailVehicle] = useState<RegisteredVehicle | null>(
+    null,
+  );
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
-  const [purchasePicker, setPurchasePicker] = useState<PurchaseState>({ open: false });
+  const [purchasePicker, setPurchasePicker] = useState<PurchaseState>({
+    open: false,
+  });
   const [adminTab, setAdminTab] = useState<AdminTab>("plans");
 
   const [now] = useState(() => Date.now());
   const isAdmin = currentUser?.role === "admin";
   // Dùng viewAs để xác định chế độ hiển thị
-  const isCustomer = currentUser?.role === "staff" ? viewAs === "customer" : currentUser?.role === "customer";
+  const isCustomer =
+    currentUser?.role === "staff"
+      ? viewAs === "customer"
+      : currentUser?.role === "customer";
   const myActiveSubs = useMemo(
     () =>
       subscriptionList.filter(
@@ -61,7 +83,10 @@ export function SubscriptionsView() {
     [subscriptionList, now],
   );
   const subscriptionHistory = useMemo(
-    () => subscriptionList.filter((s) => s.status === "expired" || s.status === "cancelled"),
+    () =>
+      subscriptionList.filter(
+        (s) => s.status === "expired" || s.status === "cancelled",
+      ),
     [subscriptionList],
   );
   if (!currentUser) return null;
@@ -96,7 +121,10 @@ export function SubscriptionsView() {
     setPurchasePicker({ open: true, planId });
   }
 
-  async function handlePurchaseConfirmed(vehicle: RegisteredVehicle, planId: string) {
+  async function handlePurchaseConfirmed(
+    vehicle: RegisteredVehicle,
+    planId: string,
+  ) {
     if (purchasing) return;
     setPurchasing(true);
     setActivePlanId(planId);
@@ -104,7 +132,9 @@ export function SubscriptionsView() {
     setFeedback(null);
     try {
       const result = await purchaseSubscription(planId, vehicle.id);
-      const base = subscriptionList.find((s) => s.id === result.subscription.id);
+      const base = subscriptionList.find(
+        (s) => s.id === result.subscription.id,
+      );
       const baseEnd = base ? new Date(base.endDate).getTime() : 0;
       const payos = result.payos as SubPayos | undefined;
       if (payos?.qrCode) {
@@ -123,12 +153,22 @@ export function SubscriptionsView() {
           renewBaseEnd: baseEnd,
           plate: vehicle.plate,
         });
-        setFeedback({ type: "info", text: `Quét mã QR để hoàn tất thanh toán cho xe ${vehicle.plate}.` });
+        setFeedback({
+          type: "info",
+          text: `Quét mã QR để hoàn tất thanh toán cho xe ${vehicle.plate}.`,
+        });
       } else {
-        setFeedback({ type: "success", text: `Mua gói thành công cho xe ${vehicle.plate}.` });
+        setFeedback({
+          type: "success",
+          text: `Mua gói thành công cho xe ${vehicle.plate}.`,
+        });
       }
     } catch (err: unknown) {
-      setFeedback({ type: "error", text: (err instanceof Error ? err.message : "") || "Không mua được gói." });
+      setFeedback({
+        type: "error",
+        text:
+          (err instanceof Error ? err.message : "") || "Không mua được gói.",
+      });
     } finally {
       setPurchasing(false);
       setActivePlanId(null);
@@ -146,11 +186,17 @@ export function SubscriptionsView() {
       const r = await apiFetch(`/subscriptions/${subId}/payment-info`);
       const d = await r.json();
       if (!r.ok) {
-        setFeedback({ type: "error", text: d.message || "Không tải được QR thanh toán." });
+        setFeedback({
+          type: "error",
+          text: d.message || "Không tải được QR thanh toán.",
+        });
         return false;
       }
       if (!d.qrCode) {
-        setFeedback({ type: "error", text: "Yêu cầu thanh toán đã hết hạn hoặc không tồn tại. Hãy mua lại gói." });
+        setFeedback({
+          type: "error",
+          text: "Yêu cầu thanh toán đã hết hạn hoặc không tồn tại. Hãy mua lại gói.",
+        });
         return false;
       }
       setPayment({
@@ -187,7 +233,9 @@ export function SubscriptionsView() {
     const plate = base?.primaryVehicle?.plate ?? "—";
     try {
       const result = await renewSubscription(id);
-      setSubscriptionList((items) => items.map((s) => (s.id === id ? result.subscription : s)));
+      setSubscriptionList((items) =>
+        items.map((s) => (s.id === id ? result.subscription : s)),
+      );
       if (result.payos?.qrCode) {
         setPayment({
           subId: id,
@@ -196,13 +244,18 @@ export function SubscriptionsView() {
           renewBaseEnd: baseEnd,
           plate,
         });
-        setFeedback({ type: "info", text: `Quét mã QR để thanh toán và gia hạn gói cho xe ${plate}.` });
+        setFeedback({
+          type: "info",
+          text: `Quét mã QR để thanh toán và gia hạn gói cho xe ${plate}.`,
+        });
       } else {
         setFeedback({ type: "success", text: "Gia hạn gói thành công." });
       }
     } catch (err: unknown) {
       const errMsg = (err instanceof Error ? err.message : "") ?? "";
-      const isPendingRenew = (err as { status?: number })?.status === 409 && /yêu cầu gia hạn chờ thanh toán/i.test(errMsg);
+      const isPendingRenew =
+        (err as { status?: number })?.status === 409 &&
+        /yêu cầu gia hạn chờ thanh toán/i.test(errMsg);
       if (isPendingRenew) {
         await openPendingPayment(id, baseEnd, plate);
       } else {
@@ -213,16 +266,26 @@ export function SubscriptionsView() {
     }
   }
 
-  async function openPendingPayment(subId: string, renewBaseEnd: number, plate: string) {
+  async function openPendingPayment(
+    subId: string,
+    renewBaseEnd: number,
+    plate: string,
+  ) {
     try {
       const r = await apiFetch(`/subscriptions/${subId}/payment-info`);
       const d = await r.json();
       if (!r.ok) {
-        setFeedback({ type: "error", text: d.message || "Không tải được QR thanh toán." });
+        setFeedback({
+          type: "error",
+          text: d.message || "Không tải được QR thanh toán.",
+        });
         return;
       }
       if (!d.qrCode) {
-        setFeedback({ type: "error", text: "Yêu cầu thanh toán đã hết hạn hoặc đã xử lý. Hãy thử lại." });
+        setFeedback({
+          type: "error",
+          text: "Yêu cầu thanh toán đã hết hạn hoặc đã xử lý. Hãy thử lại.",
+        });
         return;
       }
       setPayment({
@@ -281,12 +344,23 @@ export function SubscriptionsView() {
   }
 
   async function onPaymentPaid() {
-    setFeedback({ type: "success", text: payment?.renewMode ? "Gia hạn thành công!" : "Thanh toán thành công!" });
+    setFeedback({
+      type: "success",
+      text: payment?.renewMode
+        ? "Gia hạn thành công!"
+        : "Thanh toán thành công!",
+    });
     await refreshSubscriptionList();
   }
 
   function activeSubForVehicle(vehicleId: string): Subscription | null {
-    return myActiveSubs.find((s) => s.primaryVehicleId === vehicleId || s.primaryVehicle?.id === vehicleId) ?? null;
+    return (
+      myActiveSubs.find(
+        (s) =>
+          s.primaryVehicleId === vehicleId ||
+          s.primaryVehicle?.id === vehicleId,
+      ) ?? null
+    );
   }
 
   const visiblePlans = planList.filter((p) => p.isActive !== false);
@@ -294,7 +368,15 @@ export function SubscriptionsView() {
   return (
     <>
       {detailVehicle && (
-        <VehicleDetailModal vehicle={detailVehicle} onClose={() => setDetailVehicle(null)} onApprove={() => undefined} onReject={() => undefined} rejectReason="" onRejectReasonChange={() => undefined} processing={false} />
+        <VehicleDetailModal
+          vehicle={detailVehicle}
+          onClose={() => setDetailVehicle(null)}
+          onApprove={() => undefined}
+          onReject={() => undefined}
+          rejectReason=""
+          onRejectReasonChange={() => undefined}
+          processing={false}
+        />
       )}
 
       {payment && (
@@ -315,17 +397,21 @@ export function SubscriptionsView() {
         activeSubsForVehicle={activeSubForVehicle}
         onClose={() => setPurchasePicker({ open: false })}
         onSelect={(v) => {
-          if (purchasePicker.open) handlePurchaseConfirmed(v, purchasePicker.planId);
+          if (purchasePicker.open)
+            handlePurchaseConfirmed(v, purchasePicker.planId);
         }}
         onVehicleCreated={() => loadVehicles()}
       />
 
       <div className="subscriptions-page">
-
         {/* Feedback banner */}
         {feedback && (
           <div className={`feedback-banner ${feedback.type}`}>
-            {feedback.type === "success" ? <Check size={16} /> : <CreditCard size={16} />}
+            {feedback.type === "success" ? (
+              <Check size={16} />
+            ) : (
+              <CreditCard size={16} />
+            )}
             {feedback.text}
           </div>
         )}
@@ -368,17 +454,28 @@ export function SubscriptionsView() {
                     <h3>Mua thêm gói cho xe khác</h3>
                     <div className="plans-row">
                       {visiblePlans.map((plan, idx) => (
-                        <div key={plan.id} className={`plan-horizontal-card ${idx === 0 ? "featured" : ""}`}>
-                          <div className="plan-badge">{idx === 0 ? "Phổ biến" : plan.duration}</div>
+                        <div
+                          key={plan.id}
+                          className={`plan-horizontal-card ${idx === 0 ? "featured" : ""}`}
+                        >
+                          <div className="plan-badge">
+                            {idx === 0 ? "Phổ biến" : plan.duration}
+                          </div>
                           <h4>{plan.name}</h4>
-                          <p className="plan-price">{currency.format(plan.price)}</p>
-                          <span className="plan-days">{plan.durationDays} ngày</span>
+                          <p className="plan-price">
+                            {currency.format(plan.price)}
+                          </p>
+                          <span className="plan-days">
+                            {plan.durationDays} ngày
+                          </span>
                           <button
                             className="plan-buy-btn"
                             onClick={() => handlePurchase(plan.id)}
                             disabled={purchasing}
                           >
-                            {purchasing && activePlanId === plan.id ? "Đang tạo..." : "Mua gói này"}
+                            {purchasing && activePlanId === plan.id
+                              ? "Đang tạo..."
+                              : "Mua gói này"}
                           </button>
                         </div>
                       ))}
@@ -393,12 +490,30 @@ export function SubscriptionsView() {
                         <div className="subscription-history-row" key={sub.id}>
                           <div>
                             <strong>{sub.planName}</strong>
-                            <span>{sub.memberCode || "Không có mã thành viên"}</span>
+                            <span>
+                              {sub.memberCode || "Không có mã thành viên"}
+                            </span>
                           </div>
                           <div>
-                            <span>{new Date(sub.startDate).toLocaleDateString("vi-VN")} - {new Date(sub.endDate).toLocaleDateString("vi-VN")}</span>
-                            <b className={sub.status === "expired" ? "history-expired" : "history-cancelled"}>
-                              {sub.status === "expired" ? "Đã hết hạn" : "Đã hủy"}
+                            <span>
+                              {new Date(sub.startDate).toLocaleDateString(
+                                "vi-VN",
+                              )}{" "}
+                              -{" "}
+                              {new Date(sub.endDate).toLocaleDateString(
+                                "vi-VN",
+                              )}
+                            </span>
+                            <b
+                              className={
+                                sub.status === "expired"
+                                  ? "history-expired"
+                                  : "history-cancelled"
+                              }
+                            >
+                              {sub.status === "expired"
+                                ? "Đã hết hạn"
+                                : "Đã hủy"}
                             </b>
                           </div>
                         </div>
@@ -438,29 +553,68 @@ export function SubscriptionsView() {
                 <AdminPlans
                   plans={planList}
                   onCreate={async (data) => {
-                    const r = await apiFetch("/subscriptions/plans", { method: "POST", body: JSON.stringify(data) });
+                    const r = await apiFetch("/subscriptions/plans", {
+                      method: "POST",
+                      body: JSON.stringify(data),
+                    });
                     const d = await r.json();
                     if (r.ok) {
-                      setSubscriptionList((items) => items);
-                      setFeedback({ type: "success", text: `Đã tạo gói "${d.plan.name}".` });
+                      if (d.plan) {
+                        setPlanList((items) => [...items, d.plan]);
+                      }
+                      setFeedback({
+                        type: "success",
+                        text: `Đã tạo gói "${d.plan.name}".`,
+                      });
                     } else {
-                      setFeedback({ type: "error", text: d.message || "Không tạo được gói." });
+                      setFeedback({
+                        type: "error",
+                        text: d.message || "Không tạo được gói.",
+                      });
                     }
                   }}
                   onUpdate={async (id, data) => {
-                    const r = await apiFetch(`/subscriptions/plans/${id}`, { method: "PUT", body: JSON.stringify(data) });
-                    if (r.ok) setFeedback({ type: "success", text: "Đã cập nhật gói." });
-                    else {
-                      const d = await r.json().catch(() => ({}));
-                      setFeedback({ type: "error", text: d.message || "Không cập nhật được gói." });
+                    const r = await apiFetch(`/subscriptions/plans/${id}`, {
+                      method: "PUT",
+                      body: JSON.stringify(data),
+                    });
+                    const d = await r.json().catch(() => ({}));
+                    if (r.ok) {
+                      if (d.plan) {
+                        setPlanList((items) =>
+                          items.map((plan) => (plan.id === id ? d.plan : plan)),
+                        );
+                      }
+                      setFeedback({
+                        type: "success",
+                        text: "Đã cập nhật gói.",
+                      });
+                    } else {
+                      setFeedback({
+                        type: "error",
+                        text: d.message || "Không cập nhật được gói.",
+                      });
                     }
                   }}
                   onDelete={async (id) => {
-                    const r = await apiFetch(`/subscriptions/plans/${id}`, { method: "DELETE" });
-                    if (r.ok) setFeedback({ type: "info", text: "Đã ẩn gói." });
-                    else {
-                      const d = await r.json().catch(() => ({}));
-                      setFeedback({ type: "error", text: d.message || "Không ẩn được gói." });
+                    const r = await apiFetch(`/subscriptions/plans/${id}`, {
+                      method: "DELETE",
+                    });
+                    const d = await r.json().catch(() => ({}));
+                    if (r.ok) {
+                      setPlanList((items) =>
+                        items.map((plan) =>
+                          plan.id === id
+                            ? (d.plan ?? { ...plan, isActive: false })
+                            : plan,
+                        ),
+                      );
+                      setFeedback({ type: "info", text: "Đã ẩn gói." });
+                    } else {
+                      setFeedback({
+                        type: "error",
+                        text: d.message || "Không ẩn được gói.",
+                      });
                     }
                   }}
                 />

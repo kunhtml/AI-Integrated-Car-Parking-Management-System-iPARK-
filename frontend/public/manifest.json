@@ -1,0 +1,22 @@
+{
+  "name": "iPARK - Quản lý bãi đỗ xe thông minh",
+  "short_name": "iPARK",
+  "description": "Nền tảng quản lý vận hành bãi đỗ xe thông minh iPARK.",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#2563eb",
+  "background_color": "#f8fafc",
+  "lang": "vi",
+  "icons": [
+    {
+      "src": "/icon-light-32x32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/apple-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}

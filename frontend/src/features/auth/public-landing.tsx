@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import {
   BadgeCheck,
   Camera,
@@ -1043,11 +1044,12 @@ function HeroSection({
           </div>
         </div>
         <div className="landing-hero-image">
-          <img
+          <Image
             src="/images/hero-parking.png"
             alt="Cổng bãi đỗ xe thông minh iPARK"
             width={900}
             height={600}
+            priority
           />
           <div className="landing-hero-image-badge">
             <ScanLine size={14} />
@@ -2744,9 +2746,7 @@ function PricingSection() {
                     </li>
                     <li>
                       <Check size={13} />
-                      {plan.maxVehicles === -1
-                        ? "Không giới hạn xe"
-                        : `Tối đa ${plan.maxVehicles} biển số`}
+                      Tối đa {plan.maxVehicles ?? 1} biển số
                     </li>
                     <li>
                       <Check size={13} />
@@ -2868,7 +2868,7 @@ export function PublicLanding() {
         liveStats={liveStats}
         onLoginClick={() => setShowAuth(true)}
       />
-      <main className="landing-main">
+      <main id="main-content" className="landing-main">
         <HowItWorks />
         <PricingSection />
         <AvailabilitySection />

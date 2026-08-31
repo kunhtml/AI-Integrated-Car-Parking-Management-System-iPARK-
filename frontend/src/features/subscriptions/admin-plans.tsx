@@ -1,7 +1,21 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { CreditCard, Edit, Eye, EyeOff, Plus, Save, Trash2, X, Check, DollarSign, Calendar, Car, Package } from "lucide-react";
+import {
+  CreditCard,
+  Edit,
+  Eye,
+  EyeOff,
+  Plus,
+  Save,
+  Trash2,
+  X,
+  Check,
+  DollarSign,
+  Calendar,
+  Car,
+  Package,
+} from "lucide-react";
 import type { SubscriptionPlan } from "@/types";
 import { currency } from "@/lib/constants";
 import { DURATION_LABELS } from "./styles";
@@ -54,13 +68,20 @@ export function AdminPlans({ plans, onCreate, onUpdate, onDelete }: Props) {
     duration: "monthly" as "monthly" | "quarterly" | "yearly",
     durationDays: 30,
     price: 0,
-    maxVehicles: -1,
+    maxVehicles: 1,
   });
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     await onCreate(createDraft);
-    setCreateDraft({ name: "", description: "", duration: "monthly", durationDays: 30, price: 0, maxVehicles: -1 });
+    setCreateDraft({
+      name: "",
+      description: "",
+      duration: "monthly",
+      durationDays: 30,
+      price: 0,
+      maxVehicles: 1,
+    });
     setCreateOpen(false);
   }
 
@@ -83,7 +104,11 @@ export function AdminPlans({ plans, onCreate, onUpdate, onDelete }: Props) {
             <p>Tạo và chỉnh sửa các gói dịch vụ</p>
           </div>
         </div>
-        <button className="create-plan-btn" onClick={() => setCreateOpen(true)} type="button">
+        <button
+          className="create-plan-btn"
+          onClick={() => setCreateOpen(true)}
+          type="button"
+        >
           <Plus size={18} />
           <span>Tạo gói mới</span>
         </button>
@@ -92,19 +117,26 @@ export function AdminPlans({ plans, onCreate, onUpdate, onDelete }: Props) {
       {/* Plans Grid */}
       <div className="plans-grid">
         {plans.map((plan) => (
-          <div key={plan.id} className={`plan-card ${!plan.isActive ? "inactive" : ""}`}>
+          <div
+            key={plan.id}
+            className={`plan-card ${!plan.isActive ? "inactive" : ""}`}
+          >
             <div className="plan-card-header">
               <div className="plan-icon">
                 <CreditCard size={24} />
               </div>
               <div className="plan-info">
                 <h3>{plan.name}</h3>
-                {!plan.isActive && <span className="plan-inactive-badge">Đã ẩn</span>}
+                {!plan.isActive && (
+                  <span className="plan-inactive-badge">Đã ẩn</span>
+                )}
               </div>
               <div className="plan-actions-top">
                 <button
                   className="plan-toggle-btn"
-                  onClick={() => onUpdate(plan.id, { isActive: !plan.isActive })}
+                  onClick={() =>
+                    onUpdate(plan.id, { isActive: !plan.isActive })
+                  }
                   type="button"
                   title={plan.isActive ? "Ẩn gói" : "Hiện gói"}
                 >
@@ -134,11 +166,15 @@ export function AdminPlans({ plans, onCreate, onUpdate, onDelete }: Props) {
               </div>
               <div className="plan-feature">
                 <Calendar size={14} />
-                <span>{plan.durationDays} ngày ({DURATION_LABELS[plan.duration]})</span>
+                <span>
+                  {plan.durationDays} ngày
+                </span>
               </div>
               <div className="plan-feature">
                 <Car size={14} />
-                <span>{plan.maxVehicles < 0 ? "Không giới hạn xe" : `Tối đa ${plan.maxVehicles} xe`}</span>
+                <span>
+                  Tối đa {plan.maxVehicles ?? 1} xe
+                </span>
               </div>
             </div>
 
@@ -150,7 +186,9 @@ export function AdminPlans({ plans, onCreate, onUpdate, onDelete }: Props) {
                     <input
                       type="text"
                       defaultValue={plan.name}
-                      onChange={(e) => setEditDraft((d) => ({ ...d, name: e.target.value }))}
+                      onChange={(e) =>
+                        setEditDraft((d) => ({ ...d, name: e.target.value }))
+                      }
                     />
                   </label>
                   <label className="plan-edit-label">
@@ -159,7 +197,12 @@ export function AdminPlans({ plans, onCreate, onUpdate, onDelete }: Props) {
                       type="number"
                       min={0}
                       defaultValue={plan.price}
-                      onChange={(e) => setEditDraft((d) => ({ ...d, price: Number(e.target.value) }))}
+                      onChange={(e) =>
+                        setEditDraft((d) => ({
+                          ...d,
+                          price: Number(e.target.value),
+                        }))
+                      }
                     />
                   </label>
                 </div>
@@ -170,25 +213,43 @@ export function AdminPlans({ plans, onCreate, onUpdate, onDelete }: Props) {
                       type="number"
                       min={1}
                       defaultValue={plan.durationDays}
-                      onChange={(e) => setEditDraft((d) => ({ ...d, durationDays: Number(e.target.value) }))}
+                      onChange={(e) =>
+                        setEditDraft((d) => ({
+                          ...d,
+                          durationDays: Number(e.target.value),
+                        }))
+                      }
                     />
                   </label>
                   <label className="plan-edit-label">
                     <span>Số xe tối đa</span>
                     <input
                       type="number"
-                      min={-1}
-                      defaultValue={plan.maxVehicles}
-                      onChange={(e) => setEditDraft((d) => ({ ...d, maxVehicles: Number(e.target.value) }))}
+                      min={1}
+                      value={editDraft.maxVehicles ?? plan.maxVehicles ?? 1}
+                      onChange={(e) =>
+                        setEditDraft((d) => ({
+                          ...d,
+                          maxVehicles: Math.max(1, Number(e.target.value) || 1),
+                        }))
+                      }
                     />
                   </label>
                 </div>
                 <div className="plan-edit-actions">
-                  <button className="plan-save-btn" onClick={() => saveEdit(plan.id)} type="button">
+                  <button
+                    className="plan-save-btn"
+                    onClick={() => saveEdit(plan.id)}
+                    type="button"
+                  >
                     <Save size={16} />
                     Lưu
                   </button>
-                  <button className="plan-cancel-btn" onClick={() => setEditingId(null)} type="button">
+                  <button
+                    className="plan-cancel-btn"
+                    onClick={() => setEditingId(null)}
+                    type="button"
+                  >
                     Hủy
                   </button>
                 </div>
@@ -197,7 +258,10 @@ export function AdminPlans({ plans, onCreate, onUpdate, onDelete }: Props) {
               <div className="plan-card-actions">
                 <button
                   className="plan-edit-btn"
-                  onClick={() => { setEditingId(plan.id); setEditDraft({}); }}
+                  onClick={() => {
+                    setEditingId(plan.id);
+                    setEditDraft({});
+                  }}
                   type="button"
                 >
                   <Edit size={16} />
@@ -226,14 +290,22 @@ export function AdminPlans({ plans, onCreate, onUpdate, onDelete }: Props) {
       </div>
 
       {/* Create Modal */}
-      <Modal isOpen={createOpen} onClose={() => setCreateOpen(false)} title="Tạo gói mới">
+      <Modal
+        isOpen={createOpen}
+        onClose={() => setCreateOpen(false)}
+        title="Tạo gói mới"
+      >
         <form className="plan-form" onSubmit={handleCreate}>
           <label className="plan-form-label">
-            <span>Tên gói <span className="required">*</span></span>
+            <span>
+              Tên gói <span className="required">*</span>
+            </span>
             <input
               type="text"
               value={createDraft.name}
-              onChange={(e) => setCreateDraft({ ...createDraft, name: e.target.value })}
+              onChange={(e) =>
+                setCreateDraft({ ...createDraft, name: e.target.value })
+              }
               placeholder="VD: Gói Tháng"
               required
             />
@@ -244,7 +316,9 @@ export function AdminPlans({ plans, onCreate, onUpdate, onDelete }: Props) {
             <input
               type="text"
               value={createDraft.description}
-              onChange={(e) => setCreateDraft({ ...createDraft, description: e.target.value })}
+              onChange={(e) =>
+                setCreateDraft({ ...createDraft, description: e.target.value })
+              }
               placeholder="Mô tả ngắn về gói dịch vụ"
             />
           </label>
@@ -254,7 +328,18 @@ export function AdminPlans({ plans, onCreate, onUpdate, onDelete }: Props) {
               <span>Thời hạn</span>
               <select
                 value={createDraft.duration}
-                onChange={(e) => setCreateDraft({ ...createDraft, duration: e.target.value as "monthly" | "quarterly" | "yearly" })}
+                onChange={(e) => {
+                  const duration = e.target.value as
+                    | "monthly"
+                    | "quarterly"
+                    | "yearly";
+                  const durationDays = {
+                    monthly: 30,
+                    quarterly: 90,
+                    yearly: 365,
+                  }[duration];
+                  setCreateDraft({ ...createDraft, duration, durationDays });
+                }}
               >
                 <option value="monthly">Tháng</option>
                 <option value="quarterly">Quý</option>
@@ -267,7 +352,12 @@ export function AdminPlans({ plans, onCreate, onUpdate, onDelete }: Props) {
                 type="number"
                 min={1}
                 value={createDraft.durationDays}
-                onChange={(e) => setCreateDraft({ ...createDraft, durationDays: Number(e.target.value) })}
+                onChange={(e) =>
+                  setCreateDraft({
+                    ...createDraft,
+                    durationDays: Number(e.target.value),
+                  })
+                }
               />
             </label>
           </div>
@@ -279,22 +369,36 @@ export function AdminPlans({ plans, onCreate, onUpdate, onDelete }: Props) {
                 type="number"
                 min={0}
                 value={createDraft.price}
-                onChange={(e) => setCreateDraft({ ...createDraft, price: Number(e.target.value) })}
+                onChange={(e) =>
+                  setCreateDraft({
+                    ...createDraft,
+                    price: Number(e.target.value),
+                  })
+                }
               />
             </label>
             <label className="plan-form-label">
               <span>Số xe tối đa</span>
               <input
                 type="number"
-                min={-1}
+                min={1}
                 value={createDraft.maxVehicles}
-                onChange={(e) => setCreateDraft({ ...createDraft, maxVehicles: Number(e.target.value) })}
+                onChange={(e) =>
+                  setCreateDraft({
+                    ...createDraft,
+                    maxVehicles: Math.max(1, Number(e.target.value) || 1),
+                  })
+                }
               />
             </label>
           </div>
 
           <div className="plan-form-actions">
-            <button className="plan-cancel-btn" type="button" onClick={() => setCreateOpen(false)}>
+            <button
+              className="plan-cancel-btn"
+              type="button"
+              onClick={() => setCreateOpen(false)}
+            >
               Hủy
             </button>
             <button className="plan-save-btn" type="submit">

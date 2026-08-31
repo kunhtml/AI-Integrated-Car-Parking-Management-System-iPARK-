@@ -13,6 +13,15 @@ export function SystemLog({ message }: { message: string }) {
     }
   }, [message]);
 
-  // No visible bar — all messages go to SweetAlert toast
-  return null;
+    // Hidden aria-live region for screen reader announcements
+    return (
+      <div
+        aria-live="polite"
+        aria-atomic="true"
+        role="status"
+        className="sr-only"
+      >
+        {message}
+      </div>
+    );
 }

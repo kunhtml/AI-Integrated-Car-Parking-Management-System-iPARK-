@@ -36,7 +36,9 @@ export function AppShell({
           onToggleNav={() => setMobileNavOpen(!mobileNavOpen)}
         />
         <SystemLog message={actionLog} />
-        {children}
+          <div id="main-content">
+            {children}
+          </div>
       </section>
     </main>
   );

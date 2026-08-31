@@ -48,7 +48,7 @@ function CardDetailContent({ cardId }: { cardId: string }) {
       <section className="content-single">
         <div className="panel">
           <p className="muted-text error">{error || "Không tìm thấy thẻ."}</p>
-          <Link className="ghost-button" href="/dashboard/rfid-cards">
+          <Link className="ghost-button" href="/rfid-cards">
             <ArrowLeft size={14} /> Quay lại
           </Link>
         </div>
@@ -64,7 +64,7 @@ function CardDetailContent({ cardId }: { cardId: string }) {
           <div className="panel-heading">
             <div>
               <p>
-                <Link href="/dashboard/rfid-cards">RFID Cards</Link> / {card.cardId}
+                <Link href="/rfid-cards">RFID Cards</Link> / {card.cardId}
               </p>
               <h2>
                 <CreditCard size={28} /> Chi tiết thẻ RFID
@@ -85,7 +85,7 @@ function CardDetailContent({ cardId }: { cardId: string }) {
               >
                 <History size={14} />
               </button>
-              <Link className="ghost-button" href="/dashboard/rfid-cards">
+              <Link className="ghost-button" href="/rfid-cards">
                 <ArrowLeft size={14} />
               </Link>
             </div>
@@ -157,40 +157,38 @@ function CardDetailContent({ cardId }: { cardId: string }) {
             </h2>
           </div>
         </div>
-          {activeSession ? (
-            <div className="stack-form">
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span className="muted-text">Mã phiếu:</span>
-                <strong>{String(activeSession._id)}</strong>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span className="muted-text">Biển số:</span>
-                <span>
-                  {String(
-                    activeSession.plate ||
-                      activeSession.plateNumber ||
-                      "—",
-                  )}
-                </span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span className="muted-text">Slot:</span>
-                <span>{String(activeSession.slot || "—")}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span className="muted-text">Trạng thái:</span>
-                <span className="badge info">
-                  {String(activeSession.status || "—")}
-                </span>
-              </div>
+        {activeSession ? (
+          <div className="stack-form">
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span className="muted-text">Mã phiếu:</span>
+              <strong>{String(activeSession._id)}</strong>
             </div>
-          ) : (
-            <p className="muted-text">Không có phiếu gửi xe đang active.</p>
-          )}
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span className="muted-text">Biển số:</span>
+              <span>
+                {String(
+                  activeSession.plate || activeSession.plateNumber || "—",
+                )}
+              </span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span className="muted-text">Slot:</span>
+              <span>{String(activeSession.slot || "—")}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span className="muted-text">Trạng thái:</span>
+              <span className="badge info">
+                {String(activeSession.status || "—")}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <p className="muted-text">Không có phiếu gửi xe đang active.</p>
+        )}
       </div>
 
       {showHistory && (
-          <CardHistoryTimeline
+        <CardHistoryTimeline
           cardId={card.cardId ?? card.uid}
           loading={false}
           logs={history}
