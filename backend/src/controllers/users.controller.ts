@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { User, UserRole } from "../models/User.js";
 import { serializeUser } from "../utils/serializers.js";
+import { passwordSchema } from "../validations/password.validation.js";
 
 // Vai trò mà mỗi actor được phép quản lý.
 function manageableRoles(actorRole?: string): UserRole[] {
@@ -13,7 +14,8 @@ function manageableRoles(actorRole?: string): UserRole[] {
 
 export async function listUsers(request: Request, response: Response) {
   const roles = manageableRoles(request.user?.role);
-  const search = typeof request.query.search === "string" ? request.query.search.trim() : "";
+  const search =
+    typeof request.query.search === "string" ? request.query.search.trim() : "";
 
   const criteria: Record<string, unknown> = { role: { $in: roles } };
   if (search) {
@@ -50,7 +52,11 @@ function profilePayload(body: Record<string, unknown>) {
   const payload: Record<string, unknown> = {};
   for (const key of Object.keys(profileFields)) {
     if (body[key] === undefined) continue;
-    if (key === "birthDate" || key === "idCardIssuedAt" || key === "idCardExpiry") {
+    if (
+      key === "birthDate" ||
+      key === "idCardIssuedAt" ||
+      key === "idCardExpiry"
+    ) {
       payload[key] = body[key] ? new Date(body[key] as string) : undefined;
     } else {
       payload[key] = body[key];
@@ -65,7 +71,7 @@ export async function createUser(request: Request, response: Response) {
     .object({
       name: z.string().min(2, "Họ tên phải có ít nhất 2 ký tự"),
       email: z.string().email("Email không hợp lệ"),
-      password: z.string().min(6, "Mật khẩu phải có ít nhất 6 ký tự"),
+      password: passwordSchema,
       role: z.enum(["admin", "staff", "customer"]),
       status: z.enum(["Đang hoạt động", "Đã khóa"]).optional(),
       ...profileFields,
@@ -73,7 +79,9 @@ export async function createUser(request: Request, response: Response) {
     .parse(request.body);
 
   if (!allowed.includes(body.role)) {
-    response.status(403).json({ message: "Bạn không có quyền tạo tài khoản với vai trò này." });
+    response
+      .status(403)
+      .json({ message: "Bạn không có quyền tạo tài khoản với vai trò này." });
     return;
   }
 
@@ -122,7 +130,7 @@ export async function updateUser(request: Request, response: Response) {
       name: z.string().min(2).optional(),
       role: z.enum(["admin", "staff", "customer"]).optional(),
       status: z.enum(["Đang hoạt động", "Đã khóa"]).optional(),
-      password: z.string().min(6).optional(),
+      password: passwordSchema.optional(),
       ...profileFields,
     })
     .parse(request.body);
@@ -135,13 +143,17 @@ export async function updateUser(request: Request, response: Response) {
 
   // Chỉ được sửa tài khoản thuộc nhóm vai trò mình quản lý.
   if (!allowed.includes(target.role)) {
-    response.status(403).json({ message: "Bạn không có quyền sửa tài khoản này." });
+    response
+      .status(403)
+      .json({ message: "Bạn không có quyền sửa tài khoản này." });
     return;
   }
 
   // Nếu đổi vai trò, vai trò mới cũng phải nằm trong nhóm cho phép.
   if (body.role && !allowed.includes(body.role)) {
-    response.status(403).json({ message: "Bạn không có quyền gán vai trò này." });
+    response
+      .status(403)
+      .json({ message: "Bạn không có quyền gán vai trò này." });
     return;
   }
 
@@ -168,12 +180,16 @@ export async function deleteUser(request: Request, response: Response) {
   }
 
   if (!allowed.includes(target.role)) {
-    response.status(403).json({ message: "Bạn không có quyền xóa tài khoản này." });
+    response
+      .status(403)
+      .json({ message: "Bạn không có quyền xóa tài khoản này." });
     return;
   }
 
   if (request.user?.id === id) {
-    response.status(400).json({ message: "Không thể xóa chính tài khoản của bạn." });
+    response
+      .status(400)
+      .json({ message: "Không thể xóa chính tài khoản của bạn." });
     return;
   }
 

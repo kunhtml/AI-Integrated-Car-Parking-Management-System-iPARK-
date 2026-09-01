@@ -622,10 +622,10 @@ export function AuthPanel() {
             </span>
             <input
               name="password"
-              placeholder="Tối thiểu 6 ký tự"
+              placeholder="≥8 ký tự, chữ hoa, thường, số, ký tự đặc biệt"
               required
               type="password"
-              minLength={6}
+              minLength={8}
             />
           </label>
           <label>
@@ -637,7 +637,7 @@ export function AuthPanel() {
               placeholder="Nhập lại mật khẩu"
               required
               type="password"
-              minLength={6}
+              minLength={8}
             />
           </label>
           <button className="landing-auth-btn-primary" type="submit">
@@ -804,10 +804,10 @@ export function AuthPanel() {
             </span>
             <input
               name="password"
-              placeholder="Tối thiểu 6 ký tự"
+              placeholder="≥8 ký tự, chữ hoa, thường, số, ký tự đặc biệt"
               required
               type="password"
-              minLength={6}
+              minLength={8}
             />
           </label>
           <button className="landing-auth-btn-primary" type="submit">
@@ -2876,7 +2876,7 @@ export function PublicLanding() {
       </main>
       <LandingFooter />
       {showAuth && (
-        <div className="landing-auth-modal" onClick={() => setShowAuth(false)}>
+        <div className="landing-auth-modal">
           <div
             className="landing-auth-modal-content"
             onClick={(e) => e.stopPropagation()}

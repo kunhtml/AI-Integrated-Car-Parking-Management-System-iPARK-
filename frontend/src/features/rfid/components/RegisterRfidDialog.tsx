@@ -66,7 +66,7 @@ export function RegisterRfidDialog({
   }
 
   return (
-    <div className="modal-overlay" onClick={() => !pending && onClose()}>
+    <div className="modal-overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <CreditCard size={24} />

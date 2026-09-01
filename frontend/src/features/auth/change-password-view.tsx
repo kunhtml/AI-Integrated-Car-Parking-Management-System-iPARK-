@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { KeyRound, Save } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { isStrongPassword, passwordErrorMessage } from "@/lib/password";
 
 export function ChangePasswordView() {
   const [message, setMessage] = useState<string | null>(null);
@@ -20,6 +21,10 @@ export function ChangePasswordView() {
 
     if (newPassword !== confirmPassword) {
       setError("Mật khẩu mới không khớp.");
+      return;
+    }
+    if (!newPassword || !isStrongPassword(newPassword)) {
+      setError(passwordErrorMessage(newPassword));
       return;
     }
 
@@ -74,7 +79,7 @@ export function ChangePasswordView() {
             Mật khẩu mới
             <input
               className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-              minLength={6}
+              minLength={8}
               name="newPassword"
               required
               type="password"
@@ -84,7 +89,7 @@ export function ChangePasswordView() {
             Nhập lại mật khẩu mới
             <input
               className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-              minLength={6}
+              minLength={8}
               name="confirmPassword"
               required
               type="password"

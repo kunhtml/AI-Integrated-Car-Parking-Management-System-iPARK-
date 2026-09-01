@@ -29,7 +29,7 @@ export function BlockCardDialog({ card, open, onClose, onConfirm }: Props) {
   }
 
   return (
-    <div className="modal-overlay" onClick={() => !pending && onClose()}>
+    <div className="modal-overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <ShieldBan className="text-danger" size={24} />

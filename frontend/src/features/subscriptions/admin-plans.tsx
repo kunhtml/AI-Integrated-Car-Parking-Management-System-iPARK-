@@ -44,7 +44,7 @@ interface ModalProps {
 function Modal({ isOpen, onClose, title, children }: ModalProps) {
   if (!isOpen) return null;
   return (
-    <div className="plan-modal-overlay" onClick={onClose}>
+    <div className="plan-modal-overlay">
       <div className="plan-modal" onClick={(e) => e.stopPropagation()}>
         <div className="plan-modal-header">
           <h3>{title}</h3>

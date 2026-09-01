@@ -807,7 +807,7 @@ export function ParkingSlotsView() {
         <div
           className="modal-overlay"
           role="presentation"
-          onClick={() => setDetailSlot(null)}
+          
         >
           <section
             className="modal-card session-detail-modal"

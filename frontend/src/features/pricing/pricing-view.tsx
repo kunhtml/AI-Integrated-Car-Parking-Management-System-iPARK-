@@ -54,7 +54,7 @@ function Modal({ isOpen, onClose, title, children }: ModalProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="pricing-modal-overlay" onClick={onClose}>
+    <div className="pricing-modal-overlay">
       <div className="pricing-modal" onClick={(e) => e.stopPropagation()}>
         <div className="pricing-modal-header">
           <h3>{title}</h3>
@@ -451,12 +451,30 @@ export function PricingView() {
       >
         <form className="pricing-edit-form" onSubmit={handleSavePricing}>
           <div className="form-section">
-            <h4><CreditCard size={18} /> Giá thẻ RFID Member</h4>
+            <h4>
+              <CreditCard size={18} /> Giá thẻ RFID Member
+            </h4>
             <label className="form-label">
               <span>Giá bán thẻ (VND)</span>
-              <input name="rfidCardSalePrice" type="number" min={0} step={1000} value={pricingForm.rfidCardSalePrice} onChange={(e) => setPricingForm({ ...pricingForm, rfidCardSalePrice: Number(e.target.value) })} required />
+              <input
+                name="rfidCardSalePrice"
+                type="number"
+                min={0}
+                step={1000}
+                value={pricingForm.rfidCardSalePrice}
+                onChange={(e) =>
+                  setPricingForm({
+                    ...pricingForm,
+                    rfidCardSalePrice: Number(e.target.value),
+                  })
+                }
+                required
+              />
             </label>
-            <p className="pricing-form-hint">Giá này được dùng khi khách mua thẻ RFID Member trực tiếp trên website.</p>
+            <p className="pricing-form-hint">
+              Giá này được dùng khi khách mua thẻ RFID Member trực tiếp trên
+              website.
+            </p>
           </div>
           <div className="form-section">
             <h4>
@@ -518,7 +536,9 @@ export function PricingView() {
                 required
               />
             </label>
-            <p className="pricing-form-hint">Sau số phút này, hệ thống bắt đầu tính phí gửi xe.</p>
+            <p className="pricing-form-hint">
+              Sau số phút này, hệ thống bắt đầu tính phí gửi xe.
+            </p>
           </div>
 
           <div className="form-section">
@@ -690,5 +710,3 @@ export function PricingView() {
     </section>
   );
 }
-
-

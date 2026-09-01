@@ -22,7 +22,10 @@ app.use(
     credentials: true,
   }),
 );
-app.use(express.json());
+// Tăng giới hạn body JSON để nhận avatar dạng base64 data URL (~2.7MB cho ảnh 2MB).
+// Các route upload file nhị phân nên dùng multipart (multer) qua /api/uploads/*.
+app.use(express.json({ limit: "8mb" }));
+app.use(express.urlencoded({ limit: "8mb", extended: true }));
 app.use(cookieParser());
 app.use(morgan("dev"));
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));

@@ -143,7 +143,7 @@ function AddZoneModal({
   }
 
   return (
-    <div className="zones-modal-overlay" onClick={onClose}>
+    <div className="zones-modal-overlay">
       <div className="zones-modal" onClick={(e) => e.stopPropagation()}>
         <div className="zones-modal-header">
           <div className="zones-modal-title">
@@ -276,7 +276,7 @@ function EditZoneModal({
   }
 
   return (
-    <div className="zones-modal-overlay" onClick={onClose}>
+    <div className="zones-modal-overlay">
       <div className="zones-modal" onClick={(e) => e.stopPropagation()}>
         <div className="zones-modal-header">
           <div className="zones-modal-title">

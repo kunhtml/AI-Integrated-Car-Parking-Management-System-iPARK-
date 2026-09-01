@@ -3,6 +3,7 @@ import { FormEvent } from "react";
 import { apiFetch } from "@/lib/client-api";
 import { showError, showInfo, showSuccess } from "@/lib/toast";
 import type { AuthMode, DemoUser } from "@/types";
+import { isStrongPassword, passwordErrorMessage } from "@/lib/password";
 
 type AuthActionsParams = {
   setMode: (mode: AuthMode) => void;
@@ -125,9 +126,10 @@ export function createAuthActions({
       setAuthError("Email không hợp lệ.");
       return null;
     }
-    if (!password || password.length < 6) {
-      showError("Mật khẩu phải có ít nhất 6 ký tự.");
-      setAuthError("Mật khẩu phải có ít nhất 6 ký tự.");
+    if (!password || !isStrongPassword(password)) {
+      const msg = passwordErrorMessage(password);
+      showError(msg);
+      setAuthError(msg);
       return null;
     }
     if (password !== confirmPassword) {
@@ -276,9 +278,10 @@ export function createAuthActions({
       setAuthError("Vui lòng nhập mã OTP 6 số.");
       return;
     }
-    if (!password || password.length < 6) {
-      showError("Mật khẩu mới phải có ít nhất 6 ký tự.");
-      setAuthError("Mật khẩu mới phải có ít nhất 6 ký tự.");
+    if (!password || !isStrongPassword(password)) {
+      const msg = passwordErrorMessage(password);
+      showError(msg);
+      setAuthError(msg);
       return;
     }
 

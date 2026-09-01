@@ -26,7 +26,7 @@ interface ModalProps {
 function Modal({ isOpen, onClose, title, children }: ModalProps) {
   if (!isOpen) return null;
   return (
-    <div className="sub-modal-overlay" onClick={onClose}>
+    <div className="sub-modal-overlay">
       <div className="sub-modal" onClick={(e) => e.stopPropagation()}>
         <div className="sub-modal-header">
           <h3>{title}</h3>

@@ -88,13 +88,15 @@ export const navItems: NavItem[] = [
     label: "Sự cố",
     icon: CircleAlert,
     roles: ["admin", "staff"],
+    // Staff xử lý sự cố qua Bàn nhân viên / Khiếu nại; ẩn khỏi sidebar cho gọn.
+    hiddenFromSidebar: ["staff"],
   },
   {
     id: "disputes",
     path: "/disputes",
     label: "Khiếu nại",
     icon: MessageSquareWarning,
-    roles: ["customer"],
+    roles: ["admin", "staff", "customer"],
   },
   {
     id: "rfid",
@@ -172,9 +174,6 @@ export const adminOnlyPaths = ["/pricing", "/reports", "/staff-applications"];
 
 export function getNavItemsForRole(role: Role, viewAs?: ViewAsMode) {
   // Nếu staff đang ở "member mode", show navigation của customer
-  if (role === "staff" && viewAs === "customer") {
-    return navItems.filter((item) => item.roles.includes("customer"));
-  }
   return navItems.filter((item) => item.roles.includes(role));
 }
 

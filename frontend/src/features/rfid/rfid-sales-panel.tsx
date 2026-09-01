@@ -175,7 +175,7 @@ function Modal({
   children: ReactNode;
 }) {
   return (
-    <div className="modal-overlay" role="presentation" onMouseDown={onClose}>
+    <div className="modal-overlay" role="presentation" >
       <div
         className="modal-card rfid-sales-modal"
         role="dialog"

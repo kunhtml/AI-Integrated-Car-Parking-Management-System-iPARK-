@@ -9,6 +9,7 @@ import { User } from "../models/User.js";
 import { sendMail, smtpConfigured } from "../services/mail.service.js";
 import { signSession } from "../services/token.service.js";
 import { serializeUser } from "../utils/serializers.js";
+import { passwordSchema } from "../validations/password.validation.js";
 
 const cookieName = "parking_session";
 const OTP_TTL_MS = 5 * 60 * 1000;
@@ -35,12 +36,10 @@ async function rejectInvalidOtp(
   );
   if (!updated || updated.attempts >= OTP_MAX_ATTEMPTS) {
     await OtpToken.deleteOne({ _id: token._id });
-    response
-      .status(status)
-      .json({
-        message:
-          "M├ú OTP ─æ├ú bß╗ï v├┤ hiß╗çu h├│a do nhß║¡p sai qu├í nhiß╗üu lß║ºn.",
-      });
+    response.status(status).json({
+      message:
+        "M├ú OTP ─æ├ú bß╗ï v├┤ hiß╗çu h├│a do nhß║¡p sai qu├í nhiß╗üu lß║ºn.",
+    });
     return;
   }
   response
@@ -57,15 +56,11 @@ async function enforceOtpCooldown(email: string, response: Response) {
     (latest.createdAt.getTime() + OTP_RESEND_COOLDOWN_MS - Date.now()) / 1000,
   );
   if (retryAfter <= 0) return false;
-  response
-    .status(429)
-    .json({
-      message:
-        "Vui l├▓ng chß╗¥ " +
-        retryAfter +
-        " gi├óy tr╞░ß╗¢c khi gß╗¡i lß║íi OTP.",
-      retryAfter,
-    });
+  response.status(429).json({
+    message:
+      "Vui l├▓ng chß╗¥ " + retryAfter + " gi├óy tr╞░ß╗¢c khi gß╗¡i lß║íi OTP.",
+    retryAfter,
+  });
   return true;
 }
 
@@ -96,7 +91,7 @@ const pendingUserSchema = z
   .object({
     name: z.string().min(2),
     email: z.email(),
-    password: z.string().min(6),
+    password: passwordSchema,
   })
   .strict();
 
@@ -173,16 +168,13 @@ export async function verifyEmailOtp(request: Request, response: Response) {
   }).sort({ createdAt: -1 });
 
   if (!token || !(await bcrypt.compare(body.otp, token.otpHash))) {
-    response
-      .status(400)
-      .json({ message: "OTP không đúng hoặc đã hết hạn." });
+    response.status(400).json({ message: "OTP không đúng hoặc đã hết hạn." });
     return;
   }
 
   if (!token.pendingUser) {
     response.status(400).json({
-      message:
-        "Không tìm thấy thông tin đăng ký. Vui lòng đăng ký lại.",
+      message: "Không tìm thấy thông tin đăng ký. Vui lòng đăng ký lại.",
     });
     return;
   }
@@ -252,8 +244,7 @@ export async function resendVerificationOtp(
 
   if (!existing) {
     response.status(404).json({
-      message:
-        "Không có yêu cầu đăng ký nào đang chờ. Vui lòng đăng ký lại.",
+      message: "Không có yêu cầu đăng ký nào đang chờ. Vui lòng đăng ký lại.",
     });
     return;
   }
@@ -326,8 +317,7 @@ export async function login(request: Request, response: Response) {
   if (user.twoFactorEnabled) {
     if (!smtpConfigured()) {
       response.status(503).json({
-        message:
-          "SMTP chưa được cấu hình. Không thể gửi mã 2FA qua email.",
+        message: "SMTP chưa được cấu hình. Không thể gửi mã 2FA qua email.",
       });
       return;
     }
@@ -414,8 +404,7 @@ export async function googleCallback(request: Request, response: Response) {
 
   if (!code || !state || !expectedState || state !== expectedState) {
     response.status(400).json({
-      message:
-        "Phiên đăng nhập Google không hợp lệ hoặc đã hết hạn.",
+      message: "Phiên đăng nhập Google không hợp lệ hoặc đã hết hạn.",
     });
     return;
   }
@@ -439,9 +428,7 @@ export async function googleCallback(request: Request, response: Response) {
   };
 
   if (!tokenResponse.ok || !tokenData.access_token) {
-    response
-      .status(502)
-      .json({ message: "Không lấy được token Google." });
+    response.status(502).json({ message: "Không lấy được token Google." });
     return;
   }
 
@@ -534,8 +521,7 @@ export async function forgotPassword(request: Request, response: Response) {
 
   if (!smtpConfigured()) {
     response.status(503).json({
-      message:
-        "SMTP chưa được cấu hình. Không thể gửi OTP đặt lại mật khẩu.",
+      message: "SMTP chưa được cấu hình. Không thể gửi OTP đặt lại mật khẩu.",
     });
     return;
   }
@@ -559,8 +545,7 @@ export async function forgotPassword(request: Request, response: Response) {
 
   response.json({
     ok: true,
-    message:
-      "Nếu email tồn tại, hệ thống đã gửi OTP đặt lại mật khẩu.",
+    message: "Nếu email tồn tại, hệ thống đã gửi OTP đặt lại mật khẩu.",
   });
 }
 
@@ -569,7 +554,7 @@ export async function resetPassword(request: Request, response: Response) {
     .object({
       email: z.email(),
       otp: z.string().min(6).max(6),
-      password: z.string().min(6),
+      password: passwordSchema,
     })
     .parse(request.body);
 
@@ -582,9 +567,7 @@ export async function resetPassword(request: Request, response: Response) {
   }).sort({ createdAt: -1 });
 
   if (!token || !(await bcrypt.compare(body.otp, token.otpHash))) {
-    response
-      .status(400)
-      .json({ message: "OTP không đúng hoặc đã hết hạn." });
+    response.status(400).json({ message: "OTP không đúng hoặc đã hết hạn." });
     return;
   }
 
@@ -605,16 +588,13 @@ export async function resetPassword(request: Request, response: Response) {
 export async function setupTwoFactor(request: Request, response: Response) {
   const user = await User.findById(request.user?.id);
   if (!user) {
-    response
-      .status(401)
-      .json({ message: "Bạn cần đăng nhập để bật 2FA." });
+    response.status(401).json({ message: "Bạn cần đăng nhập để bật 2FA." });
     return;
   }
 
   if (!smtpConfigured()) {
     response.status(503).json({
-      message:
-        "SMTP chưa được cấu hình. Không thể gửi mã 2FA qua email.",
+      message: "SMTP chưa được cấu hình. Không thể gửi mã 2FA qua email.",
     });
     return;
   }
@@ -652,9 +632,7 @@ export async function verifyTwoFactor(request: Request, response: Response) {
     .parse(request.body);
   const user = await User.findById(request.user?.id);
   if (!user) {
-    response
-      .status(401)
-      .json({ message: "Bạn cần đăng nhập để bật 2FA." });
+    response.status(401).json({ message: "Bạn cần đăng nhập để bật 2FA." });
     return;
   }
 
@@ -692,8 +670,7 @@ export async function resendTwoFactorOtp(request: Request, response: Response) {
 
   if (!smtpConfigured()) {
     response.status(503).json({
-      message:
-        "SMTP chưa được cấu hình. Không thể gửi lại mã 2FA.",
+      message: "SMTP chưa được cấu hình. Không thể gửi lại mã 2FA.",
     });
     return;
   }
@@ -729,9 +706,7 @@ export async function disableTwoFactor(request: Request, response: Response) {
   const body = z.object({ code: z.string().min(6).max(6) }).parse(request.body);
   const user = await User.findById(request.user?.id);
   if (!user) {
-    response
-      .status(401)
-      .json({ message: "Bạn cần đăng nhập để tắt 2FA." });
+    response.status(401).json({ message: "Bạn cần đăng nhập để tắt 2FA." });
     return;
   }
 
@@ -750,8 +725,7 @@ export async function disableTwoFactor(request: Request, response: Response) {
 
   if (!token) {
     response.status(400).json({
-      message:
-        "Chưa có mã 2FA nào được gửi. Vui lòng bấm 'Gửi mã' trước.",
+      message: "Chưa có mã 2FA nào được gửi. Vui lòng bấm 'Gửi mã' trước.",
     });
     return;
   }
@@ -774,9 +748,7 @@ export async function requestDisableTwoFactor(
 ) {
   const user = await User.findById(request.user?.id);
   if (!user) {
-    response
-      .status(401)
-      .json({ message: "Bạn cần đăng nhập để tắt 2FA." });
+    response.status(401).json({ message: "Bạn cần đăng nhập để tắt 2FA." });
     return;
   }
 
@@ -787,8 +759,7 @@ export async function requestDisableTwoFactor(
 
   if (!smtpConfigured()) {
     response.status(503).json({
-      message:
-        "SMTP chưa được cấu hình. Không thể gửi mã 2FA qua email.",
+      message: "SMTP chưa được cấu hình. Không thể gửi mã 2FA qua email.",
     });
     return;
   }
@@ -851,11 +822,9 @@ export async function verifyLoginTwoFactor(
 
   const user = await User.findOne({ email: otpToken.email });
   if (!user || user.status === "Đã khóa") {
-    response
-      .status(401)
-      .json({
-        message: "Tài khoản không tồn tại hoặc đã bị khóa.",
-      });
+    response.status(401).json({
+      message: "Tài khoản không tồn tại hoặc đã bị khóa.",
+    });
     return;
   }
 
@@ -888,12 +857,21 @@ export async function me(request: Request, response: Response) {
 }
 
 export async function changePassword(request: Request, response: Response) {
-  const body = z
+  const parsed = z
     .object({
       currentPassword: z.string().min(1),
-      newPassword: z.string().min(6),
+      newPassword: passwordSchema,
     })
-    .parse(request.body);
+    .safeParse(request.body);
+
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    response
+      .status(400)
+      .json({ message: issue?.message ?? "Dữ liệu không hợp lệ." });
+    return;
+  }
+  const body = parsed.data;
 
   const user = await User.findById(request.user?.id);
   if (!user) {
@@ -903,9 +881,7 @@ export async function changePassword(request: Request, response: Response) {
 
   const valid = await bcrypt.compare(body.currentPassword, user.passwordHash);
   if (!valid) {
-    response
-      .status(400)
-      .json({ message: "Mật khẩu hiện tại không đúng." });
+    response.status(400).json({ message: "Mật khẩu hiện tại không đúng." });
     return;
   }
 
@@ -929,10 +905,15 @@ const profileUpdateSchema = z
       .optional()
       .or(z.literal(""))
       .transform((v) => (v ? v : undefined)),
+    // Chấp nhận cả URL thường (https://) lẫn data URL (data:image/...;base64,...)
     avatarUrl: z
       .string()
-      .url("URL ảnh không hợp lệ")
       .max(2_000_000)
+      .refine(
+        (v) =>
+          v.startsWith("data:image/") || z.string().url().safeParse(v).success,
+        { message: "URL ảnh không hợp lệ." },
+      )
       .optional(),
   })
   .strict();
@@ -967,9 +948,7 @@ export async function updateProfile(request: Request, response: Response) {
       _id: { $ne: user._id },
     });
     if (existed) {
-      response
-        .status(409)
-        .json({ message: "Số điện thoại đã được sử dụng." });
+      response.status(409).json({ message: "Số điện thoại đã được sử dụng." });
       return;
     }
     user.phone = body.phone;
@@ -986,6 +965,42 @@ export async function updateProfile(request: Request, response: Response) {
   response
     .cookie(cookieName, token, cookieOptions())
     .json({ user: serialized, message: "Đã cập nhật hồ sơ." });
+}
+
+/**
+ * POST /api/auth/avatar
+ * multipart/form-data với field "file".
+ * Trả về { user, message } sau khi cập nhật avatarUrl cho user hiện tại.
+ * Handler này được wrap với multer ở routes/auth.routes.ts (xem avatarUploadMiddleware).
+ */
+export async function uploadAvatar(
+  request: Request & { file?: Express.Multer.File },
+  response: Response,
+) {
+  const userId = request.user?.id;
+  if (!userId) {
+    response.status(401).json({ message: "Chưa đăng nhập." });
+    return;
+  }
+  if (!request.file) {
+    response.status(400).json({ message: "Không có file được gửi." });
+    return;
+  }
+  const user = await User.findById(userId);
+  if (!user) {
+    response.status(404).json({ message: "Không tìm thấy tài khoản." });
+    return;
+  }
+
+  const url = `/uploads/avatars/${request.file.filename}`;
+  user.avatarUrl = url;
+  await user.save();
+
+  const serialized = serializeUser(user);
+  const token = await signSession(serialized);
+  response
+    .cookie(cookieName, token, cookieOptions())
+    .json({ user: serialized, message: "Đã cập nhật ảnh đại diện." });
 }
 
 export async function resendOtp(request: Request, response: Response) {
@@ -1040,12 +1055,9 @@ export async function requestChangeEmail(request: Request, response: Response) {
   const newEmail = body.newEmail.toLowerCase();
 
   if (!smtpConfigured()) {
-    response
-      .status(503)
-      .json({
-        message:
-          "SMTP chưa được cấu hình. Không thể gửi OTP xác minh email.",
-      });
+    response.status(503).json({
+      message: "SMTP chưa được cấu hình. Không thể gửi OTP xác minh email.",
+    });
     return;
   }
 
@@ -1069,12 +1081,9 @@ export async function requestChangeEmail(request: Request, response: Response) {
     _id: { $ne: user._id },
   });
   if (existed) {
-    response
-      .status(409)
-      .json({
-        message:
-          "Email này đã được sử dụng bởi tài khoản khác.",
-      });
+    response.status(409).json({
+      message: "Email này đã được sử dụng bởi tài khoản khác.",
+    });
     return;
   }
 
@@ -1139,9 +1148,7 @@ export async function verifyChangeEmail(request: Request, response: Response) {
   });
 
   if (!token || !(await bcrypt.compare(body.otp, token.otpHash))) {
-    response
-      .status(400)
-      .json({ message: "OTP không đúng hoặc đã hết hạn." });
+    response.status(400).json({ message: "OTP không đúng hoặc đã hết hạn." });
     return;
   }
 
@@ -1153,12 +1160,9 @@ export async function verifyChangeEmail(request: Request, response: Response) {
     _id: { $ne: user._id },
   });
   if (existed) {
-    response
-      .status(409)
-      .json({
-        message:
-          "Email này đã được sử dụng bởi tài khoản khác.",
-      });
+    response.status(409).json({
+      message: "Email này đã được sử dụng bởi tài khoản khác.",
+    });
     return;
   }
 
@@ -1169,12 +1173,10 @@ export async function verifyChangeEmail(request: Request, response: Response) {
   const serialized = serializeUser(user);
   // Cập nhật cookie session với email mới
   const sessionToken = await signSession(serialized);
-  response
-    .cookie(cookieName, sessionToken, cookieOptions())
-    .json({
-      user: serialized,
-      message: "Đã cập nhật email thành công.",
-    });
+  response.cookie(cookieName, sessionToken, cookieOptions()).json({
+    user: serialized,
+    message: "Đã cập nhật email thành công.",
+  });
 }
 
 export async function listActiveSessions(request: Request, response: Response) {

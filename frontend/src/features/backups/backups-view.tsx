@@ -298,9 +298,7 @@ export function BackupsView() {
       {/* Confirmation modal */}
       {confirmAction && (
         <div
-          className="modal-overlay"
-          onClick={() => !actionLoading && setConfirmAction(null)}
-        >
+          className="modal-overlay">
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <AlertCircle

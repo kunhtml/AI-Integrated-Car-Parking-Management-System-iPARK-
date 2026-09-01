@@ -373,7 +373,8 @@ function ForgotPasswordModal({
     text: string;
     type: "success" | "error" | "info";
   } | null>(null);
-  const [devOtp, setDevOtp] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
 
   useEffect(() => {
@@ -389,18 +390,13 @@ function ForgotPasswordModal({
     setConfirmPassword("");
     setMsg(null);
     setDevOtp(null);
-    setResendCooldown(0);
-  }
 
-  function handleClose() {
-    if (loading) return;
-    onClose();
+    setResendCooldown(0);
   }
 
   async function handleRequestOtp(e?: FormEvent) {
     e?.preventDefault();
     if (!email.trim()) {
-      setMsg({ text: "Vui lòng nhập email.", type: "error" });
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
@@ -1357,6 +1353,7 @@ function AvatarSection({
   onUpdate: (url: string) => void;
 }) {
   const [preview, setPreview] = useState<string | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -1374,21 +1371,25 @@ function AvatarSection({
     const reader = new FileReader();
     reader.onload = () => setPreview(reader.result as string);
     reader.readAsDataURL(file);
+    setAvatarFile(file);
   }
 
   async function handleSave() {
-    if (!preview) return;
+    if (!avatarFile) return;
     setLoading(true);
     setMsg("");
     try {
+      const formData = new FormData();
+      formData.append("file", avatarFile);
       const r = await apiFetch("/auth/avatar", {
         method: "POST",
-        body: JSON.stringify({ avatarUrl: preview }),
+        body: formData,
       });
       const d = await r.json();
       if (r.ok) {
-        onUpdate(preview);
+        onUpdate(preview!);
         setPreview(null);
+        setAvatarFile(null);
         setMsg("Đã cập nhật ảnh đại diện.");
       } else {
         setMsg(d.message || "Lỗi khi lưu.");
@@ -2053,7 +2054,10 @@ export function ProfileView() {
   const { currentUser, viewAs, setCurrentUser, logout } = useParkingApp();
 
   // Dùng viewAs để xác định chế độ hiển thị
-  const isCustomer = currentUser?.role === "staff" ? viewAs === "customer" : currentUser?.role === "customer";
+  const isCustomer =
+    currentUser?.role === "staff"
+      ? viewAs === "customer"
+      : currentUser?.role === "customer";
 
   const [editingField, setEditingField] = useState<string | null>(null);
   const [fieldMsg, setFieldMsg] = useState<{
@@ -2116,375 +2120,377 @@ export function ProfileView() {
       {/* ── Avatar + Info ──────────────────────────────────────────── */}
       <div>
         <section style={sectionStyle}>
-        <div style={headingStyle}>
-          <div>
-            <p style={sectionLabelStyle}>Hồ sơ cá nhân</p>
-            <h2 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700 }}>
-              Thông tin tài khoản
-            </h2>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span
-              className={`badge ${currentUser.status === "Đang hoạt động" ? "success" : "warning"}`}
-            >
-              {currentUser.status}
-            </span>
-          </div>
-        </div>
-
-        <AvatarSection
-          avatarUrl={currentUser.avatarUrl ?? undefined}
-          name={currentUser.name}
-          onUpdate={(url) => setCurrentUser({ ...currentUser, avatarUrl: url })}
-        />
-
-        <div
-          style={{ marginTop: 20, display: "flex", flexDirection: "column" }}
-        >
-          {fieldMsg && (
-            <div style={{ marginBottom: 12 }}>
-              <AlertBanner message={fieldMsg.text} type={fieldMsg.type} />
+          <div style={headingStyle}>
+            <div>
+              <p style={sectionLabelStyle}>Hồ sơ cá nhân</p>
+              <h2 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700 }}>
+                Thông tin tài khoản
+              </h2>
             </div>
-          )}
-          <FieldRow
-            label="Họ tên"
-            value={currentUser.name}
-            icon={UserRound}
-            editable
-            editing={editingField === "name"}
-            onEdit={() =>
-              setEditingField(editingField === "name" ? null : "name")
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span
+                className={`badge ${currentUser.status === "Đang hoạt động" ? "success" : "warning"}`}
+              >
+                {currentUser.status}
+              </span>
+            </div>
+          </div>
+
+          <AvatarSection
+            avatarUrl={currentUser.avatarUrl ?? undefined}
+            name={currentUser.name}
+            onUpdate={(url) =>
+              setCurrentUser({ ...currentUser, avatarUrl: url })
             }
           />
-          <FieldRow
-            label="Email"
-            value={currentUser.email}
-            icon={Mail}
-            editable
-            editing={editingField === "email"}
-            onEdit={() =>
-              setEditingField(editingField === "email" ? null : "email")
-            }
-          />
-          <FieldRow
-            label="Số điện thoại"
-            value={currentUser.phone ?? "Chưa cập nhật"}
-            icon={Phone}
-            editable
-            editing={editingField === "phone"}
-            onEdit={() =>
-              setEditingField(editingField === "phone" ? null : "phone")
-            }
-          />
-          <FieldRow
-            label="Địa chỉ"
-            value={currentUser.address ?? "Chưa cập nhật"}
-            icon={MapPin}
-            editable
-            editing={editingField === "address"}
-            onEdit={() =>
-              setEditingField(editingField === "address" ? null : "address")
-            }
-          />
-          <FieldRow
-            label="Vai trò"
-            value={roleLabels[currentUser.role]}
-            icon={IdCard}
-          />
-          <FieldRow
-            label="Ngày tham gia"
-            value={
-              currentUser.createdAt
-                ? new Date(currentUser.createdAt).toLocaleDateString("vi-VN")
-                : "—"
-            }
-            icon={ShieldCheck}
-          />
-        </div>
-      </section>
+
+          <div
+            style={{ marginTop: 20, display: "flex", flexDirection: "column" }}
+          >
+            {fieldMsg && (
+              <div style={{ marginBottom: 12 }}>
+                <AlertBanner message={fieldMsg.text} type={fieldMsg.type} />
+              </div>
+            )}
+            <FieldRow
+              label="Họ tên"
+              value={currentUser.name}
+              icon={UserRound}
+              editable
+              editing={editingField === "name"}
+              onEdit={() =>
+                setEditingField(editingField === "name" ? null : "name")
+              }
+            />
+            <FieldRow
+              label="Email"
+              value={currentUser.email}
+              icon={Mail}
+              editable
+              editing={editingField === "email"}
+              onEdit={() =>
+                setEditingField(editingField === "email" ? null : "email")
+              }
+            />
+            <FieldRow
+              label="Số điện thoại"
+              value={currentUser.phone ?? "Chưa cập nhật"}
+              icon={Phone}
+              editable
+              editing={editingField === "phone"}
+              onEdit={() =>
+                setEditingField(editingField === "phone" ? null : "phone")
+              }
+            />
+            <FieldRow
+              label="Địa chỉ"
+              value={currentUser.address ?? "Chưa cập nhật"}
+              icon={MapPin}
+              editable
+              editing={editingField === "address"}
+              onEdit={() =>
+                setEditingField(editingField === "address" ? null : "address")
+              }
+            />
+            <FieldRow
+              label="Vai trò"
+              value={roleLabels[currentUser.role]}
+              icon={IdCard}
+            />
+            <FieldRow
+              label="Ngày tham gia"
+              value={
+                currentUser.createdAt
+                  ? new Date(currentUser.createdAt).toLocaleDateString("vi-VN")
+                  : "—"
+              }
+              icon={ShieldCheck}
+            />
+          </div>
+        </section>
       </div>
 
       {/* ── Bảo mật ──────────────────────────────────────────────── */}
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <section style={sectionStyle}>
-        <div style={headingStyle}>
-          <div>
-            <p style={sectionLabelStyle}>Bảo mật</p>
-            <h2 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700 }}>
-              Mật khẩu
-            </h2>
+        <section style={sectionStyle}>
+          <div style={headingStyle}>
+            <div>
+              <p style={sectionLabelStyle}>Bảo mật</p>
+              <h2 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700 }}>
+                Mật khẩu
+              </h2>
+            </div>
+            <ShieldCheck size={20} style={{ color: "var(--muted)" }} />
           </div>
-          <ShieldCheck size={20} style={{ color: "var(--muted)" }} />
-        </div>
 
-        <p
-          style={{
-            margin: "0 0 16px",
-            fontSize: "0.85rem",
-            color: "var(--muted)",
-          }}
-        >
-          Quản lý mật khẩu đăng nhập của bạn. Bạn có thể đổi mật khẩu khi đang
-          đăng nhập, hoặc dùng "Quên mật khẩu" nếu muốn nhận mã OTP qua email để
-          đặt lại.
-        </p>
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-            gap: 12,
-          }}
-        >
-          {/* Đổi mật khẩu */}
-          <button
-            type="button"
-            onClick={() => setChangePwOpen(true)}
+          <p
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              padding: "14px 16px",
-              border: "1px solid var(--border, #e2e6ef)",
-              borderRadius: 12,
-              background: "var(--surface)",
-              cursor: "pointer",
-              textAlign: "left",
-              transition: "all 0.15s ease",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = "var(--primary)";
-              e.currentTarget.style.background = "rgba(59,130,246,0.04)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = "var(--border, #e2e6ef)";
-              e.currentTarget.style.background = "var(--surface)";
+              margin: "0 0 16px",
+              fontSize: "0.85rem",
+              color: "var(--muted)",
             }}
           >
-            <div
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: 10,
-                background: "rgba(59,130,246,0.1)",
-                color: "var(--primary)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-              }}
-            >
-              <KeyRound size={20} />
-            </div>
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div
-                style={{
-                  fontWeight: 600,
-                  fontSize: "0.9rem",
-                  color: "var(--fg)",
-                }}
-              >
-                Đổi mật khẩu
-              </div>
-              <div
-                style={{
-                  fontSize: "0.75rem",
-                  color: "var(--muted)",
-                  marginTop: 2,
-                }}
-              >
-                Cập nhật mật khẩu đang dùng.
-              </div>
-            </div>
-          </button>
+            Quản lý mật khẩu đăng nhập của bạn. Bạn có thể đổi mật khẩu khi đang
+            đăng nhập, hoặc dùng "Quên mật khẩu" nếu muốn nhận mã OTP qua email
+            để đặt lại.
+          </p>
 
-          {/* Quên mật khẩu */}
-          <button
-            type="button"
-            onClick={() => setForgotOpen(true)}
+          <div
             style={{
-              display: "flex",
-              alignItems: "center",
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
               gap: 12,
-              padding: "14px 16px",
-              border: "1px solid var(--border, #e2e6ef)",
-              borderRadius: 12,
-              background: "var(--surface)",
-              cursor: "pointer",
-              textAlign: "left",
-              transition: "all 0.15s ease",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = "#f59e0b";
-              e.currentTarget.style.background = "rgba(245,158,11,0.04)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = "var(--border, #e2e6ef)";
-              e.currentTarget.style.background = "var(--surface)";
             }}
           >
-            <div
+            {/* Đổi mật khẩu */}
+            <button
+              type="button"
+              onClick={() => setChangePwOpen(true)}
               style={{
-                width: 40,
-                height: 40,
-                borderRadius: 10,
-                background: "rgba(245,158,11,0.1)",
-                color: "#f59e0b",
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
+                gap: 12,
+                padding: "14px 16px",
+                border: "1px solid var(--border, #e2e6ef)",
+                borderRadius: 12,
+                background: "var(--surface)",
+                cursor: "pointer",
+                textAlign: "left",
+                transition: "all 0.15s ease",
               }}
-            >
-              <HelpCircle size={20} />
-            </div>
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div
-                style={{
-                  fontWeight: 600,
-                  fontSize: "0.9rem",
-                  color: "var(--fg)",
-                }}
-              >
-                Quên mật khẩu
-              </div>
-              <div
-                style={{
-                  fontSize: "0.75rem",
-                  color: "var(--muted)",
-                  marginTop: 2,
-                }}
-              >
-                Đặt lại qua email + OTP.
-              </div>
-            </div>
-          </button>
-
-          {/* Xác thực 2 lớp (OTP qua email) */}
-          <button
-            type="button"
-            onClick={() => setTwoFactorOpen(true)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              padding: "14px 16px",
-              border: `1px solid ${currentUser.twoFactorEnabled ? "rgba(16,185,129,0.4)" : "var(--border, #e2e6ef)"}`,
-              borderRadius: 12,
-              background: currentUser.twoFactorEnabled
-                ? "rgba(16,185,129,0.04)"
-                : "var(--surface)",
-              cursor: "pointer",
-              textAlign: "left",
-              transition: "all 0.15s ease",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = "#10b981";
-              e.currentTarget.style.background = "rgba(16,185,129,0.06)";
-            }}
-            onMouseLeave={(e) => {
-              if (currentUser.twoFactorEnabled) {
-                e.currentTarget.style.borderColor = "rgba(16,185,129,0.4)";
-                e.currentTarget.style.background = "rgba(16,185,129,0.04)";
-              } else {
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "var(--primary)";
+                e.currentTarget.style.background = "rgba(59,130,246,0.04)";
+              }}
+              onMouseLeave={(e) => {
                 e.currentTarget.style.borderColor = "var(--border, #e2e6ef)";
                 e.currentTarget.style.background = "var(--surface)";
-              }
-            }}
-          >
-            <div
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: 10,
-                background: "rgba(16,185,129,0.12)",
-                color: "#10b981",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-                position: "relative",
               }}
             >
-              <ShieldCheck size={20} />
-              {currentUser.twoFactorEnabled && (
-                <span
-                  style={{
-                    position: "absolute",
-                    top: -2,
-                    right: -2,
-                    width: 12,
-                    height: 12,
-                    borderRadius: "50%",
-                    background: "#10b981",
-                    border: "2px solid var(--surface)",
-                  }}
-                  aria-label="Đang bật"
-                />
-              )}
-            </div>
-            <div style={{ minWidth: 0, flex: 1 }}>
               <div
                 style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 10,
+                  background: "rgba(59,130,246,0.1)",
+                  color: "var(--primary)",
                   display: "flex",
                   alignItems: "center",
-                  gap: 8,
-                  fontWeight: 600,
-                  fontSize: "0.9rem",
-                  color: "var(--fg)",
+                  justifyContent: "center",
+                  flexShrink: 0,
                 }}
               >
-                Xác thực 2 lớp (OTP email)
-                {currentUser.twoFactorEnabled ? (
-                  <span
-                    style={{
-                      fontSize: "0.65rem",
-                      fontWeight: 700,
-                      padding: "2px 8px",
-                      borderRadius: 999,
-                      background: "rgba(16,185,129,0.15)",
-                      color: "#10b981",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.04em",
-                    }}
-                  >
-                    Đang bật
-                  </span>
-                ) : (
-                  <span
-                    style={{
-                      fontSize: "0.65rem",
-                      fontWeight: 700,
-                      padding: "2px 8px",
-                      borderRadius: 999,
-                      background: "var(--surface-2, #f5f6fa)",
-                      color: "var(--muted)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.04em",
-                    }}
-                  >
-                    Chưa bật
-                  </span>
-                )}
+                <KeyRound size={20} />
               </div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div
+                  style={{
+                    fontWeight: 600,
+                    fontSize: "0.9rem",
+                    color: "var(--fg)",
+                  }}
+                >
+                  Đổi mật khẩu
+                </div>
+                <div
+                  style={{
+                    fontSize: "0.75rem",
+                    color: "var(--muted)",
+                    marginTop: 2,
+                  }}
+                >
+                  Cập nhật mật khẩu đang dùng.
+                </div>
+              </div>
+            </button>
+
+            {/* Quên mật khẩu */}
+            <button
+              type="button"
+              onClick={() => setForgotOpen(true)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "14px 16px",
+                border: "1px solid var(--border, #e2e6ef)",
+                borderRadius: 12,
+                background: "var(--surface)",
+                cursor: "pointer",
+                textAlign: "left",
+                transition: "all 0.15s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "#f59e0b";
+                e.currentTarget.style.background = "rgba(245,158,11,0.04)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "var(--border, #e2e6ef)";
+                e.currentTarget.style.background = "var(--surface)";
+              }}
+            >
               <div
                 style={{
-                  fontSize: "0.75rem",
-                  color: "var(--muted)",
-                  marginTop: 2,
+                  width: 40,
+                  height: 40,
+                  borderRadius: 10,
+                  background: "rgba(245,158,11,0.1)",
+                  color: "#f59e0b",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
                 }}
               >
-                {currentUser.twoFactorEnabled
-                  ? "Mã OTP 6 số gửi về email khi đăng nhập."
-                  : "Bảo vệ tài khoản với mã OTP 6 số qua email."}
+                <HelpCircle size={20} />
               </div>
-            </div>
-          </button>
-        </div>
-      </section>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div
+                  style={{
+                    fontWeight: 600,
+                    fontSize: "0.9rem",
+                    color: "var(--fg)",
+                  }}
+                >
+                  Quên mật khẩu
+                </div>
+                <div
+                  style={{
+                    fontSize: "0.75rem",
+                    color: "var(--muted)",
+                    marginTop: 2,
+                  }}
+                >
+                  Đặt lại qua email + OTP.
+                </div>
+              </div>
+            </button>
 
-      {/* ── Đăng ký làm nhân viên ────────────────────────────────── */}
-      {isCustomer && <StaffApplicationCard />}
+            {/* Xác thực 2 lớp (OTP qua email) */}
+            <button
+              type="button"
+              onClick={() => setTwoFactorOpen(true)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "14px 16px",
+                border: `1px solid ${currentUser.twoFactorEnabled ? "rgba(16,185,129,0.4)" : "var(--border, #e2e6ef)"}`,
+                borderRadius: 12,
+                background: currentUser.twoFactorEnabled
+                  ? "rgba(16,185,129,0.04)"
+                  : "var(--surface)",
+                cursor: "pointer",
+                textAlign: "left",
+                transition: "all 0.15s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "#10b981";
+                e.currentTarget.style.background = "rgba(16,185,129,0.06)";
+              }}
+              onMouseLeave={(e) => {
+                if (currentUser.twoFactorEnabled) {
+                  e.currentTarget.style.borderColor = "rgba(16,185,129,0.4)";
+                  e.currentTarget.style.background = "rgba(16,185,129,0.04)";
+                } else {
+                  e.currentTarget.style.borderColor = "var(--border, #e2e6ef)";
+                  e.currentTarget.style.background = "var(--surface)";
+                }
+              }}
+            >
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 10,
+                  background: "rgba(16,185,129,0.12)",
+                  color: "#10b981",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  position: "relative",
+                }}
+              >
+                <ShieldCheck size={20} />
+                {currentUser.twoFactorEnabled && (
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: -2,
+                      right: -2,
+                      width: 12,
+                      height: 12,
+                      borderRadius: "50%",
+                      background: "#10b981",
+                      border: "2px solid var(--surface)",
+                    }}
+                    aria-label="Đang bật"
+                  />
+                )}
+              </div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    fontWeight: 600,
+                    fontSize: "0.9rem",
+                    color: "var(--fg)",
+                  }}
+                >
+                  Xác thực 2 lớp (OTP email)
+                  {currentUser.twoFactorEnabled ? (
+                    <span
+                      style={{
+                        fontSize: "0.65rem",
+                        fontWeight: 700,
+                        padding: "2px 8px",
+                        borderRadius: 999,
+                        background: "rgba(16,185,129,0.15)",
+                        color: "#10b981",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.04em",
+                      }}
+                    >
+                      Đang bật
+                    </span>
+                  ) : (
+                    <span
+                      style={{
+                        fontSize: "0.65rem",
+                        fontWeight: 700,
+                        padding: "2px 8px",
+                        borderRadius: 999,
+                        background: "var(--surface-2, #f5f6fa)",
+                        color: "var(--muted)",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.04em",
+                      }}
+                    >
+                      Chưa bật
+                    </span>
+                  )}
+                </div>
+                <div
+                  style={{
+                    fontSize: "0.75rem",
+                    color: "var(--muted)",
+                    marginTop: 2,
+                  }}
+                >
+                  {currentUser.twoFactorEnabled
+                    ? "Mã OTP 6 số gửi về email khi đăng nhập."
+                    : "Bảo vệ tài khoản với mã OTP 6 số qua email."}
+                </div>
+              </div>
+            </button>
+          </div>
+        </section>
+
+        {/* ── Đăng ký làm nhân viên ────────────────────────────────── */}
+        {isCustomer && <StaffApplicationCard />}
       </div>
 
       {/* ── Modals ───────────────────────────────────────────────── */}

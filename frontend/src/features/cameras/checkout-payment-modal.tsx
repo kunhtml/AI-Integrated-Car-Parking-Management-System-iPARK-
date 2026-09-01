@@ -177,7 +177,7 @@ export function CheckoutPaymentModal({ sessionId, plate, fee, payos, onClose, on
   }
 
   return (
-    <div className="pay-modal-overlay" role="dialog" onClick={onClose}>
+    <div className="pay-modal-overlay" role="dialog" >
       <div className="pay-modal" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="pay-modal-header">

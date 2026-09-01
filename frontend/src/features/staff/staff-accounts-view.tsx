@@ -66,10 +66,15 @@ export function StaffAccountsView() {
     }
   }
 
-  async function updateStaff(user: StaffUser, changes: Partial<Pick<StaffUser, "name" | "status">>) {
+  async function updateStaff(
+    user: StaffUser,
+    changes: Partial<Pick<StaffUser, "name" | "status">>,
+  ) {
     setMessage(null);
     const nextUser = { ...user, ...changes };
-    setStaff((items) => items.map((item) => (item.id === user.id ? nextUser : item)));
+    setStaff((items) =>
+      items.map((item) => (item.id === user.id ? nextUser : item)),
+    );
 
     try {
       const response = await apiFetch("/users", {
@@ -79,15 +84,23 @@ export function StaffAccountsView() {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setStaff((items) => items.map((item) => (item.id === user.id ? user : item)));
+        setStaff((items) =>
+          items.map((item) => (item.id === user.id ? user : item)),
+        );
         setMessage(data.message || "Không cập nhật được nhân viên.");
         return;
       }
 
-      setStaff((items) => items.map((item) => (item.id === user.id ? data.user || nextUser : item)));
+      setStaff((items) =>
+        items.map((item) =>
+          item.id === user.id ? data.user || nextUser : item,
+        ),
+      );
       setMessage(data.message || "Đã cập nhật nhân viên.");
     } catch {
-      setStaff((items) => items.map((item) => (item.id === user.id ? user : item)));
+      setStaff((items) =>
+        items.map((item) => (item.id === user.id ? user : item)),
+      );
       setMessage("Không kết nối được API nhân viên.");
     }
   }
@@ -95,7 +108,10 @@ export function StaffAccountsView() {
   return (
     <section className="bg-slate-50 px-6 py-12">
       <div className="mx-auto grid w-full max-w-6xl gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
-        <form className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm" onSubmit={createStaff}>
+        <form
+          className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm"
+          onSubmit={createStaff}
+        >
           <div className="mb-6 border-b border-slate-100 pb-4">
             <p className="text-sm text-slate-500">Admin</p>
             <h1 className="text-2xl font-bold text-slate-900">Create Staff</h1>
@@ -103,8 +119,17 @@ export function StaffAccountsView() {
           <div className="space-y-4">
             <InputField label="Tên nhân viên" name="name" required />
             <InputField label="Email" name="email" required type="email" />
-            <InputField label="Mật khẩu tạm" minLength={6} name="password" required type="password" />
-            <button className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700" type="submit">
+            <InputField
+              label="Mật khẩu tạm"
+              minLength={8}
+              name="password"
+              required
+              type="password"
+            />
+            <button
+              className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+              type="submit"
+            >
               <Save size={16} />
               Tạo tài khoản
             </button>
@@ -115,12 +140,18 @@ export function StaffAccountsView() {
           <div className="mb-6 flex items-center justify-between border-b border-slate-100 pb-4">
             <div>
               <p className="text-sm text-slate-500">Admin</p>
-              <h1 className="text-2xl font-bold text-slate-900">Manage Staff Accounts</h1>
+              <h1 className="text-2xl font-bold text-slate-900">
+                Manage Staff Accounts
+              </h1>
             </div>
             <UsersRound className="text-blue-600" size={24} />
           </div>
 
-          {message && <p className="mb-4 rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-700">{message}</p>}
+          {message && (
+            <p className="mb-4 rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-700">
+              {message}
+            </p>
+          )}
 
           <div className="overflow-x-auto">
             <table className="w-full min-w-[640px] text-left text-sm">
@@ -134,11 +165,16 @@ export function StaffAccountsView() {
               </thead>
               <tbody>
                 {staff.map((user) => (
-                  <tr className="border-b border-slate-100 last:border-0" key={user.id}>
+                  <tr
+                    className="border-b border-slate-100 last:border-0"
+                    key={user.id}
+                  >
                     <td className="py-3 pr-4">
                       <input
                         className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
-                        onBlur={(event) => updateStaff(user, { name: event.target.value })}
+                        onBlur={(event) =>
+                          updateStaff(user, { name: event.target.value })
+                        }
                         defaultValue={user.name || user.email}
                       />
                     </td>
@@ -146,7 +182,11 @@ export function StaffAccountsView() {
                     <td className="py-3 pr-4">
                       <select
                         className="rounded-md border border-slate-200 px-3 py-2 text-sm"
-                        onChange={(event) => updateStaff(user, { status: event.target.value as StaffUser["status"] })}
+                        onChange={(event) =>
+                          updateStaff(user, {
+                            status: event.target.value as StaffUser["status"],
+                          })
+                        }
                         value={user.status}
                       >
                         <option value="Đang hoạt động">Đang hoạt động</option>
@@ -162,8 +202,16 @@ export function StaffAccountsView() {
             </table>
           </div>
 
-          {!loading && staff.length === 0 && <p className="py-10 text-center text-sm text-slate-500">Chưa có tài khoản nhân viên để hiển thị.</p>}
-          {loading && <p className="py-10 text-center text-sm text-slate-500">Đang tải danh sách nhân viên...</p>}
+          {!loading && staff.length === 0 && (
+            <p className="py-10 text-center text-sm text-slate-500">
+              Chưa có tài khoản nhân viên để hiển thị.
+            </p>
+          )}
+          {loading && (
+            <p className="py-10 text-center text-sm text-slate-500">
+              Đang tải danh sách nhân viên...
+            </p>
+          )}
         </div>
       </div>
     </section>
@@ -179,7 +227,10 @@ function InputField({
   return (
     <label className="block text-sm font-medium text-slate-700">
       {label}
-      <input className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" {...props} />
+      <input
+        className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+        {...props}
+      />
     </label>
   );
 }

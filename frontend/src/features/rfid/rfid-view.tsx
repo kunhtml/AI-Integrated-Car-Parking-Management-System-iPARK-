@@ -1246,11 +1246,7 @@ export function RfidCardsView() {
       {/* Add Modal */}
       {showAddForm && (
         <div
-          className="modal-overlay"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowAddForm(false);
-          }}
-        >
+          className="modal-overlay">
           <div className="modal-card">
             <div className="modal-header">
               <div className="modal-title">
@@ -1466,11 +1462,7 @@ export function RfidCardsView() {
 
       {lockingCard && (
         <div
-          className="modal-overlay"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setLockingCard(null);
-          }}
-        >
+          className="modal-overlay">
           <div className="modal-card narrow">
             <h3 className="confirm-title">
               <AlertTriangle size={18} color="#b45309" /> Khóa thẻ RFID
@@ -1514,11 +1506,7 @@ export function RfidCardsView() {
 
       {reportLostCard && (
         <div
-          className="modal-overlay"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setReportLostCard(null);
-          }}
-        >
+          className="modal-overlay">
           <div className="modal-card narrow">
             <h3 className="confirm-title">
               <AlertTriangle size={18} color="#e11d48" /> Đánh dấu mất thẻ RFID
@@ -1563,11 +1551,7 @@ export function RfidCardsView() {
 
       {reportDamagedCard && (
         <div
-          className="modal-overlay"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setReportDamagedCard(null);
-          }}
-        >
+          className="modal-overlay">
           <div className="modal-card narrow">
             <h3 className="confirm-title">
               <AlertTriangle size={18} color="#ea580c" /> Đánh dấu hỏng thẻ RFID
@@ -1613,11 +1597,7 @@ export function RfidCardsView() {
 
       {restoreCard && (
         <div
-          className="modal-overlay"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setRestoreCard(null);
-          }}
-        >
+          className="modal-overlay">
           <div className="modal-card narrow">
             <h3 className="confirm-title">
               <RefreshCcw size={18} color="#0891b2" /> Khôi phục thẻ RFID
@@ -1663,11 +1643,7 @@ export function RfidCardsView() {
       {/* Edit Modal */}
       {editing && (
         <div
-          className="modal-overlay"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setEditing(null);
-          }}
-        >
+          className="modal-overlay">
           <div className="modal-card narrow">
             <div className="modal-header">
               <div className="modal-title">
@@ -1834,11 +1810,7 @@ export function RfidCardsView() {
       {/* Confirm Delete */}
       {confirmDelete && (
         <div
-          className="modal-overlay"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setConfirmDelete(null);
-          }}
-        >
+          className="modal-overlay">
           <div className="modal-card narrow">
             <h3 className="confirm-title">
               <Trash2 size={18} color="#ef4444" />
@@ -1873,14 +1845,8 @@ export function RfidCardsView() {
 
       {bulkClear && (
         <div
-          className="modal-overlay"
-          onClick={(e) => {
-            if (e.target === e.currentTarget && !submitting) {
-              setBulkClear(null);
-              setBulkConfirmText("");
-            }
-          }}
-        >
+          className="modal-overlay">
+
           <div className="modal-card narrow">
             <h3 className="confirm-title">
               {bulkClear.mode === "reset" ? (

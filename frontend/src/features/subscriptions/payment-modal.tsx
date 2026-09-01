@@ -199,7 +199,7 @@ export function PaymentModal({ payos, subscriptionId, renewMode, renewBaseEnd, p
   }
 
   return (
-    <div className="pay-modal-overlay" role="dialog" onClick={onClose}>
+    <div className="pay-modal-overlay" role="dialog" >
       <div className="pay-modal" onClick={(e) => e.stopPropagation()}>
         {/* Header gradient */}
         <div className="pay-modal-header">

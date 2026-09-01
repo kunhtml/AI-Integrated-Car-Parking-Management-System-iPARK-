@@ -683,7 +683,7 @@ export function SessionsView() {
           <div
             className="modal-overlay"
             role="presentation"
-            onClick={() => setDetailSession(null)}
+            
           >
             <section
               className="modal-card session-detail-modal"

@@ -59,7 +59,8 @@ const DISPUTE_STATUSES: DisputeStatus[] = [
 
 export function DisputeDetailView({ id }: { id: string }) {
   const router = useRouter();
-  const { currentUser, setActionLog } = useParkingApp();
+  const { currentUser, incidentList, setIncidentList, setActionLog } =
+    useParkingApp();
   const [detail, setDetail] = useState<DisputeItem | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -103,28 +104,62 @@ export function DisputeDetailView({ id }: { id: string }) {
 
   const handleReply = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!replyContent.trim()) return;
+    const hasMessage = replyContent.trim().length > 0;
+    const hasStatusChange = Boolean(newStatus) && newStatus !== detail?.status;
+    // Phải có ít nhất 1 trong 2: tin nhắn hoặc đổi trạng thái
+    if (!hasMessage && !hasStatusChange) return;
     setSending(true);
     try {
-      const msgRes = await apiFetch(`/disputes/${id}/messages`, {
-        method: "POST",
-        body: JSON.stringify({ content: replyContent.trim() }),
-      });
-      const msgData = await msgRes.json();
-      if (!msgRes.ok) {
-        setActionLog(msgData.message || "Gửi tin nhắn thất bại.");
-        return;
+      if (hasMessage) {
+        const msgRes = await apiFetch(`/disputes/${id}/messages`, {
+          method: "POST",
+          body: JSON.stringify({ content: replyContent.trim() }),
+        });
+        const msgData = await msgRes.json();
+        if (!msgRes.ok) {
+          setActionLog(msgData.message || "Gửi tin nhắn thất bại.");
+          return;
+        }
       }
-      if (newStatus && newStatus !== detail?.status) {
-        await apiFetch(`/disputes/${id}`, {
+      if (hasStatusChange) {
+        const statusRes = await apiFetch(`/disputes/${id}`, {
           method: "PATCH",
           body: JSON.stringify({ status: newStatus }),
         });
+        if (!statusRes.ok) {
+          const statusData = await statusRes.json().catch(() => ({}));
+          setActionLog(statusData.message || "Cập nhật trạng thái thất bại.");
+          return;
+        }
       }
       setReplyContent("");
       setNewStatus("");
+      // Đồng bộ trạng thái incident liên quan (Hàng đợi sự cố) ngay trong
+      // context để tránh hiển thị "Đang xử lý" cũ khi quay lại /incidents.
+      // Backend map: "Đã xử lý"/"Từ chối" của dispute → incident "Đã xử lý".
+      if (hasStatusChange && detail?.incidentId) {
+        const incidentStatus =
+          newStatus === "Mới"
+            ? "Mới"
+            : newStatus === "Đang xử lý"
+              ? "Đang xử lý"
+              : "Đã xử lý";
+        setIncidentList((items) =>
+          items.map((item) =>
+            item.id === detail.incidentId || item.disputeId === detail.id
+              ? { ...item, status: incidentStatus }
+              : item,
+          ),
+        );
+      }
       await loadDetail();
-      setActionLog("Đã gửi phản hồi.");
+      setActionLog(
+        hasMessage && hasStatusChange
+          ? "Đã gửi phản hồi và cập nhật trạng thái."
+          : hasMessage
+            ? "Đã gửi phản hồi."
+            : "Đã cập nhật trạng thái.",
+      );
     } catch (err) {
       console.error("[disputes] reply failed:", err);
       setActionLog("Lỗi khi gửi phản hồi.");
@@ -370,17 +405,20 @@ export function DisputeDetailView({ id }: { id: string }) {
               <div className="dispute-reply-input-row">
                 <textarea
                   className="dispute-reply-textarea"
-                  placeholder="Nhập phản hồi cho khách hàng..."
+                  placeholder="Nhập phản hồi cho khách hàng (tùy chọn nếu chỉ đổi trạng thái)..."
                   value={replyContent}
                   onChange={(e) => setReplyContent(e.target.value)}
                   rows={3}
-                  required
                   disabled={sending}
                 />
                 <button
                   className="primary-button dispute-reply-send"
                   type="submit"
-                  disabled={sending || !replyContent.trim()}
+                  disabled={
+                    sending ||
+                    (!replyContent.trim() &&
+                      (!newStatus || newStatus === detail?.status))
+                  }
                   aria-label="Gửi phản hồi"
                 >
                   {sending ? (

@@ -1,3 +1,7 @@
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import multer from "multer";
 import { Router } from "express";
 import {
   changePassword,
@@ -20,6 +24,7 @@ import {
   revokeSession,
   setupTwoFactor,
   updateProfile,
+  uploadAvatar,
   verifyChangeEmail,
   verifyEmailOtp,
   verifyLoginTwoFactor,
@@ -27,6 +32,42 @@ import {
 } from "../controllers/auth.controller.js";
 import { requireAuth } from "../middlewares/auth.middleware.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Thư mục lưu avatar. Đường dẫn có thể override qua env UPLOADS_AVATAR_DIR.
+const AVATAR_DIR = process.env.UPLOADS_AVATAR_DIR
+  ? path.resolve(process.env.UPLOADS_AVATAR_DIR)
+  : path.resolve(__dirname, "../../uploads/avatars");
+if (!fs.existsSync(AVATAR_DIR)) {
+  fs.mkdirSync(AVATAR_DIR, { recursive: true });
+}
+
+const avatarUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, AVATAR_DIR),
+    filename: (_req, file, cb) => {
+      const ext = (path.extname(file.originalname || "").toLowerCase() ||
+        ".jpg") as string;
+      const safeExt = [".jpg", ".jpeg", ".png", ".webp"].includes(ext)
+        ? ext
+        : ".jpg";
+      cb(
+        null,
+        `avatar_${Date.now()}_${Math.random().toString(36).slice(2, 8)}${safeExt}`,
+      );
+    },
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (_req, file, cb) => {
+    if (!file.mimetype.startsWith("image/")) {
+      cb(new Error("Chỉ chấp nhận file ảnh."));
+      return;
+    }
+    cb(null, true);
+  },
+});
 
 export const authRoutes = Router();
 
@@ -44,10 +85,24 @@ authRoutes.get("/google", googleLogin);
 authRoutes.get("/google/callback", asyncHandler(googleCallback));
 authRoutes.post("/logout", logout);
 authRoutes.get("/me", requireAuth, me);
+authRoutes.post(
+  "/avatar",
+  requireAuth,
+  avatarUpload.single("file"),
+  asyncHandler(uploadAvatar),
+);
 authRoutes.put("/profile", requireAuth, asyncHandler(updateProfile));
 authRoutes.post("/change-password", requireAuth, asyncHandler(changePassword));
-authRoutes.post("/request-change-email", requireAuth, asyncHandler(requestChangeEmail));
-authRoutes.post("/verify-change-email", requireAuth, asyncHandler(verifyChangeEmail));
+authRoutes.post(
+  "/request-change-email",
+  requireAuth,
+  asyncHandler(requestChangeEmail),
+);
+authRoutes.post(
+  "/verify-change-email",
+  requireAuth,
+  asyncHandler(verifyChangeEmail),
+);
 authRoutes.post("/2fa/setup", requireAuth, asyncHandler(setupTwoFactor));
 authRoutes.post("/2fa/verify", requireAuth, asyncHandler(verifyTwoFactor));
 authRoutes.post(

@@ -675,9 +675,7 @@ export function RfidCardsView() {
       {/* ───── Confirm modal ───── */}
       {confirm && (
         <div
-          className="modal-overlay"
-          onClick={() => !actionPending && setConfirm(null)}
-        >
+          className="modal-overlay">
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               {confirm.type === "block" && (

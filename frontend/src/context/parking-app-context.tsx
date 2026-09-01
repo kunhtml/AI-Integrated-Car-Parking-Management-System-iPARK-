@@ -9,7 +9,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-
 import { createInitialState } from "@/context/parking-app-state";
 import { createAnalyticsActions } from "@/hooks/actions/use-analytics-actions";
 import { createAuthActions } from "@/hooks/actions/use-auth-actions";
@@ -141,6 +140,11 @@ type ParkingAppContextValue = {
   checkInShift: (id: string) => Promise<ShiftScheduleItem>;
   completeShiftSchedule: (id: string) => Promise<ShiftScheduleItem>;
   incidentList: IncidentItem[];
+  setIncidentList: (
+    incidentList:
+      | IncidentItem[]
+      | ((items: IncidentItem[]) => IncidentItem[]),
+  ) => void;
   reportFrom: string;
   setReportFrom: (from: string) => void;
   reportTo: string;
@@ -831,17 +835,51 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
   );
 
   /**
-   * Auto-refresh slot mỗi 5s khi user đã đăng nhập.
+   * Auto-refresh slot định kỳ khi user đã đăng nhập.
    * Đảm bảo mọi tab (cameras / rfid / vehicles / dashboard) đều thấy
    * slot chuyển trạng thái realtime mà không cần mở trang parking-slots.
+   * Tối ưu: interval 30s, pause khi tab ẩn, skip khi offline, dedupe khi đang fetch.
    * Dừng interval khi logout.
    */
   useEffect(() => {
-    if (!state.currentUser) return;
-    const interval = setInterval(() => {
-      void reloadSlots();
-    }, 5_000);
-    return () => clearInterval(interval);
+    if (!state.currentUser || typeof window === "undefined") return;
+
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    let inFlight = false;
+
+    const tick = () => {
+      if (inFlight) return;
+      if (typeof document !== "undefined" && document.hidden) return;
+      if (typeof navigator !== "undefined" && navigator.onLine === false)
+        return;
+      inFlight = true;
+      reloadSlots().finally(() => {
+        inFlight = false;
+      });
+    };
+
+    // Fetch ngay khi mount, sau đó mỗi 30s
+    tick();
+    intervalId = setInterval(tick, 30_000);
+
+    // Tạm dừng polling khi tab ẩn, resume khi tab hiện lại
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        if (intervalId) {
+          clearInterval(intervalId);
+          intervalId = null;
+        }
+      } else if (!intervalId) {
+        tick();
+        intervalId = setInterval(tick, 30_000);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
   }, [state.currentUser, reloadSlots]);
 
   const subscriptionActions = useMemo(
@@ -973,6 +1011,7 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       shiftList: state.shiftList,
       shiftScheduleList: state.shiftScheduleList,
       incidentList: state.incidentList,
+      setIncidentList,
       reportFrom: state.reportFrom,
       setReportFrom,
       reportTo: state.reportTo,

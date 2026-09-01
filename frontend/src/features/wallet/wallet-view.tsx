@@ -554,7 +554,7 @@ export function WalletView() {
 
       {/* Modal chi tiết hóa đơn */}
       {detailTransaction && (
-        <div className="wallet-modal-overlay" onClick={() => setDetailTransaction(null)}>
+        <div className="wallet-modal-overlay">
           <div className="wallet-invoice-modal" onClick={(e) => e.stopPropagation()}>
             <div className="wallet-invoice-head">
               <div className="wallet-invoice-brand">

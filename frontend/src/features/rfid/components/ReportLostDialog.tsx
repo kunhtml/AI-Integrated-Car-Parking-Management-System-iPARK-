@@ -27,7 +27,7 @@ export function ReportLostDialog({ card, open, onClose, onConfirm }: Props) {
   }
 
   return (
-    <div className="modal-overlay" onClick={() => !pending && onClose()}>
+    <div className="modal-overlay">
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <AlertTriangle className="text-warning" size={24} />
