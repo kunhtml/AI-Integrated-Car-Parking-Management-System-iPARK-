@@ -30,6 +30,13 @@ export async function listPlansHandler(request: Request, response: Response) {
   response.json({ plans: plans.map(serializeSubscriptionPlan) });
 }
 
+// Ràng buộc chéo giữa duration và durationDays
+const DURATION_DAYS_RANGE: Record<string, [number, number]> = {
+  monthly: [28, 31],
+  quarterly: [89, 92],
+  yearly: [365, 366],
+};
+
 export async function createPlanHandler(request: Request, response: Response) {
   const body = z
     .object({
@@ -38,8 +45,12 @@ export async function createPlanHandler(request: Request, response: Response) {
       duration: z.enum(["monthly", "quarterly", "yearly"]),
       durationDays: z.number().int().min(1),
       price: z.number().min(0),
-      maxVehicles: z.number().int().min(1).optional(),
+      maxVehicles: z.number().int().min(-1).optional(),
     })
+    .refine((v) => {
+      const range = DURATION_DAYS_RANGE[v.duration];
+      return range ? v.durationDays >= range[0] && v.durationDays <= range[1] : true;
+    }, { message: "Số ngày không khớp với loại chu kỳ gói.", path: ["durationDays"] })
     .parse(request.body);
 
   const plan = await createPlan(body);
@@ -52,7 +63,7 @@ export async function updatePlanHandler(request: Request, response: Response) {
       name: z.string().min(2).optional(),
       description: z.string().optional(),
       price: z.number().min(0).optional(),
-      maxVehicles: z.number().int().min(1).optional(),
+      maxVehicles: z.number().int().min(-1).optional(),
       isActive: z.boolean().optional(),
     })
     .parse(request.body);

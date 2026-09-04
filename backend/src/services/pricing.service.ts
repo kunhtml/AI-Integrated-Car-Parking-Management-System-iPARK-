@@ -12,8 +12,16 @@ export const defaultPricingConfig = {
   maxMinutes: 1440,
 };
 
-// Mức phạt quá hạn cố định (VND / 30 phút) — không còn cấu hình qua admin.
+// Mức phạt quá hạn mặc định (VND / 30 phút) — dùng làm fallback nếu DB chưa cấu hình.
 export const OVERDUE_FINE_RATE = 20000;
+
+/**
+ * Lấy mức phạt quá hạn từ cấu hình active, fallback về hằng số mặc định.
+ */
+export async function getOverdueFineRate(): Promise<number> {
+  const config = await getActivePricingConfig();
+  return (config as any).overdueFineRate ?? OVERDUE_FINE_RATE;
+}
 
 export type FeeBreakdown = {
   totalMinutes: number;

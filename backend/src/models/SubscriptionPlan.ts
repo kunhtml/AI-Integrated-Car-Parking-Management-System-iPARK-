@@ -22,7 +22,7 @@ const subscriptionPlanSchema = new Schema<SubscriptionPlanDocument>(
     duration: { type: String, enum: ["monthly", "quarterly", "yearly"], required: true },
     durationDays: { type: Number, required: true, min: 1 },
     price: { type: Number, required: true, min: 0 },
-    maxVehicles: { type: Number, default: 1, min: 1 },
+    maxVehicles: { type: Number, default: 1, min: -1 },
     isActive: { type: Boolean, default: true, index: true },
   },
   { timestamps: true },

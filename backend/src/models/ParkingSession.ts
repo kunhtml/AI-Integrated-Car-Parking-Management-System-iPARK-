@@ -118,6 +118,13 @@ export type ParkingSessionDocument = {
   cancelledBy?: mongoose.Types.ObjectId;
   cancelledAt?: Date;
   notes?: string;
+  checkInPricingSnapshot?: {
+    dayRate: number;
+    nightRate: number;
+    gracePeriod: number;
+    dayStartHour: number;
+    nightStartHour: number;
+  };
   createdAt: Date;
   updatedAt: Date;
 };
@@ -279,6 +286,13 @@ const parkingSessionSchema = new Schema<ParkingSessionDocument>(
     cancelledBy: { type: Schema.Types.ObjectId, ref: "User" },
     cancelledAt: { type: Date },
     notes: { type: String, trim: true },
+    checkInPricingSnapshot: {
+      dayRate: { type: Number },
+      nightRate: { type: Number },
+      gracePeriod: { type: Number },
+      dayStartHour: { type: Number },
+      nightStartHour: { type: Number },
+    },
   },
   { timestamps: true },
 );
