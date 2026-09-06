@@ -15,6 +15,7 @@ import {
 import { DataTable } from "@/components/ui/data-table";
 import { useParkingApp } from "@/context/parking-app-context";
 import { apiFetch } from "@/lib/client-api";
+import { logger } from "@/lib/logger";
 import type {
   DisputeItem,
   DisputeSessionRef,
@@ -110,7 +111,7 @@ export function DisputesView() {
         setTransactionRefs(data.transactions);
       }
     } catch (error) {
-      console.error("[disputes] load failed:", error);
+      logger.error("[disputes] load failed:", { error });
       setActionLog("Không tải được dữ liệu khiếu nại.");
     } finally {
       setLoading(false);
@@ -191,7 +192,7 @@ export function DisputesView() {
         return next;
       });
     } catch (error) {
-      console.error("[disputes] upload failed:", error);
+      logger.error("[disputes] upload failed:", { error });
       setErrors((prev) => ({
         ...prev,
         attachments: "Lỗi kết nối khi upload.",
@@ -252,7 +253,7 @@ export function DisputesView() {
       }));
       setActionLog(`Đã gửi khiếu nại ${data.dispute.code}.`);
     } catch (error) {
-      console.error("[disputes] submit failed:", error);
+      logger.error("[disputes] submit failed:", { error });
       setActionLog("Lỗi kết nối khi gửi khiếu nại.");
     } finally {
       setSubmitting(false);
@@ -325,22 +326,22 @@ export function DisputesView() {
                   tType === "parking"
                     ? "Gửi xe"
                     : tType === "subscription"
-                    ? "Mua gói"
-                    : tType === "penalty"
-                    ? "Phạt"
-                    : tType === "rfid_sale"
-                    ? "Bán thẻ RFID"
-                    : tType === "rfid_deposit"
-                    ? "Đặt cọc RFID"
-                    : tType === "rfid_replacement"
-                    ? "Thay thẻ RFID"
-                    : tType === "rfid_refund"
-                    ? "Hoàn tiền RFID"
-                    : item.transactionType ?? "";
+                      ? "Mua gói"
+                      : tType === "penalty"
+                        ? "Phạt"
+                        : tType === "rfid_sale"
+                          ? "Bán thẻ RFID"
+                          : tType === "rfid_deposit"
+                            ? "Đặt cọc RFID"
+                            : tType === "rfid_replacement"
+                              ? "Thay thẻ RFID"
+                              : tType === "rfid_refund"
+                                ? "Hoàn tiền RFID"
+                                : (item.transactionType ?? "");
                 return (
                   <option key={item.id} value={item.id}>
-                    {typeLabel} · {item.method} · {formatMoney(item.amount)} · {item.status} · {" "}
-                    {formatDateTime(item.createdAt)}
+                    {typeLabel} · {item.method} · {formatMoney(item.amount)} ·{" "}
+                    {item.status} · {formatDateTime(item.createdAt)}
                     {item.plate ? ` · ${item.plate}` : ""}
                   </option>
                 );

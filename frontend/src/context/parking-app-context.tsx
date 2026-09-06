@@ -42,7 +42,6 @@ import type {
   DemoUser,
   DeviceItem,
   DeviceMaintenanceLog,
-  IncidentItem,
   NotificationItem,
   OccupancyHourPoint,
   ParkingSession,
@@ -139,12 +138,6 @@ type ParkingAppContextValue = {
   deleteSchedule: (id: string) => Promise<boolean>;
   checkInShift: (id: string) => Promise<ShiftScheduleItem>;
   completeShiftSchedule: (id: string) => Promise<ShiftScheduleItem>;
-  incidentList: IncidentItem[];
-  setIncidentList: (
-    incidentList:
-      | IncidentItem[]
-      | ((items: IncidentItem[]) => IncidentItem[]),
-  ) => void;
   reportFrom: string;
   setReportFrom: (from: string) => void;
   reportTo: string;
@@ -200,8 +193,6 @@ type ParkingAppContextValue = {
   markNotificationRead: (id: string) => Promise<void>;
   startShift: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   endShift: (id: string) => Promise<void>;
-  createIncident: (event: FormEvent<HTMLFormElement>) => Promise<void>;
-  resolveIncident: (id: string) => Promise<void>;
   approveVehicle: (vehicle: RegisteredVehicle) => Promise<void>;
   fetchVehicleDetail: (id: string) => Promise<RegisteredVehicle | null>;
   createEditRequest: (
@@ -517,21 +508,6 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       })),
     [],
   );
-  const setIncidentList = useCallback(
-    (
-      incidentList:
-        | IncidentItem[]
-        | ((items: IncidentItem[]) => IncidentItem[]),
-    ) =>
-      setState((s) => ({
-        ...s,
-        incidentList:
-          typeof incidentList === "function"
-            ? incidentList(s.incidentList)
-            : incidentList,
-      })),
-    [],
-  );
   const setCapacityConfig = useCallback(
     (capacityConfig: CapacityConfig | null) =>
       setState((s) => ({ ...s, capacityConfig })),
@@ -730,7 +706,6 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
     setDeviceList,
     setShiftList,
     setShiftScheduleList,
-    setIncidentList,
     setZoneList,
     setSlotList,
     setPlanList,
@@ -802,17 +777,10 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       createMiscActions({
         setNotificationList,
         setShiftList,
-        setIncidentList,
         setRegisteredVehicles,
         setActionLog,
       }),
-    [
-      setNotificationList,
-      setShiftList,
-      setIncidentList,
-      setRegisteredVehicles,
-      setActionLog,
-    ],
+    [setNotificationList, setShiftList, setRegisteredVehicles, setActionLog],
   );
 
   const vehicleActions = useMemo(
@@ -1010,8 +978,6 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
       deviceList: state.deviceList,
       shiftList: state.shiftList,
       shiftScheduleList: state.shiftScheduleList,
-      incidentList: state.incidentList,
-      setIncidentList,
       reportFrom: state.reportFrom,
       setReportFrom,
       reportTo: state.reportTo,

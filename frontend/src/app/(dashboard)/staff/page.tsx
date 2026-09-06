@@ -1,12 +1,12 @@
 "use client";
 
 import { RoleGuard } from "@/components/layout/role-guard";
-import { StaffAccountsView } from "@/features/staff/staff-accounts-view";
+import { UsersView } from "@/features/users/users-view";
 
 export default function StaffPage() {
   return (
-    <RoleGuard allowedRoles={["admin"]}>
-      <StaffAccountsView />
+    <RoleGuard allowedRoles={["admin", "manager"]}>
+      <UsersView />
     </RoleGuard>
   );
 }

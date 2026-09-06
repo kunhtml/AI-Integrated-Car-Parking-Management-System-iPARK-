@@ -55,9 +55,13 @@ export async function saveStaffApplication(
   return (data.application ?? data) as StaffApplication;
 }
 
-export async function resubmitStaffApplication(id: string): Promise<StaffApplication> {
+export async function resubmitStaffApplication(
+  id: string,
+  payload?: StaffApplicationFormPayload,
+): Promise<StaffApplication> {
   const r = await apiFetch(`/staff-applications/${id}/resubmit`, {
     method: "POST",
+    ...(payload ? { body: JSON.stringify(payload) } : {}),
   });
   const data = await r.json();
   if (!r.ok) throw new Error(data.message || "Không gửi lại được đơn.");
@@ -78,7 +82,9 @@ export async function fetchStaffApplicationHistory(
 }
 
 export async function cancelMyStaffApplication(): Promise<StaffApplication> {
-  const r = await apiFetch("/staff-applications/me/cancel", { method: "PATCH" });
+  const r = await apiFetch("/staff-applications/me/cancel", {
+    method: "PATCH",
+  });
   const data = await r.json();
   if (!r.ok) throw new Error(data.message || "Không hủy được đơn.");
   return (data.application ?? data) as StaffApplication;

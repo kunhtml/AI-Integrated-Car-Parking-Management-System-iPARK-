@@ -1,10 +1,10 @@
 import { useEffect, useRef } from "react";
 
 import { apiFetch } from "@/lib/client-api";
+import { logger } from "@/lib/logger";
 import type {
   DemoUser,
   DeviceItem,
-  IncidentItem,
   NotificationItem,
   ParkingSession,
   ParkingSlot,
@@ -20,26 +20,53 @@ import type {
 
 type OperationalDataParams = {
   currentUser: DemoUser | null;
-  setSessions: (sessions: ParkingSession[] | ((items: ParkingSession[]) => ParkingSession[])) => void;
-  setRegisteredVehicles: (
-    vehicles: RegisteredVehicle[] | ((items: RegisteredVehicle[]) => RegisteredVehicle[]),
+  setSessions: (
+    sessions:
+      | ParkingSession[]
+      | ((items: ParkingSession[]) => ParkingSession[]),
   ) => void;
-  setUserList: (users: DemoUser[] | ((items: DemoUser[]) => DemoUser[])) => void;
+  setRegisteredVehicles: (
+    vehicles:
+      | RegisteredVehicle[]
+      | ((items: RegisteredVehicle[]) => RegisteredVehicle[]),
+  ) => void;
+  setUserList: (
+    users: DemoUser[] | ((items: DemoUser[]) => DemoUser[]),
+  ) => void;
   setPricingConfigState: (config: PricingConfig) => void;
   setTransactionList: (
-    transactions: TransactionItem[] | ((items: TransactionItem[]) => TransactionItem[]),
+    transactions:
+      | TransactionItem[]
+      | ((items: TransactionItem[]) => TransactionItem[]),
   ) => void;
   setNotificationList: (
-    notifications: NotificationItem[] | ((items: NotificationItem[]) => NotificationItem[]),
+    notifications:
+      | NotificationItem[]
+      | ((items: NotificationItem[]) => NotificationItem[]),
   ) => void;
-  setDeviceList: (devices: DeviceItem[] | ((items: DeviceItem[]) => DeviceItem[])) => void;
-  setShiftList: (shifts: ShiftItem[] | ((items: ShiftItem[]) => ShiftItem[])) => void;
-  setShiftScheduleList: (schedules: ShiftScheduleItem[] | ((items: ShiftScheduleItem[]) => ShiftScheduleItem[])) => void;
-  setIncidentList: (incidents: IncidentItem[] | ((items: IncidentItem[]) => IncidentItem[])) => void;
+  setDeviceList: (
+    devices: DeviceItem[] | ((items: DeviceItem[]) => DeviceItem[]),
+  ) => void;
+  setShiftList: (
+    shifts: ShiftItem[] | ((items: ShiftItem[]) => ShiftItem[]),
+  ) => void;
+  setShiftScheduleList: (
+    schedules:
+      | ShiftScheduleItem[]
+      | ((items: ShiftScheduleItem[]) => ShiftScheduleItem[]),
+  ) => void;
   setZoneList: (zones: Zone[] | ((items: Zone[]) => Zone[])) => void;
-  setSlotList: (slots: ParkingSlot[] | ((items: ParkingSlot[]) => ParkingSlot[])) => void;
-  setPlanList: (items: SubscriptionPlan[] | ((prev: SubscriptionPlan[]) => SubscriptionPlan[])) => void;
-  setSubscriptionList: (items: Subscription[] | ((prev: Subscription[]) => Subscription[])) => void;
+  setSlotList: (
+    slots: ParkingSlot[] | ((items: ParkingSlot[]) => ParkingSlot[]),
+  ) => void;
+  setPlanList: (
+    items:
+      | SubscriptionPlan[]
+      | ((prev: SubscriptionPlan[]) => SubscriptionPlan[]),
+  ) => void;
+  setSubscriptionList: (
+    items: Subscription[] | ((prev: Subscription[]) => Subscription[]),
+  ) => void;
   setActionLog: (log: string) => void;
 };
 
@@ -54,7 +81,6 @@ export function useOperationalData({
   setDeviceList,
   setShiftList,
   setShiftScheduleList,
-  setIncidentList,
   setZoneList,
   setSlotList,
   setPlanList,
@@ -95,11 +121,28 @@ export function useOperationalData({
           const data = await vehicleResponse.json();
           setRegisteredVehicles(data.vehicles);
         }
-        if (activeUser.role === "admin" || activeUser.role === "staff") {
-          const userResponse = await apiFetch("/users");
-          if (!cancelled && userResponse.ok) {
+        if (
+          activeUser.role === "admin" ||
+          activeUser.role === "manager" ||
+          activeUser.role === "staff"
+        ) {
+          const users: DemoUser[] = [];
+          let page = 1;
+          let totalPages = 1;
+          do {
+            const userResponse = await apiFetch(
+              `/users?page=${page}&limit=100`,
+            );
+            if (!userResponse.ok) break;
             const data = await userResponse.json();
-            setUserList(data.users);
+            if (Array.isArray(data.users)) {
+              users.push(...(data.users as DemoUser[]));
+            }
+            totalPages = Math.max(1, Number(data.totalPages) || 1);
+            page += 1;
+          } while (!cancelled && page <= totalPages);
+          if (!cancelled) {
+            setUserList(users);
           }
         }
         const pricingResponse = await apiFetch("/pricing-config");
@@ -124,11 +167,13 @@ export function useOperationalData({
         }
         if (activeUser.role !== "customer") {
           // Admin calls /shift-schedules (all schedules), Staff calls /shift-schedules/my (own schedule)
-          const scheduleEndpoint = activeUser.role === "admin" ? "/shift-schedules" : "/shift-schedules/my";
-          const [shiftResponse, shiftScheduleResponse, incidentResponse] = await Promise.all([
+          const scheduleEndpoint =
+            activeUser.role === "admin" || activeUser.role === "manager"
+              ? "/shift-schedules"
+              : "/shift-schedules/my";
+          const [shiftResponse, shiftScheduleResponse] = await Promise.all([
             apiFetch("/shifts"),
             apiFetch(scheduleEndpoint),
-            apiFetch("/incidents"),
           ]);
           if (cancelled) {
             return;
@@ -140,10 +185,6 @@ export function useOperationalData({
           if (shiftScheduleResponse.ok) {
             const data = await shiftScheduleResponse.json();
             setShiftScheduleList(data.schedules);
-          }
-          if (incidentResponse.ok) {
-            const data = await incidentResponse.json();
-            setIncidentList(data.incidents);
           }
           // Load zones and slots for admin/staff
           const [zoneResponse, slotResponse] = await Promise.all([
@@ -163,7 +204,11 @@ export function useOperationalData({
         // Load subscriptions for all roles
         const [plansRes, subsRes] = await Promise.all([
           apiFetch("/subscriptions/plans"),
-          apiFetch(activeUser.role === "customer" ? "/subscriptions/my" : "/subscriptions"),
+          apiFetch(
+            activeUser.role === "customer"
+              ? "/subscriptions/my"
+              : "/subscriptions",
+          ),
         ]);
         if (cancelled) return;
         if (plansRes.ok) {
@@ -176,8 +221,10 @@ export function useOperationalData({
         }
       } catch (error) {
         if (!cancelled) {
-          console.error("[use-operational-data] Load error:", error);
-          setActionLog("Lỗi tải dữ liệu. Kiểm tra console để biết thêm chi tiết.");
+          logger.error("[use-operational-data] Load error:", { error });
+          setActionLog(
+            "Lỗi tải dữ liệu. Kiểm tra console để biết thêm chi tiết.",
+          );
         }
       }
     }
@@ -199,7 +246,6 @@ export function useOperationalData({
     setDeviceList,
     setShiftList,
     setShiftScheduleList,
-    setIncidentList,
     setZoneList,
     setSlotList,
     setPlanList,

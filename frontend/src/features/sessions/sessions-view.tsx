@@ -162,8 +162,6 @@ export function SessionsView() {
 
   const searchRef = useRef<HTMLInputElement>(null);
 
-  if (!currentUser) return null;
-
   // Refresh provisional fees so active sessions reflect the current parking time.
   useEffect(() => {
     let cancelled = false;
@@ -189,8 +187,8 @@ export function SessionsView() {
   }, [setSessions]);
 
   // Dùng viewAs để xác định chế độ hiển thị
-  const isCustomer = currentUser.role === "staff" ? viewAs === "customer" : currentUser.role === "customer";
-  const isAdmin = currentUser.role === "admin";
+  const isCustomer = currentUser?.role === "staff" ? viewAs === "customer" : currentUser?.role === "customer";
+  const isAdmin = currentUser?.role === "admin";
 
   // Keyboard shortcut: "/" focuses search (admin only)
   useEffect(() => {
@@ -347,6 +345,8 @@ export function SessionsView() {
   }
 
   const aiConf = (v?: number) => formatConfidence(v);
+
+  if (!currentUser) return null;
 
   return (
     <section className={isCustomer ? "full-width-section" : "sessions-section"}>

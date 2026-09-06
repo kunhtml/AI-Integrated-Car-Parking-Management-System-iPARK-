@@ -5,7 +5,7 @@ import { RfidCardsView } from "@/features/rfid/rfid-view";
 
 export default function RfidPage() {
   return (
-    <RoleGuard allowedRoles={["admin", "staff"]}>
+    <RoleGuard allowedRoles={["admin", "manager", "staff"]}>
       <RfidCardsView />
     </RoleGuard>
   );

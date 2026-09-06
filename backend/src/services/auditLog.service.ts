@@ -15,6 +15,7 @@ export type CreateAuditLogInput = {
   };
   ipAddress?: string;
   userAgent?: string;
+  session?: mongoose.ClientSession;
 };
 
 export type ListAuditLogsOptions = {
@@ -40,11 +41,19 @@ function toObjectId(value?: string | mongoose.Types.ObjectId) {
 }
 
 export async function createAuditLog(input: CreateAuditLogInput) {
-  return AuditLog.create({
-    ...input,
-    entityId: toObjectId(input.entityId),
-    performedBy: toObjectId(input.performedBy),
-  });
+  const { session, ...payload } = input;
+  const document = {
+    ...payload,
+    entityId: toObjectId(payload.entityId),
+    performedBy: toObjectId(payload.performedBy),
+  };
+
+  if (session) {
+    const [audit] = await AuditLog.create([document], { session });
+    return audit;
+  }
+
+  return AuditLog.create(document);
 }
 
 export async function listAuditLogs(

@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import {
   cameraEventBus,
   CameraIngestEvent,
+  ExitSessionStateEvent,
 } from "../services/camera-event-bus.js";
 
 /**
@@ -32,7 +33,14 @@ export async function streamCameraEvents(request: Request, response: Response) {
     response.write(`event: camera.ingest\ndata: ${JSON.stringify(event)}\n\n`);
   };
 
+  const sendExitState = (event: ExitSessionStateEvent) => {
+    response.write(
+      `event: exit.session-state\ndata: ${JSON.stringify(event)}\n\n`,
+    );
+  };
+
   const unsubscribe = cameraEventBus.subscribe(send);
+  const unsubscribeExitState = cameraEventBus.subscribeExitState(sendExitState);
 
   // Heartbeat mỗi 25s — giữ kết nối và phát hiện client disconnect sớm.
   const heartbeat = setInterval(() => {
@@ -43,6 +51,7 @@ export async function streamCameraEvents(request: Request, response: Response) {
   const cleanup = () => {
     clearInterval(heartbeat);
     unsubscribe();
+    unsubscribeExitState();
   };
   request.on("close", cleanup);
   request.on("aborted", cleanup);

@@ -7,8 +7,18 @@ export type RevenuePoint = { date: string; revenue: number; count: number };
 type RevenueGroupBy = "day" | "week" | "month" | "hour";
 
 const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
-export type OccupancyPoint = { hour: number; avgOccupancy: number; maxOccupancy: number };
-export type TopCustomerItem = { userId: string; name: string; email?: string; sessionCount: number; totalSpent: number };
+export type OccupancyPoint = {
+  hour: number;
+  avgOccupancy: number;
+  maxOccupancy: number;
+};
+export type TopCustomerItem = {
+  userId: string;
+  name: string;
+  email?: string;
+  sessionCount: number;
+  totalSpent: number;
+};
 export type PeakHourPoint = { dayOfWeek: number; hour: number; count: number };
 
 /**
@@ -57,45 +67,69 @@ export async function getRevenueChart(
     { $sort: { _id: 1 } },
   ]);
 
-  return results.map((r) => ({ date: r._id, revenue: r.revenue, count: r.count }));
+  return results.map((r) => ({
+    date: r._id,
+    revenue: r.revenue,
+    count: r.count,
+  }));
 }
 
 /**
- * Average occupancy by hour of day (0-23).
+ * Average number of vehicles occupying the car park by hour of day (0-23).
+ * A session occupies a slot from check-in until check-out. The calculation
+ * uses Vietnam local time so the chart hours match what staff see in the UI.
  */
-export async function getOccupancyByHour(from: Date, to: Date): Promise<OccupancyPoint[]> {
-  const results = await ParkingSession.aggregate([
-    {
-      $match: {
-        checkInAt: { $gte: from, $lte: to },
-      },
-    },
-    {
-      $group: {
-        _id: { $hour: "$checkInAt" },
-        count: { $sum: 1 },
-      },
-    },
-    { $sort: { _id: 1 } },
-  ]);
+export async function getOccupancyByHour(
+  from: Date,
+  to: Date,
+): Promise<OccupancyPoint[]> {
+  const sessions = await ParkingSession.find({
+    checkInAt: { $lt: to },
+    $or: [
+      { checkOutAt: { $exists: false } },
+      { checkOutAt: null },
+      { checkOutAt: { $gt: from } },
+    ],
+  })
+    .select({ checkInAt: 1, checkOutAt: 1 })
+    .lean();
 
-  // Calculate total days in range for averaging
-  const days = Math.max(1, Math.ceil((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000)));
+  const occupancyByHour = Array.from({ length: 24 }, () => 0);
+  const samplesByHour = Array.from({ length: 24 }, () => 0);
+  const dayCount = Math.max(
+    1,
+    Math.ceil((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000)),
+  );
 
-  // Fill all 24 hours
-  const hourMap = new Map<number, number>();
-  for (const r of results) {
-    hourMap.set(r._id, r.count);
+  // Sample every local hour in the selected range. This handles sessions that
+  // span midnight and sessions that were already active before `from`.
+  for (let day = 0; day < dayCount; day += 1) {
+    for (let hour = 0; hour < 24; hour += 1) {
+      const sample = new Date(
+        from.getTime() + (day * 24 + hour) * 60 * 60 * 1000,
+      );
+      if (sample > to) continue;
+      const activeCount = sessions.reduce((count, session) => {
+        const checkIn = new Date(session.checkInAt).getTime();
+        const checkOut = session.checkOutAt
+          ? new Date(session.checkOutAt).getTime()
+          : to.getTime();
+        return checkIn <= sample.getTime() && sample.getTime() < checkOut
+          ? count + 1
+          : count;
+      }, 0);
+      occupancyByHour[hour] += activeCount;
+      samplesByHour[hour] += 1;
+    }
   }
 
-  return Array.from({ length: 24 }, (_, hour) => {
-    const total = hourMap.get(hour) || 0;
-    return {
-      hour,
-      avgOccupancy: Math.round(total / days),
-      maxOccupancy: total,
-    };
-  });
+  return occupancyByHour.map((total, hour) => ({
+    hour,
+    avgOccupancy: samplesByHour[hour]
+      ? Math.round(total / samplesByHour[hour])
+      : 0,
+    maxOccupancy: total,
+  }));
 }
 
 /**
@@ -146,7 +180,10 @@ export async function getTopCustomers(
 /**
  * Peak hours analysis — count of check-ins by day of week and hour.
  */
-export async function getPeakHoursAnalysis(from: Date, to: Date): Promise<PeakHourPoint[]> {
+export async function getPeakHoursAnalysis(
+  from: Date,
+  to: Date,
+): Promise<PeakHourPoint[]> {
   const results = await ParkingSession.aggregate([
     {
       $match: {
@@ -193,8 +230,16 @@ export async function getEntryByZone(from: Date, to: Date) {
  */
 export async function getExitByZone(from: Date, to: Date) {
   const results = await ParkingSession.aggregate([
-    { $match: { status: "Đã hoàn thành", checkOutAt: { $gte: from, $lte: to } } },
-    { $group: { _id: "$zone", exitCount: { $sum: 1 }, revenue: { $sum: "$fee" } } },
+    {
+      $match: { status: "Đã hoàn thành", checkOutAt: { $gte: from, $lte: to } },
+    },
+    {
+      $group: {
+        _id: "$zone",
+        exitCount: { $sum: 1 },
+        revenue: { $sum: "$fee" },
+      },
+    },
     { $sort: { exitCount: -1 } },
   ]);
 
@@ -234,7 +279,11 @@ export async function getPenaltyReport(from: Date, to: Date) {
     .limit(20)
     .select("plate ownerName slot zone overdueMinutes fee checkInAt");
 
-  const summary = results[0] || { totalOverdue: 0, totalOverdueMinutes: 0, avgOverdueMinutes: 0 };
+  const summary = results[0] || {
+    totalOverdue: 0,
+    totalOverdueMinutes: 0,
+    avgOverdueMinutes: 0,
+  };
 
   return {
     summary: {

@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { KeyRound, Save } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { isStrongPassword, passwordErrorMessage } from "@/lib/password";
+import { PasswordInput } from "./password-input";
 
 export function ChangePasswordView() {
   const [message, setMessage] = useState<string | null>(null);
@@ -68,36 +69,41 @@ export function ChangePasswordView() {
         <form className="space-y-4" onSubmit={handleSubmit}>
           <label className="block text-sm font-medium text-slate-700">
             Mật khẩu hiện tại
-            <input
+            <PasswordInput
               className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               name="currentPassword"
               required
-              type="password"
             />
           </label>
           <label className="block text-sm font-medium text-slate-700">
             Mật khẩu mới
-            <input
+            <PasswordInput
               className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               minLength={8}
               name="newPassword"
               required
-              type="password"
             />
           </label>
           <label className="block text-sm font-medium text-slate-700">
             Nhập lại mật khẩu mới
-            <input
+            <PasswordInput
               className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               minLength={8}
               name="confirmPassword"
               required
-              type="password"
             />
           </label>
 
-          {message && <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{message}</p>}
-          {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+          {message && (
+            <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              {message}
+            </p>
+          )}
+          {error && (
+            <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+              {error}
+            </p>
+          )}
 
           <button
             className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"

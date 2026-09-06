@@ -5,7 +5,7 @@ import { RevenueReportsView } from "@/features/revenue-reports/revenue-reports-v
 
 export default function RevenueReportsPage() {
   return (
-    <RoleGuard allowedRoles={["admin", "staff"]}>
+    <RoleGuard allowedRoles={["admin", "manager", "staff"]}>
       <RevenueReportsView />
     </RoleGuard>
   );

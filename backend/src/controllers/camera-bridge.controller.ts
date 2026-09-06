@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { Request, Response } from "express";
+import { createGateCommandLog } from "../services/gateCommandLog.service.js";
 import { z } from "zod";
 import { ParkingCameraLog } from "../models/ParkingCameraLog.js";
 import {
@@ -353,11 +354,10 @@ export async function pushCameraLog(request: Request, response: Response) {
 
   const plate = normalizePlate(body.plate || body.detectedPlate);
   const detectedPlate = normalizePlate(body.detectedPlate);
-  // The bridge reports its physical channel. Resolve it to the current
-  // business role so a lane swap also redirects new OCR events safely.
-  const { Device } = await import("../models/Device.js");
-  const laneDevice = await Device.findOne({ lane: body.direction });
-  const direction: "in" | "out" = laneDevice?.gate === "exit" ? "out" : "in";
+  // direction do AI bridge gửi lên chính là kênh vật lý đã OCR xong.
+  // Không remap qua Device và không mặc định "out" thành "in": nếu không,
+  // ảnh/biển số camera ra sẽ bị lưu nhầm vào entryImageUrl/entryDetectedPlate.
+  const direction: "in" | "out" = body.direction;
 
   // Tìm RfidCard nếu có
   let rfidCard = null as null | { _id: any; uid: string };
@@ -445,9 +445,13 @@ export async function pushCameraLog(request: Request, response: Response) {
             .select("uid")
         : null;
       openSession.expectedExitRfidUid = expectedMemberCard?.uid;
-      // Đánh dấu đang chờ xác minh RFID — KHÔNG finalize, KHÔNG freeSlot
-      openSession.exitState = "waiting_rfid";
-      openSession.exitDetectedAt = new Date();
+      // Đánh dấu đang chờ xác minh RFID — KHÔNG finalize, KHÔNG freeSlot.
+      // Không hạ thấp trạng thái đã tiến xa hơn (mismatch/verify/thanh
+      // toán/gate): push trùng theo chu kỳ phải giữ nguyên state của staff.
+      if (!openSession.exitState || openSession.exitState === "waiting_rfid") {
+        openSession.exitState = "waiting_rfid";
+        openSession.exitDetectedAt = new Date();
+      }
       // Tính phí dự kiến (hiển thị trên UI)
       if (!activeMembership && openSession.paymentMethod === "subscription") {
         // Gói đã hết hạn sau lúc xe vào: bỏ trạng thái miễn phí đã gán lúc check-in.
@@ -558,6 +562,9 @@ export async function pushCameraLog(request: Request, response: Response) {
       !openSession?.entryRfidUid && openSession?.entryExpectedRfidUid,
     ),
     entryRfidUid,
+    entrySource: openSession?.entrySource || "camera",
+    manualEntryReason: openSession?.manualEntryReason || null,
+    entryPhotoStatus: openSession?.entryPhotoStatus || null,
     // Thẻ thay thế (đổi thẻ mới khi thẻ cũ hỏng/mất) — hiển thị để nhân viên
     // biết xe dùng thẻ mới thay cho thẻ đã quét lúc vào.
     replacementCardUid:
@@ -578,6 +585,7 @@ export async function pushCameraLog(request: Request, response: Response) {
     ownerName: eventOwnerName,
     userType: eventUserType,
     imagePath: body.imagePath,
+    entryImagePath: openSession?.entryImageUrl,
     barrierOpened: body.barrierOpened,
     sessionId: sessionId?.toString() ?? null,
     checkInAt: openSession?.checkInAt?.toISOString() ?? null,
@@ -589,7 +597,7 @@ export async function pushCameraLog(request: Request, response: Response) {
           : (action as string) === "completed"
             ? "Đã hoàn thành"
             : null,
-    exitState: isExitWaiting ? "waiting_rfid" : null,
+    exitState: isExitWaiting ? (openSession?.exitState || "waiting_rfid") : null,
     action: isExitWaiting ? "waiting_rfid" : action,
     sessionPaymentStatus: isExitWaiting ? "pending" : null,
     duplicateSession: action === "duplicate",
@@ -605,10 +613,20 @@ export async function pushCameraLog(request: Request, response: Response) {
     createdAt: log.createdAt.toISOString(),
   });
 
-  const rejected =
-    action === "invalid_rfid" || action === "duplicate" || action === "skipped";
-  response.status(rejected ? 409 : 201).json({
-    ok: !rejected,
+  // Phân biệt:
+  // - `created` → 201, tạo phiên thành công.
+  // - `skipped` (camera-only detect, no RFID) → 200 OK, vẫn là flow bình
+  //   thường; staff sẽ xác nhận biển trên UI rồi quét thẻ để tạo phiên.
+  // - `duplicate` / `invalid_rfid` → 409, thực sự bị từ chối.
+  const status =
+    action === "created"
+      ? 201
+      : action === "invalid_rfid" || action === "duplicate"
+        ? 409
+        : 200;
+  const ok = status === 201 || status === 200;
+  response.status(status).json({
+    ok,
     log: {
       id: log._id.toString(),
       direction: log.direction,
@@ -629,7 +647,9 @@ export async function pushCameraLog(request: Request, response: Response) {
                 "RFID không hợp lệ với biển số hoặc gói thành viên của xe này."
               : (action as string) === "no_session"
                 ? `Không tìm thấy phiên đang gửi cho biển ${plate}`
-                : `Không thể tạo phiên cho biển ${plate}: bãi có thể đã hết chỗ phù hợp.`,
+                : (action as string) === "skipped"
+                  ? `AI đã nhận biển ${plate} — chờ staff xác nhận.`
+                  : `Không thể tạo phiên cho biển ${plate}: bãi có thể đã hết chỗ phù hợp.`,
   });
 }
 
@@ -694,9 +714,8 @@ export async function clearCameraLogs(request: Request, response: Response) {
 
 /**
  * POST /api/bridge/gate/:direction/:action
- * Bridge ghi nhận barrier open/close (manual). Không tạo ParkingCameraLog
+ * Bridge ghi nhận barrier open/close. Không tạo ParkingCameraLog
  * vì log này dành cho camera detect biển số — manual gate không có detectedPlate.
- * Nếu cần audit trail cho manual gate, mở rộng thêm collection riêng sau.
  */
 export async function bridgeGateControl(request: Request, response: Response) {
   const direction = String(request.params.direction || "");
@@ -710,10 +729,20 @@ export async function bridgeGateControl(request: Request, response: Response) {
       .json({ ok: false, message: "Invalid direction or action" });
     return;
   }
-  // Audit qua console (chưa cần collection riêng)
+  const source = String(
+    request.header("x-gate-command-source") || "AI bridge",
+  ).slice(0, 100);
+  await createGateCommandLog({
+    gate: direction as "in" | "out",
+    command: action as "open" | "close",
+    source,
+    success: true,
+    message: `Lệnh ${action === "open" ? "mở" : "đóng"} barrier từ ${source}.`,
+  });
+
   // eslint-disable-next-line no-console
   console.log(
-    `[bridge.gate] direction=${direction} action=${action} ts=${new Date().toISOString()}`,
+    `[bridge.gate] direction=${direction} action=${action} source=${source} ts=${new Date().toISOString()}`,
   );
   response.json({ ok: true, message: `Gate ${direction} ${action} recorded` });
 }

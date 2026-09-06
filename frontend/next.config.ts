@@ -12,9 +12,9 @@ const nextConfig: NextConfig = {
               "default-src 'self'",
               "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
               "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: blob: http://localhost:4000",
+              "img-src 'self' data: blob: http://localhost:4000 http://localhost:5050",
               "font-src 'self' data:",
-              "connect-src 'self' http://localhost:4000 ws://localhost:3000",
+              "connect-src 'self' http://localhost:4000 http://localhost:5050 ws://localhost:3000",
               "frame-ancestors 'none'",
             ].join("; "),
           },
@@ -40,6 +40,15 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      {
+        source: "/images/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
     ];
   },
   async rewrites() {
@@ -47,6 +56,13 @@ const nextConfig: NextConfig = {
       {
         source: "/uploads/:path*",
         destination: "http://localhost:4000/uploads/:path*",
+      },
+      // Proxy SSE từ backend để vượt qua vấn đề cookie/CORS khi browser
+      // mở EventSource cross-origin. Next.js forward headers + cookies
+      // cho destination; client vẫn kết nối same-origin tới /api/camera-logs/stream.
+      {
+        source: "/api/camera-logs/stream",
+        destination: "http://localhost:4000/api/camera-logs/stream",
       },
     ];
   },

@@ -5,6 +5,7 @@ import {
   STAFF_APPLICATION_SHIFTS,
   STAFF_APPLICATION_STATUSES,
   StaffApplication,
+  type StaffApplicationDocument,
   type StaffApplicationStatus,
 } from "../models/StaffApplication.js";
 import { StaffApplicationHistory } from "../models/StaffApplicationHistory.js";
@@ -12,6 +13,7 @@ import { User } from "../models/User.js";
 import { createNotification } from "../services/notification.service.js";
 import {
   appendHistory,
+  cancelApplication,
   createApplication,
   getApplicationHistory,
   getApplicationPayload,
@@ -29,7 +31,7 @@ const applicationInputSchema = z
       .trim()
       .min(6)
       .max(20)
-      .regex(/^[0-9+().\s-]+$/, "Số điện thoại không hợp lệ."),
+      .regex(/^[0-9+\-\s()]{6,20}$/, "Số điện thoại không hợp lệ."),
     idCardNumber: z
       .string()
       .trim()
@@ -94,22 +96,30 @@ async function notifySafely(values: Parameters<typeof createNotification>[0]) {
 
 async function findOwnedApplication(id: string, userId: string) {
   if (!mongoose.isValidObjectId(id)) {
-    throw Object.assign(new Error("ID đơn đăng ký không hợp lệ."), { status: 400 });
+    throw Object.assign(new Error("ID đơn đăng ký không hợp lệ."), {
+      status: 400,
+    });
   }
   const application = await StaffApplication.findOne({ _id: id, userId });
   if (!application) {
-    throw Object.assign(new Error("Không tìm thấy đơn đăng ký."), { status: 404 });
+    throw Object.assign(new Error("Không tìm thấy đơn đăng ký."), {
+      status: 404,
+    });
   }
   return application;
 }
 
 async function findApplication(id: string) {
   if (!mongoose.isValidObjectId(id)) {
-    throw Object.assign(new Error("ID đơn đăng ký không hợp lệ."), { status: 400 });
+    throw Object.assign(new Error("ID đơn đăng ký không hợp lệ."), {
+      status: 400,
+    });
   }
   const application = await StaffApplication.findById(id);
   if (!application) {
-    throw Object.assign(new Error("Không tìm thấy đơn đăng ký."), { status: 404 });
+    throw Object.assign(new Error("Không tìm thấy đơn đăng ký."), {
+      status: 404,
+    });
   }
   return application;
 }
@@ -141,7 +151,9 @@ export async function getMyStaffApplication(
   request: Request,
   response: Response,
 ) {
-  const application = await StaffApplication.findOne({ userId: request.user!.id })
+  const application = await StaffApplication.findOne({
+    userId: request.user!.id,
+  })
     .sort({ createdAt: -1 })
     .populate({ path: "reviewedBy", model: "User", select: "name" });
 
@@ -171,7 +183,8 @@ export async function createStaffApplication(
     }),
     notifySafely({
       title: "Đã tiếp nhận đơn đăng ký",
-      content: "Đơn đăng ký làm nhân viên của bạn đang chờ quản trị viên xét duyệt.",
+      content:
+        "Đơn đăng ký làm nhân viên của bạn đang chờ quản trị viên xét duyệt.",
       userId: request.user!.id,
     }),
   ]);
@@ -200,9 +213,16 @@ export async function resubmitMyStaffApplication(
   request: Request,
   response: Response,
 ) {
+  // APP-01: gửi lại trên cùng ID, cho phép cập nhật nội dung kèm submit
+  // trong một thao tác nguyên tử (draft trung gian không còn cần thiết).
+  const body =
+    request.body && Object.keys(request.body).length
+      ? applicationInputSchema.parse(request.body)
+      : undefined;
   const application = await submitExistingApplication(
     String(request.params.id),
     request.user!.id,
+    body ? asApplicationPayload(body) : undefined,
   );
 
   await Promise.all([
@@ -238,28 +258,8 @@ export async function cancelMyStaffApplication(
   request: Request,
   response: Response,
 ) {
-  const application = await StaffApplication.findOne({
-    userId: request.user!.id,
-    status: "pending",
-  });
-  if (!application) {
-    response.status(409).json({ message: "Không có đơn đang chờ duyệt để hủy." });
-    return;
-  }
-
-  const before = getApplicationPayload(application);
-  application.status = "cancelled";
-  await application.save();
-  await appendHistory({
-    application,
-    action: "CANCELLED",
-    oldStatus: "pending",
-    newStatus: "cancelled",
-    performedBy: request.user!.id,
-    performedRole: "customer",
-    before,
-    after: getApplicationPayload(application),
-  });
+  // APP-02: hủy nguyên tử qua service (conditional update + history cùng transaction).
+  const application = await cancelApplication(request.user!.id);
 
   response.json({
     application: serializeStaffApplication(applicationWithUsers(application)),
@@ -270,28 +270,37 @@ export async function listStaffApplications(
   request: Request,
   response: Response,
 ) {
-  const rawStatus = typeof request.query.status === "string"
-    ? request.query.status
-    : undefined;
-  const status = rawStatus && rawStatus !== "all"
-    ? z.enum(STAFF_APPLICATION_STATUSES).parse(rawStatus)
-    : undefined;
-  const search = typeof request.query.search === "string"
-    ? request.query.search.trim().slice(0, 100)
-    : "";
+  const rawStatus =
+    typeof request.query.status === "string" ? request.query.status : undefined;
+  const status =
+    rawStatus && rawStatus !== "all"
+      ? z.enum(STAFF_APPLICATION_STATUSES).parse(rawStatus)
+      : undefined;
+  const search =
+    typeof request.query.search === "string"
+      ? request.query.search.trim().slice(0, 100)
+      : "";
   const page = Math.max(
     1,
-    Number.parseInt(typeof request.query.page === "string" ? request.query.page : "1", 10) || 1,
+    Number.parseInt(
+      typeof request.query.page === "string" ? request.query.page : "1",
+      10,
+    ) || 1,
   );
   const limit = Math.min(
     100,
     Math.max(
       1,
-      Number.parseInt(typeof request.query.limit === "string" ? request.query.limit : "10", 10) || 10,
+      Number.parseInt(
+        typeof request.query.limit === "string" ? request.query.limit : "10",
+        10,
+      ) || 10,
     ),
   );
 
-  const filter: Record<string, unknown> = {};
+  const filter: Record<string, unknown> & {
+    $or?: Array<Record<string, unknown>>;
+  } = {};
   if (status) filter.status = status;
 
   if (search) {
@@ -366,104 +375,152 @@ export async function reviewStaffApplication(
     return;
   }
 
-  const application = await StaffApplication.findOne({
-    _id: String(request.params.id),
-    status: "pending",
-  });
-  if (!application) {
-    const existing = await StaffApplication.exists({ _id: String(request.params.id) });
-    response.status(existing ? 409 : 404).json({
-      message: existing ? "Đơn này đã được xử lý." : "Không tìm thấy đơn đăng ký.",
+  // APP-02: review nguyên tử — application (conditional theo status pending)
+  // + history trong một transaction; approve thêm CAS nâng role user trong
+  // cùng transaction để không có staff đi kèm đơn rejected/cancelled do race.
+  // Thông báo chỉ gửi sau khi commit thành công.
+  const session = await mongoose.startSession();
+  try {
+    let application: StaffApplicationDocument | undefined;
+    await session.withTransaction(async () => {
+      const current = await StaffApplication.findOne({
+        _id: String(request.params.id),
+        status: "pending",
+      }).session(session);
+      if (!current) {
+        const existing = await StaffApplication.findOne(
+          { _id: String(request.params.id) },
+          null,
+          { session },
+        );
+        throw Object.assign(
+          new Error(
+            existing ? "Đơn này đã được xử lý." : "Không tìm thấy đơn đăng ký.",
+          ),
+          { status: existing ? 409 : 404 },
+        );
+      }
+
+      const before = getApplicationPayload(current);
+      const oldStatus = current.status;
+      const now = new Date();
+      const reviewerId = new mongoose.Types.ObjectId(request.user!.id);
+
+      if (body.decision === "rejected") {
+        const updated = await StaffApplication.findOneAndUpdate(
+          { _id: current._id, status: "pending" },
+          {
+            $set: {
+              status: "rejected",
+              reviewNote: body.note,
+              reviewedBy: reviewerId,
+              reviewedAt: now,
+            },
+          },
+          { new: true, session },
+        );
+        if (!updated) {
+          throw Object.assign(new Error("Đơn vừa được xử lý trước đó."), {
+            status: 409,
+          });
+        }
+        await recordReviewHistory({
+          application: updated,
+          oldStatus,
+          action: "REJECTED",
+          note: body.note,
+          before,
+          session,
+        });
+        application = updated;
+        return;
+      }
+
+      // Approve: CAS user role trước, rồi cập nhật application + history.
+      const updatedUser = await User.findOneAndUpdate(
+        {
+          _id: current.userId,
+          role: "customer",
+          status: "Đang hoạt động",
+        },
+        { $set: { role: "staff" } },
+        { new: true, session },
+      );
+      if (!updatedUser) {
+        throw Object.assign(
+          new Error("Tài khoản người đăng ký không còn đủ điều kiện."),
+          { status: 409 },
+        );
+      }
+
+      const updated = await StaffApplication.findOneAndUpdate(
+        { _id: current._id, status: "pending" },
+        {
+          $set: {
+            status: "approved",
+            reviewNote: body.note,
+            reviewedBy: reviewerId,
+            approvedBy: reviewerId,
+            reviewedAt: now,
+            approvedAt: now,
+          },
+        },
+        { new: true, session },
+      );
+      if (!updated) {
+        throw Object.assign(new Error("Đơn vừa được xử lý trước đó."), {
+          status: 409,
+        });
+      }
+      await recordReviewHistory({
+        application: updated,
+        oldStatus,
+        action: "APPROVED",
+        note: body.note,
+        before,
+        session,
+      });
+      application = updated;
     });
-    return;
-  }
 
-  const before = getApplicationPayload(application);
-  const oldStatus = application.status;
+    if (!application) {
+      response.status(500).json({ message: "Không xét duyệt được đơn." });
+      return;
+    }
 
-  if (body.decision === "rejected") {
-    application.status = "rejected";
-    application.reviewNote = body.note;
-    application.reviewedBy = new mongoose.Types.ObjectId(request.user!.id);
-    application.reviewedAt = new Date();
-    await application.save();
-    await recordReviewHistory({
-      application,
-      oldStatus,
-      action: "REJECTED",
-      note: body.note,
-      before,
-    });
-
-    await notifySafely({
-      title: "Đơn đăng ký nhân viên bị từ chối",
-      content: body.note || "Đơn đăng ký của bạn chưa được thông qua.",
-      userId: application.userId.toString(),
-    });
-
-    await application.populate({ path: "reviewedBy", model: "User", select: "name" });
-    response.json({
-      application: serializeStaffApplication(applicationWithUsers(application), {
-        maskIdCard: true,
-      }),
-    });
-    return;
-  }
-
-  const user = await User.findOne({
-    _id: application.userId,
-    role: "customer",
-    status: "Đang hoạt động",
-  });
-  if (!user) {
-    throw Object.assign(
-      new Error("Tài khoản người đăng ký không còn đủ điều kiện."),
-      { status: 409 },
+    // Sau commit: thông báo + populate để trả response.
+    await notifySafely(
+      body.decision === "rejected"
+        ? {
+            title: "Đơn đăng ký nhân viên bị từ chối",
+            content: body.note || "Đơn đăng ký của bạn chưa được thông qua.",
+            userId: application.userId.toString(),
+          }
+        : {
+            title: "Đơn đăng ký nhân viên đã được duyệt",
+            content:
+              "Chúc mừng! Tài khoản của bạn đã được nâng quyền nhân viên. Vui lòng đăng nhập lại.",
+            userId: application.userId.toString(),
+          },
     );
-  }
 
-  const updatedUser = await User.findOneAndUpdate(
-    {
-      _id: user._id,
-      role: "customer",
-      status: "Đang hoạt động",
-    },
-    { $set: { role: "staff" } },
-    { new: true },
-  );
-  if (!updatedUser) {
-    throw Object.assign(new Error("Tài khoản đã được xử lý trước đó."), {
-      status: 409,
+    const [populated] = await StaffApplication.populate([application], {
+      path: "reviewedBy",
+      model: "User",
+      select: "name",
     });
+    application = populated;
+    response.json({
+      application: serializeStaffApplication(
+        applicationWithUsers(application),
+        {
+          maskIdCard: true,
+        },
+      ),
+    });
+  } finally {
+    await session.endSession();
   }
-
-  application.status = "approved";
-  application.reviewNote = body.note;
-  application.reviewedBy = new mongoose.Types.ObjectId(request.user!.id);
-  application.approvedBy = new mongoose.Types.ObjectId(request.user!.id);
-  application.reviewedAt = new Date();
-  application.approvedAt = application.reviewedAt;
-  await application.save();
-  await recordReviewHistory({
-    application,
-    oldStatus,
-    action: "APPROVED",
-    note: body.note,
-    before,
-  });
-
-  await notifySafely({
-    title: "Đơn đăng ký nhân viên đã được duyệt",
-    content: "Chúc mừng! Tài khoản của bạn đã được nâng quyền nhân viên. Vui lòng đăng nhập lại.",
-    userId: application.userId.toString(),
-  });
-
-  await application.populate({ path: "reviewedBy", model: "User", select: "name" });
-  response.json({
-    application: serializeStaffApplication(applicationWithUsers(application), {
-      maskIdCard: true,
-    }),
-  });
 }
 
 export async function countApplicationHistory(applicationId: string) {

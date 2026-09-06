@@ -1,4 +1,4 @@
-import { dashboardRoutes } from './dashboard.routes.js';
+import { dashboardRoutes } from "./dashboard.routes.js";
 import { Router } from "express";
 import { authRoutes } from "./auth.routes.js";
 import { devicesRoutes } from "./devices.routes.js";
@@ -32,6 +32,7 @@ import {
 import { uploadsRoutes } from "./uploads.routes.js";
 import { capacityConfigRoutes } from "./capacityConfig.routes.js";
 import { exitRoutes } from "./exit.routes.js";
+import { gateCommandLogRoutes } from "./gateCommandLog.routes.js";
 
 export const apiRoutes = Router();
 
@@ -107,6 +108,7 @@ apiRoutes.use("/penalties", penaltiesRoutes);
 apiRoutes.use("/exit", exitRoutes);
 apiRoutes.use("/rfid", rfidRoutes);
 apiRoutes.use("/camera-logs", cameraBridgeAdminRoutes);
+apiRoutes.use("/gate-command-logs", gateCommandLogRoutes);
 apiRoutes.use("/uploads", uploadsRoutes);
 apiRoutes.use("/capacity-config", capacityConfigRoutes);
-apiRoutes.use('/dashboard', dashboardRoutes);
+apiRoutes.use("/dashboard", dashboardRoutes);

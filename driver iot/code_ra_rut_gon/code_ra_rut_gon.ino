@@ -7,6 +7,10 @@
 #include <ESP32Servo.h>
 
 // ================== PIN MAP (ESP32 OUT) - BẢN RÚT GỌN ==================
+// ID thiết bị: Python dùng để tự dò port COM (không phụ thuộc số COM).
+// OUT = cổng RA. Đổi sang "IN" nếu flash firmware này cho cổng vào.
+#define DEVICE_ID       "OUT"
+
 #define PIN_BUZZER      14
 #define PIN_SERVO       13
 
@@ -200,15 +204,62 @@ void array_to_string(byte array[], unsigned int len, char buffer[]) {
   buffer[len * 2] = '\0';
 }
 
+// ===== Chẩn đoán lỗi không đọc được thẻ =====
+// Dùng API có từ thư viện MFRC522 1.1.15 (tương thích cả 1.4.5+).
+void diagStatusName(byte status, char *buf, int len) {
+  // So sanh so thuan vi (khong dung constant de tuong thich moi ban thu vien)
+  const char *name = "KHC";
+  switch (status) {
+    case 0: name = "OK"; break;
+    case 1: name = "ERROR (loi lien lac)"; break;
+    case 2: name = "COLLISION"; break;
+    case 3: name = "TIMEOUT (co the: chua thay the)"; break;
+    case 4: name = "NO_ERROR"; break;
+    case 5: name = "CRC_ERROR"; break;
+  }
+  strncpy(buf, name, len - 1);
+  buf[len - 1] = '\0';
+}
+
 int getid() {
-  if (!mfrc522.PICC_IsNewCardPresent()) return 0;
-  if (!mfrc522.PICC_ReadCardSerial())   return 0;
+  byte status;
+  char name[40];
+  static unsigned long lastFailLog = 0;
+
+  status = mfrc522.PICC_IsNewCardPresent();
+  if (status != MFRC522::STATUS_OK) {
+    // 8 = NO_TAG_DET: chip RC522 lien lac duoc qua SPI nhung khong bat duoc
+    // song tu the -> loi cam ung/antenna hoac the ra xa.
+    // Cac ma khac (duoi 4 / READER_ERROR) -> loi chip hoac day SPI.
+    // Throttle: chi in 1 lan / 5s de khong spam serial.
+    if (millis() - lastFailLog >= 5000) {
+      lastFailLog = millis();
+      diagStatusName(status, name, sizeof(name));
+      Serial.print("[RFID-DIAG] IsNewCardPresent: 0x");
+      Serial.print(status, HEX);
+      Serial.print(" -> ");
+      Serial.println(name);
+    }
+    return 0;
+  }
+
+  if (!mfrc522.PICC_ReadCardSerial()) {
+    // Ghost detection binh thuong khi khong co the -> chi in 1 lan / 5s.
+    if (millis() - lastFailLog >= 5000) {
+      lastFailLog = millis();
+      Serial.println("[RFID-DIAG] PICC_ReadCardSerial: FAILED (loi doc serial the)");
+    }
+    return 0;
+  }
 
   for (int i = 0; i < 4; i++) {
     readcard[i] = mfrc522.uid.uidByte[i];
     array_to_string(readcard, 4, str);
     StrUID = str;
   }
+  // PICC_GetType: 1 = MIFARE (hop le), 0/99 = khong biet
+  Serial.print("[RFID-DIAG] Card type code: ");
+  Serial.println(mfrc522.PICC_GetType(readcard[0]));
   mfrc522.PICC_HaltA();
   return 1;
 }
@@ -229,15 +280,15 @@ void senddata() {
   readsuccess = getid();
   if (!readsuccess) return;
 
+  // Luôn phát UID giống firmware cũ; Python tự lọc theo phiên quét.
+  if (StrUID != lastUIDPrinted || (millis() - lastUIDTime) > 1500) {
+    Serial.println("UID:" + StrUID);
+    lastUIDPrinted = StrUID;
+    lastUIDTime = millis();
+  }
+
   // ===== SCAN MODE: chỉ gửi UID về Python, KHÔNG validate thẻ =====
   if (scanMode) {
-    // StrUID ĐÃ CÓ SẴN TỪ getid()
-    if (StrUID != lastUIDPrinted || (millis() - lastUIDTime) > 1500) {
-      Serial.println("UID:" + StrUID);
-      lastUIDPrinted = StrUID;
-      lastUIDTime = millis();
-    }
-
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("UID SENT");
@@ -361,6 +412,11 @@ void docBienSoTuPython() {
             }
           }
         }
+      }
+
+      // Python gửi GET_ID để xác nhận danh tính thiết bị (tự dò port COM).
+      else if (buffer.equals("GET_ID")) {
+        Serial.println("ID:" + String(DEVICE_ID));
       }
 
       else if (buffer.equals("SCAN_ON")) {
@@ -498,6 +554,19 @@ void setup() {
   mfrc522.PCD_Init();
   delay(250);
 
+  // Chẩn đoán khởi động: RC522 v2.0 hop le phai co PCD_ID = 0x92.
+  // Neu 0x00/0xFF hoac getPCDIDName hien "UNKNOWN" -> day SPI long,
+  // cap nguon sai (nhap 5V thay 3.3V) hoac module RC522 chet.
+  Serial.print("CLEARDATA");
+  // 0x37 = giay den PCD_ID (CommandAndStatus). RC522 hop le phai tra 0x92.
+  Serial.print("[RFID-DIAG] PCD_ID=0x");
+  Serial.print(mfrc522.PCD_ReadRegister((MFRC522::PCD_Register)0x37), HEX);
+  Serial.println(" (mong doi 0x92)");
+
+  // Báo danh tính cho Python tự dò port COM (không phụ thuộc số COM).
+  // Python gửi GET_ID để lấy lại ID bất cứ lúc nào (VD khi ESP32 reset).
+  Serial.println("ID:" + String(DEVICE_ID));
+
   LCD();
   delay(250);
 
@@ -511,4 +580,8 @@ void loop() {
   }
 
   senddata();
+
+  // Nghỉ 50ms giữa 2 vòng để không đốt CPU/ESP32 và không spam serial
+  // khi không có thẻ (ghost detection của RC522).
+  delay(50);
 }

@@ -8,47 +8,22 @@ export type UserUpdatePayload = {
   status?: string;
   password?: string;
   phone?: string;
-  firstName?: string;
-  lastName?: string;
-  gender?: string;
-  birthDate?: string;
-  idCardNumber?: string;
-  idCardIssuedAt?: string;
-  idCardExpiry?: string;
-  address?: string;
-  city?: string;
-  district?: string;
-  emergencyContact?: string;
-  emergencyPhone?: string;
-  company?: string;
-  taxCode?: string;
 };
 
 type UserActionsParams = {
-  setUserList: (users: DemoUser[] | ((items: DemoUser[]) => DemoUser[])) => void;
+  setUserList: (
+    users: DemoUser[] | ((items: DemoUser[]) => DemoUser[]),
+  ) => void;
   setActionLog: (log: string) => void;
 };
 
-// Các field text gom từ form tạo mới; bỏ qua giá trị rỗng.
-const FORM_TEXT_FIELDS = [
-  "phone",
-  "firstName",
-  "lastName",
-  "gender",
-  "birthDate",
-  "idCardNumber",
-  "idCardIssuedAt",
-  "idCardExpiry",
-  "address",
-  "city",
-  "district",
-  "emergencyContact",
-  "emergencyPhone",
-  "company",
-  "taxCode",
-] as const;
+// DATA-01: chỉ còn phone là field hồ sơ backend hỗ trợ; bỏ qua giá trị rỗng.
+const FORM_TEXT_FIELDS = ["phone"] as const;
 
-export function createUserActions({ setUserList, setActionLog }: UserActionsParams) {
+export function createUserActions({
+  setUserList,
+  setActionLog,
+}: UserActionsParams) {
   async function createUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formEl = event.currentTarget;
@@ -71,8 +46,9 @@ export function createUserActions({ setUserList, setActionLog }: UserActionsPara
     });
     const data = await response.json();
     if (!response.ok) {
-      setActionLog(data.message || "Không tạo được người dùng.");
-      return;
+      const error = new Error(data.message || "Không tạo được người dùng.");
+      setActionLog(error.message);
+      throw error;
     }
     setUserList((items) => [data.user, ...items]);
     setActionLog(`Đã tạo tài khoản "${data.user.name}".`);
@@ -86,8 +62,11 @@ export function createUserActions({ setUserList, setActionLog }: UserActionsPara
     });
     const data = await response.json();
     if (!response.ok) {
-      setActionLog(data.message || "Không cập nhật được người dùng.");
-      return;
+      const error = new Error(
+        data.message || "Không cập nhật được người dùng.",
+      );
+      setActionLog(error.message);
+      throw error;
     }
     setUserList((items) => items.map((u) => (u.id === id ? data.user : u)));
     setActionLog(`Đã cập nhật tài khoản "${data.user.name}".`);
@@ -97,8 +76,9 @@ export function createUserActions({ setUserList, setActionLog }: UserActionsPara
     const response = await apiFetch(`/users/${id}`, { method: "DELETE" });
     const data = await response.json();
     if (!response.ok) {
-      setActionLog(data.message || "Không xóa được người dùng.");
-      return;
+      const error = new Error(data.message || "Không xóa được người dùng.");
+      setActionLog(error.message);
+      throw error;
     }
     setUserList((items) => items.filter((u) => u.id !== id));
     setActionLog("Đã xóa tài khoản.");

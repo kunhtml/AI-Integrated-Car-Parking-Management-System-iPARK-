@@ -29,16 +29,41 @@ shiftScheduleRoutes.get("/types", asyncHandler(getShiftTypes));
 // Staff can see their own schedule
 shiftScheduleRoutes.get("/my", asyncHandler(getMySchedule));
 shiftScheduleRoutes.get("/my/current", asyncHandler(getMyCurrentShift));
-shiftScheduleRoutes.get("/week", asyncHandler(getWeeklySchedule));
+// SEC-02: customer không được đọc lịch nhân sự qua /week.
+shiftScheduleRoutes.get(
+  "/week",
+  requireRole("admin", "manager", "staff"),
+  asyncHandler(getWeeklySchedule),
+);
 
 // Management routes for admin + manager
-shiftScheduleRoutes.get("/staffs", requireRole("admin", "manager"), asyncHandler(getStaffsForSchedule));
-shiftScheduleRoutes.get("/stats", requireRole("admin", "manager"), asyncHandler(getShiftStats));
-shiftScheduleRoutes.get("/", requireRole("admin", "manager"), asyncHandler(listShiftSchedules));
-shiftScheduleRoutes.post("/bulk", requireRole("admin", "manager"), asyncHandler(bulkCreateShiftSchedules));
+shiftScheduleRoutes.get(
+  "/staffs",
+  requireRole("admin", "manager"),
+  asyncHandler(getStaffsForSchedule),
+);
+shiftScheduleRoutes.get(
+  "/stats",
+  requireRole("admin", "manager"),
+  asyncHandler(getShiftStats),
+);
+shiftScheduleRoutes.get(
+  "/",
+  requireRole("admin", "manager"),
+  asyncHandler(listShiftSchedules),
+);
+shiftScheduleRoutes.post(
+  "/bulk",
+  requireRole("admin", "manager"),
+  asyncHandler(bulkCreateShiftSchedules),
+);
 
 // Routes for both admin and manager, plus staff actions
-shiftScheduleRoutes.get("/:id/history", requireRole("admin", "manager", "staff"), asyncHandler(getScheduleHistory));
+shiftScheduleRoutes.get(
+  "/:id/history",
+  requireRole("admin", "manager", "staff"),
+  asyncHandler(getScheduleHistory),
+);
 shiftScheduleRoutes.post("/", asyncHandler(createShiftSchedule));
 shiftScheduleRoutes.patch("/:id", asyncHandler(updateShiftSchedule));
 shiftScheduleRoutes.delete("/:id", asyncHandler(deleteShiftSchedule));

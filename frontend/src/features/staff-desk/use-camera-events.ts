@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { apiBaseUrl } from "@/lib/constants"
 import { bridgeBaseUrl } from "@/lib/client-api";
 
 export type CameraIngestEvent = {
@@ -15,6 +14,7 @@ export type CameraIngestEvent = {
   ownerName?: string;
   userType: "resident" | "guest" | "unknown";
   imagePath?: string;
+  entryImagePath?: string;
   barrierOpened: boolean;
   sessionId?: string | null;
   checkInAt?: string | null;
@@ -30,6 +30,12 @@ export type CameraIngestEvent = {
 
 export type CameraStreamStatus = "connecting" | "open" | "error" | "closed";
 
+export type ExitSessionStateEvent = {
+  sessionId: string;
+  status: string;
+  exitState?: string | null;
+};
+
 /**
  * Subscribe SSE từ backend `/api/camera-logs/stream`.
  * - Auto-reconnect khi lỗi (exponential backoff tối đa 15s).
@@ -40,6 +46,8 @@ export type CameraStreamStatus = "connecting" | "open" | "error" | "closed";
  */
 export function useCameraIngestEvents() {
   const [latest, setLatest] = useState<CameraIngestEvent | null>(null);
+  const [latestExitState, setLatestExitState] =
+    useState<ExitSessionStateEvent | null>(null);
   const [status, setStatus] = useState<CameraStreamStatus>("connecting");
   const retryRef = useRef(0);
   const closedRef = useRef(false);
@@ -50,8 +58,11 @@ export function useCameraIngestEvents() {
 
     const connect = () => {
       if (closedRef.current) return;
-      // EventSource gửi cookie cùng domain tự động; backend đã set credentials.
-      const url = `${apiBaseUrl}/camera-logs/stream`;
+      // SSE đi qua Next.js rewrites → same-origin để browser tự gửi
+      // cookie `parking_session` mà không cần CORS credentials. Backend
+      // thật vẫn là http://localhost:4000 (xem next.config.ts rewrites).
+      // Dùng URL tương đối để tự thích nghi với mọi host/proxy.
+      const url = "/api/camera-logs/stream";
       const es = new EventSource(url, { withCredentials: true });
       sourceRef.current = es;
       setStatus("connecting");
@@ -76,6 +87,16 @@ export function useCameraIngestEvents() {
         }
       });
 
+      es.addEventListener("exit.session-state", (e) => {
+        try {
+          setLatestExitState(
+            JSON.parse((e as MessageEvent).data) as ExitSessionStateEvent,
+          );
+        } catch {
+          // ignore malformed
+        }
+      });
+
       es.onerror = () => {
         setStatus("error");
         es.close();
@@ -88,14 +109,39 @@ export function useCameraIngestEvents() {
     };
 
     connect();
+
+    // Ping AI runtime để bật chế độ inference (chỉ chạy khi staff-desk mở).
+    const pingWatch = async () => {
+      try {
+        await fetch(`${bridgeBaseUrl}/api/staff-desk/watch`, {
+          method: "POST",
+          credentials: "omit",
+        });
+      } catch {
+        // ignore: AI có thể chưa sẵn sàng, hook sẽ retry ở lần sau
+      }
+    };
+    pingWatch();
+    const watchInterval = window.setInterval(pingWatch, 10_000);
+
     return () => {
       closedRef.current = true;
       sourceRef.current?.close();
       sourceRef.current = null;
+      window.clearInterval(watchInterval);
+      // Báo AI ngưng inference khi rời trang.
+      try {
+        const body = new Blob([JSON.stringify({})], {
+          type: "application/json",
+        });
+        navigator.sendBeacon?.(`${bridgeBaseUrl}/api/staff-desk/unwatch`, body);
+      } catch {
+        // ignore
+      }
     };
   }, []);
 
-  return { latest, status };
+  return { latest, latestExitState, status };
 }
 
 /** Resolve đường dẫn ảnh tương đối từ bridge (vd `/static/snapshots/x.jpg`) sang absolute URL. */
@@ -105,5 +151,11 @@ export function resolveBridgeImageUrl(
   if (!imagePath) return null;
   if (imagePath.startsWith("http://") || imagePath.startsWith("https://"))
     return imagePath;
-  return `${bridgeBaseUrl}${imagePath.startsWith("/") ? "" : "/"}${imagePath}`;
+
+  // Backend có thể trả path ảnh của bridge hoặc path tương đối của API.
+  // Ảnh OCR/snapshot được lưu và serve bởi Python bridge trên port 5050.
+  const normalizedPath = imagePath.startsWith("/")
+    ? imagePath
+    : `/${imagePath}`;
+  return `${bridgeBaseUrl}${normalizedPath}`;
 }

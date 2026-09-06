@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { apiBaseUrl } from "@/lib/constants";
+import { logger } from "@/lib/logger";
 
 // ─── Types ─────────────────────────────────────────────────────────
 type ExitStep =
@@ -111,7 +112,7 @@ export function GuestExitView() {
     const poll = setInterval(async () => {
       try {
         const r = await fetch(
-          `${apiBaseUrl}/public/session/${sessionInfo.id}/payment-status`
+          `${apiBaseUrl}/public/session/${sessionInfo.id}/payment-status`,
         );
         const d = await r.json();
         if (
@@ -151,7 +152,7 @@ export function GuestExitView() {
         scanQRCode();
       }
     } catch (err) {
-      console.error("Camera error:", err);
+      logger.error("Camera error:", { err });
       setError("Không thể truy cập camera. Vui lòng nhập biển số thủ công.");
       setShowScanner(false);
     }
@@ -196,7 +197,7 @@ export function GuestExitView() {
     setLoading(true);
     try {
       const r = await fetch(
-        `${apiBaseUrl}/public/lookup?plate=${encodeURIComponent(plate.trim())}`
+        `${apiBaseUrl}/public/lookup?plate=${encodeURIComponent(plate.trim())}`,
       );
       const d = await r.json();
       if (d.found && d.session) {
@@ -236,7 +237,7 @@ export function GuestExitView() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({}),
-        }
+        },
       );
       const d = await r.json();
       if (d.sessionPaymentStatus === "fully_paid") {
@@ -270,7 +271,9 @@ export function GuestExitView() {
         setStep("success");
       } else {
         setGateStatus("failed");
-        setError(d.message || "Không mở được barie. Vui lòng liên hệ nhân viên.");
+        setError(
+          d.message || "Không mở được barie. Vui lòng liên hệ nhân viên.",
+        );
       }
     } catch {
       setGateStatus("failed");
@@ -371,7 +374,9 @@ export function GuestExitView() {
               <Car size={20} />
               <span className="guest-exit-plate">{sessionInfo.plate}</span>
               {sessionInfo.ownerName && (
-                <span className="guest-exit-owner">{sessionInfo.ownerName}</span>
+                <span className="guest-exit-owner">
+                  {sessionInfo.ownerName}
+                </span>
               )}
             </div>
 
@@ -404,20 +409,17 @@ export function GuestExitView() {
             {/* Fee */}
             <div className="guest-exit-fee">
               <div className="guest-exit-fee-label">Phí gửi xe</div>
-              <div className="guest-exit-fee-amount">{formatVND(amountToPay)}</div>
+              <div className="guest-exit-fee-amount">
+                {formatVND(amountToPay)}
+              </div>
               {sessionInfo.isPrepaid && (
-                <div className="guest-exit-prepaid">
-                  Đã thanh toán trước
-                </div>
+                <div className="guest-exit-prepaid">Đã thanh toán trước</div>
               )}
             </div>
 
             {/* Actions */}
             <div className="guest-exit-actions">
-              <button
-                className="guest-exit-btn-secondary"
-                onClick={reset}
-              >
+              <button className="guest-exit-btn-secondary" onClick={reset}>
                 Quay lại
               </button>
               {!sessionInfo.isPrepaid && amountToPay > 0 && (

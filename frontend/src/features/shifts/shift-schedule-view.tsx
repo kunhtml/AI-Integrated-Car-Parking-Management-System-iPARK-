@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useParkingApp } from "@/context/parking-app-context";
 import { apiFetch } from "@/lib/client-api";
+import { logger } from "@/lib/logger";
 import type {
   ShiftScheduleHistoryItem,
   ShiftScheduleItem,
@@ -1498,7 +1499,7 @@ export function ShiftScheduleView() {
               setPreselectedDate(null);
               setPreselectedShiftType(null);
             } catch (e) {
-              console.error(e);
+              logger.error("Create schedule failed:", { e });
             }
           }}
         />
@@ -1515,7 +1516,7 @@ export function ShiftScheduleView() {
             try {
               await createSchedule(data);
             } catch (e) {
-              console.error(e);
+              logger.error("Bulk create schedule failed:", { e });
             }
           }}
         />
@@ -1533,7 +1534,7 @@ export function ShiftScheduleView() {
                 await createSchedule(item);
               }
             } catch (e) {
-              console.error(e);
+              logger.error("Bulk import schedule failed:", { e });
             }
           }}
         />
@@ -1554,7 +1555,7 @@ export function ShiftScheduleView() {
                 setShowExportModal(false);
               }
             } catch (e) {
-              console.error(e);
+              logger.error("Export schedule failed:", { e });
               alert("Có lỗi khi xuất dữ liệu");
             }
           }}
@@ -1872,7 +1873,7 @@ function BulkAssignModal({
       }
       onClose();
     } catch (e) {
-      console.error(e);
+      logger.error("Submit schedule failed:", { e });
     } finally {
       setIsSubmitting(false);
     }
@@ -2431,7 +2432,7 @@ function MonthAssignModal({
       await onAdd(schedules);
       onClose();
     } catch (e) {
-      console.error(e);
+      logger.error("Submit bulk schedule failed:", { e });
     } finally {
       setIsSubmitting(false);
     }

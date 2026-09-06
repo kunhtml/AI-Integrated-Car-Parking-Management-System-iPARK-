@@ -1,20 +1,33 @@
 import { FormEvent } from "react";
 
 import { apiFetch } from "@/lib/client-api";
-import type { IncidentItem, NotificationItem, RegisteredVehicle, ShiftItem, ShiftScheduleItem } from "@/types";
+import type {
+  NotificationItem,
+  RegisteredVehicle,
+  ShiftItem,
+  ShiftScheduleItem,
+} from "@/types";
 
 type MiscActionsParams = {
-  setNotificationList: (items: NotificationItem[] | ((items: NotificationItem[]) => NotificationItem[])) => void;
-  setShiftList: (items: ShiftItem[] | ((items: ShiftItem[]) => ShiftItem[])) => void;
-  setIncidentList: (items: IncidentItem[] | ((items: IncidentItem[]) => IncidentItem[])) => void;
-  setRegisteredVehicles: (vehicles: RegisteredVehicle[] | ((items: RegisteredVehicle[]) => RegisteredVehicle[])) => void;
+  setNotificationList: (
+    items:
+      | NotificationItem[]
+      | ((items: NotificationItem[]) => NotificationItem[]),
+  ) => void;
+  setShiftList: (
+    items: ShiftItem[] | ((items: ShiftItem[]) => ShiftItem[]),
+  ) => void;
+  setRegisteredVehicles: (
+    vehicles:
+      | RegisteredVehicle[]
+      | ((items: RegisteredVehicle[]) => RegisteredVehicle[]),
+  ) => void;
   setActionLog: (log: string) => void;
 };
 
 export function createMiscActions({
   setNotificationList,
   setShiftList,
-  setIncidentList,
   setRegisteredVehicles,
   setActionLog,
 }: MiscActionsParams) {
@@ -23,10 +36,14 @@ export function createMiscActions({
   }
 
   async function markNotificationRead(id: string) {
-    const response = await apiFetch(`/notifications/${id}/read`, { method: "PATCH" });
+    const response = await apiFetch(`/notifications/${id}/read`, {
+      method: "PATCH",
+    });
     const data = await response.json();
     if (response.ok) {
-      setNotificationList((items) => items.map((item) => (item.id === id ? data.notification : item)));
+      setNotificationList((items) =>
+        items.map((item) => (item.id === id ? data.notification : item)),
+      );
     }
   }
 
@@ -37,7 +54,10 @@ export function createMiscActions({
     const response = await apiFetch("/shifts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: String(form.get("name") || "Ca làm"), note: String(form.get("note") || "") }),
+      body: JSON.stringify({
+        name: String(form.get("name") || "Ca làm"),
+        note: String(form.get("note") || ""),
+      }),
     });
     const data = await response.json();
     if (response.ok) {
@@ -51,42 +71,10 @@ export function createMiscActions({
     const response = await apiFetch(`/shifts/${id}/end`, { method: "PATCH" });
     const data = await response.json();
     if (response.ok) {
-      setShiftList((items) => items.map((item) => (item.id === id ? data.shift : item)));
+      setShiftList((items) =>
+        items.map((item) => (item.id === id ? data.shift : item)),
+      );
       setActionLog("Đã kết thúc ca làm việc.");
-    }
-  }
-
-  async function createIncident(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const formEl = event.currentTarget;
-    const form = new FormData(formEl);
-    const response = await apiFetch("/incidents", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type: String(form.get("type") || "Khác"),
-        note: String(form.get("note") || ""),
-        plate: String(form.get("plate") || ""),
-      }),
-    });
-    const data = await response.json();
-    if (response.ok) {
-      setIncidentList((items) => [data.incident, ...items]);
-      setActionLog("Đã lưu sự cố vào MongoDB.");
-      formEl.reset();
-    }
-  }
-
-  async function resolveIncident(id: string) {
-    const response = await apiFetch(`/incidents/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "Đã xử lý" }),
-    });
-    const data = await response.json();
-    if (response.ok) {
-      setIncidentList((items) => items.map((item) => (item.id === id ? data.incident : item)));
-      setActionLog("Đã xử lý sự cố.");
     }
   }
 
@@ -105,11 +93,15 @@ export function createMiscActions({
       simulateAction(data.message || "Không duyệt được phương tiện.");
       return;
     }
-    setRegisteredVehicles((items) => items.map((item) => (item.id === vehicle.id ? data.vehicle : item)));
+    setRegisteredVehicles((items) =>
+      items.map((item) => (item.id === vehicle.id ? data.vehicle : item)),
+    );
     simulateAction(`Đã duyệt xe ${vehicle.plate} trong MongoDB.`);
   }
 
-  async function fetchVehicleDetail(id: string): Promise<RegisteredVehicle | null> {
+  async function fetchVehicleDetail(
+    id: string,
+  ): Promise<RegisteredVehicle | null> {
     const response = await apiFetch(`/vehicles/${id}`);
     if (!response.ok) return null;
     const data = await response.json();
@@ -121,8 +113,6 @@ export function createMiscActions({
     markNotificationRead,
     startShift,
     endShift,
-    createIncident,
-    resolveIncident,
     approveVehicle,
     fetchVehicleDetail,
   };

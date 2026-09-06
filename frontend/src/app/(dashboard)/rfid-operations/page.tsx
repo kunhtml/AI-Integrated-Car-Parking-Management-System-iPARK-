@@ -72,7 +72,8 @@ function MismatchPanel({
   const [acting, setActing] = useState(false);
   const [actionError, setActionError] = useState("");
 
-  const entryPlate = result.session?.plate || result.session?.plateNumber || "—";
+  const entryPlate =
+    result.session?.plate || result.session?.plateNumber || "—";
   const exitPlate = plateDetected || result.plateDetected || "—";
   const sessionId = sessionIdOf(result.session);
 
@@ -112,14 +113,32 @@ function MismatchPanel({
         background: "rgba(245,158,11,0.06)",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
-        <ShieldAlert size={20} style={{ color: "var(--color-warning, #f59e0b)" }} />
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.5rem",
+          marginBottom: "0.75rem",
+        }}
+      >
+        <ShieldAlert
+          size={20}
+          style={{ color: "var(--color-warning, #f59e0b)" }}
+        />
         <strong style={{ color: "var(--color-warning, #f59e0b)" }}>
           CROSS-CHECK MISMATCH
         </strong>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", fontSize: "0.85rem", marginBottom: "0.75rem" }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: "0.5rem",
+          fontSize: "0.85rem",
+          marginBottom: "0.75rem",
+        }}
+      >
         <div>
           <span className="muted-text">Thẻ:</span>{" "}
           <strong>{result.card?.cardId}</strong>
@@ -130,17 +149,22 @@ function MismatchPanel({
         </div>
         <div>
           <span className="muted-text">Biển số vào:</span>{" "}
-          <strong style={{ color: "var(--color-success, #22c55e)" }}>{entryPlate}</strong>
+          <strong style={{ color: "var(--color-success, #22c55e)" }}>
+            {entryPlate}
+          </strong>
         </div>
         <div>
           <span className="muted-text">Biển số ra:</span>{" "}
-          <strong style={{ color: "var(--color-error, #ef4444)" }}>{exitPlate} ← KHÔNG KHỚP</strong>
+          <strong style={{ color: "var(--color-error, #ef4444)" }}>
+            {exitPlate} ← KHÔNG KHỚP
+          </strong>
         </div>
       </div>
 
       {result.session?.checkInAt && (
         <p style={{ fontSize: "0.8rem", marginBottom: "0.75rem" }}>
-          <span className="muted-text">Vào lúc:</span> {fmt(result.session.checkInAt)}
+          <span className="muted-text">Vào lúc:</span>{" "}
+          {fmt(result.session.checkInAt)}
         </p>
       )}
 
@@ -158,7 +182,11 @@ function MismatchPanel({
           type="button"
           style={{ flex: 1 }}
         >
-          {acting ? <Loader2 className="spin" size={14} /> : <XCircle size={14} />}
+          {acting ? (
+            <Loader2 className="spin" size={14} />
+          ) : (
+            <XCircle size={14} />
+          )}
           Từ chối
         </button>
         <button
@@ -168,7 +196,11 @@ function MismatchPanel({
           type="button"
           style={{ flex: 1 }}
         >
-          {acting ? <Loader2 className="spin" size={14} /> : <ShieldCheck size={14} />}
+          {acting ? (
+            <Loader2 className="spin" size={14} />
+          ) : (
+            <ShieldCheck size={14} />
+          )}
           Xác nhận ra
         </button>
       </div>
@@ -321,13 +353,17 @@ function ScannerPanel({
                 : "rgba(239,68,68,0.05)",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <div
+              style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+            >
               {result.valid ? (
                 <CheckCircle size={18} className="text-success" />
               ) : (
                 <AlertCircle size={18} className="text-danger" />
               )}
-              <strong>{result.message || (result.valid ? "Hợp lệ" : "Không hợp lệ")}</strong>
+              <strong>
+                {result.message || (result.valid ? "Hợp lệ" : "Không hợp lệ")}
+              </strong>
             </div>
             {result.card && (
               <p style={{ marginTop: "0.25rem", fontSize: "0.85rem" }}>
@@ -336,8 +372,8 @@ function ScannerPanel({
             )}
             {result.session && (
               <p style={{ marginTop: "0.25rem", fontSize: "0.85rem" }}>
-                Phiếu: {result.session.plate || result.session.plateNumber} | Slot:{" "}
-                {result.session.slot}
+                Phiếu: {result.session.plate || result.session.plateNumber} |
+                Slot: {result.session.slot}
               </p>
             )}
           </div>
@@ -386,7 +422,9 @@ function AssignCardPanel({ onDone }: { onDone: () => void }) {
       });
       const data = await res.json();
       if (res.ok) {
-        setSuccess(`Gán thẻ ${data.card?.cardId || cardId.trim()} thành công cho phiên ${sessionId.trim().slice(-6).toUpperCase()}`);
+        setSuccess(
+          `Gán thẻ ${data.card?.cardId || cardId.trim()} thành công cho phiên ${sessionId.trim().slice(-6).toUpperCase()}`,
+        );
         setCardId("");
         setSessionId("");
         onDone();
@@ -748,7 +786,11 @@ function RfidOperationsContent() {
   }, []);
 
   const scanEntry = useCallback(
-    (body: { cardId: string; gate: "entry" | "exit"; plateDetected?: string }) =>
+    (body: {
+      cardId: string;
+      gate: "entry" | "exit";
+      plateDetected?: string;
+    }) =>
       apiFetch("/rfid-cards/scan/entry", {
         method: "POST",
         body: JSON.stringify({ ...body, gate: "entry" }),
@@ -757,7 +799,11 @@ function RfidOperationsContent() {
   );
 
   const scanExit = useCallback(
-    (body: { cardId: string; gate: "entry" | "exit"; plateDetected?: string }) =>
+    (body: {
+      cardId: string;
+      gate: "entry" | "exit";
+      plateDetected?: string;
+    }) =>
       apiFetch("/rfid-cards/scan/exit", {
         method: "POST",
         body: JSON.stringify({ ...body, gate: "exit" }),
@@ -831,7 +877,7 @@ function RfidOperationsContent() {
 
 export default function RfidOperationsPage() {
   return (
-    <RoleGuard allowedRoles={["admin", "staff"]}>
+    <RoleGuard allowedRoles={["admin", "manager", "staff"]}>
       <RfidOperationsContent />
     </RoleGuard>
   );

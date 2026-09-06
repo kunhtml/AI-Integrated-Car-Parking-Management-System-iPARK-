@@ -2,6 +2,7 @@ import type { Role } from "@/types";
 
 export const roleLabels: Record<Role, string> = {
   admin: "Quản trị viên",
+  manager: "Quản lý",
   staff: "Nhân viên",
   customer: "Khách hàng",
 };

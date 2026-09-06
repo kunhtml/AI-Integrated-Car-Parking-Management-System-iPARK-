@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 
 import { useParkingApp } from "@/context/parking-app-context";
 import { apiFetch } from "@/lib/client-api";
+import { logger } from "@/lib/logger";
 import type { DisputeItem, DisputeStatus } from "@/types";
 
 const apiOrigin = (
@@ -59,8 +60,7 @@ const DISPUTE_STATUSES: DisputeStatus[] = [
 
 export function DisputeDetailView({ id }: { id: string }) {
   const router = useRouter();
-  const { currentUser, incidentList, setIncidentList, setActionLog } =
-    useParkingApp();
+  const { currentUser, setActionLog } = useParkingApp();
   const [detail, setDetail] = useState<DisputeItem | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -85,7 +85,7 @@ export function DisputeDetailView({ id }: { id: string }) {
       }
       setDetail(data.dispute);
     } catch (error) {
-      console.error("[disputes] detail load failed:", error);
+      logger.error("[disputes] detail load failed:", { error });
       setActionLog("Lỗi kết nối khi tải chi tiết khiếu nại.");
       router.replace("/disputes");
     } finally {
@@ -134,24 +134,6 @@ export function DisputeDetailView({ id }: { id: string }) {
       }
       setReplyContent("");
       setNewStatus("");
-      // Đồng bộ trạng thái incident liên quan (Hàng đợi sự cố) ngay trong
-      // context để tránh hiển thị "Đang xử lý" cũ khi quay lại /incidents.
-      // Backend map: "Đã xử lý"/"Từ chối" của dispute → incident "Đã xử lý".
-      if (hasStatusChange && detail?.incidentId) {
-        const incidentStatus =
-          newStatus === "Mới"
-            ? "Mới"
-            : newStatus === "Đang xử lý"
-              ? "Đang xử lý"
-              : "Đã xử lý";
-        setIncidentList((items) =>
-          items.map((item) =>
-            item.id === detail.incidentId || item.disputeId === detail.id
-              ? { ...item, status: incidentStatus }
-              : item,
-          ),
-        );
-      }
       await loadDetail();
       setActionLog(
         hasMessage && hasStatusChange
@@ -161,7 +143,7 @@ export function DisputeDetailView({ id }: { id: string }) {
             : "Đã cập nhật trạng thái.",
       );
     } catch (err) {
-      console.error("[disputes] reply failed:", err);
+      logger.error("[disputes] reply failed:", { err });
       setActionLog("Lỗi khi gửi phản hồi.");
     } finally {
       setSending(false);

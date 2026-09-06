@@ -7,6 +7,10 @@ import { env } from "../config/env.js";
 import { OtpToken } from "../models/OtpToken.js";
 import { User } from "../models/User.js";
 import { sendMail, smtpConfigured } from "../services/mail.service.js";
+import {
+  createActiveSession,
+  revokeUserSessions,
+} from "../services/session.service.js";
 import { signSession } from "../services/token.service.js";
 import { serializeUser } from "../utils/serializers.js";
 import { passwordSchema } from "../validations/password.validation.js";
@@ -206,8 +210,11 @@ export async function verifyEmailOtp(request: Request, response: Response) {
   await token.save();
 
   const serialized = serializeUser(user);
-  const sessionToken = await signSession(serialized);
-  await recordActiveSession(request, user._id);
+  const activeSession = await createActiveSession(request, user._id);
+  const sessionToken = await signSession({
+    ...serialized,
+    sid: activeSession._id.toString(),
+  });
 
   const { notifyRegistration } =
     await import("../services/notificationTriggers.service.js");
@@ -349,8 +356,11 @@ export async function login(request: Request, response: Response) {
   }
 
   const serialized = serializeUser(user);
-  const token = await signSession(serialized);
-  await recordActiveSession(request, user._id);
+  const activeSession = await createActiveSession(request, user._id);
+  const token = await signSession({
+    ...serialized,
+    sid: activeSession._id.toString(),
+  });
   // Cập nhật lastLoginAt (ghi vào DB; nếu chỉ set trong serializeUser thì không persist)
   user.lastLoginAt = new Date();
   await user.save();
@@ -487,8 +497,11 @@ export async function googleCallback(request: Request, response: Response) {
   }
 
   const serialized = serializeUser(user);
-  const token = await signSession(serialized);
-  await recordActiveSession(request, user._id);
+  const activeSession = await createActiveSession(request, user._id);
+  const token = await signSession({
+    ...serialized,
+    sid: activeSession._id.toString(),
+  });
   user.lastLoginAt = new Date();
   await user.save();
   response.cookie(cookieName, token, cookieOptions()).redirect(env.frontendUrl);
@@ -833,8 +846,11 @@ export async function verifyLoginTwoFactor(
   await Promise.all([otpToken.save(), user.save()]);
 
   const serialized = serializeUser(user);
-  const sessionToken = await signSession(serialized);
-  await recordActiveSession(request, user._id);
+  const activeSession = await createActiveSession(request, user._id);
+  const sessionToken = await signSession({
+    ...serialized,
+    sid: activeSession._id.toString(),
+  });
 
   response.cookie(cookieName, sessionToken, cookieOptions()).json({
     user: serialized,
@@ -851,9 +867,11 @@ export async function me(request: Request, response: Response) {
     response.json({ user: null });
     return;
   }
+
   // Đọc từ DB để có dữ liệu mới nhất (vd: cập nhật status sau khi đăng nhập).
   const user = await User.findById(request.user.id);
-  response.json({ user: user ? serializeUser(user) : request.user });
+  // SEC-01: không fallback về claims JWT cũ khi tài khoản không còn tồn tại.
+  response.json({ user: user ? serializeUser(user) : null });
 }
 
 export async function changePassword(request: Request, response: Response) {
@@ -887,6 +905,12 @@ export async function changePassword(request: Request, response: Response) {
 
   user.passwordHash = await bcrypt.hash(body.newPassword, 12);
   await user.save();
+
+  // SEC-01: thu hồi mọi phiên khác sau khi đổi mật khẩu; giữ phiên hiện tại.
+  await revokeUserSessions(user._id, {
+    exceptSessionId: request.user?.sid,
+  });
+
   response.json({ ok: true, message: "Đã thay đổi mật khẩu." });
 }
 
@@ -961,7 +985,10 @@ export async function updateProfile(request: Request, response: Response) {
   await user.save();
 
   const serialized = serializeUser(user);
-  const token = await signSession(serialized);
+  const token = await signSession({
+    ...serialized,
+    sid: request.user?.sid,
+  });
   response
     .cookie(cookieName, token, cookieOptions())
     .json({ user: serialized, message: "Đã cập nhật hồ sơ." });
@@ -997,7 +1024,10 @@ export async function uploadAvatar(
   await user.save();
 
   const serialized = serializeUser(user);
-  const token = await signSession(serialized);
+  const token = await signSession({
+    ...serialized,
+    sid: request.user?.sid,
+  });
   response
     .cookie(cookieName, token, cookieOptions())
     .json({ user: serialized, message: "Đã cập nhật ảnh đại diện." });
@@ -1172,7 +1202,10 @@ export async function verifyChangeEmail(request: Request, response: Response) {
 
   const serialized = serializeUser(user);
   // Cập nhật cookie session với email mới
-  const sessionToken = await signSession(serialized);
+  const sessionToken = await signSession({
+    ...serialized,
+    sid: request.user?.sid,
+  });
   response.cookie(cookieName, sessionToken, cookieOptions()).json({
     user: serialized,
     message: "Đã cập nhật email thành công.",

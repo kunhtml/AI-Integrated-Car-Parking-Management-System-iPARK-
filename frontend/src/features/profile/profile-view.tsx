@@ -376,6 +376,12 @@ function ForgotPasswordModal({
   const [preview, setPreview] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [devOtp, setDevOtp] = useState<string | null>(null);
+
+  function handleClose() {
+    if (loading) return;
+    onClose();
+  }
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -2184,7 +2190,7 @@ export function ProfileView() {
             />
             <FieldRow
               label="Địa chỉ"
-              value={currentUser.address ?? "Chưa cập nhật"}
+              value="Chưa cập nhật"
               icon={MapPin}
               editable
               editing={editingField === "address"}

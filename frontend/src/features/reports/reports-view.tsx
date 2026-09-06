@@ -10,7 +10,6 @@ import {
   Car,
   CheckCircle,
   Download,
-  Eye,
   Flame,
   MapPin,
   ParkingCircle,
@@ -23,6 +22,7 @@ import {
 } from "lucide-react";
 import { useParkingApp } from "@/context/parking-app-context";
 import { apiFetch } from "@/lib/client-api";
+import { logger } from "@/lib/logger";
 
 import type {
   RevenueChartPoint,
@@ -61,6 +61,62 @@ function formatShortCurrency(value: number) {
   return `${value}`;
 }
 
+function formatDisplayDate(value: string) {
+  if (!value) return "—";
+  const [year, month, day] = value.split("-");
+  return year && month && day ? `${day}/${month}/${year}` : value;
+}
+
+function toIsoDate(value: Date) {
+  return value.toISOString().slice(0, 10);
+}
+
+function getPresetRange(preset: string) {
+  const end = todayStr();
+  const start = new Date(`${end}T00:00:00`);
+  if (preset === "today") return { from: end, to: end };
+  if (preset === "7d") start.setDate(start.getDate() - 6);
+  if (preset === "30d") start.setDate(start.getDate() - 29);
+  if (preset === "month") start.setDate(1);
+  return { from: toIsoDate(start), to: end };
+}
+
+function DateTextInput({
+  value,
+  onChange,
+  label,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  label: string;
+}) {
+  return (
+    <input
+      aria-label={label}
+      type="text"
+      inputMode="numeric"
+      placeholder="dd/mm/yyyy"
+      maxLength={10}
+      value={formatDisplayDate(value)}
+      onChange={(event) => {
+        const digits = event.target.value.replace(/\D/g, "").slice(0, 8);
+        const formatted =
+          digits.length > 4
+            ? `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`
+            : digits.length > 2
+              ? `${digits.slice(0, 2)}/${digits.slice(2)}`
+              : digits;
+        if (formatted.length === 10) {
+          const [day, month, year] = formatted.split("/");
+          onChange(`${year}-${month}-${day}`);
+        } else {
+          onChange("");
+        }
+      }}
+    />
+  );
+}
+
 // ─── KPI Card ────────────────────────────────────────────────────────────────
 interface KpiCardProps {
   icon: React.ReactNode;
@@ -68,9 +124,10 @@ interface KpiCardProps {
   value: string;
   sub?: string;
   color: "blue" | "green" | "amber" | "purple" | "cyan" | "red";
+  deltaPct?: number;
 }
 
-function KpiCard({ icon, label, value, sub, color }: KpiCardProps) {
+function KpiCard({ icon, label, value, sub, color, deltaPct }: KpiCardProps) {
   const colors: Record<string, { bg: string; color: string }> = {
     blue: { bg: "rgba(59,130,246,0.08)", color: "#3b82f6" },
     green: { bg: "rgba(16,185,129,0.08)", color: "#10b981" },
@@ -82,13 +139,42 @@ function KpiCard({ icon, label, value, sub, color }: KpiCardProps) {
   const c = colors[color];
   return (
     <div className="rep-kpi-card">
-      <div className="rep-kpi-icon" style={{ background: c.bg, color: c.color }}>
+      <div
+        className="rep-kpi-icon"
+        style={{ background: c.bg, color: c.color }}
+      >
         {icon}
       </div>
       <div className="rep-kpi-body">
         <span className="rep-kpi-label">{label}</span>
         <strong className="rep-kpi-value">{value}</strong>
         {sub && <span className="rep-kpi-sub">{sub}</span>}
+        {deltaPct !== undefined && (
+          <span
+            className="rep-kpi-delta"
+            style={{
+              color:
+                deltaPct > 0
+                  ? "#10b981"
+                  : deltaPct < 0
+                    ? "#ef4444"
+                    : "var(--muted)",
+            }}
+          >
+            {deltaPct > 0 ? (
+              <TrendingUp size={12} />
+            ) : deltaPct < 0 ? (
+              <TrendingDown size={12} />
+            ) : null}
+            {deltaPct > 0 ? "+" : ""}
+            {deltaPct}%
+            <span
+              style={{ color: "var(--muted)", marginLeft: 4, fontWeight: 400 }}
+            >
+              so với kỳ trước
+            </span>
+          </span>
+        )}
       </div>
     </div>
   );
@@ -102,7 +188,11 @@ interface RepRevenueChartProps {
 
 function RepRevenueChart({ data, groupBy }: RepRevenueChartProps) {
   if (!data.length) {
-    return <p className="rep-empty">Chưa có dữ liệu. Chọn khoảng thời gian và nhấn "Tải dữ liệu".</p>;
+    return (
+      <p className="rep-empty">
+        Chưa có dữ liệu. Chọn khoảng thời gian và nhấn "Tải dữ liệu".
+      </p>
+    );
   }
   const maxRev = Math.max(...data.map((d) => d.revenue), 1);
 
@@ -118,25 +208,38 @@ function RepRevenueChart({ data, groupBy }: RepRevenueChartProps) {
                 title={formatCurrency(p.revenue)}
               />
             </div>
-            <span className="rep-bar-val">{formatShortCurrency(p.revenue)}</span>
+            <span className="rep-bar-val">
+              {formatShortCurrency(p.revenue)}
+            </span>
             <span className="rep-bar-label">
-              {groupBy === "hour"
-                ? `${p.date}h`
-                : p.date.slice(5)}
+              {groupBy === "hour" ? `${p.date}h` : p.date.slice(5)}
             </span>
           </div>
         ))}
       </div>
       <div className="rep-chart-table">
         <table>
-          <thead><tr><th>Thời gian</th><th>Doanh thu</th><th>Số giao dịch</th><th>TB/phiên</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Thời gian</th>
+              <th>Doanh thu</th>
+              <th>Số giao dịch</th>
+              <th>TB/phiên</th>
+            </tr>
+          </thead>
           <tbody>
             {data.map((p, i) => (
               <tr key={i}>
                 <td>{groupBy === "hour" ? `${p.date}h` : p.date}</td>
-                <td><strong>{formatCurrency(p.revenue)}</strong></td>
+                <td>
+                  <strong>{formatCurrency(p.revenue)}</strong>
+                </td>
                 <td>{p.count}</td>
-                <td>{p.count > 0 ? formatCurrency(Math.round(p.revenue / p.count)) : "—"}</td>
+                <td>
+                  {p.count > 0
+                    ? formatCurrency(Math.round(p.revenue / p.count))
+                    : "—"}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -149,39 +252,89 @@ function RepRevenueChart({ data, groupBy }: RepRevenueChartProps) {
 // ─── Occupancy Chart ────────────────────────────────────────────────────────
 interface RepOccupancyChartProps {
   data: OccupancyHourPoint[];
+  capacity: number;
 }
 
-function RepOccupancyChart({ data }: RepOccupancyChartProps) {
+function RepOccupancyChart({ data, capacity }: RepOccupancyChartProps) {
   if (!data.length) {
-    return <p className="rep-empty">Chưa có dữ liệu. Chọn khoảng thời gian và nhấn "Tải dữ liệu".</p>;
+    return (
+      <p className="rep-empty">
+        Chưa có dữ liệu. Chọn khoảng thời gian và nhấn "Tải dữ liệu".
+      </p>
+    );
   }
-  const maxOcc = Math.max(...data.map((d) => d.maxOccupancy), 1);
+  const chartCapacity = Math.max(capacity, 1);
 
   return (
     <div className="rep-chart-area">
       <div className="rep-bar-chart">
         {data.map((p, i) => {
-          const avgPct = maxOcc > 0 ? Math.round((p.avgOccupancy / maxOcc) * 100) : 0;
-          const color = avgPct >= 85 ? "#ef4444" : avgPct >= 60 ? "#f59e0b" : "#10b981";
+          const avgPct = Math.min(
+            100,
+            Math.round((p.avgOccupancy / chartCapacity) * 100),
+          );
+          const color =
+            avgPct >= 85 ? "#ef4444" : avgPct >= 60 ? "#f59e0b" : "#10b981";
           return (
             <div className="rep-bar-col" key={i}>
               <div className="rep-bar-wrap">
                 <div
                   className="rep-bar-fill"
-                  style={{ height: `${(p.avgOccupancy / maxOcc) * 100}%`, background: color }}
+                  style={{
+                    height: `${avgPct}%`,
+                    background: color,
+                  }}
                   title={`TB: ${p.avgOccupancy} xe`}
                 />
               </div>
               <span className="rep-bar-val">{p.avgOccupancy}</span>
-              <span className="rep-bar-label">{String(p.hour).padStart(2, "0")}h</span>
+              <span className="rep-bar-label">
+                {String(p.hour).padStart(2, "0")}h
+              </span>
             </div>
           );
         })}
       </div>
       <div className="rep-occ-legend">
-        <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: "#10b981", marginRight: 4 }} />Dưới 60%</span>
-        <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: "#f59e0b", marginRight: 4 }} />60–85%</span>
-        <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: "#ef4444", marginRight: 4 }} />Trên 85%</span>
+        <span>
+          <span
+            style={{
+              display: "inline-block",
+              width: 10,
+              height: 10,
+              borderRadius: 2,
+              background: "#10b981",
+              marginRight: 4,
+            }}
+          />
+          Dưới 60%
+        </span>
+        <span>
+          <span
+            style={{
+              display: "inline-block",
+              width: 10,
+              height: 10,
+              borderRadius: 2,
+              background: "#f59e0b",
+              marginRight: 4,
+            }}
+          />
+          60–85%
+        </span>
+        <span>
+          <span
+            style={{
+              display: "inline-block",
+              width: 10,
+              height: 10,
+              borderRadius: 2,
+              background: "#ef4444",
+              marginRight: 4,
+            }}
+          />
+          Trên 85%
+        </span>
       </div>
     </div>
   );
@@ -200,16 +353,26 @@ function RepTopCustomers({ data }: RepTopCustomersProps) {
     <div className="rep-customers">
       {data.map((c, i) => (
         <div key={c.userId} className="rep-customer-row">
-          <div className="rep-customer-rank" data-rank={i + 1}>{i + 1}</div>
-          <div className="rep-customer-avatar">{c.name?.charAt(0).toUpperCase() ?? "?"}</div>
+          <div className="rep-customer-rank" data-rank={i + 1}>
+            {i + 1}
+          </div>
+          <div className="rep-customer-avatar">
+            {c.name?.charAt(0).toUpperCase() ?? "?"}
+          </div>
           <div className="rep-customer-info">
             <span className="rep-customer-name">{c.name}</span>
-            <span className="rep-customer-sessions">{c.sessionCount} phiên gửi</span>
+            <span className="rep-customer-sessions">
+              {c.sessionCount} phiên gửi
+            </span>
           </div>
           <div className="rep-customer-spent">
             <strong>{formatCurrency(c.totalSpent)}</strong>
             <span className="rep-customer-avg">
-              TB {c.sessionCount > 0 ? formatCurrency(Math.round(c.totalSpent / c.sessionCount)) : "—"}/phiên
+              TB{" "}
+              {c.sessionCount > 0
+                ? formatCurrency(Math.round(c.totalSpent / c.sessionCount))
+                : "—"}
+              /phiên
             </span>
           </div>
         </div>
@@ -256,7 +419,9 @@ function RepPeakHours({ data }: RepPeakHoursProps) {
           <div className="rep-heatmap-header">
             <div className="rep-heatmap-label" />
             {Array.from({ length: 24 }, (_, h) => (
-              <div className="rep-heatmap-hour" key={h}>{h}</div>
+              <div className="rep-heatmap-hour" key={h}>
+                {h}
+              </div>
             ))}
           </div>
           {grid.map((row, dayIndex) => (
@@ -276,10 +441,38 @@ function RepPeakHours({ data }: RepPeakHoursProps) {
       </div>
       <div className="rep-heatmap-legend">
         <span>Ít</span>
-        <div style={{ background: "rgba(59,130,246,0.2)", width: 16, height: 10, borderRadius: 2 }} />
-        <div style={{ background: "rgba(59,130,246,0.45)", width: 16, height: 10, borderRadius: 2 }} />
-        <div style={{ background: "rgba(245,158,11,0.75)", width: 16, height: 10, borderRadius: 2 }} />
-        <div style={{ background: "rgba(239,68,68,0.85)", width: 16, height: 10, borderRadius: 2 }} />
+        <div
+          style={{
+            background: "rgba(59,130,246,0.2)",
+            width: 16,
+            height: 10,
+            borderRadius: 2,
+          }}
+        />
+        <div
+          style={{
+            background: "rgba(59,130,246,0.45)",
+            width: 16,
+            height: 10,
+            borderRadius: 2,
+          }}
+        />
+        <div
+          style={{
+            background: "rgba(245,158,11,0.75)",
+            width: 16,
+            height: 10,
+            borderRadius: 2,
+          }}
+        />
+        <div
+          style={{
+            background: "rgba(239,68,68,0.85)",
+            width: 16,
+            height: 10,
+            borderRadius: 2,
+          }}
+        />
         <span>Nhiều</span>
       </div>
     </div>
@@ -287,8 +480,15 @@ function RepPeakHours({ data }: RepPeakHoursProps) {
 }
 
 // ─── Zone Report ────────────────────────────────────────────────────────────
-interface ZoneEntry { zone: string; entryCount: number }
-interface ZoneExit { zone: string; exitCount: number; revenue: number }
+interface ZoneEntry {
+  zone: string;
+  entryCount: number;
+}
+interface ZoneExit {
+  zone: string;
+  exitCount: number;
+  revenue: number;
+}
 
 interface RepZoneReportProps {
   entries: ZoneEntry[];
@@ -345,7 +545,9 @@ function RepZoneReport({ entries, exits }: RepZoneReportProps) {
         {exits.map((e) => (
           <div key={e.zone} className="rep-zone-rev-row">
             <span className="rep-zone-name">{e.zone}</span>
-            <strong className="rep-zone-rev-amount">{formatCurrency(e.revenue)}</strong>
+            <strong className="rep-zone-rev-amount">
+              {formatCurrency(e.revenue)}
+            </strong>
           </div>
         ))}
       </div>
@@ -354,19 +556,46 @@ function RepZoneReport({ entries, exits }: RepZoneReportProps) {
 }
 
 // ─── Main Reports View ──────────────────────────────────────────────────────
-type TabKey = "summary" | "revenue" | "occupancy" | "customers" | "peak" | "zones";
+type TabKey =
+  | "summary"
+  | "revenue"
+  | "occupancy"
+  | "customers"
+  | "peak"
+  | "zones";
 
 export function ReportsView() {
-  const { currentUser, reportSummary, reportFrom, setReportFrom, reportTo, setReportTo, loadReportSummary, downloadReport } = useParkingApp();
+  const {
+    currentUser,
+    reportSummary,
+    reportFrom,
+    setReportFrom,
+    reportTo,
+    setReportTo,
+    loadReportSummary,
+    downloadReport,
+  } = useParkingApp();
 
   const [activeTab, setActiveTab] = useState<TabKey>("summary");
-  const [chartFrom, setChartFrom] = useState(monthAgoStr());
-  const [chartTo, setChartTo] = useState(todayStr());
+  const initialReportRange = getPresetRange("30d");
+  const [chartFrom, setChartFrom] = useState(initialReportRange.from);
+  const [chartTo, setChartTo] = useState(initialReportRange.to);
   const [groupBy, setGroupBy] = useState("day");
+  const [filterPreset, setFilterPreset] = useState("30d");
+  const [filterError, setFilterError] = useState("");
+  const [reportDraftFrom, setReportDraftFrom] = useState(reportFrom);
+  const [reportDraftTo, setReportDraftTo] = useState(reportTo);
+
+  // Comparison state: previous-period summary for delta indicators
+  const [compareSummary, setCompareSummary] = useState<ReportSummary | null>(
+    null,
+  );
+  const [compareLoading, setCompareLoading] = useState(false);
 
   // Chart data states
   const [revenueData, setRevenueData] = useState<RevenueChartPoint[]>([]);
   const [occupancyData, setOccupancyData] = useState<OccupancyHourPoint[]>([]);
+  const [occupancyCapacity, setOccupancyCapacity] = useState(1);
   const [topCustomersData, setTopCustomersData] = useState<TopCustomer[]>([]);
   const [peakHoursData, setPeakHoursData] = useState<PeakHourPoint[]>([]);
   const [entryZoneData, setEntryZoneData] = useState<ZoneEntry[]>([]);
@@ -376,17 +605,106 @@ export function ReportsView() {
 
   if (!currentUser || currentUser.role !== "admin") return null;
 
+  function shiftDate(dateStr: string, days: number) {
+    const d = new Date(dateStr);
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0, 10);
+  }
+
+  // Compute previous-period range (same length, shifted back)
+  function previousPeriod(from: string, to: string) {
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
+    const lengthMs = toDate.getTime() - fromDate.getTime();
+    const prevTo = shiftDate(from, -1);
+    const prevFrom = shiftDate(prevTo, -Math.round(lengthMs / 86_400_000));
+    return { prevFrom, prevTo };
+  }
+
+  async function loadComparison() {
+    setCompareLoading(true);
+    try {
+      const { prevFrom, prevTo } = previousPeriod(reportFrom, reportTo);
+      const params = new URLSearchParams({ from: prevFrom, to: prevTo });
+      const res = await apiFetch(`/reports/summary?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setCompareSummary(data.summary ?? null);
+      } else {
+        setCompareSummary(null);
+      }
+    } catch (err) {
+      logger.error("Load comparison error:", { err });
+      setCompareSummary(null);
+    }
+    setCompareLoading(false);
+  }
+
+  function pctDelta(current: number, previous: number) {
+    if (previous === 0) {
+      return current > 0 ? 100 : 0;
+    }
+    return Math.round(((current - previous) / previous) * 100);
+  }
+
+  function applyPreset(preset: string) {
+    const range = getPresetRange(preset);
+    setChartFrom(range.from);
+    setChartTo(range.to);
+    setReportDraftFrom(range.from);
+    setReportDraftTo(range.to);
+    setFilterPreset(preset);
+    setFilterError("");
+
+    if (activeTab === "summary") {
+      setReportFrom(range.from);
+      setReportTo(range.to);
+      void loadReportSummary(range.from, range.to);
+    }
+  }
+
+  function validateDateRange(from: string, to: string) {
+    if (!from || !to)
+      return "Vui lòng chọn đầy đủ ngày bắt đầu và ngày kết thúc.";
+    if (from > to) return "Ngày bắt đầu không được lớn hơn ngày kết thúc.";
+    return "";
+  }
+
   async function loadChartData() {
+    const validationError = validateDateRange(chartFrom, chartTo);
+    if (validationError) {
+      setFilterError(validationError);
+      return;
+    }
+    setFilterError("");
     setChartLoading(true);
     const params = `?from=${chartFrom}&to=${chartTo}`;
     try {
       if (activeTab === "revenue") {
-        const res = await apiFetch(`/reports/revenue-chart?from=${chartFrom}&to=${chartTo}&groupBy=${groupBy}`);
+        const res = await apiFetch(
+          `/reports/revenue-chart?from=${chartFrom}&to=${chartTo}&groupBy=${groupBy}`,
+        );
         if (res.ok) setRevenueData((await res.json()).data ?? []);
       }
       if (activeTab === "occupancy") {
-        const res = await apiFetch(`/reports/occupancy-hourly${params}`);
-        if (res.ok) setOccupancyData((await res.json()).data ?? []);
+        const [occupancyRes, capacityRes] = await Promise.all([
+          apiFetch(`/reports/occupancy-hourly${params}`),
+          apiFetch("/capacity-config"),
+        ]);
+        if (!occupancyRes.ok) {
+          const body = await occupancyRes.text();
+          throw new Error(
+            `Occupancy request failed (${occupancyRes.status}): ${body}`,
+          );
+        }
+        const occupancyJson = await occupancyRes.json();
+        setOccupancyData(occupancyJson.data ?? []);
+        if (capacityRes.ok) {
+          const capacityJson = await capacityRes.json();
+          setOccupancyCapacity(
+            Math.max(1, Number(capacityJson.config?.globalCapacity) || 1),
+          );
+        }
       }
       if (activeTab === "customers") {
         const res = await apiFetch(`/reports/top-customers${params}&limit=10`);
@@ -405,17 +723,24 @@ export function ReportsView() {
         if (exitRes.ok) setExitZoneData((await exitRes.json()).data ?? []);
       }
     } catch (err) {
-      console.error("Load chart error:", err);
+      logger.error("Load chart error:", { err });
     }
     setChartLoading(false);
   }
 
-  // Auto-load on tab change
+  // Auto-load only when switching reports or changing an applied range.
   useEffect(() => {
     if (activeTab !== "summary") {
       loadChartData();
     }
   }, [activeTab, chartFrom, chartTo, groupBy]);
+
+  useEffect(() => {
+    setReportDraftFrom(reportFrom);
+    setReportDraftTo(reportTo);
+  }, [reportFrom, reportTo]);
+
+  const filterSummary = `${formatDisplayDate(chartFrom)} → ${formatDisplayDate(chartTo)}`;
 
   // Computed KPIs from reportSummary
   const kpis = useMemo(() => {
@@ -442,13 +767,21 @@ export function ReportsView() {
           </div>
           <div>
             <h1 className="rep-title">Báo cáo & Thống kê</h1>
-            <p className="rep-subtitle">Phân tích chi tiết hoạt động bãi đỗ xe</p>
+            <p className="rep-subtitle">
+              Phân tích chi tiết hoạt động bãi đỗ xe
+            </p>
           </div>
         </div>
         <div className="rep-header-right">
           <div className="rep-date-range">
             <Calendar size={14} />
-            <span>{chartFrom} → {chartTo}</span>
+            <span>
+              {formatDisplayDate(
+                activeTab === "summary" ? reportFrom : chartFrom,
+              )}{" "}
+              →{" "}
+              {formatDisplayDate(activeTab === "summary" ? reportTo : chartTo)}
+            </span>
           </div>
         </div>
       </div>
@@ -471,54 +804,198 @@ export function ReportsView() {
       {/* Summary Tab */}
       {activeTab === "summary" && (
         <div className="rep-content">
-          <div className="rep-filter-bar">
-            <div className="rep-date-inputs">
-              <label>
-                <span>Từ ngày</span>
-                <input
-                  type="date"
-                  value={reportFrom}
-                  onChange={(e) => setReportFrom(e.target.value)}
-                />
-              </label>
-              <label>
-                <span>Đến ngày</span>
-                <input
-                  type="date"
-                  value={reportTo}
-                  onChange={(e) => setReportTo(e.target.value)}
-                />
-              </label>
+          <div className="rep-filter-panel">
+            <div className="rep-filter-heading">
+              <div>
+                <span className="rep-filter-kicker">BỘ LỌC BÁO CÁO</span>
+                <strong>Chọn khoảng thời gian phân tích</strong>
+                <small>
+                  Dữ liệu hiện tại: {formatDisplayDate(reportFrom)} →{" "}
+                  {formatDisplayDate(reportTo)}
+                </small>
+              </div>
+              <Calendar size={20} />
             </div>
-            <div className="rep-filter-actions">
-              <button className="rep-btn primary" onClick={() => loadReportSummary(reportFrom, reportTo)} type="button">
-                <Eye size={14} /> Xem báo cáo
-              </button>
-              <button className="rep-btn" onClick={() => downloadReport("sessions", "xlsx")} type="button">
-                <Download size={14} /> Excel
-              </button>
-              <button className="rep-btn" onClick={() => downloadReport("revenue", "pdf")} type="button">
-                <Download size={14} /> PDF
-              </button>
+            <div
+              className="rep-filter-presets"
+              role="group"
+              aria-label="Khoảng thời gian nhanh"
+            >
+              {[
+                ["today", "Hôm nay"],
+                ["7d", "7 ngày"],
+                ["30d", "30 ngày"],
+                ["month", "Tháng này"],
+              ].map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={filterPreset === key ? "active" : ""}
+                  onClick={() => applyPreset(key)}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
+            <div className="rep-filter-bar">
+              <div className="rep-date-inputs">
+                <label>
+                  <span>Từ ngày</span>
+                  <DateTextInput
+                    label="Ngày bắt đầu báo cáo"
+                    value={reportDraftFrom}
+                    onChange={(value) => {
+                      setReportDraftFrom(value);
+                      setFilterPreset("custom");
+                    }}
+                  />
+                </label>
+                <span className="rep-filter-arrow">→</span>
+                <label>
+                  <span>Đến ngày</span>
+                  <DateTextInput
+                    label="Ngày kết thúc báo cáo"
+                    value={reportDraftTo}
+                    onChange={(value) => {
+                      setReportDraftTo(value);
+                      setFilterPreset("custom");
+                    }}
+                  />
+                </label>
+              </div>
+              <div className="rep-filter-actions">
+                <button
+                  className="rep-btn"
+                  onClick={() => downloadReport("sessions", "xlsx")}
+                  type="button"
+                >
+                  <Download size={14} /> Excel
+                </button>
+                <button
+                  className="rep-btn"
+                  onClick={() => downloadReport("revenue", "pdf")}
+                  type="button"
+                >
+                  <Download size={14} /> PDF
+                </button>
+              </div>
+            </div>
+            {filterError && (
+              <p className="rep-filter-error" role="alert">
+                {filterError}
+              </p>
+            )}
           </div>
-
           {kpis && (
             <>
               <div className="rep-kpi-row">
-                <KpiCard icon={<ArrowDown size={16} />} label="Xe vào" value={String(kpis.entryCount)} sub="tổng lượt vào" color="blue" />
-                <KpiCard icon={<ArrowUp size={16} />} label="Xe ra" value={String(kpis.exitCount)} sub="tổng lượt ra" color="cyan" />
-                <KpiCard icon={<Car size={16} />} label="Đang gửi" value={String(kpis.activeCount)} sub="phiên đang hoạt động" color="amber" />
-                <KpiCard icon={<Wallet size={16} />} label="Doanh thu" value={formatCurrency(kpis.revenue)} sub="trong khoảng thời gian" color="green" />
-                <KpiCard icon={<Activity size={16} />} label="Phiên miễn phí" value={String(kpis.freeSessionCount)} sub="không tính phí" color="purple" />
-                <KpiCard icon={<TrendingUp size={16} />} label="Phiên có phí" value={String(kpis.paidSessionCount)} sub="đã thanh toán" color="blue" />
+                <KpiCard
+                  icon={<ArrowDown size={16} />}
+                  label="Xe vào"
+                  value={String(kpis.entryCount)}
+                  sub="tổng lượt vào"
+                  color="blue"
+                  deltaPct={
+                    compareSummary
+                      ? pctDelta(kpis.entryCount, compareSummary.entryCount)
+                      : undefined
+                  }
+                />
+                <KpiCard
+                  icon={<ArrowUp size={16} />}
+                  label="Xe ra"
+                  value={String(kpis.exitCount)}
+                  sub="tổng lượt ra"
+                  color="cyan"
+                  deltaPct={
+                    compareSummary
+                      ? pctDelta(kpis.exitCount, compareSummary.exitCount)
+                      : undefined
+                  }
+                />
+                <KpiCard
+                  icon={<Car size={16} />}
+                  label="Đang gửi"
+                  value={String(kpis.activeCount)}
+                  sub="phiên đang hoạt động"
+                  color="amber"
+                />
+                <KpiCard
+                  icon={<Wallet size={16} />}
+                  label="Doanh thu"
+                  value={formatCurrency(kpis.revenue)}
+                  sub="trong khoảng thời gian"
+                  color="green"
+                  deltaPct={
+                    compareSummary
+                      ? pctDelta(kpis.revenue, compareSummary.revenue)
+                      : undefined
+                  }
+                />
+                <KpiCard
+                  icon={<Activity size={16} />}
+                  label="Phiên miễn phí"
+                  value={String(kpis.freeSessionCount)}
+                  sub="không tính phí"
+                  color="purple"
+                />
+                <KpiCard
+                  icon={<TrendingUp size={16} />}
+                  label="Phiên có phí"
+                  value={String(kpis.paidSessionCount)}
+                  sub="đã thanh toán"
+                  color="blue"
+                  deltaPct={
+                    compareSummary
+                      ? pctDelta(
+                          kpis.paidSessionCount,
+                          compareSummary.paidSessionCount,
+                        )
+                      : undefined
+                  }
+                />
               </div>
+              {compareSummary && (
+                <div
+                  className="rep-summary-insight"
+                  style={{
+                    background: "rgba(59,130,246,0.08)",
+                    borderColor: "rgba(59,130,246,0.2)",
+                  }}
+                >
+                  <BarChart3 size={14} />
+                  <span>
+                    So sánh với kỳ trước (
+                    {previousPeriod(reportFrom, reportTo).prevFrom} →{" "}
+                    {previousPeriod(reportFrom, reportTo).prevTo}
+                    ): doanh thu{" "}
+                    <strong>
+                      {pctDelta(kpis.revenue, compareSummary.revenue) > 0
+                        ? "+"
+                        : ""}
+                      {pctDelta(kpis.revenue, compareSummary.revenue)}%
+                    </strong>
+                    , lượt vào{" "}
+                    <strong>
+                      {pctDelta(kpis.entryCount, compareSummary.entryCount) > 0
+                        ? "+"
+                        : ""}
+                      {pctDelta(kpis.entryCount, compareSummary.entryCount)}%
+                    </strong>
+                    .
+                  </span>
+                </div>
+              )}
               {kpis.revenue > 0 && kpis.paidSessionCount > 0 && (
                 <div className="rep-summary-insight">
                   <TrendingUp size={14} />
                   <span>
                     Doanh thu trung bình mỗi phiên có phí:{" "}
-                    <strong>{formatCurrency(Math.round(kpis.revenue / kpis.paidSessionCount))}</strong>
+                    <strong>
+                      {formatCurrency(
+                        Math.round(kpis.revenue / kpis.paidSessionCount),
+                      )}
+                    </strong>
                   </span>
                 </div>
               )}
@@ -528,7 +1005,10 @@ export function ReportsView() {
           {!kpis && (
             <div className="rep-empty-state">
               <BarChart3 size={40} />
-              <p>Chọn khoảng thời gian và nhấn <strong>"Xem báo cáo"</strong> để bắt đầu</p>
+              <p>
+                Chọn khoảng thời gian và nhấn <strong>"Xem báo cáo"</strong> để
+                bắt đầu
+              </p>
             </div>
           )}
         </div>
@@ -537,26 +1017,72 @@ export function ReportsView() {
       {/* Revenue Tab */}
       {activeTab === "revenue" && (
         <div className="rep-content">
+          <div className="rep-filter-panel compact">
+            <div className="rep-filter-heading">
+              <div>
+                <span className="rep-filter-kicker">BỘ LỌC</span>
+                <strong>{filterSummary}</strong>
+              </div>
+              <Calendar size={18} />
+            </div>
+            <div
+              className="rep-filter-presets"
+              role="group"
+              aria-label="Khoảng thời gian nhanh"
+            >
+              {[
+                ["today", "Hôm nay"],
+                ["7d", "7 ngày"],
+                ["30d", "30 ngày"],
+                ["month", "Tháng này"],
+              ].map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={filterPreset === key ? "active" : ""}
+                  onClick={() => applyPreset(key)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="rep-filter-bar">
             <div className="rep-date-inputs">
               <label>
                 <span>Từ ngày</span>
-                <input type="date" value={chartFrom} onChange={(e) => setChartFrom(e.target.value)} />
+                <input
+                  type="date"
+                  value={chartFrom}
+                  onChange={(e) => setChartFrom(e.target.value)}
+                />
               </label>
               <label>
                 <span>Đến ngày</span>
-                <input type="date" value={chartTo} onChange={(e) => setChartTo(e.target.value)} />
+                <input
+                  type="date"
+                  value={chartTo}
+                  onChange={(e) => setChartTo(e.target.value)}
+                />
               </label>
               <label>
                 <span>Nhóm theo</span>
-                <select value={groupBy} onChange={(e) => setGroupBy(e.target.value)}>
+                <select
+                  value={groupBy}
+                  onChange={(e) => setGroupBy(e.target.value)}
+                >
                   <option value="day">Ngày</option>
                   <option value="week">Tuần</option>
                   <option value="month">Tháng</option>
                 </select>
               </label>
             </div>
-            <button className="rep-btn primary" onClick={loadChartData} disabled={chartLoading} type="button">
+            <button
+              className="rep-btn primary"
+              onClick={loadChartData}
+              disabled={chartLoading}
+              type="button"
+            >
               <RefreshCw size={14} className={chartLoading ? "spin" : ""} />
               {chartLoading ? "Đang tải..." : "Tải dữ liệu"}
             </button>
@@ -568,41 +1094,130 @@ export function ReportsView() {
       {/* Occupancy Tab */}
       {activeTab === "occupancy" && (
         <div className="rep-content">
+          <div className="rep-filter-panel compact">
+            <div className="rep-filter-heading">
+              <div>
+                <span className="rep-filter-kicker">BỘ LỌC</span>
+                <strong>{filterSummary}</strong>
+              </div>
+              <Calendar size={18} />
+            </div>
+            <div
+              className="rep-filter-presets"
+              role="group"
+              aria-label="Khoảng thời gian nhanh"
+            >
+              {[
+                ["today", "Hôm nay"],
+                ["7d", "7 ngày"],
+                ["30d", "30 ngày"],
+                ["month", "Tháng này"],
+              ].map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={filterPreset === key ? "active" : ""}
+                  onClick={() => applyPreset(key)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="rep-filter-bar">
             <div className="rep-date-inputs">
               <label>
                 <span>Từ ngày</span>
-                <input type="date" value={chartFrom} onChange={(e) => setChartFrom(e.target.value)} />
+                <input
+                  type="date"
+                  value={chartFrom}
+                  onChange={(e) => setChartFrom(e.target.value)}
+                />
               </label>
               <label>
                 <span>Đến ngày</span>
-                <input type="date" value={chartTo} onChange={(e) => setChartTo(e.target.value)} />
+                <input
+                  type="date"
+                  value={chartTo}
+                  onChange={(e) => setChartTo(e.target.value)}
+                />
               </label>
             </div>
-            <button className="rep-btn primary" onClick={loadChartData} disabled={chartLoading} type="button">
+            <button
+              className="rep-btn primary"
+              onClick={loadChartData}
+              disabled={chartLoading}
+              type="button"
+            >
               <RefreshCw size={14} className={chartLoading ? "spin" : ""} />
               {chartLoading ? "Đang tải..." : "Tải dữ liệu"}
             </button>
           </div>
-          <RepOccupancyChart data={occupancyData} />
+          <RepOccupancyChart
+            data={occupancyData}
+            capacity={occupancyCapacity}
+          />
         </div>
       )}
 
       {/* Customers Tab */}
       {activeTab === "customers" && (
         <div className="rep-content">
+          <div className="rep-filter-panel compact">
+            <div className="rep-filter-heading">
+              <div>
+                <span className="rep-filter-kicker">BỘ LỌC</span>
+                <strong>{filterSummary}</strong>
+              </div>
+              <Calendar size={18} />
+            </div>
+            <div
+              className="rep-filter-presets"
+              role="group"
+              aria-label="Khoảng thời gian nhanh"
+            >
+              {[
+                ["today", "Hôm nay"],
+                ["7d", "7 ngày"],
+                ["30d", "30 ngày"],
+                ["month", "Tháng này"],
+              ].map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={filterPreset === key ? "active" : ""}
+                  onClick={() => applyPreset(key)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="rep-filter-bar">
             <div className="rep-date-inputs">
               <label>
                 <span>Từ ngày</span>
-                <input type="date" value={chartFrom} onChange={(e) => setChartFrom(e.target.value)} />
+                <input
+                  type="date"
+                  value={chartFrom}
+                  onChange={(e) => setChartFrom(e.target.value)}
+                />
               </label>
               <label>
                 <span>Đến ngày</span>
-                <input type="date" value={chartTo} onChange={(e) => setChartTo(e.target.value)} />
+                <input
+                  type="date"
+                  value={chartTo}
+                  onChange={(e) => setChartTo(e.target.value)}
+                />
               </label>
             </div>
-            <button className="rep-btn primary" onClick={loadChartData} disabled={chartLoading} type="button">
+            <button
+              className="rep-btn primary"
+              onClick={loadChartData}
+              disabled={chartLoading}
+              type="button"
+            >
               <RefreshCw size={14} className={chartLoading ? "spin" : ""} />
               {chartLoading ? "Đang tải..." : "Tải dữ liệu"}
             </button>
@@ -614,18 +1229,61 @@ export function ReportsView() {
       {/* Peak Hours Tab */}
       {activeTab === "peak" && (
         <div className="rep-content">
+          <div className="rep-filter-panel compact">
+            <div className="rep-filter-heading">
+              <div>
+                <span className="rep-filter-kicker">BỘ LỌC</span>
+                <strong>{filterSummary}</strong>
+              </div>
+              <Calendar size={18} />
+            </div>
+            <div
+              className="rep-filter-presets"
+              role="group"
+              aria-label="Khoảng thời gian nhanh"
+            >
+              {[
+                ["today", "Hôm nay"],
+                ["7d", "7 ngày"],
+                ["30d", "30 ngày"],
+                ["month", "Tháng này"],
+              ].map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={filterPreset === key ? "active" : ""}
+                  onClick={() => applyPreset(key)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="rep-filter-bar">
             <div className="rep-date-inputs">
               <label>
                 <span>Từ ngày</span>
-                <input type="date" value={chartFrom} onChange={(e) => setChartFrom(e.target.value)} />
+                <input
+                  type="date"
+                  value={chartFrom}
+                  onChange={(e) => setChartFrom(e.target.value)}
+                />
               </label>
               <label>
                 <span>Đến ngày</span>
-                <input type="date" value={chartTo} onChange={(e) => setChartTo(e.target.value)} />
+                <input
+                  type="date"
+                  value={chartTo}
+                  onChange={(e) => setChartTo(e.target.value)}
+                />
               </label>
             </div>
-            <button className="rep-btn primary" onClick={loadChartData} disabled={chartLoading} type="button">
+            <button
+              className="rep-btn primary"
+              onClick={loadChartData}
+              disabled={chartLoading}
+              type="button"
+            >
               <RefreshCw size={14} className={chartLoading ? "spin" : ""} />
               {chartLoading ? "Đang tải..." : "Tải dữ liệu"}
             </button>
@@ -637,18 +1295,61 @@ export function ReportsView() {
       {/* Zones Tab */}
       {activeTab === "zones" && (
         <div className="rep-content">
+          <div className="rep-filter-panel compact">
+            <div className="rep-filter-heading">
+              <div>
+                <span className="rep-filter-kicker">BỘ LỌC</span>
+                <strong>{filterSummary}</strong>
+              </div>
+              <Calendar size={18} />
+            </div>
+            <div
+              className="rep-filter-presets"
+              role="group"
+              aria-label="Khoảng thời gian nhanh"
+            >
+              {[
+                ["today", "Hôm nay"],
+                ["7d", "7 ngày"],
+                ["30d", "30 ngày"],
+                ["month", "Tháng này"],
+              ].map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={filterPreset === key ? "active" : ""}
+                  onClick={() => applyPreset(key)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="rep-filter-bar">
             <div className="rep-date-inputs">
               <label>
                 <span>Từ ngày</span>
-                <input type="date" value={chartFrom} onChange={(e) => setChartFrom(e.target.value)} />
+                <input
+                  type="date"
+                  value={chartFrom}
+                  onChange={(e) => setChartFrom(e.target.value)}
+                />
               </label>
               <label>
                 <span>Đến ngày</span>
-                <input type="date" value={chartTo} onChange={(e) => setChartTo(e.target.value)} />
+                <input
+                  type="date"
+                  value={chartTo}
+                  onChange={(e) => setChartTo(e.target.value)}
+                />
               </label>
             </div>
-            <button className="rep-btn primary" onClick={loadChartData} disabled={chartLoading} type="button">
+            <button
+              className="rep-btn primary"
+              onClick={loadChartData}
+              disabled={chartLoading}
+              type="button"
+            >
               <RefreshCw size={14} className={chartLoading ? "spin" : ""} />
               {chartLoading ? "Đang tải..." : "Tải dữ liệu"}
             </button>

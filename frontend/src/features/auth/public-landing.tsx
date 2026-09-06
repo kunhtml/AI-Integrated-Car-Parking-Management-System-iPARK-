@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import {
   BadgeCheck,
@@ -35,6 +35,7 @@ import { apiFetch } from "@/lib/client-api";
 import { apiBaseUrl } from "@/lib/constants";
 import { parkingConfig } from "@/lib/parking-config";
 import { showInfo } from "@/lib/toast";
+import { PasswordInput } from "./password-input";
 
 const STEPS = [
   {
@@ -80,21 +81,12 @@ function getDefaultDate() {
 }
 
 // ─── Parking Availability ────────────────────────────────────────
-type ZoneData = {
-  zone: string;
-  description?: string;
-  total: number;
-  available: number;
-  occupied: number;
-  allowedVehicleTypes: string[];
-};
-
-type AvailabilityAPI = {
-  capacity: number;
-  available: number;
-  occupied: number;
-  zones: ZoneData[];
-};
+import {
+  subscribeAvailability,
+  type AvailabilityAPI,
+  type ZoneData,
+  refreshAvailability,
+} from "@/lib/availability-store";
 
 type ActiveZone = {
   zone: string;
@@ -120,42 +112,33 @@ function ParkingAvailability() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  async function load(silent = false) {
-    if (!silent) setIsLoading(true);
-    else setIsRefreshing(true);
-    try {
-      const r = await fetch(`${apiBaseUrl}/public/availability`);
-      if (r.ok) {
-        const d: AvailabilityAPI = await r.json();
-        const mapped: ActiveZone[] = (d.zones || []).map((z: ZoneData) => ({
-          ...z,
-          fillRate:
-            z.total > 0
-              ? Math.round(((z.total - z.available) / z.total) * 100)
-              : 0,
-          isFull: z.available === 0,
-        }));
-        setZones(mapped);
-        setStats({
-          capacity: d.capacity,
-          available: d.available,
-          occupied: d.occupied,
-        });
-        setLastUpdated(new Date());
-      }
-    } catch {
-      /* silent */
-    }
-    setIsLoading(false);
-    setIsRefreshing(false);
-  }
-
+  // Nhận dữ liệu từ store chung (1 fetch/30s cho cả trang, không fetch riêng)
   useEffect(() => {
-    load();
+    const unsubscribe = subscribeAvailability((d) => {
+      const mapped: ActiveZone[] = (d.zones || []).map((z: ZoneData) => ({
+        ...z,
+        fillRate:
+          z.total > 0
+            ? Math.round(((z.total - z.available) / z.total) * 100)
+            : 0,
+        isFull: z.available === 0,
+      }));
+      setZones(mapped);
+      setStats({
+        capacity: d.capacity,
+        available: d.available,
+        occupied: d.occupied,
+      });
+      setLastUpdated(new Date());
+      setIsLoading(false);
+    });
+    return unsubscribe;
   }, []);
-  useEffect(() => {
-    const i = setInterval(() => load(true), 30000);
-    return () => clearInterval(i);
+
+  // Nút "Làm mới" thủ công: fetch ngay qua store, store sẽ notify mọi subscriber
+  const load = useCallback(() => {
+    setIsRefreshing(true);
+    void refreshAvailability().finally(() => setIsRefreshing(false));
   }, []);
 
   const filtered = zones.filter((z) => {
@@ -260,7 +243,7 @@ function ParkingAvailability() {
         </div>
         <button
           className={`pkav-refresh-btn ${isRefreshing ? "refreshing" : ""}`}
-          onClick={() => load(true)}
+          onClick={() => load()}
           disabled={isRefreshing}
           type="button"
           title="Làm mới"
@@ -547,10 +530,9 @@ export function AuthPanel() {
           </label>
           <label>
             <span className="landing-auth-label">Mật khẩu</span>
-            <input
-              name="password"
+            <PasswordInput
               defaultValue="admin"
-              type="password"
+              name="password"
               placeholder="••••••"
             />
           </label>
@@ -620,11 +602,10 @@ export function AuthPanel() {
             <span className="landing-auth-label">
               Mật khẩu <span className="required">*</span>
             </span>
-            <input
+            <PasswordInput
               name="password"
               placeholder="≥8 ký tự, chữ hoa, thường, số, ký tự đặc biệt"
               required
-              type="password"
               minLength={8}
             />
           </label>
@@ -632,11 +613,10 @@ export function AuthPanel() {
             <span className="landing-auth-label">
               Nhập lại mật khẩu <span className="required">*</span>
             </span>
-            <input
+            <PasswordInput
               name="confirmPassword"
               placeholder="Nhập lại mật khẩu"
               required
-              type="password"
               minLength={8}
             />
           </label>
@@ -802,11 +782,10 @@ export function AuthPanel() {
             <span className="landing-auth-label">
               Mật khẩu mới <span className="required">*</span>
             </span>
-            <input
+            <PasswordInput
               name="password"
               placeholder="≥8 ký tự, chữ hoa, thường, số, ký tự đặc biệt"
               required
-              type="password"
               minLength={8}
             />
           </label>
@@ -1045,7 +1024,7 @@ function HeroSection({
         </div>
         <div className="landing-hero-image">
           <Image
-            src="/images/hero-parking.png"
+            src="/images/hero-parking.webp"
             alt="Cổng bãi đỗ xe thông minh iPARK"
             width={900}
             height={600}
@@ -2837,25 +2816,16 @@ export function PublicLanding() {
   const [liveStats, setLiveStats] = useState({ active: 0, available: 0 });
   const [showAuth, setShowAuth] = useState(false);
 
+  // Nhận dữ liệu từ store chung (1 fetch/30s cho cả trang)
   useEffect(() => {
-    async function load() {
-      try {
-        const r = await fetch(`${apiBaseUrl}/public/availability`);
-        if (r.ok) {
-          const d = await r.json();
-          setAvailable(d.available || 0);
-          setLiveStats({
-            available: d.available,
-            active: d.capacity - d.available,
-          });
-        }
-      } catch {
-        /* silent */
-      }
-    }
-    load();
-    const i = setInterval(load, 30000);
-    return () => clearInterval(i);
+    const unsubscribe = subscribeAvailability((d) => {
+      setAvailable(d.available || 0);
+      setLiveStats({
+        available: d.available,
+        active: d.capacity - d.available,
+      });
+    });
+    return unsubscribe;
   }, []);
 
   return (

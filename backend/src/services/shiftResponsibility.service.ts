@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { ShiftSchedule } from "../models/ShiftSchedule.js";
+import { User } from "../models/User.js";
 import { AppError } from "../utils/AppError.js";
 
 const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
@@ -19,13 +20,25 @@ function getVietnamDateParts(date: Date) {
 function getShiftDateTime(date: Date, time: string) {
   const { year, month, day } = getVietnamDateParts(date);
   const [hour, minute] = time.split(":").map(Number);
-  if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+  if (
+    !Number.isInteger(hour) ||
+    !Number.isInteger(minute) ||
+    hour < 0 ||
+    hour > 23 ||
+    minute < 0 ||
+    minute > 59
+  ) {
     return null;
   }
-  return new Date(Date.UTC(year, month - 1, day, hour, minute) - 7 * 60 * 60 * 1000);
+  return new Date(
+    Date.UTC(year, month - 1, day, hour, minute) - 7 * 60 * 60 * 1000,
+  );
 }
 
-function isWithinShift(at: Date, schedule: { date: Date; startTime: string; endTime: string }) {
+function isWithinShift(
+  at: Date,
+  schedule: { date: Date; startTime: string; endTime: string },
+) {
   const start = getShiftDateTime(schedule.date, schedule.startTime);
   const end = getShiftDateTime(schedule.date, schedule.endTime);
   if (!start || !end) return false;
@@ -50,13 +63,38 @@ export async function findResponsibleStaffAt(
     .sort({ updatedAt: -1, createdAt: -1 })
     .lean();
 
-  return schedules.find((schedule) => isWithinShift(at, schedule))?.staffId ?? null;
+  const activeSchedules = schedules.filter((schedule) =>
+    isWithinShift(at, schedule),
+  );
+  if (!activeSchedules.length) return null;
+
+  // SHIFT-01/LIFE-01: lịch cũ có thể trỏ user đã bị offboard/xóa. Không gán
+  // trách nhiệm mới cho reference mồ côi hoặc tài khoản không còn là staff.
+  const staffIds = activeSchedules
+    .map((schedule) => schedule.staffId)
+    .filter(Boolean);
+  const activeStaff = await User.find({
+    _id: { $in: staffIds },
+    role: "staff",
+    status: "Đang hoạt động",
+  })
+    .select("_id")
+    .lean<Array<{ _id: mongoose.Types.ObjectId }>>();
+  const activeIds = new Set(activeStaff.map((staff) => staff._id.toString()));
+  return (
+    activeSchedules.find((schedule) =>
+      activeIds.has(schedule.staffId.toString()),
+    )?.staffId ?? null
+  );
 }
 
 export async function requireResponsibleStaffAt(at: Date) {
   const staffId = await findResponsibleStaffAt(at);
   if (!staffId) {
-    throw new AppError("Không có nhân viên đang điểm danh ca để chịu trách nhiệm cho phiên gửi xe này.", 409);
+    throw new AppError(
+      "Không có nhân viên đang điểm danh ca để chịu trách nhiệm cho phiên gửi xe này.",
+      409,
+    );
   }
   return staffId;
 }

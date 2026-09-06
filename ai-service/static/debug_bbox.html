@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <title>iPARK · YOLO BBox Debug</title>
+    <style>
+      body {
+        font-family: -apple-system, "Segoe UI", sans-serif;
+        background: #0f172a;
+        color: #e2e8f0;
+        margin: 0;
+        padding: 24px;
+      }
+      h1 {
+        margin: 0 0 16px;
+        font-size: 20px;
+      }
+      .row {
+        display: flex;
+        gap: 16px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+      }
+      .panel {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 10px;
+        padding: 14px;
+        min-width: 380px;
+      }
+      .panel h2 {
+        margin: 0 0 10px;
+        font-size: 14px;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+      button {
+        background: #2563eb;
+        color: white;
+        border: 0;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        margin-right: 6px;
+      }
+      button:hover {
+        background: #1d4ed8;
+      }
+      button:disabled {
+        background: #475569;
+        cursor: not-allowed;
+      }
+      select,
+      input[type="file"] {
+        background: #0f172a;
+        color: #e2e8f0;
+        border: 1px solid #475569;
+        border-radius: 6px;
+        padding: 6px;
+      }
+      img {
+        max-width: 100%;
+        border-radius: 6px;
+        background: #000;
+      }
+      .stats {
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 13px;
+      }
+      .badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+        background: #0ea5e9;
+        color: white;
+      }
+      ul.boxes {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+      }
+      ul.boxes li {
+        padding: 6px 10px;
+        background: #0f172a;
+        border: 1px solid #334155;
+        border-radius: 6px;
+        margin-bottom: 4px;
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 12px;
+      }
+      .pill {
+        display: inline-block;
+        padding: 1px 6px;
+        background: #16a34a;
+        color: white;
+        border-radius: 4px;
+        font-size: 11px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🚗 iPARK · YOLO Bounding Box Debug</h1>
+
+    <div class="row">
+      <div class="panel">
+        <h2>1) Camera trực tiếp</h2>
+        <div>
+          <select id="direction">
+            <option value="in">Camera Vào (in)</option>
+            <option value="out">Camera Ra (out)</option>
+          </select>
+          <button onclick="detectLive()">YOLO detect</button>
+          <button onclick="autoLoop()" id="loopBtn">▶ Auto loop 1s</button>
+        </div>
+        <div class="stats" id="liveStats" style="margin-top: 10px">
+          Chưa chạy.
+        </div>
+        <div style="margin-top: 10px"><img id="liveImg" alt="live bbox" /></div>
+      </div>
+
+      <div class="panel">
+        <h2>2) Upload ảnh từ máy</h2>
+        <input type="file" id="fileInput" accept="image/*" />
+        <button onclick="detectFile()">YOLO detect</button>
+        <div class="stats" id="fileStats" style="margin-top: 10px">
+          Chưa upload.
+        </div>
+        <div style="margin-top: 10px"><img id="fileImg" alt="uploaded" /></div>
+      </div>
+
+      <div class="panel" style="min-width: 280px">
+        <h2>3) Bounding boxes (live)</h2>
+        <div class="stats">
+          <span class="badge" id="boxCount">0</span> box phát hiện
+          <ul class="boxes" id="boxList"></ul>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let loopTimer = null;
+
+      async function detectLive() {
+        const dir = document.getElementById("direction").value;
+        document.getElementById("liveStats").textContent = "⏳ đang chạy YOLO…";
+        try {
+          const res = await fetch(`/api/debug/detect_live/${dir}`);
+          const data = await res.json();
+          if (!data.ok) {
+            document.getElementById("liveStats").textContent =
+              "❌ " + (data.error || "lỗi");
+            return;
+          }
+          document.getElementById("liveImg").src = data.image;
+          renderBoxes(data.boxes, data.width, data.height);
+          document.getElementById("liveStats").textContent =
+            `✅ ${data.boxes.length} box · ${data.width}×${data.height}px · ${new Date().toLocaleTimeString()}`;
+        } catch (e) {
+          document.getElementById("liveStats").textContent = "❌ " + e.message;
+        }
+      }
+
+      async function detectFile() {
+        const file = document.getElementById("fileInput").files[0];
+        if (!file) {
+          alert("Chọn file ảnh trước");
+          return;
+        }
+        const form = new FormData();
+        form.append("file", file);
+        document.getElementById("fileStats").textContent = "⏳ uploading…";
+        try {
+          const res = await fetch("/api/debug/detect", {
+            method: "POST",
+            body: form,
+          });
+          const data = await res.json();
+          if (!data.ok) {
+            document.getElementById("fileStats").textContent =
+              "❌ " + data.error;
+            return;
+          }
+          document.getElementById("fileImg").src = data.image;
+          document.getElementById("fileStats").textContent =
+            `✅ ${data.boxes.length} box · ${data.width}×${data.height}px`;
+          renderBoxes(data.boxes, data.width, data.height);
+        } catch (e) {
+          document.getElementById("fileStats").textContent = "❌ " + e.message;
+        }
+      }
+
+      function renderBoxes(boxes, w, h) {
+        document.getElementById("boxCount").textContent = boxes.length;
+        const list = document.getElementById("boxList");
+        list.innerHTML = "";
+        boxes.forEach((b, i) => {
+          const li = document.createElement("li");
+          li.innerHTML = `<span class="pill">#${i + 1}</span>  [${b.x1}, ${b.y1}, ${b.x2}, ${b.y2}] · conf ${b.confidence.toFixed(3)} · w=${b.x2 - b.x1} h=${b.y2 - b.y1}`;
+          list.appendChild(li);
+        });
+      }
+
+      function autoLoop() {
+        const btn = document.getElementById("loopBtn");
+        if (loopTimer) {
+          clearInterval(loopTimer);
+          loopTimer = null;
+          btn.textContent = "▶ Auto loop 1s";
+        } else {
+          detectLive();
+          loopTimer = setInterval(detectLive, 1000);
+          btn.textContent = "⏸ Dừng loop";
+        }
+      }
+    </script>
+  </body>
+</html>

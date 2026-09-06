@@ -30,9 +30,10 @@ export function RoleGuard({ allowedRoles, children }: RoleGuardProps) {
     let targetPath: string | null = null;
 
     // Xác định role hiệu dụng dựa trên viewAs
-    const effectiveRole = currentUser.role === "staff" && viewAs === "customer"
-      ? "customer"
-      : currentUser.role;
+    const effectiveRole =
+      currentUser.role === "staff" && viewAs === "customer"
+        ? "customer"
+        : currentUser.role;
 
     if (allowedRoles) {
       if (!allowedRoles.includes(effectiveRole)) {
@@ -40,7 +41,8 @@ export function RoleGuard({ allowedRoles, children }: RoleGuardProps) {
       }
     } else if (
       adminOnlyPaths.includes(pathname) &&
-      currentUser.role !== "admin"
+      currentUser.role !== "admin" &&
+      currentUser.role !== "manager"
     ) {
       targetPath = getDefaultPathForRole(currentUser.role);
     } else {
@@ -64,16 +66,24 @@ export function RoleGuard({ allowedRoles, children }: RoleGuardProps) {
       lastRedirectRef.current = targetPath;
       router.replace(targetPath);
     }
-  }, [currentUser?.id, currentUser?.role, viewAs, pathname, allowedRoles, router]);
+  }, [
+    currentUser?.id,
+    currentUser?.role,
+    viewAs,
+    pathname,
+    allowedRoles,
+    router,
+  ]);
 
   if (!currentUser) {
     return null;
   }
 
   // Xác định role hiệu dụng dựa trên viewAs
-  const effectiveRole = currentUser.role === "staff" && viewAs === "customer"
-    ? "customer"
-    : currentUser.role;
+  const effectiveRole =
+    currentUser.role === "staff" && viewAs === "customer"
+      ? "customer"
+      : currentUser.role;
 
   if (allowedRoles && !allowedRoles.includes(effectiveRole)) {
     return null;

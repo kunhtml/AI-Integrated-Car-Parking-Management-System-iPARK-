@@ -66,8 +66,11 @@ function platesEqual(a?: string | null, b?: string | null) {
 }
 
 export async function findExpectedEntryUid(session: SessionDoc) {
-  const expectedExitUid = normalizeUid(session.expectedExitRfidUid);
-  if (expectedExitUid) return expectedExitUid;
+  // UID đã quẹt lúc vào là bằng chứng gốc của phiên. Không ưu tiên
+  // expectedExitRfidUid ở đây vì trường đó có thể là UID thẻ thay thế được
+  // gán cho cổng ra, không phải UID thực tế của phiên lúc vào.
+  const entryUid = normalizeUid(session.entryRfidUid);
+  if (entryUid) return entryUid;
 
   const entryLog = await ParkingCameraLog.findOne({
     sessionId: session._id,
@@ -76,7 +79,17 @@ export async function findExpectedEntryUid(session: SessionDoc) {
   })
     .sort({ createdAt: -1 })
     .lean();
-  return normalizeUid(entryLog?.rfidUid || session.rfidCardId);
+  const loggedEntryUid = normalizeUid(entryLog?.rfidUid);
+  if (loggedEntryUid) return loggedEntryUid;
+
+  const expectedEntryUid = normalizeUid(session.entryExpectedRfidUid);
+  if (expectedEntryUid) return expectedEntryUid;
+
+  const cardUid = normalizeUid(session.rfidCardId);
+  if (cardUid) return cardUid;
+
+  // Chỉ dùng UID thẻ thay thế khi phiên không có bất kỳ bằng chứng UID lúc vào.
+  return normalizeUid(session.expectedExitRfidUid);
 }
 
 export async function findCardBoundPlate(uid: string, sessionId: string) {
@@ -119,6 +132,8 @@ function uidMatchesSession(
 ) {
   const scannedUid = normalizeUid(uid);
   const requiredUid = normalizeUid(expectedUid);
+  // Guest RFID được phát theo từng phiên, nên UID lúc vào là bằng chứng
+  // chính xác nhất. Chỉ dùng biển gắn trên thẻ khi phiên không có UID lịch sử.
   if (requiredUid) return scannedUid === requiredUid;
   return Boolean(cardPlate && platesEqual(cardPlate, sessionPlate));
 }
@@ -136,19 +151,35 @@ export async function classifyExitMismatch(params: {
     uid,
     session._id.toString(),
   );
-  const uidOk = uidMatchesSession(uid, expectedUid, boundPlate, sessionPlate);
+  const isGuestCard = card?.cardType === "guest";
+  // Guest card có thể còn plate lịch sử, nhưng không được dùng plate đó để
+  // biến UID hợp lệ của phiên hiện tại thành thẻ sai xe.
+  const cardPlateEvidence = isGuestCard ? "" : boundPlate;
+  const uidOk = uidMatchesSession(
+    uid,
+    expectedUid,
+    cardPlateEvidence,
+    sessionPlate,
+  );
   const exitMatchesSession = platesEqual(exitPlate, sessionPlate);
-  const cardAgreesWithExit = boundPlate
-    ? platesEqual(boundPlate, exitPlate)
+  const cardAgreesWithExit = cardPlateEvidence
+    ? platesEqual(cardPlateEvidence, exitPlate)
     : false;
-  const cardAgreesWithSession = boundPlate
-    ? platesEqual(boundPlate, sessionPlate)
+  const cardAgreesWithSession = cardPlateEvidence
+    ? platesEqual(cardPlateEvidence, sessionPlate)
     : false;
   // Thẻ member cùng chủ xe (cùng biển số) là thẻ thay thế hợp lệ khi thẻ cũ
   // đã bị mất/hỏng và được cấp lại. Nếu camera ra khớp biển phiên thì chấp
   // nhận ngay, không bắt nhân viên duyệt "accept_uid" thủ công mỗi lần.
   const isReplacementCard =
-    card?.cardType === "member" && Boolean(boundPlate) && cardAgreesWithSession;
+    card?.cardType === "member" &&
+    Boolean(cardPlateEvidence) &&
+    cardAgreesWithSession;
+  // Khi cả UID lúc vào và biển camera ra đều khớp phiên, dữ liệu plate cũ
+  // trên guest card/phiên khác không được phép tạo mismatch giả.
+  if (uidOk && exitMatchesSession) {
+    return null;
+  }
   if (isReplacementCard && !uidOk && exitMatchesSession) {
     return null;
   }
@@ -211,7 +242,7 @@ export async function classifyExitMismatch(params: {
     exitPlate,
     scannedUid: uid,
     expectedUid,
-    cardBoundPlate: boundPlate,
+    cardBoundPlate: cardPlateEvidence,
     entryImageUrl: session.entryImageUrl || "",
     exitImageUrl: session.exitImageUrl || "",
   };
@@ -233,7 +264,7 @@ export async function classifyExitMismatch(params: {
     reason,
     sessionId: session._id.toString(),
     currentPlate: sessionPlate || exitPlate,
-    cardBoundPlate: boundPlate,
+    cardBoundPlate: cardPlateEvidence,
     entryPlate: sessionPlate,
     exitPlate,
     scannedUid: uid,

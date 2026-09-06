@@ -9,7 +9,6 @@ import type {
   DemoUser,
   DeviceItem,
   DeviceMaintenanceLog,
-  IncidentItem,
   NotificationItem,
   OccupancyHourPoint,
   ParkingSession,
@@ -49,7 +48,6 @@ export type ParkingAppState = {
   deviceList: DeviceItem[];
   shiftList: ShiftItem[];
   shiftScheduleList: ShiftScheduleItem[];
-  incidentList: IncidentItem[];
   reportFrom: string;
   reportTo: string;
   reportSummary: ReportSummary | null;
@@ -90,7 +88,6 @@ export function createInitialState(): ParkingAppState {
     deviceList: [],
     shiftList: [],
     shiftScheduleList: [],
-    incidentList: [],
     reportFrom: todayInputValue(),
     reportTo: todayInputValue(),
     reportSummary: null,

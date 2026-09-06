@@ -247,7 +247,14 @@ def save_snapshot(direction: str, plate: str) -> str | None:
 
 # ── Flask App ──
 app = Flask(__name__)
-CORS(app)
+# Cho phép frontend (localhost:3000) gọi các endpoint (watch/unwatch/...) kèm cookie.
+# Cần supports_credentials=True vì `sendBeacon` / fetch từ Next.js dev server
+# gửi credentials=include theo mặc định cho same-site.
+CORS(
+    app,
+    resources={r"/api/*": {"origins": ["http://localhost:3000", "http://127.0.0.1:3000"]}},
+    supports_credentials=True,
+)
 
 @app.route("/api/cameras/health")
 def health():

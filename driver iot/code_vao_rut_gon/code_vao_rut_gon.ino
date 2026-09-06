@@ -7,6 +7,10 @@
 #include <ESP32Servo.h>
 
 // ====== PIN MAP (ESP32 IN) - BẢN RÚT GỌN ======
+// ID thiết bị: Python dùng để tự dò port COM (không phụ thuộc số COM).
+// IN = cổng VÀO. Đổi sang "OUT" nếu flash firmware này cho cổng ra.
+#define DEVICE_ID       "IN"
+
 #define PIN_BUZZER      14
 #define PIN_SERVO       13
 
@@ -225,29 +229,21 @@ void mo_cua_remote() {
   cua_vao.write(0);
 }
 
-/*
-  cua_vao.write(90);
-  LCD_TRUE();
-  coiCanhBao(2, 100);
-
-  delay(5000);
-  cua_vao.write(0);
-  */
-}
-
 // ===== Xử lý quét thẻ =====
 void senddata() {
   readsuccess = getid();
   if (!readsuccess) return;
 
+  // Luôn phát UID giống firmware cũ. Python tự quyết định có ghi nhận UID
+  // hay không dựa trên trạng thái phiên quét; không phụ thuộc SCAN_ON.
+  if (StrUID != lastUIDPrinted || (millis() - lastUIDTime) > 1500) {
+    Serial.println("UID:" + StrUID);
+    lastUIDPrinted = StrUID;
+    lastUIDTime = millis();
+  }
+
   // ===== SCAN MODE: chỉ gửi UID về Python, KHÔNG validate thẻ =====
   if (scanMode) {
-    if (StrUID != lastUIDPrinted || (millis() - lastUIDTime) > 1500) {
-      Serial.println("UID:" + StrUID);
-      lastUIDPrinted = StrUID;
-      lastUIDTime = millis();
-    }
-
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("UID SENT");
@@ -388,6 +384,11 @@ void docBienSoTuPython() {
         }
       }
 
+      // Python gửi GET_ID để xác nhận danh tính thiết bị (tự dò port COM).
+      else if (buffer.equals("GET_ID")) {
+        Serial.println("ID:" + String(DEVICE_ID));
+      }
+
       else if (buffer.equals("SCAN_ON")) {
         scanMode = true;
         lcd.clear();
@@ -521,6 +522,11 @@ void setup() {
   Serial.println("LABEL,Date,Time,RFID UID,USER,Plate,IN/OUT");
   delay(500);
   Serial.println("Scan PICC to see UID...");
+
+  // Báo danh tính cho Python tự dò port COM (không phụ thuộc số COM).
+  // Python gửi GET_ID để lấy lại ID bất cứ lúc nào (VD khi ESP32 reset).
+  Serial.println("ID:" + String(DEVICE_ID));
+
   LCD();
 }
 
@@ -532,4 +538,7 @@ void loop() {
   }
 
   senddata();
+
+  // Nghỉ 50ms giữa 2 vòng để không đốt CPU ESP32 khi không có thẻ.
+  delay(50);
 }

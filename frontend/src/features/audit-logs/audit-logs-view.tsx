@@ -5,34 +5,36 @@ import { ClipboardList, Loader2, Search } from "lucide-react";
 
 import { apiFetch } from "@/lib/client-api";
 
-type AuditLog = {
+type GateCommandLog = {
   id: string;
-  action: string;
-  entityType: string;
-  entityId: string;
-  userId: string;
-  userName: string;
-  details: string;
+  gate: "in" | "out";
+  command: "open" | "close";
+  source: string;
+  success: boolean;
+  message: string;
   createdAt: string;
 };
 
-const ENTITY_TYPES = [
+const GATES = [
   { value: "", label: "Tất cả" },
-  { value: "User", label: "User" },
-  { value: "ParkingSession", label: "ParkingSession" },
-  { value: "Device", label: "Device" },
-  { value: "Zone", label: "Zone" },
-  { value: "PricingConfig", label: "PricingConfig" },
-  { value: "RfidCard", label: "RfidCard" },
+  { value: "in", label: "Cổng vào (IN)" },
+  { value: "out", label: "Cổng ra (OUT)" },
+];
+
+const COMMANDS = [
+  { value: "", label: "Tất cả lệnh" },
+  { value: "open", label: "Mở barie" },
+  { value: "close", label: "Đóng barie" },
 ];
 
 const LIMIT = 20;
 
 export function AuditLogsView() {
-  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [logs, setLogs] = useState<GateCommandLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [entityType, setEntityType] = useState("");
+  const [gate, setGate] = useState("");
+  const [command, setCommand] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [cursor, setCursor] = useState<string | null>(null);
@@ -48,17 +50,20 @@ export function AuditLogsView() {
       }
 
       const params = new URLSearchParams();
-      if (entityType) params.set("entityType", entityType);
+      if (gate) params.set("gate", gate);
+      if (command) params.set("command", command);
       if (fromDate) params.set("from", fromDate);
       if (toDate) params.set("to", toDate);
       params.set("limit", String(LIMIT));
       if (nextCursor) params.set("cursor", nextCursor);
 
       try {
-        const response = await apiFetch(`/audit-logs?${params.toString()}`);
+        const response = await apiFetch(
+          `/gate-command-logs?${params.toString()}`,
+        );
         if (response.ok) {
           const data = await response.json();
-          const newLogs: AuditLog[] = data.logs || data.data || [];
+          const newLogs: GateCommandLog[] = data.logs || [];
           if (isLoadMore) {
             setLogs((prev) => [...prev, ...newLogs]);
           } else {
@@ -78,7 +83,7 @@ export function AuditLogsView() {
         setLoadingMore(false);
       }
     },
-    [entityType, fromDate, toDate],
+    [gate, command, fromDate, toDate],
   );
 
   useEffect(() => {
@@ -105,22 +110,43 @@ export function AuditLogsView() {
       <div className="panel">
         <div className="panel-heading">
           <div>
-            <p>Hệ thống</p>
-            <h2>Nhật ký hệ thống</h2>
+            <p>Kiểm soát ra vào</p>
+            <h2>Nhật ký barie</h2>
+            <span className="muted-cell">
+              Lịch sử lệnh mở/đóng và nguồn phát lệnh
+            </span>
           </div>
           <ClipboardList size={22} />
         </div>
 
         {/* Filters */}
-        <form className="filter-row" onSubmit={handleFilter} style={{ marginBottom: 16 }}>
+        <form
+          className="filter-row"
+          onSubmit={handleFilter}
+          style={{ marginBottom: 16 }}
+        >
           <select
-            value={entityType}
-            onChange={(e) => setEntityType(e.target.value)}
+            value={gate}
+            onChange={(e) => setGate(e.target.value)}
             style={{ minWidth: 150 }}
+            aria-label="Lọc theo cổng"
           >
-            {ENTITY_TYPES.map((t) => (
+            {GATES.map((t) => (
               <option key={t.value} value={t.value}>
                 {t.label}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={command}
+            onChange={(e) => setCommand(e.target.value)}
+            style={{ minWidth: 150 }}
+            aria-label="Lọc theo lệnh"
+          >
+            {COMMANDS.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
               </option>
             ))}
           </select>
@@ -147,7 +173,10 @@ export function AuditLogsView() {
 
         {/* Table */}
         {loading ? (
-          <p className="muted-cell" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <p
+            className="muted-cell"
+            style={{ display: "flex", alignItems: "center", gap: 8 }}
+          >
             <Loader2 className="spin" size={16} /> Đang tải...
           </p>
         ) : (
@@ -157,9 +186,10 @@ export function AuditLogsView() {
                 <thead>
                   <tr>
                     <th>Thời gian</th>
-                    <th>Hành động</th>
-                    <th>Loại</th>
-                    <th>Người thực hiện</th>
+                    <th>Cổng</th>
+                    <th>Lệnh</th>
+                    <th>Nguồn lệnh</th>
+                    <th>Trạng thái</th>
                     <th>Chi tiết</th>
                   </tr>
                 </thead>
@@ -177,20 +207,29 @@ export function AuditLogsView() {
                         })}
                       </td>
                       <td>
-                        <span className="badge">{log.action}</span>
+                        <strong>
+                          {log.gate === "in"
+                            ? "Cổng vào (IN)"
+                            : "Cổng ra (OUT)"}
+                        </strong>
                       </td>
-                      <td>{log.entityType}</td>
-                      <td>{log.userName || log.userId || "---"}</td>
+                      <td>
+                        <span className="badge">
+                          {log.command === "open" ? "Mở barie" : "Đóng barie"}
+                        </span>
+                      </td>
+                      <td>{log.source || "---"}</td>
+                      <td>{log.success ? "Thành công" : "Thất bại"}</td>
                       <td style={{ maxWidth: 320, wordBreak: "break-word" }}>
-                        {log.details || "---"}
+                        {log.message || "---"}
                       </td>
                     </tr>
                   ))}
 
                   {logs.length === 0 && (
                     <tr>
-                      <td className="muted-cell" colSpan={5}>
-                        Không có nhật ký nào.
+                      <td className="muted-cell" colSpan={6}>
+                        Không có lệnh barie nào phù hợp.
                       </td>
                     </tr>
                   )}
@@ -199,16 +238,20 @@ export function AuditLogsView() {
             </div>
 
             {hasMore && (
-              <div style={{ display: "flex", justifyContent: "center", marginTop: 16 }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  marginTop: 16,
+                }}
+              >
                 <button
                   className="small-button"
                   disabled={loadingMore}
                   onClick={handleLoadMore}
                   type="button"
                 >
-                  {loadingMore ? (
-                    <Loader2 className="spin" size={14} />
-                  ) : null}
+                  {loadingMore ? <Loader2 className="spin" size={14} /> : null}
                   {loadingMore ? "Đang tải..." : "Tải thêm"}
                 </button>
               </div>

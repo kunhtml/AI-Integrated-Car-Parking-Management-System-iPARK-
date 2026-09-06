@@ -14,6 +14,8 @@ import {
   classifyExitMismatch,
   settleExitAfterVerify,
 } from "../services/exitMismatch.service.js";
+import { createGateCommandLog } from "../services/gateCommandLog.service.js";
+import { cameraEventBus } from "../services/camera-event-bus.js";
 
 function actorId(request: Request) {
   const id = request.user?.id;
@@ -45,15 +47,6 @@ export async function verifyExit(request: Request, response: Response) {
     return;
   }
 
-  // Kiểm tra session đang chờ xác minh RFID
-  if (session.exitState !== "waiting_rfid") {
-    response.status(400).json({
-      verified: false,
-      reason: `Session không ở trạng thái chờ xác minh (exitState=${session.exitState})`,
-    });
-    return;
-  }
-
   // Kiểm tra session chưa bị checkout bởi luồng khác
   if (session.status !== "Đang gửi") {
     response.status(400).json({
@@ -64,6 +57,34 @@ export async function verifyExit(request: Request, response: Response) {
   }
 
   const scannedUid = uid.trim().toUpperCase();
+
+  // Idempotent: cùng thẻ đã xác minh (staff quét lại / frontend gọi trùng)
+  // → trả lại kết quả success như lần đầu thay vì lỗi trạng thái cũ.
+  if (session.exitState === "rfid_verified") {
+    if (session.exitRfidUid !== scannedUid) {
+      response.status(400).json({
+        verified: false,
+        reason: `Phiên đã được xác minh bằng thẻ ${session.exitRfidUid}.`,
+      });
+      return;
+    }
+    const settled = await settleExitAfterVerify(session);
+    response.json(settled);
+    return;
+  }
+
+  // Nhân viên có thể quét lại sau khi lần xác minh trước bị từ chối/mismatch.
+  // Khôi phục phiên về trạng thái chờ RFID thay vì trả lỗi trạng thái cũ.
+  if (
+    session.exitState !== "waiting_rfid" &&
+    session.exitState !== "waiting_manual_verification"
+  ) {
+    response.status(400).json({
+      verified: false,
+      reason: `Session không ở trạng thái chờ xác minh (exitState=${session.exitState})`,
+    });
+    return;
+  }
   const card = await RfidCard.findOne({ uid: scannedUid });
 
   if (card && !["active", "in-use"].includes(card.status)) {
@@ -179,6 +200,15 @@ export async function openGate(request: Request, response: Response) {
 
     if (!bridgeResponse.ok) {
       const errorText = await bridgeResponse.text();
+      let bridgeMessage = errorText;
+      try {
+        const parsed = JSON.parse(errorText) as { message?: unknown };
+        if (typeof parsed.message === "string") {
+          bridgeMessage = parsed.message;
+        }
+      } catch {
+        // Bridge can return plain text; retain it as the diagnostic message.
+      }
       console.warn(
         `[openGate] Bridge trả lỗi ${bridgeResponse.status}: ${errorText}`,
       );
@@ -186,6 +216,16 @@ export async function openGate(request: Request, response: Response) {
       // Rollback state
       session.exitState = "rfid_verified";
       await session.save();
+
+      await createGateCommandLog({
+        gate: "out",
+        command: "open",
+        source: "Exit authorization",
+        sessionId: session._id,
+        plate: session.plate,
+        success: false,
+        message: `Mở barie thất bại (bridge HTTP ${bridgeResponse.status}): ${bridgeMessage.slice(0, 300)}`,
+      });
 
       response
         .status(502)
@@ -196,15 +236,54 @@ export async function openGate(request: Request, response: Response) {
     const bridgeResult = await bridgeResponse.json();
     console.log(`[openGate] Bridge OK:`, bridgeResult);
 
+    if (!bridgeResult?.ok) {
+      session.exitState = "rfid_verified";
+      await session.save();
+      await createGateCommandLog({
+        gate: "out",
+        command: "open",
+        source: "Exit authorization",
+        sessionId: session._id,
+        plate: session.plate,
+        success: false,
+        message: bridgeResult?.message || "Bridge không xác nhận đã mở barie.",
+      });
+      response
+        .status(502)
+        .json({ ok: false, message: "Không mở được barie, vui lòng thử lại" });
+      return;
+    }
+
+    await createGateCommandLog({
+      gate: "out",
+      command: "open",
+      source: "Exit authorization",
+      sessionId: session._id,
+      plate: session.plate,
+      success: true,
+      message: "Lệnh mở barie cổng ra đã được bridge xác nhận.",
+    });
+
     // Bridge OK — mới finalize session
     session.status = "Đã hoàn thành";
     session.checkOutAt = new Date();
     session.exitState = "gate_opened";
     await session.save();
+    cameraEventBus.emitExitState({
+      sessionId: session._id.toString(),
+      status: session.status,
+      exitState: session.exitState,
+    });
 
     // Guest trả thẻ vào kho; Member tiếp tục sở hữu và dùng lại thẻ ở lần tiếp theo.
-    const usedCard = session.exitRfidUid
-      ? await RfidCard.findOne({ uid: session.exitRfidUid })
+    // Ưu tiên UID quẹt lúc ra; nếu không có (luồng ra thủ công / lỗi RFID —
+    // exitRfidManualVerified) thì dùng thẻ đã gắn lúc vào (rfidCardId) để không
+    // để thẻ Guest kẹt ở "in-use" sau khi phiên hoàn thành.
+    const releaseUid = session.exitRfidUid || session.rfidCardId;
+    const usedCard = releaseUid
+      ? await RfidCard.findOne({
+          $or: [{ uid: releaseUid }, { cardId: releaseUid }],
+        })
       : null;
     if (usedCard) {
       usedCard.lastUsedAt = new Date();
@@ -241,6 +320,19 @@ export async function openGate(request: Request, response: Response) {
     session.exitState = "rfid_verified";
     await session.save();
 
+    await createGateCommandLog({
+      gate: "out",
+      command: "open",
+      source: "Exit authorization",
+      sessionId: session._id,
+      plate: session.plate,
+      success: false,
+      message:
+        err instanceof Error
+          ? `Lỗi kết nối bridge: ${err.message}`
+          : "Lỗi kết nối bridge hoặc hết thời gian chờ.",
+    });
+
     response
       .status(500)
       .json({ ok: false, message: "Lỗi kết nối bridge, vui lòng thử lại" });
@@ -253,9 +345,19 @@ export async function openGate(request: Request, response: Response) {
  * để frontend restore state khi mount hoặc SSE kết nối lại.
  */
 export async function getPendingExit(request: Request, response: Response) {
-  // Tìm phiên đang chờ xác minh RFID, mới nhất
+  // Tìm phiên đang chờ xác minh RFID HOẶC đã verify đang chờ thu tiền/mở
+  // gate, mới nhất. Thêm rfid_verified/payment_pending để restore card xe ra
+  // khi staff reload trang giữa chừng (trước đây phiên đã verify bị "mất"
+  // khỏi UI và phải chờ AI push lại biển số).
   const session = await ParkingSession.findOne({
-    exitState: { $in: ["waiting_rfid", "waiting_manual_verification"] },
+    exitState: {
+      $in: [
+        "waiting_rfid",
+        "waiting_manual_verification",
+        "rfid_verified",
+        "payment_pending",
+      ],
+    },
     status: "Đang gửi",
   })
     .sort({ exitDetectedAt: -1 })
@@ -307,8 +409,8 @@ export async function getPendingExit(request: Request, response: Response) {
       sessionId: session._id.toString(),
       checkInAt: session.checkInAt.toISOString(),
       sessionStatus: "Đang gửi",
-      exitState: "waiting_rfid",
-      action: "waiting_rfid",
+      exitState: session.exitState,
+      action: session.exitState,
       sessionPaymentStatus: session.paymentStatus ?? "pending",
       fee: session.fee ?? null,
       userType:
@@ -316,6 +418,7 @@ export async function getPendingExit(request: Request, response: Response) {
           ? ("resident" as const)
           : ("guest" as const),
       barrierOpened: false,
+      entryImagePath: session.entryImageUrl || undefined,
       metadata: {
         customerType: session.customerType,
         quotaType: session.quotaType ?? null,
@@ -342,6 +445,9 @@ export async function getPendingExit(request: Request, response: Response) {
           !session.entryRfidUid && session.entryExpectedRfidUid,
         ),
         entryRfidUnverified: Boolean(session.entryRfidUnverified),
+        entrySource: session.entrySource || "camera",
+        manualEntryReason: session.manualEntryReason || null,
+        entryPhotoStatus: session.entryPhotoStatus || null,
       },
       createdAt: (session.exitDetectedAt ?? session.checkInAt).toISOString(),
     },
@@ -407,6 +513,12 @@ export async function dismissPendingExit(request: Request, response: Response) {
       },
     },
   );
+
+  cameraEventBus.emitExitState({
+    sessionId,
+    status: "Đang gửi",
+    exitState: null,
+  });
 
   response.json({ ok: true, dismissed: true, sessionId });
 }
@@ -475,18 +587,10 @@ export async function prepareManualExit(request: Request, response: Response) {
       "Camera cổng ra không nhận diện; staff nhập biển thủ công";
   }
 
-  // Member expected RFID if any
-  const activeMembership = await findActiveSubscriptionByPlate(session.plate);
-  if (activeMembership) {
-    const expectedMemberCard = await RfidCard.findOne({
-      plate: session.plate,
-      cardType: "member",
-      status: { $in: ["active", "in-use"] },
-    })
-      .sort({ updatedAt: -1 })
-      .select("uid");
-    session.expectedExitRfidUid = expectedMemberCard?.uid;
-  }
+  // Không tự suy diễn thẻ member khác là thẻ thay thế. UID lúc vào hoặc
+  // UID được quẹt tại cổng ra mới là bằng chứng của phiên. Chỉ ghi
+  // expectedExitRfidUid khi có quy trình đổi thẻ xác nhận rõ ràng.
+  session.expectedExitRfidUid = undefined;
 
   await session.save();
 
@@ -519,6 +623,7 @@ export async function prepareManualExit(request: Request, response: Response) {
           : ("guest" as const),
       barrierOpened: false,
       imagePath: session.exitImageUrl || cameraLog?.imagePath || undefined,
+      entryImagePath: session.entryImageUrl || undefined,
       createdAt: (session.exitDetectedAt ?? new Date()).toISOString(),
       metadata: {
         manualExit: true,
@@ -535,12 +640,23 @@ export async function prepareManualExit(request: Request, response: Response) {
             ? session.expectedExitRfidUid
             : null,
         entryRfidUnverified: Boolean(session.entryRfidUnverified),
+        entrySource: session.entrySource || "camera",
+        manualEntryReason: session.manualEntryReason || null,
+        entryPhotoStatus: session.entryPhotoStatus || null,
         vehicleType: session.vehicleType,
         customerType: session.customerType,
         quotaType: session.quotaType ?? null,
         expectedRfidUid: session.expectedExitRfidUid,
       },
     },
+  });
+
+  // Báo SSE để các bàn nhân viên khác (và chính bàn hiện tại) biết phiên
+  // đang chờ quét thẻ ra, giúp UI cập nhật real-time mà không cần F5.
+  cameraEventBus.emitExitState({
+    sessionId: session._id.toString(),
+    status: "Đang gửi",
+    exitState: session.exitState || "waiting_rfid",
   });
 }
 
@@ -596,12 +712,10 @@ export async function resolveExitMismatch(
     "manual_missing_entry_rfid",
   ].includes(action);
   if (needsNote && note.length < 8) {
-    response
-      .status(400)
-      .json({
-        ok: false,
-        message: "Vui lòng nhập lý do xử lý (tối thiểu 8 ký tự).",
-      });
+    response.status(400).json({
+      ok: false,
+      message: "Vui lòng nhập lý do xử lý (tối thiểu 8 ký tự).",
+    });
     return;
   }
 

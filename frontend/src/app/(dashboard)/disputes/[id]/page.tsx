@@ -9,7 +9,7 @@ export default function DisputeDetailPage() {
   const params = useParams<{ id: string }>();
 
   return (
-    <RoleGuard allowedRoles={["customer", "admin", "staff"]}>
+    <RoleGuard allowedRoles={["customer", "admin", "manager", "staff"]}>
       <DisputeDetailView id={params.id} />
     </RoleGuard>
   );

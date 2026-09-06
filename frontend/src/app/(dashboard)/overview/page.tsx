@@ -5,7 +5,7 @@ import { OverviewView } from "@/features/overview/overview-view";
 
 export default function OverviewPage() {
   return (
-    <RoleGuard allowedRoles={["admin", "staff"]}>
+    <RoleGuard allowedRoles={["admin", "manager", "staff"]}>
       <OverviewView />
     </RoleGuard>
   );

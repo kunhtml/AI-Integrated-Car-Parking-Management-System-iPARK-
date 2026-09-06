@@ -5,7 +5,7 @@ import { ChangePasswordView } from "@/features/auth/change-password-view";
 
 export default function ChangePasswordPage() {
   return (
-    <RoleGuard allowedRoles={["admin", "staff", "customer"]}>
+    <RoleGuard allowedRoles={["admin", "manager", "staff", "customer"]}>
       <ChangePasswordView />
     </RoleGuard>
   );

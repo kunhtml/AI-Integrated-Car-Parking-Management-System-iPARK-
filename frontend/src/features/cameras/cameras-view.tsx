@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { bridgeFetch } from "@/lib/client-api";
+import { logger } from "@/lib/logger";
 import { CamerasLogsPanel } from "@/features/cameras/cameras-logs-panel";
 
 const bridgeBaseUrl =
@@ -69,7 +70,10 @@ export function CamerasView() {
   // Trạng thái barie per-gate + cooldown chống double-click
   const [barriers, setBarriers] = useState<BarrierState>(INITIAL_BARRIER);
   const [barrierMsg, setBarrierMsg] = useState<string>("");
-  const barrierActionLockRef = useRef<Record<Gate, boolean>>({ in: false, out: false });
+  const barrierActionLockRef = useRef<Record<Gate, boolean>>({
+    in: false,
+    out: false,
+  });
 
   // Probe bridge service để biết online/offline
   useEffect(() => {
@@ -109,8 +113,10 @@ export function CamerasView() {
         ) {
           // Normalize gate → "in" | "out" (giữ default nếu bridge trả "entry"/"exit")
           const normalized = data.cameras.map(
-            (c: Omit<CameraStream, "gate"> & { gate: Gate | "entry" | "exit" }) => ({
-            ...c,
+            (
+              c: Omit<CameraStream, "gate"> & { gate: Gate | "entry" | "exit" },
+            ) => ({
+              ...c,
               gate: c.gate === "exit" || c.gate === "out" ? "out" : "in",
             }),
           ) as CameraStream[];
@@ -170,10 +176,15 @@ export function CamerasView() {
     setBarriers((cur) => ({ ...cur, [gate]: nextPhase }));
     setBarrierMsg("");
     try {
-      const res = await bridgeFetch(`/gate/${gate}/${action}`, { method: "POST" });
+      const res = await bridgeFetch(`/gate/${gate}/${action}`, {
+        method: "POST",
+      });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        setBarriers((cur) => ({ ...cur, [gate]: action === "open" ? "open" : "closed" }));
+        setBarriers((cur) => ({
+          ...cur,
+          [gate]: action === "open" ? "open" : "closed",
+        }));
         setBarrierMsg(
           action === "open"
             ? `Đã mở barie ${gate === "in" ? "cổng vào" : "cổng ra"}`
@@ -191,7 +202,7 @@ export function CamerasView() {
           ? "Không kết nối được bridge service. Kiểm tra port 5050 và CORS."
           : "Lỗi không xác định khi gọi bridge.",
       );
-      console.error("Barrier control error", err);
+      logger.error("Barrier control error", { err });
     } finally {
       // Cooldown 1.2s
       window.setTimeout(() => {
@@ -229,9 +240,10 @@ export function CamerasView() {
                 Bridge service chưa chạy hoặc không truy cập được
               </div>
               <div>
-                Camera stream yêu cầu Python service (<code>smart_parking_rut_gon</code>) chạy tại{" "}
-                <code>{bridgeBaseUrl}</code>. Chạy <code>python app.py</code> trong thư mục{" "}
-                <code>smart_parking_rut_gon</code> để bật camera.
+                Camera stream yêu cầu Python service (
+                <code>smart_parking_rut_gon</code>) chạy tại{" "}
+                <code>{bridgeBaseUrl}</code>. Chạy <code>python app.py</code>{" "}
+                trong thư mục <code>smart_parking_rut_gon</code> để bật camera.
               </div>
             </div>
           </div>
@@ -339,7 +351,12 @@ export function CamerasView() {
                         `${bridgeBaseUrl}/video_feed/${stream.id}`
                       }
                     >
-                      {(stream.streamUrl || `${bridgeBaseUrl}/video_feed/${stream.id}`).split("?")[0]}
+                      {
+                        (
+                          stream.streamUrl ||
+                          `${bridgeBaseUrl}/video_feed/${stream.id}`
+                        ).split("?")[0]
+                      }
                     </span>
                     <span className="cam-meta-time">
                       {lastLoaded
@@ -408,7 +425,8 @@ export function CamerasView() {
 
         {orderedStreams.length === 0 && (
           <p className="cam-loading">
-            <Loader2 size={16} className="spin" /> Đang tải danh sách camera từ bridge service...
+            <Loader2 size={16} className="spin" /> Đang tải danh sách camera từ
+            bridge service...
           </p>
         )}
       </div>
@@ -443,7 +461,8 @@ function BridgeStatus({ online }: { online: boolean | null }) {
 }
 
 function BarrierStatusIcon({ state }: { state: BarrierState["in"] }) {
-  if (state === "opening" || state === "closing") return <Loader2 size={13} className="spin" />;
+  if (state === "opening" || state === "closing")
+    return <Loader2 size={13} className="spin" />;
   if (state === "open") return <LockOpen size={13} />;
   if (state === "closed") return <Lock size={13} />;
   return <ShieldAlert size={13} />;

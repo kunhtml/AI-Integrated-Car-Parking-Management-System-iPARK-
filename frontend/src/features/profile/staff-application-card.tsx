@@ -21,6 +21,7 @@ import {
   cancelMyStaffApplication,
   fetchMyStaffApplication,
 } from "@/lib/staff-application-api";
+import { logger } from "@/lib/logger";
 import type { StaffApplication } from "@/types";
 
 import { StaffApplicationModal } from "./staff-application-modal";
@@ -114,7 +115,7 @@ export function StaffApplicationCard() {
       const data = await fetchMyStaffApplication();
       setApplication(data.application);
     } catch (err) {
-      console.error(err);
+      logger.error("Load staff application failed:", { err });
       showError(
         err instanceof Error
           ? `Không tải được đơn: ${err.message}`
@@ -436,7 +437,8 @@ function RejectedView({
         >
           <b>Lý do từ chối:</b> {application.reviewNote}
           <div style={{ marginTop: 6, fontSize: "0.76rem" }}>
-            Bạn có thể chỉnh sửa và gửi lại chính đơn này. Lần gửi lại: {application.resubmitCount ?? 0}.
+            Bạn có thể chỉnh sửa và gửi lại chính đơn này. Lần gửi lại:{" "}
+            {application.resubmitCount ?? 0}.
           </div>
         </div>
       )}

@@ -129,7 +129,11 @@ export async function validateEntry(
   deviceId?: string,
   plateDetected?: string,
 ) {
-  const card = await RfidCard.findOne({ cardId: cardId.toUpperCase() });
+  const normalizedCardId = cardId.trim().toUpperCase();
+  // Đầu đọc trả UID, trong khi dữ liệu cũ có thể lưu ở cardId.
+  const card = await RfidCard.findOne({
+    $or: [{ uid: normalizedCardId }, { cardId: normalizedCardId }],
+  });
   if (!card) {
     await logScan({
       cardId,
@@ -338,7 +342,11 @@ export async function validateExit(
   deviceId?: string,
   plateDetected?: string,
 ) {
-  const card = await RfidCard.findOne({ cardId: cardId.toUpperCase() });
+  const normalizedCardId = cardId.trim().toUpperCase();
+  // Hỗ trợ cả UID thực tế từ đầu đọc và mã cardId legacy.
+  const card = await RfidCard.findOne({
+    $or: [{ uid: normalizedCardId }, { cardId: normalizedCardId }],
+  });
   if (!card) {
     await logScan({
       cardId,

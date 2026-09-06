@@ -364,10 +364,17 @@ export async function createParkingSession(
   }
 
   if (body.rfidUid) {
-    const card = await RfidCard.findOne({ uid: body.rfidUid.trim() });
+    const rfidUid = body.rfidUid.trim().toUpperCase();
+    const escapedRfidUid = rfidUid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const card = await RfidCard.findOne({
+      $or: [
+        { uid: { $regex: `^${escapedRfidUid}$`, $options: "i" } },
+        { cardId: { $regex: `^${escapedRfidUid}$`, $options: "i" } },
+      ],
+    });
     if (!card) {
       response.status(404).json({
-        message: `Kh\u00F4ng t\u00ECm th\u1EA5y th\u1EBB RFID v\u1EDBi UID ${body.rfidUid}.`,
+        message: `Kh\u00F4ng t\u00ECm th\u1EA5y th\u1EBB RFID v\u1EDBi UID ${rfidUid}.`,
       });
       return;
     }

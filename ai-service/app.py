@@ -981,11 +981,19 @@ else:
 # Chỉ load PaddleOCR khi OCR được bật — model mobile ~5MB.
 # use_angle_cls=False: crop biển thường đã thẳng.
 # lang='en': latin A-Z/0-9 đủ biển VN, nhẹ hơn 'vi'.
-paddle_ocr = PaddleOCR(use_angle_cls=False, lang='en', show_log=False) if OCR_ENABLED else None
+paddle_ocr = None
+if OCR_ENABLED and PaddleOCR is not None:
+    try:
+        paddle_ocr = PaddleOCR(use_angle_cls=False, lang='en', show_log=False)
+    except Exception as exc:
+        print(f"[OCR][WARN] PaddleOCR unavailable: {type(exc).__name__}: {exc}")
+        paddle_ocr = None
 
 # YOLO chỉ load khi PLATE_DETECTOR=yolo.
-# PyTorch >=2.6 weights_only=True mặc định → patch load best.pt local.
-YOLO_MODEL_PATH = os.path.join(_BASE_DIR, "yolo_model", "best.pt")
+# Có thể ghi đè bằng biến môi trường YOLO_MODEL_PATH.
+YOLO_MODEL_PATH = os.getenv(
+    "YOLO_MODEL_PATH", os.path.join(_BASE_DIR, "yolo_model", "best.pt")
+)
 yolo_model = None
 YOLO_CONF_THR = float(os.getenv("YOLO_CONF_THR", "0.25"))
 if YOLO_NEEDED and YOLO is not None:
@@ -1136,13 +1144,10 @@ def set_rfid_scan_enabled(value: bool, direction: str = "in", mode: str = "gate"
 # ==== OCR & XỬ LÝ FRAME ====
 def _save_plate_snapshot(crop_img, full_frame, direction: str, plate_hint: str = "") -> str:
     """
-    Khi YOLO vừa detect được bbox biển số -> chụp lại:
-      1. Ảnh crop biển số (chỉ phần bbox, có padding) — dùng để OCR.
-      2. Ảnh full frame (đã vẽ bbox YOLO + label OCR) — dùng làm bằng chứng.
-
-    Lưu cả 2 vào SNAPSHOT_DIR, tên file chứa direction + timestamp + plate
-    để debug. Trả về RELATIVE path của ảnh crop (ảnh dùng để OCR). Nếu lỗi
-    I/O trả về "" — caller vẫn tiếp tục OCR trên crop trong RAM.
+    Lưu bằng chứng là ảnh toàn bộ khung hình camera tại thời điểm OCR xác nhận
+    biển số. Ảnh crop chỉ phục vụ OCR trong RAM, không được dùng làm evidence.
+    Tên file chứa direction + timestamp + plate để tránh nhầm camera vào/ra.
+    Nếu lỗi I/O trả về "" — caller vẫn tiếp tục xử lý OCR trong RAM.
     """
     try:
         os.makedirs(SNAPSHOT_DIR, exist_ok=True)
@@ -1157,19 +1162,15 @@ def _save_plate_snapshot(crop_img, full_frame, direction: str, plate_hint: str =
     plate_norm = _normalize_plate(plate_hint) or "nopl"
     base_name = f"{direction_norm}_{ts}_{plate_norm}"
 
-    crop_path = os.path.join(SNAPSHOT_DIR, f"{base_name}_crop.jpg")
     full_path = os.path.join(SNAPSHOT_DIR, f"{base_name}_full.jpg")
 
-    saved_any = False
-    if crop_img is not None and crop_img.size > 0 and _safe_imwrite(crop_path, crop_img):
-        saved_any = True
-    if full_frame is not None and _safe_imwrite(full_path, full_frame):
-        saved_any = True
-
-    if not saved_any:
+    # Chỉ lưu và trả về full frame. Backend sẽ dùng path này cho
+    # entryImageUrl hoặc exitImageUrl tương ứng với direction.
+    if full_frame is None or not _safe_imwrite(full_path, full_frame):
         return ""
-    # Trả về path tương đối để frontend dùng qua Flask static handler
-    return f"/static/snapshots/{base_name}_crop.jpg"
+
+    # Trả về path tương đối để frontend dùng qua Flask static handler.
+    return f"/static/snapshots/{base_name}_full.jpg"
 
 
 def _find_plate_boxes_opencv(frame) -> list:
@@ -1419,23 +1420,13 @@ def process_frame(frame, plate_counter, last_plate, last_seen_time, prefix, ser,
                     for (x1, y1, x2, y2, conf) in boxes
                 ]
 
-        # fullframe hoặc không có box -> OCR toàn frame (đã resize)
-        if detector == "fullframe" or not boxes:
-            if detector != "fullframe" and not boxes:
-                if is_in:
-                    last_boxes_in = []
-                else:
-                    last_boxes_out = []
-            gray = cv2.cvtColor(work, cv2.COLOR_BGR2GRAY)
-            if OCR_MAX_WIDTH > 0 and gray.shape[1] > OCR_MAX_WIDTH:
-                sc = OCR_MAX_WIDTH / gray.shape[1]
-                gray = cv2.resize(
-                    gray,
-                    (OCR_MAX_WIDTH, max(1, int(gray.shape[0] * sc))),
-                    interpolation=cv2.INTER_AREA,
-                )
-            parts_all = _ocr_parts_from_crop(gray, min_prob=0.5)
-            candidate = _join_plate_parts(parts_all)
+        # Chỉ OCR trên vùng crop do detector trả về; tuyệt đối không OCR toàn frame.
+        # Khi không tìm thấy bbox thì chờ frame kế tiếp thay vì đọc nhầm chữ nền.
+        if not boxes:
+            if is_in:
+                last_boxes_in = []
+            else:
+                last_boxes_out = []
         else:
             tag = "YOLO" if detector == "yolo" else "CV"
             for (x1, y1, x2, y2, conf) in boxes:
@@ -1728,21 +1719,29 @@ def read_from_arduino(ser, ser_out=None, direction="in"):
 def open_gate(gate='in'):
     ser = arduino_in if gate == 'in' else arduino_out
     if gate == 'in':
-        safe_write(ser, serial_lock_in, 'OPEN_GATE')
+        ok = safe_write(ser, serial_lock_in, 'OPEN_GATE')
     else:
-        safe_write(ser, serial_lock_out, 'OPEN_GATE')
-    backend.gate_control(gate, "open")
-    print(f"[MANUAL] Sent OPEN_GATE to Arduino {gate.upper()}")
+        ok = safe_write(ser, serial_lock_out, 'OPEN_GATE')
+    if ok:
+        backend.gate_control(gate, "open")
+        print(f"[MANUAL] Sent OPEN_GATE to Arduino {gate.upper()}")
+    else:
+        print(f"[MANUAL][ERROR] Cannot send OPEN_GATE to Arduino {gate.upper()}")
+    return ok
 
 
 def close_gate(gate='in'):
     ser = arduino_in if gate == 'in' else arduino_out
     if gate == 'in':
-        safe_write(ser, serial_lock_in, 'CLOSE_GATE')
+        ok = safe_write(ser, serial_lock_in, 'CLOSE_GATE')
     else:
-        safe_write(ser, serial_lock_out, 'CLOSE_GATE')
-    backend.gate_control(gate, "close")
-    print(f"[MANUAL] Sent CLOSE_GATE to Arduino {gate.upper()}")
+        ok = safe_write(ser, serial_lock_out, 'CLOSE_GATE')
+    if ok:
+        backend.gate_control(gate, "close")
+        print(f"[MANUAL] Sent CLOSE_GATE to Arduino {gate.upper()}")
+    else:
+        print(f"[MANUAL][ERROR] Cannot send CLOSE_GATE to Arduino {gate.upper()}")
+    return ok
 
 
 # ==== CAMERA LOOP / OCR SCHEDULER ====
@@ -2175,8 +2174,8 @@ def capture_snapshot_for_event(direction: str, base_url: str = "") -> str:
     # ---- ƯU TIÊN 1: dùng snapshot đã chụp bởi OCR ----
     ocr_snap_rel = last_snapshot_in if direction_norm == "in" else last_snapshot_out
     if ocr_snap_rel:
-        # ocr_snap_rel dạng "/static/snapshots/xxx_crop.jpg" — copy sang tên
-        # mới có chứa UID để gắn với session, tránh bị 2 xe cùng lúc ghi đè.
+        # ocr_snap_rel là full-frame evidence đã lưu sau khi OCR xác nhận —
+        # copy sang tên mới có UID để gắn với session, tránh bị ghi đè.
         ocr_snap_abs = os.path.join(_BASE_DIR, ocr_snap_rel.lstrip("/"))
         if os.path.isfile(ocr_snap_abs):
             try:
@@ -2234,7 +2233,9 @@ def capture_snapshot_for_event(direction: str, base_url: str = "") -> str:
 
 
 # ==== FLASK ====
-app = Flask(__name__)
+# Dùng static folder tuyệt đối theo vị trí app.py, không phụ thuộc cwd khi
+# start bằng start-ai.bat hoặc từ một thư mục khác.
+app = Flask(__name__, static_folder=STATIC_DIR, static_url_path="/static")
 
 
 @app.before_request
@@ -2401,10 +2402,19 @@ def _draw_overlay(frame, boxes):
         return frame
     try:
         for i, (x1, y1, x2, y2, conf, ocr_text) in enumerate(boxes):
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
-            label = f"YOLO {conf:.2f}"
-            cv2.putText(frame, label, (x1, max(15, y1 - 8)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+            # Khung xanh lá giúp dễ quan sát trực tiếp trên stream camera.
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 3)
+            label = f"BIEN SO | {conf:.2f}"
+            label_y = max(22, y1 - 8)
+            (label_w, label_h), _ = cv2.getTextSize(
+                label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2
+            )
+            cv2.rectangle(
+                frame, (x1, label_y - label_h - 8),
+                (x1 + label_w + 8, label_y + 4), (0, 255, 0), -1
+            )
+            cv2.putText(frame, label, (x1 + 4, label_y - 2),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
             # Chỉ hiện OCR text ở bbox đầu tiên (YOLO thường chỉ 1 bbox)
             if i == 0 and ocr_text:
                 cv2.putText(frame, ocr_text, (x1, min(frame.shape[0] - 10, y2 + 22)),
@@ -2512,15 +2522,21 @@ def control_gate(direction, action):
     if direction not in ["in", "out"] or action not in ["open", "close"]:
         return jsonify({"error": "Invalid command"}), 400
     if action == "open":
-        open_gate(direction)
-        # Cổng ra giữ mở 7 giây sau thanh toán; cổng vào giữ thời gian mặc định.
-        def _auto_close(gate=direction):
-            time.sleep(7 if gate == "out" else 5)
-            close_gate(gate)
-        threading.Thread(target=_auto_close, daemon=True).start()
+        ok = open_gate(direction)
+        if ok:
+            # Cổng ra giữ mở 7 giây sau thanh toán; cổng vào giữ thời gian mặc định.
+            def _auto_close(gate=direction):
+                time.sleep(7 if gate == "out" else 5)
+                close_gate(gate)
+            threading.Thread(target=_auto_close, daemon=True).start()
     else:
-        close_gate(direction)
-    return jsonify({"status": f"Gate {direction} {action}ed successfully"})
+        ok = close_gate(direction)
+    if not ok:
+        return jsonify({
+            "ok": False,
+            "message": f"Không gửi được lệnh {action} đến bộ điều khiển cổng {direction}. Kiểm tra kết nối phần cứng.",
+        }), 503
+    return jsonify({"ok": True, "status": f"Gate {direction} {action}ed successfully"})
 
 
 @app.route("/api/rfid/list")
@@ -2702,7 +2718,23 @@ if __name__ == "__main__":
     except Exception as e:
         print("[BOOT][WARN] Cannot create folders:", e)
 
-    threading.Thread(target=camera_loop, daemon=True).start()
+    # Runtime hiện tại vẫn dùng camera_loop legacy vì nó giữ đầy đủ contract
+    # RFID/barrier/backend. Modular orchestrator chỉ được bật khi explicit,
+    # tránh chạy trùng camera và OCR loop trong cùng process.
+    use_modular = os.getenv("IPARK_MODULAR_RUNTIME", "false").strip().lower() in {"1", "true", "yes", "on"}
+    if use_modular:
+        try:
+            from services.orchestration import Orchestrator
+            modular_runtime = Orchestrator(enable_backend=True)
+            modular_runtime.start()
+            print("[BOOT] Modular runtime enabled")
+        except Exception as exc:
+            print(f"[BOOT][MODULAR][ERROR] {type(exc).__name__}: {exc}")
+            print("[BOOT] Falling back to legacy runtime")
+            threading.Thread(target=camera_loop, daemon=True).start()
+    else:
+        threading.Thread(target=camera_loop, daemon=True).start()
+
     if AI_METRIC_INTERVAL_SEC > 0:
         threading.Thread(target=_metric_logger_loop, name="ai-metric", daemon=True).start()
 

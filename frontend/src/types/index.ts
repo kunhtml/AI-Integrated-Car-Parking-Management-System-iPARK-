@@ -49,11 +49,12 @@ export type InvoiceItem = {
   createdAt: string;
 };
 
-export type Role = "admin" | "staff" | "customer";
+export type Role = "admin" | "manager" | "staff" | "customer";
 export type ViewAsMode = "staff" | "customer";
 
 export type View =
   | "overview"
+  | "parking-sessions"
   | "sessions"
   | "users"
   | "pricing"
@@ -63,7 +64,6 @@ export type View =
   | "vehicles"
   | "notifications"
   | "shifts"
-  | "incidents"
   | "ai"
   | "occupancy"
   | "devices"
@@ -79,7 +79,8 @@ export type View =
   | "staff-desk"
   | "disputes"
   | "capacity-config"
-  | "staff-applications";
+  | "staff-applications"
+  | "audit-logs";
 
 export type DemoUser = {
   id: number | string;
@@ -93,20 +94,6 @@ export type DemoUser = {
   provider?: string;
   twoFactorEnabled?: boolean;
   phone?: string | null;
-  firstName?: string | null;
-  lastName?: string | null;
-  gender?: string | null;
-  birthDate?: string | null;
-  idCardNumber?: string | null;
-  idCardIssuedAt?: string | null;
-  idCardExpiry?: string | null;
-  address?: string | null;
-  city?: string | null;
-  district?: string | null;
-  emergencyContact?: string | null;
-  emergencyPhone?: string | null;
-  company?: string | null;
-  taxCode?: string | null;
   isVerified?: boolean;
   lastLoginAt?: string | null;
   createdAt?: string;
@@ -310,27 +297,12 @@ export type TransactionItem = {
   sessionPaymentStatus?: "unpaid" | "partial_paid" | "fully_paid";
   sessionFee?: number;
   sessionPaidAmount?: number;
-<<<<<<< Updated upstream
-  session?: {
-    id?: string;
-    checkIn?: string;
-    checkOut?: string;
-    durationMinutes?: number;
-    fee?: number;
-    paidAmount?: number;
-    paymentStatus?: string;
-  };
-  subscription?: {
-    id?: string;
-    name?: string;
-    planCode?: string;
-    startDate?: string;
-    endDate?: string;
-    price?: number;
-=======
   // Đối chiếu (UC-29)
   session?: {
     id: string;
+    checkIn?: string;
+    checkOut?: string;
+    durationMinutes?: number;
     checkInAt?: string;
     checkOutAt?: string;
     plate?: string;
@@ -342,11 +314,13 @@ export type TransactionItem = {
   };
   subscription?: {
     id: string;
+    name?: string;
     planName?: string;
+    planCode?: string;
     memberCode?: string;
     startDate?: string;
     endDate?: string;
->>>>>>> Stashed changes
+    price?: number;
     status?: string;
   };
   reconciliation?: "reconciled" | "unresolved" | "not_applicable";
@@ -468,23 +442,12 @@ export type StaffForSchedule = {
   avatarUrl: string | null;
 };
 
-export type IncidentItem = {
-  id: string;
-  type: string;
-  note: string;
-  plate?: string;
-  sessionId?: string;
-  disputeId?: string;
-  status: "Mới" | "Đang xử lý" | "Đã xử lý";
-  createdAt: string;
-};
-
 export type DisputeStatus = "Mới" | "Đang xử lý" | "Đã xử lý" | "Từ chối";
 
 export type DisputeMessage = {
   id: string;
   senderId: string;
-  senderRole: "customer" | "admin" | "staff";
+  senderRole: "customer" | "admin" | "manager" | "staff";
   senderName: string;
   content: string;
   createdAt: string;
@@ -852,7 +815,7 @@ export type StaffApplicationHistory = {
   oldStatus?: StaffApplicationStatus | null;
   newStatus: StaffApplicationStatus;
   performedBy?: string | null;
-  performedRole?: "customer" | "admin" | "staff" | null;
+  performedRole?: "customer" | "admin" | "manager" | "staff" | null;
   note?: string | null;
   changedFields: string[];
   before: Partial<StaffApplication>;

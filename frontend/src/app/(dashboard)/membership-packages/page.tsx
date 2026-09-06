@@ -5,7 +5,7 @@ import { MembershipPackagesView } from "@/features/membership-packages/membershi
 
 export default function MembershipPackagesPage() {
   return (
-    <RoleGuard allowedRoles={["admin", "staff"]}>
+    <RoleGuard allowedRoles={["admin", "manager", "staff"]}>
       <MembershipPackagesView />
     </RoleGuard>
   );

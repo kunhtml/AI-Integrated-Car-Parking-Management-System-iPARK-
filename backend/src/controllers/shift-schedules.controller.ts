@@ -1,12 +1,57 @@
 import { Request, Response } from "express";
+import mongoose from "mongoose";
 import { z } from "zod";
 import { AuditLog } from "../models/AuditLog.js";
 import { ShiftSchedule } from "../models/ShiftSchedule.js";
 import { User } from "../models/User.js";
-import { serializeAuditLog, serializeShiftSchedule } from "../utils/serializers.js";
+import { createAuditLog } from "../services/auditLog.service.js";
+import {
+  serializeAuditLog,
+  serializeShiftSchedule,
+} from "../utils/serializers.js";
 
 function canManageSchedules(user?: { role?: string | null }) {
   return user?.role === "admin" || user?.role === "manager";
+}
+
+// SHIFT-01: người được gán ca phải là staff đang hoạt động — chặn staff bị
+// khóa, customer và user không tồn tại trên mọi thao tác gán.
+async function getAssignableStaff(staffId: string) {
+  const staff = await User.findById(staffId);
+  if (!staff) {
+    return { error: 404, message: "Không tìm thấy nhân viên" as const };
+  }
+  if (staff.role !== "staff") {
+    return {
+      error: 400,
+      message: "Người này không phải là nhân viên" as const,
+    };
+  }
+  if (staff.status !== "Đang hoạt động") {
+    return {
+      error: 409,
+      message: "Nhân viên này đã bị khóa, không thể gán ca mới" as const,
+    };
+  }
+  return { staff };
+}
+
+// SHIFT-01: kiểm tra trùng ca tính trên trạng thái SAU update (staffId mới +
+// date/shiftType mới), không chỉ khi đổi date/shiftType.
+async function findConflict(values: {
+  excludeId?: mongoose.Types.ObjectId | string;
+  staffId: string;
+  date: Date;
+  shiftType: string;
+}) {
+  const filter: Record<string, unknown> = {
+    staffId: values.staffId,
+    date: values.date,
+    shiftType: values.shiftType,
+    status: { $ne: "cancelled" },
+  };
+  if (values.excludeId) filter._id = { $ne: values.excludeId };
+  return ShiftSchedule.findOne(filter);
 }
 
 const createScheduleSchema = z.object({
@@ -26,7 +71,9 @@ const updateScheduleSchema = z.object({
   shiftType: z.enum(["morning", "afternoon", "evening", "night"]).optional(),
   startTime: z.string().optional(),
   endTime: z.string().optional(),
-  status: z.enum(["scheduled", "checked_in", "completed", "cancelled"]).optional(),
+  status: z
+    .enum(["scheduled", "checked_in", "completed", "cancelled"])
+    .optional(),
   note: z.string().optional(),
   location: z.string().optional(),
   deviceId: z.string().optional(),
@@ -51,10 +98,17 @@ function shiftDateTime(date: Date, time: string) {
     Number(parts.find((item) => item.type === type)?.value);
   const [hour, minute] = time.split(":").map(Number);
   if (!Number.isInteger(hour) || !Number.isInteger(minute)) return null;
-  return new Date(Date.UTC(part("year"), part("month") - 1, part("day"), hour, minute) - 7 * 60 * 60 * 1000);
+  return new Date(
+    Date.UTC(part("year"), part("month") - 1, part("day"), hour, minute) -
+      7 * 60 * 60 * 1000,
+  );
 }
 
-function shiftEndAt(schedule: { date: Date; startTime: string; endTime: string }) {
+function shiftEndAt(schedule: {
+  date: Date;
+  startTime: string;
+  endTime: string;
+}) {
   const start = shiftDateTime(schedule.date, schedule.startTime);
   const end = shiftDateTime(schedule.date, schedule.endTime);
   if (!start || !end) return null;
@@ -104,8 +158,19 @@ export async function listShiftSchedules(request: Request, response: Response) {
         $lte: new Date(toDate as string),
       };
     } else if (month && year) {
-      const startOfMonth = new Date(parseInt(year as string), parseInt(month as string) - 1, 1);
-      const endOfMonth = new Date(parseInt(year as string), parseInt(month as string), 0, 23, 59, 59);
+      const startOfMonth = new Date(
+        parseInt(year as string),
+        parseInt(month as string) - 1,
+        1,
+      );
+      const endOfMonth = new Date(
+        parseInt(year as string),
+        parseInt(month as string),
+        0,
+        23,
+        59,
+        59,
+      );
       query.date = { $gte: startOfMonth, $lte: endOfMonth };
     }
 
@@ -135,14 +200,32 @@ export async function getMySchedule(request: Request, response: Response) {
         $lte: new Date(toDate as string),
       };
     } else if (month && year) {
-      const startOfMonth = new Date(parseInt(year as string), parseInt(month as string) - 1, 1);
-      const endOfMonth = new Date(parseInt(year as string), parseInt(month as string), 0, 23, 59, 59);
+      const startOfMonth = new Date(
+        parseInt(year as string),
+        parseInt(month as string) - 1,
+        1,
+      );
+      const endOfMonth = new Date(
+        parseInt(year as string),
+        parseInt(month as string),
+        0,
+        23,
+        59,
+        59,
+      );
       query.date = { $gte: startOfMonth, $lte: endOfMonth };
     } else {
       // Default: current month
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+      const endOfMonth = new Date(
+        now.getFullYear(),
+        now.getMonth() + 1,
+        0,
+        23,
+        59,
+        59,
+      );
       query.date = { $gte: startOfMonth, $lte: endOfMonth };
     }
 
@@ -225,37 +308,39 @@ export async function getWeeklySchedule(request: Request, response: Response) {
 }
 
 // POST /api/shift-schedules - Create schedule
-export async function createShiftSchedule(request: Request, response: Response) {
+export async function createShiftSchedule(
+  request: Request,
+  response: Response,
+) {
   try {
     if (!canManageSchedules(request.user)) {
-      response.status(403).json({ message: "Chỉ admin hoặc manager mới có quyền gán lịch làm việc" });
+      response.status(403).json({
+        message: "Chỉ admin hoặc manager mới có quyền gán lịch làm việc",
+      });
       return;
     }
 
     const body = createScheduleSchema.parse(request.body);
 
-    // Verify staff exists and is a staff role
-    const staff = await User.findById(body.staffId);
-    if (!staff) {
-      response.status(404).json({ message: "Không tìm thấy nhân viên" });
-      return;
-    }
-    if (staff.role !== "staff") {
-      response.status(400).json({ message: "Người này không phải là nhân viên" });
+    const staffCheck = await getAssignableStaff(body.staffId);
+    if ("error" in staffCheck) {
+      response
+        .status(staffCheck.error ?? 400)
+        .json({ message: staffCheck.message });
       return;
     }
 
     // Check for existing schedule on same day and shift type
-    const existingSchedule = await ShiftSchedule.findOne({
+    const existingSchedule = await findConflict({
       staffId: body.staffId,
       date: new Date(body.date),
       shiftType: body.shiftType,
-      status: { $ne: "cancelled" },
     });
 
     if (existingSchedule) {
       response.status(400).json({
-        message: "Nhân viên này đã có lịch ca này trong ngày. Vui lòng chọn ca khác hoặc xóa lịch cũ.",
+        message:
+          "Nhân viên này đã có lịch ca này trong ngày. Vui lòng chọn ca khác hoặc xóa lịch cũ.",
       });
       return;
     }
@@ -269,14 +354,14 @@ export async function createShiftSchedule(request: Request, response: Response) 
       note: body.note,
       location: body.location,
       deviceId: body.deviceId,
-      assignedBy: request.user.id,
+      assignedBy: request.user!.id,
       status: "scheduled",
     });
 
     await schedule.populate("staffId", "name email phone avatarUrl");
     await schedule.populate("assignedBy", "name email");
 
-    await AuditLog.create({
+    await createAuditLog({
       action: "shift_schedule_assigned",
       entityType: "ShiftSchedule",
       entityId: schedule._id,
@@ -297,7 +382,9 @@ export async function createShiftSchedule(request: Request, response: Response) 
     response.status(201).json({ schedule: serializeShiftSchedule(schedule) });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      response.status(400).json({ message: error.issues[0]?.message, errors: error.issues });
+      response
+        .status(400)
+        .json({ message: error.issues[0]?.message, errors: error.issues });
       return;
     }
     console.error("Error creating shift schedule:", error);
@@ -306,30 +393,36 @@ export async function createShiftSchedule(request: Request, response: Response) 
 }
 
 // POST /api/shift-schedules/bulk - Create multiple schedules
-export async function bulkCreateShiftSchedules(request: Request, response: Response) {
+export async function bulkCreateShiftSchedules(
+  request: Request,
+  response: Response,
+) {
   try {
     if (!canManageSchedules(request.user)) {
-      response.status(403).json({ message: "Chỉ admin hoặc manager mới có quyền gán lịch làm việc" });
+      response.status(403).json({
+        message: "Chỉ admin hoặc manager mới có quyền gán lịch làm việc",
+      });
       return;
     }
 
-    const body = z.object({
-      schedules: z.array(createScheduleSchema).min(1),
-    }).parse(request.body);
+    const body = z
+      .object({
+        schedules: z.array(createScheduleSchema).min(1),
+      })
+      .parse(request.body);
 
     const createdSchedules = [];
 
     for (const scheduleData of body.schedules) {
-      // Verify staff exists
-      const staff = await User.findById(scheduleData.staffId);
-      if (!staff || staff.role !== "staff") continue;
+      // SHIFT-01: bỏ qua mục không hợp lệ (user không tồn tại/không phải staff/bị khóa).
+      const staffCheck = await getAssignableStaff(scheduleData.staffId);
+      if ("error" in staffCheck) continue;
 
       // Check for existing schedule
-      const existingSchedule = await ShiftSchedule.findOne({
+      const existingSchedule = await findConflict({
         staffId: scheduleData.staffId,
         date: new Date(scheduleData.date),
         shiftType: scheduleData.shiftType,
-        status: { $ne: "cancelled" },
       });
 
       if (existingSchedule) continue;
@@ -343,7 +436,7 @@ export async function bulkCreateShiftSchedules(request: Request, response: Respo
         note: scheduleData.note,
         location: scheduleData.location,
         deviceId: scheduleData.deviceId,
-        assignedBy: request.user.id,
+        assignedBy: request.user!.id,
         status: "scheduled",
       });
 
@@ -357,7 +450,7 @@ export async function bulkCreateShiftSchedules(request: Request, response: Respo
 
     await Promise.all(
       createdSchedules.map((schedule) =>
-        AuditLog.create({
+        createAuditLog({
           action: "shift_schedule_assigned",
           entityType: "ShiftSchedule",
           entityId: schedule._id,
@@ -383,7 +476,9 @@ export async function bulkCreateShiftSchedules(request: Request, response: Respo
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      response.status(400).json({ message: error.issues[0]?.message, errors: error.issues });
+      response
+        .status(400)
+        .json({ message: error.issues[0]?.message, errors: error.issues });
       return;
     }
     console.error("Error bulk creating shift schedules:", error);
@@ -392,10 +487,15 @@ export async function bulkCreateShiftSchedules(request: Request, response: Respo
 }
 
 // PATCH /api/shift-schedules/:id - Update schedule
-export async function updateShiftSchedule(request: Request, response: Response) {
+export async function updateShiftSchedule(
+  request: Request,
+  response: Response,
+) {
   try {
     if (!canManageSchedules(request.user)) {
-      response.status(403).json({ message: "Chỉ admin hoặc manager mới có quyền sửa lịch làm việc" });
+      response.status(403).json({
+        message: "Chỉ admin hoặc manager mới có quyền sửa lịch làm việc",
+      });
       return;
     }
 
@@ -407,32 +507,31 @@ export async function updateShiftSchedule(request: Request, response: Response) 
       return;
     }
 
-    // If changing staff, verify new staff exists
+    // SHIFT-01: nếu đổi nhân viên, người mới phải là staff đang hoạt động.
     if (body.staffId && body.staffId !== schedule.staffId.toString()) {
-      const newStaff = await User.findById(body.staffId);
-      if (!newStaff || newStaff.role !== "staff") {
-        response.status(400).json({ message: "Nhân viên mới không hợp lệ" });
+      const staffCheck = await getAssignableStaff(body.staffId);
+      if ("error" in staffCheck) {
+        response
+          .status(staffCheck.error ?? 400)
+          .json({ message: staffCheck.message });
         return;
       }
     }
 
-    // Check for conflicts if changing date/shiftType
-    if (body.date || body.shiftType) {
-      const checkDate = body.date ? new Date(body.date) : schedule.date;
-      const checkType = body.shiftType || schedule.shiftType;
+    // SHIFT-01: conflict check tính trên trạng thái SAU update (staffId mới +
+    // date/shiftType mới) — đổi riêng staffId gây trùng cũng bị chặn.
+    const conflict = await findConflict({
+      excludeId: schedule._id,
+      staffId: body.staffId || schedule.staffId.toString(),
+      date: body.date ? new Date(body.date) : schedule.date,
+      shiftType: body.shiftType || schedule.shiftType,
+    });
 
-      const conflict = await ShiftSchedule.findOne({
-        _id: { $ne: schedule._id },
-        staffId: body.staffId || schedule.staffId,
-        date: checkDate,
-        shiftType: checkType,
-        status: { $ne: "cancelled" },
-      });
-
-      if (conflict) {
-        response.status(400).json({ message: "Nhân viên đã có lịch ca này trong ngày" });
-        return;
-      }
+    if (conflict) {
+      response
+        .status(400)
+        .json({ message: "Nhân viên đã có lịch ca này trong ngày" });
+      return;
     }
 
     const previousValues = {
@@ -462,8 +561,11 @@ export async function updateShiftSchedule(request: Request, response: Response) 
     await schedule.populate("staffId", "name email phone avatarUrl");
     await schedule.populate("assignedBy", "name email");
 
-    await AuditLog.create({
-      action: body.staffId && body.staffId !== previousValues.staffId ? "shift_schedule_handover" : "shift_schedule_updated",
+    await createAuditLog({
+      action:
+        body.staffId && body.staffId !== previousValues.staffId
+          ? "shift_schedule_handover"
+          : "shift_schedule_updated",
       entityType: "ShiftSchedule",
       entityId: schedule._id,
       performedBy: request.user!.id,
@@ -486,7 +588,9 @@ export async function updateShiftSchedule(request: Request, response: Response) 
     response.json({ schedule: serializeShiftSchedule(schedule) });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      response.status(400).json({ message: error.issues[0]?.message, errors: error.issues });
+      response
+        .status(400)
+        .json({ message: error.issues[0]?.message, errors: error.issues });
       return;
     }
     console.error("Error updating shift schedule:", error);
@@ -495,10 +599,15 @@ export async function updateShiftSchedule(request: Request, response: Response) 
 }
 
 // DELETE /api/shift-schedules/:id - Delete schedule
-export async function deleteShiftSchedule(request: Request, response: Response) {
+export async function deleteShiftSchedule(
+  request: Request,
+  response: Response,
+) {
   try {
     if (!canManageSchedules(request.user)) {
-      response.status(403).json({ message: "Chỉ admin hoặc manager mới có quyền xóa lịch làm việc" });
+      response.status(403).json({
+        message: "Chỉ admin hoặc manager mới có quyền xóa lịch làm việc",
+      });
       return;
     }
 
@@ -509,7 +618,7 @@ export async function deleteShiftSchedule(request: Request, response: Response) 
       return;
     }
 
-    await AuditLog.create({
+    await createAuditLog({
       action: "shift_schedule_deleted",
       entityType: "ShiftSchedule",
       entityId: schedule._id,
@@ -540,6 +649,16 @@ export async function deleteShiftSchedule(request: Request, response: Response) 
 export async function getScheduleHistory(request: Request, response: Response) {
   try {
     const scheduleId = request.params.id;
+    // SEC-02: staff chỉ được xem lịch sử của ca mình được gán.
+    if (request.user?.role === "staff") {
+      const schedule =
+        await ShiftSchedule.findById(scheduleId).select("staffId");
+      if (!schedule || schedule.staffId.toString() !== request.user.id) {
+        response.status(404).json({ message: "Không tìm thấy lịch ca" });
+        return;
+      }
+    }
+
     const logs = await AuditLog.find({
       entityType: "ShiftSchedule",
       entityId: scheduleId,
@@ -567,17 +686,28 @@ export async function checkInShift(request: Request, response: Response) {
     }
 
     // Only the assigned staff can check in
-    if (schedule.staffId.toString() !== request.user?.id && !canManageSchedules(request.user)) {
-      response.status(403).json({ message: "Bạn không có quyền check-in ca này" });
+    if (
+      schedule.staffId.toString() !== request.user?.id &&
+      !canManageSchedules(request.user)
+    ) {
+      response
+        .status(403)
+        .json({ message: "Bạn không có quyền check-in ca này" });
       return;
     }
 
     if (schedule.status !== "scheduled") {
-      response.status(400).json({ message: `Ca này đang ở trạng thái "${schedule.status}"` });
+      response
+        .status(400)
+        .json({ message: `Ca này đang ở trạng thái "${schedule.status}"` });
       return;
     }
 
-    // Check if it's within the scheduled time (allow 30 min before)
+    // Check if it's within the scheduled time.
+    // Ca đêm / evening là ca xuyên đêm (vd 22:00 → 06:00 hôm sau), nên cho
+    // phép check-in "trễ" từ 12h TRƯỚC scheduledStart (tức là từ 10:00 sáng hôm
+    // trước cho tới khi ca kết thúc). Điều này đảm bảo nhân viên ca đêm có thể
+    // check-in ngay khi vào ca, kể cả khi 02:00 sáng hôm sau.
     const now = new Date();
     const scheduledStart = shiftDateTime(schedule.date, schedule.startTime);
     const scheduledEnd = shiftEndAt(schedule);
@@ -586,8 +716,14 @@ export async function checkInShift(request: Request, response: Response) {
       return;
     }
 
+    // earlyCheckin: mốc sớm nhất được phép check-in.
+    // - Ca thường (không xuyên đêm): scheduledStart - 30 phút.
+    // - Ca xuyên đêm (end <= start): scheduledStart - 12 giờ (đủ rộng cho
+    //   nhân viên ca đêm check-in vào giữa đêm, vd 02:15 AM).
+    const isOvernight = scheduledEnd.getTime() <= scheduledStart.getTime();
+    const earlyMinutes = isOvernight ? 12 * 60 : 30;
     const earlyThreshold = new Date(scheduledStart);
-    earlyThreshold.setMinutes(earlyThreshold.getMinutes() - 30);
+    earlyThreshold.setMinutes(earlyThreshold.getMinutes() - earlyMinutes);
 
     if (now < earlyThreshold) {
       response.status(400).json({
@@ -625,8 +761,13 @@ export async function completeShift(request: Request, response: Response) {
       return;
     }
 
-    if (schedule.staffId.toString() !== request.user?.id && !canManageSchedules(request.user)) {
-      response.status(403).json({ message: "Bạn không có quyền hoàn thành ca này" });
+    if (
+      schedule.staffId.toString() !== request.user?.id &&
+      !canManageSchedules(request.user)
+    ) {
+      response
+        .status(403)
+        .json({ message: "Bạn không có quyền hoàn thành ca này" });
       return;
     }
 
@@ -651,8 +792,18 @@ export async function completeShift(request: Request, response: Response) {
 export async function getShiftTypes(request: Request, response: Response) {
   response.json({
     shiftTypes: [
-      { key: "morning", label: "Ca sáng", startTime: "06:00", endTime: "14:00" },
-      { key: "afternoon", label: "Ca chiều", startTime: "14:00", endTime: "18:00" },
+      {
+        key: "morning",
+        label: "Ca sáng",
+        startTime: "06:00",
+        endTime: "14:00",
+      },
+      {
+        key: "afternoon",
+        label: "Ca chiều",
+        startTime: "14:00",
+        endTime: "18:00",
+      },
       { key: "evening", label: "Ca tối", startTime: "18:00", endTime: "02:00" },
       { key: "night", label: "Ca đêm", startTime: "22:00", endTime: "06:00" },
     ],
@@ -660,10 +811,15 @@ export async function getShiftTypes(request: Request, response: Response) {
 }
 
 // GET /api/shift-schedules/staffs - Get list of staff (for admin to select)
-export async function getStaffsForSchedule(request: Request, response: Response) {
+export async function getStaffsForSchedule(
+  request: Request,
+  response: Response,
+) {
   try {
     if (!canManageSchedules(request.user)) {
-      response.status(403).json({ message: "Chỉ admin hoặc manager mới có quyền xem danh sách nhân viên" });
+      response.status(403).json({
+        message: "Chỉ admin hoặc manager mới có quyền xem danh sách nhân viên",
+      });
       return;
     }
 
@@ -690,15 +846,21 @@ export async function getStaffsForSchedule(request: Request, response: Response)
 export async function getShiftStats(request: Request, response: Response) {
   try {
     if (!canManageSchedules(request.user)) {
-      response.status(403).json({ message: "Chỉ admin hoặc manager mới có quyền xem thống kê" });
+      response
+        .status(403)
+        .json({ message: "Chỉ admin hoặc manager mới có quyền xem thống kê" });
       return;
     }
 
     const { month, year } = request.query;
 
     // Default to current month
-    const targetYear = year ? parseInt(year as string) : new Date().getFullYear();
-    const targetMonth = month ? parseInt(month as string) : new Date().getMonth() + 1;
+    const targetYear = year
+      ? parseInt(year as string)
+      : new Date().getFullYear();
+    const targetMonth = month
+      ? parseInt(month as string)
+      : new Date().getMonth() + 1;
 
     const startOfMonth = new Date(targetYear, targetMonth - 1, 1);
     const endOfMonth = new Date(targetYear, targetMonth, 0, 23, 59, 59);
@@ -714,16 +876,29 @@ export async function getShiftStats(request: Request, response: Response) {
     }).populate("staffId", "name");
 
     // Calculate stats for each staff
+    // SHIFT-01: populate staffId có thể null (user bị xóa cũ) — đếm vào bucket
+    // "unassigned" thay vì dereference .staffId._id gây 500.
     const staffStats = staffs.map((staff) => {
       const staffSchedules = schedules.filter(
-        (s) => s.staffId._id.toString() === staff._id.toString()
+        (s) =>
+          s.staffId &&
+          (s.staffId as { _id?: unknown })._id?.toString() ===
+            staff._id.toString(),
       );
 
       const total = staffSchedules.length;
-      const completed = staffSchedules.filter((s) => s.status === "completed").length;
-      const checkedIn = staffSchedules.filter((s) => s.status === "checked_in").length;
-      const scheduled = staffSchedules.filter((s) => s.status === "scheduled").length;
-      const cancelled = staffSchedules.filter((s) => s.status === "cancelled").length;
+      const completed = staffSchedules.filter(
+        (s) => s.status === "completed",
+      ).length;
+      const checkedIn = staffSchedules.filter(
+        (s) => s.status === "checked_in",
+      ).length;
+      const scheduled = staffSchedules.filter(
+        (s) => s.status === "scheduled",
+      ).length;
+      const cancelled = staffSchedules.filter(
+        (s) => s.status === "cancelled",
+      ).length;
 
       return {
         staffId: staff._id.toString(),
@@ -739,19 +914,37 @@ export async function getShiftStats(request: Request, response: Response) {
       };
     });
 
+    const orphanSchedules = schedules.filter((s) => !s.staffId);
+
     // Calculate totals
+    const unassignedStats = {
+      staffId: null,
+      name: "(Nhân viên không còn trong hệ thống)",
+      email: null,
+      phone: null,
+      avatarUrl: null,
+      total: orphanSchedules.length,
+      completed: orphanSchedules.filter((s) => s.status === "completed").length,
+      checkedIn: orphanSchedules.filter((s) => s.status === "checked_in")
+        .length,
+      scheduled: orphanSchedules.filter((s) => s.status === "scheduled").length,
+      cancelled: orphanSchedules.filter((s) => s.status === "cancelled").length,
+    };
+    const allStats = orphanSchedules.length
+      ? [...staffStats, unassignedStats]
+      : staffStats;
     const totals = {
-      total: staffStats.reduce((sum, s) => sum + s.total, 0),
-      completed: staffStats.reduce((sum, s) => sum + s.completed, 0),
-      checkedIn: staffStats.reduce((sum, s) => sum + s.checkedIn, 0),
-      scheduled: staffStats.reduce((sum, s) => sum + s.scheduled, 0),
-      cancelled: staffStats.reduce((sum, s) => sum + s.cancelled, 0),
+      total: allStats.reduce((sum, s) => sum + s.total, 0),
+      completed: allStats.reduce((sum, s) => sum + s.completed, 0),
+      checkedIn: allStats.reduce((sum, s) => sum + s.checkedIn, 0),
+      scheduled: allStats.reduce((sum, s) => sum + s.scheduled, 0),
+      cancelled: allStats.reduce((sum, s) => sum + s.cancelled, 0),
     };
 
     response.json({
       month: targetMonth,
       year: targetYear,
-      stats: staffStats,
+      stats: allStats,
       totals,
     });
   } catch (error) {

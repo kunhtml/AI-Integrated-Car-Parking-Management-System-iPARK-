@@ -38,7 +38,6 @@ Cài xong set biến môi trường `TESSERACT_CMD` hoặc để mặc định `
 ### 1. Clone và cài dependencies
 
 ```bash
-git clone https://github.com/trthanhdo41/bai-do-xe.git
 cd bai-do-xe
 npm install
 ```

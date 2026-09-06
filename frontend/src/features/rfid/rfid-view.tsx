@@ -127,19 +127,9 @@ export function RfidCardsView() {
   // Customer view is handled by the same compact card list below.
   void isCustomer;
 
-  // Staff chưa có quyền nếu backend từ chối → cảnh báo rõ
-  if (!isAdmin && !isStaff) {
-    return (
-      <section className="rfid-view">
-        <h1 className="rfid-view-title">Thẻ RFID</h1>
-        <p style={{ color: "#dc2626", marginTop: 16 }}>
-          Tài khoản hiện tại (role: <strong>{role ?? "—"}</strong>) không có
-          quyền truy cập trang này. Vui lòng đăng nhập bằng tài khoản admin hoặc
-          staff.
-        </p>
-      </section>
-    );
-  }
+  // Quyền truy cập: chỉ admin/staff. Kiểm tra được trì hoãn đến cuối component
+  // để không gọi React Hook sau một early return (rules-of-hooks).
+  const hasAccess = isAdmin || isStaff;
 
   const [cards, setCards] = useState<RfidCardItem[]>([]);
   const [residents, setResidents] = useState<Resident[]>([]);
@@ -808,6 +798,20 @@ export function RfidCardsView() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  // Staff chưa có quyền nếu backend từ chối → cảnh báo rõ.
+  if (!hasAccess) {
+    return (
+      <section className="rfid-view">
+        <h1 className="rfid-view-title">Thẻ RFID</h1>
+        <p style={{ color: "#dc2626", marginTop: 16 }}>
+          Tài khoản hiện tại (role: <strong>{role ?? "—"}</strong>) không có
+          quyền truy cập trang này. Vui lòng đăng nhập bằng tài khoản admin hoặc
+          staff.
+        </p>
+      </section>
+    );
   }
 
   return (

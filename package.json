@@ -16,6 +16,9 @@
     "seed": "npx tsx backend/scripts/seed.mjs",
     "ai:dev": "node scripts/run-ai.mjs"
   },
+  "overrides": {
+    "postcss": "^8.5.6"
+  },
   "devDependencies": {
     "@types/multer": "^2.1.0",
     "concurrently": "^9.2.1",

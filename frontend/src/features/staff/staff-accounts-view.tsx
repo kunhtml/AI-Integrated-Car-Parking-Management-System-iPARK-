@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import type { InputHTMLAttributes } from "react";
 import { Save, UsersRound } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { PasswordInput } from "@/features/auth/password-input";
 
 type StaffUser = {
   id: string;
@@ -21,7 +22,7 @@ export function StaffAccountsView() {
   async function loadStaff() {
     setLoading(true);
     try {
-      const response = await apiFetch("/users?role=staff");
+      const response = await apiFetch("/users?role=staff&limit=100");
       const data = await response.json().catch(() => ({}));
       setStaff(response.ok ? data.users || [] : []);
     } catch {
@@ -38,16 +39,18 @@ export function StaffAccountsView() {
   async function createStaff(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage(null);
-    const form = new FormData(event.currentTarget);
+    const formEl = event.currentTarget;
+    const form = new FormData(formEl);
 
     try {
-      const response = await apiFetch("/users/staff", {
+      const response = await apiFetch("/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: String(form.get("name") || ""),
           email: String(form.get("email") || ""),
           password: String(form.get("password") || ""),
+          role: "staff",
           status: "Đang hoạt động",
         }),
       });
@@ -60,7 +63,7 @@ export function StaffAccountsView() {
 
       setStaff((items) => [data.user, ...items]);
       setMessage(data.message || "Đã tạo tài khoản nhân viên.");
-      event.currentTarget.reset();
+      formEl.reset();
     } catch {
       setMessage("Không kết nối được API nhân viên.");
     }
@@ -119,13 +122,15 @@ export function StaffAccountsView() {
           <div className="space-y-4">
             <InputField label="Tên nhân viên" name="name" required />
             <InputField label="Email" name="email" required type="email" />
-            <InputField
-              label="Mật khẩu tạm"
-              minLength={8}
-              name="password"
-              required
-              type="password"
-            />
+            <label className="block text-sm font-medium text-slate-700">
+              Mật khẩu tạm
+              <PasswordInput
+                className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                minLength={8}
+                name="password"
+                required
+              />
+            </label>
             <button
               className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
               type="submit"

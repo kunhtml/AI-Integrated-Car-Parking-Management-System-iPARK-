@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback } from "react";
 
 import { apiFetch } from "@/lib/client-api";
+import { logger } from "@/lib/logger";
 import type { ParkingSession, ParkingSlot, Zone } from "@/types";
 
 type DashboardPollingParams = {
@@ -11,7 +12,12 @@ type DashboardPollingParams = {
   onSessionsUpdate: (sessions: ParkingSession[]) => void;
   onZonesUpdate: (zones: Zone[]) => void;
   onSlotsUpdate: (slots: ParkingSlot[]) => void;
-  onStatsUpdate?: (stats: { active: number; available: number; revenue: number; completion: number }) => void;
+  onStatsUpdate?: (stats: {
+    active: number;
+    available: number;
+    revenue: number;
+    completion: number;
+  }) => void;
 };
 
 /**
@@ -46,12 +52,13 @@ export function useDashboardPolling({
 
     try {
       // Fetch sessions, zones, slots, and stats in parallel
-      const [sessionsRes, zonesRes, slotsRes, statsRes] = await Promise.allSettled([
-        apiFetch("/parking-sessions"),
-        apiFetch("/zones"),
-        apiFetch("/parking-slots"),
-        apiFetch("/dashboard/overview"),
-      ]);
+      const [sessionsRes, zonesRes, slotsRes, statsRes] =
+        await Promise.allSettled([
+          apiFetch("/parking-sessions"),
+          apiFetch("/zones"),
+          apiFetch("/parking-slots"),
+          apiFetch("/dashboard/overview"),
+        ]);
 
       // Update sessions
       if (sessionsRes.status === "fulfilled" && sessionsRes.value.ok) {
@@ -72,7 +79,11 @@ export function useDashboardPolling({
       }
 
       // Update stats if callback provided
-      if (onStatsUpdateRef.current && statsRes.status === "fulfilled" && statsRes.value.ok) {
+      if (
+        onStatsUpdateRef.current &&
+        statsRes.status === "fulfilled" &&
+        statsRes.value.ok
+      ) {
         const data = await statsRes.value.json();
         const overview = data.overview;
         if (overview) {
@@ -85,7 +96,7 @@ export function useDashboardPolling({
         }
       }
     } catch (error) {
-      console.error("[use-dashboard-polling] Poll error:", error);
+      logger.error("[use-dashboard-polling] Poll error:", { error });
     }
   }, []);
 

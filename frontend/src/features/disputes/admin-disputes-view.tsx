@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { DataTable } from "@/components/ui/data-table";
 import { apiFetch } from "@/lib/client-api";
+import { logger } from "@/lib/logger";
 import type { DisputeItem } from "@/types";
 
 function statusBadgeClass(status: string) {
@@ -41,7 +42,9 @@ export function AdminDisputesView() {
     apiFetch("/disputes")
       .then((r) => r.json())
       .then((data) => setDisputes(data.disputes ?? []))
-      .catch(console.error)
+      .catch((error) =>
+        logger.error("[admin-disputes] load failed:", { error }),
+      )
       .finally(() => setLoading(false));
   }, []);
 

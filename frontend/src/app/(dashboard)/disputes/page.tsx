@@ -11,7 +11,7 @@ export default function DisputesPage() {
     currentUser?.role === "admin" || currentUser?.role === "staff";
 
   return (
-    <RoleGuard allowedRoles={["customer", "admin", "staff"]}>
+    <RoleGuard allowedRoles={["customer", "admin", "manager", "staff"]}>
       {isStaffRole ? <AdminDisputesView /> : <DisputesView />}
     </RoleGuard>
   );

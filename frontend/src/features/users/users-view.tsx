@@ -14,8 +14,6 @@ import {
   Building,
   Shield,
   Calendar,
-  MapPin,
-  CreditCard,
   AlertCircle,
   Check,
   Ban,
@@ -23,29 +21,14 @@ import {
 } from "lucide-react";
 
 import { useParkingApp } from "@/context/parking-app-context";
+import { PasswordInput } from "@/features/auth/password-input";
 import type { UserUpdatePayload } from "@/hooks/actions/use-user-actions";
 import { roleLabels } from "@/lib/constants";
 import type { DemoUser, Role } from "@/types";
 
-function toDateInput(iso?: string | null) {
-  return iso ? iso.slice(0, 10) : "";
-}
-
-const GENDER_LABELS: Record<string, string> = {
-  male: "Nam",
-  female: "Nữ",
-  other: "Khác",
-};
-
 function show(value?: string | number | null) {
   if (value === null || value === undefined || value === "") return "—";
   return String(value);
-}
-
-function fmtDate(iso?: string | null) {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("vi-VN");
 }
 
 function fmtDateTime(iso?: string | null) {
@@ -55,23 +38,6 @@ function fmtDateTime(iso?: string | null) {
 }
 
 type EditState = Record<string, string>;
-
-const EDIT_FIELDS: { key: keyof DemoUser; label: string; type?: string }[] = [
-  { key: "firstName", label: "Tên" },
-  { key: "lastName", label: "Họ" },
-  { key: "phone", label: "Số điện thoại", type: "tel" },
-  { key: "birthDate", label: "Ngày sinh", type: "date" },
-  { key: "idCardNumber", label: "Số CCCD/CMND" },
-  { key: "idCardIssuedAt", label: "Ngày cấp", type: "date" },
-  { key: "idCardExpiry", label: "Ngày hết hạn", type: "date" },
-  { key: "address", label: "Địa chỉ" },
-  { key: "city", label: "Tỉnh/Thành phố" },
-  { key: "district", label: "Quận/Huyện" },
-  { key: "emergencyContact", label: "Người liên hệ khẩn cấp" },
-  { key: "emergencyPhone", label: "SĐT khẩn cấp", type: "tel" },
-  { key: "company", label: "Công ty" },
-  { key: "taxCode", label: "Mã số thuế" },
-];
 
 interface ModalProps {
   isOpen: boolean;
@@ -194,12 +160,6 @@ function UserCard({
             <span>{user.phone}</span>
           </div>
         )}
-        {user.company && (
-          <div className="user-detail">
-            <Building size={14} />
-            <span>{user.company}</span>
-          </div>
-        )}
         <div className="user-detail">
           <span
             className="user-status"
@@ -288,9 +248,13 @@ export function UsersView() {
   const [form, setForm] = useState<EditState>({});
 
   const isAdmin = currentUser?.role === "admin";
+  const canManageStaff =
+    currentUser?.role === "admin" || currentUser?.role === "manager";
   const manageableRoles: Role[] = isAdmin
-    ? ["staff", "customer"]
-    : ["customer"];
+    ? ["manager", "staff", "customer"]
+    : canManageStaff
+      ? ["staff", "customer"]
+      : ["customer"];
 
   const visibleUsers = useMemo(
     () => userList.filter((u) => manageableRoles.includes(u.role)),
@@ -302,10 +266,7 @@ export function UsersView() {
     return visibleUsers.filter((u) => {
       if (
         q &&
-        ![u.name, u.email, u.phone ?? "", u.company ?? ""]
-          .join(" ")
-          .toLowerCase()
-          .includes(q)
+        ![u.name, u.email, u.phone ?? ""].join(" ").toLowerCase().includes(q)
       )
         return false;
       if (filterRole && u.role !== filterRole) return false;
@@ -333,21 +294,7 @@ export function UsersView() {
       role: user.role,
       status: user.status,
       password: "",
-      gender: user.gender ?? "",
-      firstName: user.firstName ?? "",
-      lastName: user.lastName ?? "",
       phone: user.phone ?? "",
-      birthDate: toDateInput(user.birthDate),
-      idCardNumber: user.idCardNumber ?? "",
-      idCardIssuedAt: toDateInput(user.idCardIssuedAt),
-      idCardExpiry: toDateInput(user.idCardExpiry),
-      address: user.address ?? "",
-      city: user.city ?? "",
-      district: user.district ?? "",
-      emergencyContact: user.emergencyContact ?? "",
-      emergencyPhone: user.emergencyPhone ?? "",
-      company: user.company ?? "",
-      taxCode: user.taxCode ?? "",
     });
   }
 
@@ -360,13 +307,11 @@ export function UsersView() {
     const updates: UserUpdatePayload = {
       name: form.name,
       status: form.status,
-      ...(isAdmin ? { role: form.role } : {}),
+      ...(canManageStaff ? { role: form.role } : {}),
       ...(form.password ? { password: form.password } : {}),
     };
-    for (const { key } of EDIT_FIELDS) {
-      (updates as Record<string, unknown>)[key] = form[key] ?? "";
-    }
-    if (form.gender) updates.gender = form.gender;
+    // DATA-01: chỉ gửi các trường backend hỗ trợ; phone rỗng = xóa SĐT.
+    updates.phone = form.phone?.trim() ?? "";
     await updateUser(String(editing.id), updates);
     setEditing(null);
   }
@@ -455,7 +400,7 @@ export function UsersView() {
           <Search size={18} />
           <input
             type="text"
-            placeholder="Tìm tên, email, SĐT, công ty..."
+            placeholder="Tìm tên, email hoặc SĐT..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -538,11 +483,10 @@ export function UsersView() {
                 <span>
                   Mật khẩu <span className="required">*</span>
                 </span>
-                <input
+                <PasswordInput
                   name="password"
                   placeholder="Tối thiểu 6 ký tự"
                   required
-                  type="password"
                 />
               </label>
               <label className="users-form-label">
@@ -574,35 +518,16 @@ export function UsersView() {
           <div className="users-form-section">
             <h4>Thông tin cá nhân</h4>
             <div className="users-form-row">
-              <label className="users-form-label">
-                <span>Tên</span>
-                <input name="firstName" placeholder="Văn A" />
-              </label>
-              <label className="users-form-label">
-                <span>Họ</span>
-                <input name="lastName" placeholder="Nguyễn" />
-              </label>
-            </div>
-            <div className="users-form-row">
-              <label className="users-form-label">
-                <span>Giới tính</span>
-                <select name="gender" defaultValue="">
-                  <option value="">—</option>
-                  <option value="male">Nam</option>
-                  <option value="female">Nữ</option>
-                  <option value="other">Khác</option>
-                </select>
-              </label>
-              <label className="users-form-label">
-                <span>Ngày sinh</span>
-                <input name="birthDate" type="date" />
-              </label>
-            </div>
-            <div className="users-form-row">
-              <label className="users-form-label full">
-                <span>Địa chỉ</span>
-                <input name="address" placeholder="Số nhà, đường" />
-              </label>
+              <span
+                style={{
+                  fontSize: "0.8rem",
+                  color: "var(--muted)",
+                  lineHeight: 1.5,
+                }}
+              >
+                Thông tin cá nhân chi tiết (CCCD, địa chỉ, ngày sinh...) được
+                quản lý qua hồ sơ đăng ký của từng tài khoản.
+              </span>
             </div>
           </div>
 
@@ -670,47 +595,6 @@ export function UsersView() {
                 icon={<Phone size={14} />}
                 label="SĐT"
                 value={show(viewing.phone)}
-              />
-              <DetailRow
-                icon={viewing.gender ? <></> : null}
-                label="Giới tính"
-                value={viewing.gender ? GENDER_LABELS[viewing.gender] : "—"}
-              />
-              <DetailRow
-                icon={<Calendar size={14} />}
-                label="Ngày sinh"
-                value={fmtDate(viewing.birthDate)}
-              />
-            </DetailSection>
-
-            <DetailSection title="Giấy tờ">
-              <DetailRow
-                icon={<CreditCard size={14} />}
-                label="Số CCCD"
-                value={show(viewing.idCardNumber)}
-              />
-              <DetailRow
-                icon={<Calendar size={14} />}
-                label="Ngày cấp"
-                value={fmtDate(viewing.idCardIssuedAt)}
-              />
-              <DetailRow
-                icon={<AlertCircle size={14} />}
-                label="Ngày hết hạn"
-                value={fmtDate(viewing.idCardExpiry)}
-              />
-            </DetailSection>
-
-            <DetailSection title="Địa chỉ & liên hệ">
-              <DetailRow
-                icon={<MapPin size={14} />}
-                label="Địa chỉ"
-                value={show(viewing.address)}
-              />
-              <DetailRow
-                icon={<Building size={14} />}
-                label="Công ty"
-                value={show(viewing.company)}
               />
             </DetailSection>
 
@@ -805,10 +689,10 @@ export function UsersView() {
                 </label>
                 <label className="users-form-label">
                   <span>Đặt lại mật khẩu</span>
-                  <input
+                  <PasswordInput
+                    name="password"
                     onChange={(e) => setField("password", e.target.value)}
                     placeholder="Để trống nếu không đổi"
-                    type="password"
                   />
                 </label>
               </div>
@@ -818,56 +702,11 @@ export function UsersView() {
               <h4>Thông tin cá nhân</h4>
               <div className="users-form-row">
                 <label className="users-form-label">
-                  <span>Tên</span>
-                  <input
-                    onChange={(e) => setField("firstName", e.target.value)}
-                    value={form.firstName ?? ""}
-                  />
-                </label>
-                <label className="users-form-label">
-                  <span>Họ</span>
-                  <input
-                    onChange={(e) => setField("lastName", e.target.value)}
-                    value={form.lastName ?? ""}
-                  />
-                </label>
-              </div>
-              <div className="users-form-row">
-                <label className="users-form-label">
                   <span>Số điện thoại</span>
                   <input
                     onChange={(e) => setField("phone", e.target.value)}
                     type="tel"
                     value={form.phone ?? ""}
-                  />
-                </label>
-                <label className="users-form-label">
-                  <span>Giới tính</span>
-                  <select
-                    onChange={(e) => setField("gender", e.target.value)}
-                    value={form.gender ?? ""}
-                  >
-                    <option value="">—</option>
-                    <option value="male">Nam</option>
-                    <option value="female">Nữ</option>
-                    <option value="other">Khác</option>
-                  </select>
-                </label>
-              </div>
-              <div className="users-form-row">
-                <label className="users-form-label">
-                  <span>Ngày sinh</span>
-                  <input
-                    onChange={(e) => setField("birthDate", e.target.value)}
-                    type="date"
-                    value={form.birthDate ?? ""}
-                  />
-                </label>
-                <label className="users-form-label">
-                  <span>Công ty</span>
-                  <input
-                    onChange={(e) => setField("company", e.target.value)}
-                    value={form.company ?? ""}
                   />
                 </label>
               </div>

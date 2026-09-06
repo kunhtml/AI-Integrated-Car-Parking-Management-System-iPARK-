@@ -16,7 +16,6 @@ import { useEffect, useState } from "react";
 import { showError, showSuccess } from "@/lib/toast";
 import {
   resubmitStaffApplication,
-  saveStaffApplication,
   submitStaffApplication,
   type StaffApplicationFormPayload,
 } from "@/lib/staff-application-api";
@@ -156,13 +155,21 @@ export function StaffApplicationModal({
 
     try {
       let next: StaffApplication;
-      if (existing) {
-        await saveStaffApplication(existing.id, payload);
-        next = await resubmitStaffApplication(existing.id);
+      if (existing?.status === "rejected") {
+        // APP-01: gửi lại trực tiếp trên cùng ID — backend chấp nhận payload
+        // cập nhật kèm submit trong một thao tác, giữ nguyên ID, lịch sử và
+        // resubmitCount. Không còn chuỗi save→resubmit hai request dễ lệch state.
+        next = await resubmitStaffApplication(existing.id, payload);
         showSuccess("Đã cập nhật và gửi lại chính đơn đăng ký cũ.");
-      } else {
+      } else if (existing?.status === "cancelled" || !existing) {
         next = await submitStaffApplication(payload);
-        showSuccess("Đã gửi đơn đăng ký làm nhân viên.");
+        showSuccess(
+          existing?.status === "cancelled"
+            ? "Đã tạo đơn đăng ký mới sau khi đơn cũ bị hủy."
+            : "Đã gửi đơn đăng ký làm nhân viên.",
+        );
+      } else {
+        throw new Error("Đơn đăng ký hiện tại không thể gửi lại.");
       }
       onSubmitted(next);
     } catch (err) {

@@ -10,6 +10,7 @@ export type AuthUser = {
   status: string;
   avatarUrl?: string;
   provider?: string;
+  sid?: string;
 };
 
 function secretKey() {

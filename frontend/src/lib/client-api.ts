@@ -1,6 +1,8 @@
-export const bridgeBaseUrl = process.env.NEXT_PUBLIC_BRIDGE_URL || 'http://localhost:5050';
+export const bridgeBaseUrl =
+  process.env.NEXT_PUBLIC_BRIDGE_URL || "http://localhost:5050";
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+const apiBaseUrl =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
 
 export async function apiFetch(path: string, init?: RequestInit) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
@@ -23,8 +25,9 @@ export async function apiFetch(path: string, init?: RequestInit) {
  */
 export async function bridgeFetch(path: string, init?: RequestInit) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  return fetch(`http://localhost:5050${normalizedPath}`, {
+  return fetch(`${bridgeBaseUrl}${normalizedPath}`, {
     ...init,
+    credentials: "omit",
     headers: {
       ...(init?.body && !(init.body instanceof FormData)
         ? { "Content-Type": "application/json" }

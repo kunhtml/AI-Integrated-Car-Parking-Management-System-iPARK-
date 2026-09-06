@@ -120,6 +120,20 @@ export async function updateRfidIssue(request: Request, response: Response) {
     response.status(404).json({ message: "Không tìm thấy yêu cầu RFID." });
     return;
   }
+  if (item.status === "completed" || item.status === "rejected") {
+    response
+      .status(409)
+      .json({
+        message: "Yêu cầu RFID đã được xử lý, không thể chuyển trạng thái lại.",
+      });
+    return;
+  }
+  if (body.status === "rejected" && !body.managerNote) {
+    response
+      .status(400)
+      .json({ message: "Cần nhập lý do khi từ chối yêu cầu RFID." });
+    return;
+  }
   item.status = body.status;
   item.managerNote = body.managerNote;
   item.handledBy = request.user!.id as any;

@@ -54,10 +54,14 @@ try {
     });
     console.log("[detect-queue] Redis connected — async queue enabled");
   } else {
-    console.log("[detect-queue] Redis not available — using synchronous fallback");
+    console.log(
+      "[detect-queue] Redis not available — using synchronous fallback",
+    );
   }
 } catch {
-  console.log("[detect-queue] Redis not available — using synchronous fallback");
+  console.log(
+    "[detect-queue] Redis not available — using synchronous fallback",
+  );
 }
 
 export { redisAvailable, detectQueue };
@@ -93,7 +97,8 @@ async function processDetectLogic(data: Record<string, unknown>) {
     ...rest
   } = data;
   const deviceId = typeof rawDeviceId === "string" ? rawDeviceId : undefined;
-  const deviceName = typeof rawDeviceName === "string" ? rawDeviceName : undefined;
+  const deviceName =
+    typeof rawDeviceName === "string" ? rawDeviceName : undefined;
   const sessionId = typeof rawSessionId === "string" ? rawSessionId : undefined;
 
   let imageBuffer: Buffer | null = null;
@@ -132,13 +137,11 @@ async function processDetectLogic(data: Record<string, unknown>) {
     return { ok: false, reason: "no-image" };
   }
 
-  const detection = await detectVehicleImage(
-    {
-      buffer: imageBuffer,
-      mimetype: "image/jpeg",
-      originalname: "async-detect.jpg",
-    } as any,
-  );
+  const detection = await detectVehicleImage({
+    buffer: imageBuffer,
+    mimetype: "image/jpeg",
+    originalname: "async-detect.jpg",
+  } as any);
 
   const finalMethod = detection.detectionMethod || "camera";
 
@@ -191,16 +194,19 @@ export function startDetectWorker(): void {
     },
   );
 
-  workerInstance.on("completed", (job) => {
+  workerInstance.on("completed", (job: Job<DetectJobData>) => {
     console.log(`[detect-queue] Completed job ${job?.id}`);
   });
 
-  workerInstance.on("failed", (job, err) => {
-    console.error(
-      `[detect-queue] Failed job ${job?.id}:`,
-      err?.message || err,
-    );
-  });
+  workerInstance.on(
+    "failed",
+    (job: Job<DetectJobData> | undefined, err: Error) => {
+      console.error(
+        `[detect-queue] Failed job ${job?.id}:`,
+        err?.message || err,
+      );
+    },
+  );
 
   console.log("[detect-queue] Worker listening for detect-plate jobs");
 }
@@ -213,4 +219,9 @@ export async function stopDetectWorker(): Promise<void> {
   }
 }
 
-export default { detectQueue, addDetectJob, startDetectWorker, stopDetectWorker };
+export default {
+  detectQueue,
+  addDetectJob,
+  startDetectWorker,
+  stopDetectWorker,
+};

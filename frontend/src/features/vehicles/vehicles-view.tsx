@@ -29,6 +29,7 @@ import { useParkingApp } from "@/context/parking-app-context";
 import type { FormEvent } from "react";
 import type { RfidCard, RegisteredVehicle, VehicleRequest } from "@/types";
 import { apiFetch } from "@/lib/client-api";
+import { logger } from "@/lib/logger";
 
 type StatusFilter = "all" | "Đã đăng ký" | "Cần duyệt" | "Blacklist";
 type SortField = "plate" | "owner" | "status" | "createdAt";
@@ -879,7 +880,7 @@ function VehicleEditModal({
       }
       setImageUrl(data.url as string);
     } catch (err) {
-      console.error("[upload] failed:", err);
+      logger.error("[upload] failed:", { err });
       setUploadError(
         err instanceof Error
           ? `Lỗi kết nối: ${err.message}`

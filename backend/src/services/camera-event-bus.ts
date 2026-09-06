@@ -21,6 +21,7 @@ export type CameraIngestEvent = {
   ownerName?: string;
   userType: "resident" | "guest" | "unknown";
   imagePath?: string;
+  entryImagePath?: string;
   barrierOpened: boolean;
   sessionId?: string | null;
   checkInAt?: string | null;
@@ -34,14 +35,31 @@ export type CameraIngestEvent = {
   duplicateSession?: boolean;
 };
 
+export type ExitSessionStateEvent = {
+  sessionId: string;
+  status: string;
+  exitState?: string | null;
+};
+
 class CameraEventBus extends EventEmitter {
   emitIngest(event: CameraIngestEvent) {
     this.emit("ingest", event);
   }
 
+  emitExitState(event: ExitSessionStateEvent) {
+    this.emit("exit-state", event);
+  }
+
   subscribe(listener: (event: CameraIngestEvent) => void): () => void {
     this.on("ingest", listener);
     return () => this.off("ingest", listener);
+  }
+
+  subscribeExitState(
+    listener: (event: ExitSessionStateEvent) => void,
+  ): () => void {
+    this.on("exit-state", listener);
+    return () => this.off("exit-state", listener);
   }
 }
 
