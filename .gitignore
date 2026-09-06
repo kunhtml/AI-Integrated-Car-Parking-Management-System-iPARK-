@@ -2,8 +2,8 @@
 
 # dependencies
 node_modules/
-.venv/
-.pnp
+/.venv
+/.pnp
 .pnp.*
 .yarn/*
 !.yarn/patches
@@ -13,20 +13,31 @@ node_modules/
 # testing
 /coverage
 # next.js
-.next/
+/.next/
+/frontend/.next/
 /frontend/out/
 /out/
 # production
 /build
 /backend/dist
-**/uploads/
-!**/uploads/.gitkeep
+/backend/uploads
+/public/uploads
+/frontend/public/uploads
 __pycache__/
 *.pyc
 # misc
 .DS_Store
 *.pem
-*.log
+# scripts & batch files
+scripts/
+backend/scripts/
+*.bat
+# images
+*.jpg
+# docs
+docs/
+# claude
+.claude/
 # debug
 npm-debug.log*
 yarn-debug.log*
@@ -44,17 +55,18 @@ next-env.d.ts
 # internal markdown docs
 *.md
 !README.md
-!Tài liệu dev.md
-# audit artifacts, plans, reports, and scripts
-*audit*
 # log files
+*.log
 *.log.*
+frontend/audit_results/
+frontend/DESIGN.md
+frontend/audit_plans/
 # next.js broken build backups
 .next.broken*
-!docs/UC-FLOW-MAP.md
-# tooling / AI assistant folders
-.claude/
-.vscode/
-# docs and reports folders
-markdown/
+
+# reports folder
 outputs/
+# documents folder
+markdown/
+audit.json
+frontend/src/app/(dashboard)/audit-logs/page.tsx
