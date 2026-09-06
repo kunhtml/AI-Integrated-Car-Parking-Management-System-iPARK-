@@ -2,8 +2,8 @@
 
 # dependencies
 node_modules/
-/.venv
-/.pnp
+.venv/
+.pnp
 .pnp.*
 .yarn/*
 !.yarn/patches
@@ -15,39 +15,22 @@ node_modules/
 /coverage
 
 # next.js
-/.next/
-/frontend/.next/
+.next/
 /frontend/out/
 /out/
 
 # production
 /build
 /backend/dist
-/backend/uploads
-/public/uploads
-/frontend/public/uploads
+**/uploads/
+!**/uploads/.gitkeep
 __pycache__/
 *.pyc
 
 # misc
 .DS_Store
 *.pem
-
-# scripts & batch files
-scripts/
-backend/scripts/
-*.bat
-
-# images
-*.jpg
-
-# docs
-docs/
-markdown/
-outputs/
-
-# claude
-.claude/
+*.log
 
 # debug
 npm-debug.log*
@@ -71,10 +54,4 @@ next-env.d.ts
 *.md
 !README.md
 !Tài liệu dev.md
-
-# audit artifacts, plans, reports, and scripts
-*audit*
-
-# log files
-*.log
-*.log.*
+!docs/UC-FLOW-MAP.md
