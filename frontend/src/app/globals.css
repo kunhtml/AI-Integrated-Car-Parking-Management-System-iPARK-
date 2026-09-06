@@ -11280,20 +11280,33 @@ tr:hover td {
 /* Stats cards */
 .rfid-stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(8, 1fr);
   gap: 10px;
   margin-bottom: 16px;
 }
 
+@media (max-width: 1400px) {
+  .rfid-stats {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .rfid-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 .rfid-stat {
   position: relative;
-  padding: 12px 16px;
+  padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid var(--border, #e2e6ef);
   background: var(--surface-2, #f5f6fa);
   transition:
     transform 0.15s ease,
     box-shadow 0.15s ease;
+  min-width: 0;
 }
 
 .rfid-stat:hover {
@@ -11302,11 +11315,14 @@ tr:hover td {
 }
 
 .rfid-stat-label {
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--muted);
   letter-spacing: 0.02em;
   text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .rfid-stat-value {

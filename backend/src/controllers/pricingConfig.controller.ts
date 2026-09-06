@@ -17,6 +17,7 @@ function serializePricingConfig(
     nightStartHour: config.nightStartHour,
     gracePeriod: config.gracePeriod,
     maxMinutes: config.maxMinutes,
+    overdueFineRate: config.overdueFineRate ?? 20000,
     isActive: config.isActive,
     updatedAt: config.updatedAt,
   };
@@ -31,6 +32,7 @@ const pricingConfigSchema = z
     nightStartHour: z.coerce.number().int().min(0).max(23),
     gracePeriod: z.coerce.number().int().min(0).optional(),
     maxMinutes: z.coerce.number().int().min(0).optional(),
+    overdueFineRate: z.coerce.number().int().min(0, "Mức phạt quá hạn không được âm.").optional(),
   })
   .refine((v) => v.dayStartHour < v.nightStartHour, {
     message: "Giờ bắt đầu ngày phải nhỏ hơn giờ bắt đầu đêm.",

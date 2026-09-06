@@ -47,6 +47,13 @@ export async function createPlan(data: {
   price: number;
   maxVehicles?: number;
 }): Promise<SubscriptionPlanDocument> {
+  // Chống trùng tên gói đăng ký
+  const existing = await SubscriptionPlan.findOne({ name: data.name });
+  if (existing) {
+    const err = new Error("Tên gói đăng ký đã tồn tại, vui lòng chọn tên khác.") as Error & { status: number };
+    err.status = 409;
+    throw err;
+  }
   return SubscriptionPlan.create({ ...data, isActive: true });
 }
 
@@ -60,6 +67,15 @@ export async function updatePlan(
     isActive: boolean;
   }>,
 ): Promise<SubscriptionPlanDocument> {
+  // Chống đổi tên trùng với gói khác
+  if (data.name) {
+    const duplicate = await SubscriptionPlan.findOne({ name: data.name, _id: { $ne: id } });
+    if (duplicate) {
+      const err = new Error("Tên gói đăng ký đã tồn tại, vui lòng chọn tên khác.") as Error & { status: number };
+      err.status = 409;
+      throw err;
+    }
+  }
   const plan = await SubscriptionPlan.findByIdAndUpdate(
     id,
     { $set: data },
@@ -175,11 +191,11 @@ export async function purchaseSubscription(params: {
   const rfidCard = params.rfidCardId
     ? await RfidCard.findById(params.rfidCardId)
     : await RfidCard.findOne({
-        cardType: "member",
-        vehicleId: vehicle._id,
-        userId: vehicle.userId,
-        status: { $in: ["active", "in-use"] },
-      }).sort({ soldAt: -1 });
+      cardType: "member",
+      vehicleId: vehicle._id,
+      userId: vehicle.userId,
+      status: { $in: ["active", "in-use"] },
+    }).sort({ soldAt: -1 });
   if (!rfidCard) {
     const err = new Error(
       "Xe chưa có RFID Member. Vui lòng mua thẻ RFID cho xe trước khi đăng ký gói.",
@@ -280,13 +296,13 @@ export async function purchaseSubscription(params: {
       note: `SUB-${String(subscription._id)}`,
       ...(payosResult.success
         ? {
-            payosOrderCode: String(payosResult.orderCode),
-            payosQrCode: payosResult.qrCode,
-            payosCheckoutUrl: payosResult.checkoutUrl,
-            payosAccountNumber: payosResult.accountNumber,
-            payosAccountName: payosResult.accountName,
-            payosBin: payosResult.bin,
-          }
+          payosOrderCode: String(payosResult.orderCode),
+          payosQrCode: payosResult.qrCode,
+          payosCheckoutUrl: payosResult.checkoutUrl,
+          payosAccountNumber: payosResult.accountNumber,
+          payosAccountName: payosResult.accountName,
+          payosBin: payosResult.bin,
+        }
         : {}),
     });
     subscription.transactionId = transaction._id;
@@ -555,13 +571,13 @@ export async function renewSubscription(
     note: `RENEW-${String(sub._id)}`,
     ...(payosResult.success
       ? {
-          payosOrderCode: String(payosResult.orderCode),
-          payosQrCode: payosResult.qrCode,
-          payosCheckoutUrl: payosResult.checkoutUrl,
-          payosAccountNumber: payosResult.accountNumber,
-          payosAccountName: payosResult.accountName,
-          payosBin: payosResult.bin,
-        }
+        payosOrderCode: String(payosResult.orderCode),
+        payosQrCode: payosResult.qrCode,
+        payosCheckoutUrl: payosResult.checkoutUrl,
+        payosAccountNumber: payosResult.accountNumber,
+        payosAccountName: payosResult.accountName,
+        payosBin: payosResult.bin,
+      }
       : {}),
   });
   sub.transactionId = transaction._id;

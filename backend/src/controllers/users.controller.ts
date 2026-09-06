@@ -173,6 +173,7 @@ export async function updateUser(request: Request, response: Response) {
     .object({
       id: z.string().min(1),
       name: z.string().min(2).optional(),
+      email: z.string().email("Email không hợp lệ").optional(),
       role: z.enum(["admin", "staff", "customer"]).optional(),
       status: z.enum(["Đang hoạt động", "Đã khóa"]).optional(),
       password: passwordSchema.optional(),
@@ -190,6 +191,14 @@ export async function updateUser(request: Request, response: Response) {
   const target = await User.findById(body.id);
   if (!target) {
     response.status(404).json({ message: "Không tìm thấy người dùng." });
+    return;
+  }
+
+  // Chặn tự sửa/khóa chính mình — đặt trước kiểm tra role
+  if (request.user?.id === body.id && body.status === "Đã khóa") {
+    response
+      .status(400)
+      .json({ message: "Không thể khóa chính tài khoản đang đăng nhập." });
     return;
   }
 
@@ -220,14 +229,29 @@ export async function updateUser(request: Request, response: Response) {
     old: {},
     new: {},
   };
-  const auditFields = ["name", "role", "status", "phone"] as const;
+  const auditFields = ["name", "role", "status", "phone", "email"] as const;
   type AuditField = (typeof auditFields)[number];
   const beforeAudit: Partial<Record<AuditField, unknown>> = {
     name: target.name,
     role: target.role,
     status: target.status,
     phone: target.phone ?? null,
+    email: target.email ?? null,
   };
+
+  // Kiểm tra email trùng khi cập nhật
+  if (body.email !== undefined) {
+    const emailLower = body.email.toLowerCase();
+    const emailExisted = await User.findOne({
+      email: emailLower,
+      _id: { $ne: target._id },
+    });
+    if (emailExisted) {
+      response.status(409).json({ message: "Email đã tồn tại ở tài khoản khác." });
+      return;
+    }
+    target.email = emailLower;
+  }
 
   if (body.name !== undefined) target.name = body.name;
   if (body.role !== undefined) target.role = body.role;
@@ -301,17 +325,18 @@ export async function deleteUser(request: Request, response: Response) {
     return;
   }
 
-  if (!allowed.includes(target.role)) {
-    response
-      .status(403)
-      .json({ message: "Bạn không có quyền xóa tài khoản này." });
-    return;
-  }
-
+  // Chặn tự xóa chính mình (đặt trước kiểm tra quyền quản lý)
   if (request.user?.id === id) {
     response
       .status(400)
       .json({ message: "Không thể xóa chính tài khoản của bạn." });
+    return;
+  }
+
+  if (!allowed.includes(target.role)) {
+    response
+      .status(403)
+      .json({ message: "Bạn không có quyền xóa tài khoản này." });
     return;
   }
 

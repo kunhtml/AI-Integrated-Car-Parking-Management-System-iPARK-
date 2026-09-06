@@ -66,11 +66,14 @@ async function finalizeCheckout(session: ParkingSessionDocument) {
     return session;
   }
 
-  // Look up zone via slot for zone-specific pricing
+  // Ưu tiên biểu giá snapshot lúc check-in, fallback biểu giá hiện tại
   const slotDoc = session.slotId
     ? await ParkingSlot.findById(session.slotId)
     : null;
-  const pricing = await getActivePricingConfigForZone(slotDoc?.zoneId);
+  const currentPricing = await getActivePricingConfigForZone(slotDoc?.zoneId);
+  const pricing = (session as any).checkInPricingSnapshot
+    ? { ...currentPricing, ...(session as any).checkInPricingSnapshot }
+    : currentPricing;
   const feeBreakdown = calculateParkingFee(
     session.checkInAt,
     session.checkOutAt,
@@ -305,10 +308,10 @@ export async function createParkingSession(
       const vehicle =
         memberCard.userId && memberCard.vehicleId
           ? await Vehicle.findOne({
-              _id: memberCard.vehicleId,
-              userId: memberCard.userId,
-              plate: memberPlate,
-            })
+            _id: memberCard.vehicleId,
+            userId: memberCard.userId,
+            plate: memberPlate,
+          })
           : null;
       if (
         !memberCard.userId ||
@@ -532,6 +535,16 @@ export async function createParkingSession(
     });
   }
 
+  // Snapshot biểu giá tại thời điểm check-in
+  const entryPricing = await getActivePricingConfigForZone(slotDoc.zoneId);
+  const checkInPricingSnapshot = {
+    dayRate: entryPricing.dayRate,
+    nightRate: entryPricing.nightRate,
+    gracePeriod: entryPricing.gracePeriod ?? (entryPricing as any).freeMinutes ?? 20,
+    dayStartHour: entryPricing.dayStartHour,
+    nightStartHour: entryPricing.nightStartHour,
+  };
+
   const session = await ParkingSession.create({
     plate: body.plate,
     ownerName,
@@ -549,14 +562,14 @@ export async function createParkingSession(
       : {}),
     ...(rfidCard
       ? {
-          rfidCardId: rfidCard.cardId || rfidCard.uid,
-          ...(body.rfidUid ? { entryRfidUid: rfidCard.uid } : {}),
-          ...(manualMemberCardUid
-            ? { entryExpectedRfidUid: manualMemberCardUid }
-            : {}),
-          rfidAssignedAt: new Date(),
-          rfidGate: "entry" as const,
-        }
+        rfidCardId: rfidCard.cardId || rfidCard.uid,
+        ...(body.rfidUid ? { entryRfidUid: rfidCard.uid } : {}),
+        ...(manualMemberCardUid
+          ? { entryExpectedRfidUid: manualMemberCardUid }
+          : {}),
+        rfidAssignedAt: new Date(),
+        rfidGate: "entry" as const,
+      }
       : {}),
     ...(body.entryDetectedPlate
       ? { entryDetectedPlate: body.entryDetectedPlate.toUpperCase() }
@@ -568,33 +581,34 @@ export async function createParkingSession(
     entrySource: isManualEntry ? "manual" : "camera",
     ...(isManualEntry
       ? {
-          entryPhotoStatus:
-            body.entryPhotoStatus ||
-            (body.entryImageUrl ? "photo_captured" : "camera_unavailable"),
-          ...(body.manualEntryReason
-            ? { manualEntryReason: body.manualEntryReason.trim() }
-            : {}),
-          ...(body.visualConfirmed
-            ? {
-                visualConfirmed: true,
-                visualConfirmedBy: objectId(request.user?.id),
-                visualConfirmedAt: new Date(),
-              }
-            : {}),
-        }
+        entryPhotoStatus:
+          body.entryPhotoStatus ||
+          (body.entryImageUrl ? "photo_captured" : "camera_unavailable"),
+        ...(body.manualEntryReason
+          ? { manualEntryReason: body.manualEntryReason.trim() }
+          : {}),
+        ...(body.visualConfirmed
+          ? {
+            visualConfirmed: true,
+            visualConfirmedBy: objectId(request.user?.id),
+            visualConfirmedAt: new Date(),
+          }
+          : {}),
+      }
       : {}),
     ...(body.entryRfidUnverified ? { entryRfidUnverified: true } : {}),
     ...(isMember
       ? {
-          paymentStatus: "fully_paid",
-          paymentMethod: "subscription",
-          fee: 0,
-          paidAmount: 0,
-        }
+        paymentStatus: "fully_paid",
+        paymentMethod: "subscription",
+        fee: 0,
+        paidAmount: 0,
+      }
       : {}),
     ...(plateCheck.warn
       ? { feeBreakdown: { subscriptionWarn: plateCheck.warn } as any }
       : {}),
+    checkInPricingSnapshot,
   });
 
   await occupySlot(slotDoc._id, session._id);
@@ -824,11 +838,11 @@ export async function uploadParkingImage(request: Request, response: Response) {
       createdBy: request.user?.id,
       ...(isMember
         ? {
-            paymentStatus: "fully_paid",
-            paymentMethod: "subscription",
-            fee: 0,
-            paidAmount: 0,
-          }
+          paymentStatus: "fully_paid",
+          paymentMethod: "subscription",
+          fee: 0,
+          paidAmount: 0,
+        }
         : {}),
       ...(subscriptionWarn
         ? { feeBreakdown: { subscriptionWarn } as any }
@@ -1034,11 +1048,11 @@ export async function cameraEntry(request: Request, response: Response) {
     createdBy: request.user?.id,
     ...(isMember
       ? {
-          paymentStatus: "fully_paid",
-          paymentMethod: "subscription",
-          fee: 0,
-          paidAmount: 0,
-        }
+        paymentStatus: "fully_paid",
+        paymentMethod: "subscription",
+        fee: 0,
+        paidAmount: 0,
+      }
       : {}),
     ...(plateCheck.warn
       ? { feeBreakdown: { subscriptionWarn: plateCheck.warn } as any }

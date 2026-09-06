@@ -1,19 +1,17 @@
-import mongoose from "mongoose";
 import { ParkingSession } from "../models/ParkingSession.js";
-import { PricingConfig } from "../models/PricingConfig.js";
 import { getActivePricingConfig, OVERDUE_FINE_RATE } from "./pricing.service.js";
 import { notifyPenalty } from "./notificationTriggers.service.js";
 import { createNotification } from "./notification.service.js";
 
 /**
  * PM-05 + CF-03: Calculate overdue fine for a session.
- * Mức phạt cố định OVERDUE_FINE_RATE (VND / 30 phút).
+ * Mức phạt overdueFineRate (VND / 30 phút), đọc từ cấu hình biểu phí.
  * Grace period: additional minutes allowed after checkout time before fine kicks in.
  */
 export function calculateOverdueFine(
   checkInAt: Date,
   now: Date,
-  config: { gracePeriod?: number },
+  config: { gracePeriod?: number; overdueFineRate?: number },
   maxAllowedMinutes?: number,
 ): { isOverstayed: boolean; overdueMinutes: number; fineAmount: number } {
   const totalMinutes = Math.ceil((now.getTime() - checkInAt.getTime()) / 60000);
@@ -27,9 +25,10 @@ export function calculateOverdueFine(
   }
 
   const overdueMinutes = totalMinutes - threshold;
-  // Fine per 30 minutes overdue
+  // Fine per 30 minutes overdue — dùng giá trị từ config, fallback hằng số mặc định
+  const fineRate = config.overdueFineRate ?? OVERDUE_FINE_RATE;
   const fineUnits = Math.ceil(overdueMinutes / 30);
-  const fineAmount = fineUnits * OVERDUE_FINE_RATE;
+  const fineAmount = fineUnits * fineRate;
 
   return { isOverstayed: true, overdueMinutes, fineAmount };
 }
@@ -55,6 +54,7 @@ export async function scanAndFlagOverdueSessions(): Promise<number> {
   for (const session of overdueSessions) {
     const result = calculateOverdueFine(session.checkInAt, now, {
       gracePeriod: (config as any).gracePeriod ?? 0,
+      overdueFineRate: (config as any).overdueFineRate,
     }, maxMinutes);
 
     if (result.isOverstayed) {
