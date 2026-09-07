@@ -461,8 +461,6 @@ export async function validateExit(
     await activeSession.save();
     await createPendingTransactionForSession(activeSession);
     releaseGuestCard(card, returnedAt);
-    // SLOT-FIX: phiên kết thúc → nhả slot về empty (như luồng checkout thường).
-    await freeSlot(activeSession.slotId);
   } else {
     activeSession.fee = 0;
     activeSession.paidAmount = 0;
@@ -546,8 +544,6 @@ export async function confirmExitWithMismatch(
     await session.save();
     await createPendingTransactionForSession(session);
     releaseGuestCard(card, returnedAt);
-    // SLOT-FIX: phiên kết thúc → nhả slot về empty (như luồng checkout thường).
-    await freeSlot(session.slotId);
   } else {
     session.fee = 0;
     session.paidAmount = 0;
