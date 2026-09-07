@@ -24,11 +24,11 @@ export function StatusBadge({ status }: { status: string }) {
                 : "#f1f5f9",
         color:
           status === "active"
-            ? "#16a34a"
+            ? "var(--success)"
             : status === "pending_payment" || status === "expired"
               ? "#854d0e"
               : status === "cancelled"
-                ? "#dc2626"
+                ? "var(--danger)"
                 : "#475569",
         border: "1px solid transparent",
         whiteSpace: "nowrap",
