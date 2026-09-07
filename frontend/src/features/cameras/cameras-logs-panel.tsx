@@ -236,7 +236,7 @@ export function CamerasLogsPanel() {
           disabled={loading || deleting || logs.length === 0}
           type="button"
           style={{
-            color: confirming ? "#dc2626" : undefined,
+            color: confirming ? "var(--danger)" : undefined,
             borderColor: confirming ? "rgba(239,68,68,0.5)" : undefined,
           }}
         >
@@ -256,7 +256,7 @@ export function CamerasLogsPanel() {
             marginBottom: 12,
             color: msg.includes("Lỗi") || msg.includes("Xóa thất bại")
               ? "var(--danger)"
-              : "var(--success, #16a34a)",
+              : "var(--success)",
           }}
         >
           {msg}
@@ -306,7 +306,7 @@ export function CamerasLogsPanel() {
                   display: "inline-flex",
                   alignItems: "center",
                   gap: 4,
-                  color: log.direction === "in" ? "#16a34a" : "#2563eb",
+                  color: log.direction === "in" ? "var(--success)" : "var(--primary)",
                   fontWeight: 600,
                 }}
               >
@@ -378,7 +378,7 @@ export function CamerasLogsPanel() {
                   <span
                     style={{
                       fontSize: "0.75rem",
-                      color: "var(--success, #16a34a)",
+                      color: "var(--success)",
                       fontWeight: 600,
                     }}
                   >
