@@ -246,13 +246,13 @@ export function AssistedRegistrationView() {
                   border: "1px solid rgba(239,68,68,0.3)",
                 }}
               >
-                <AlertCircle size={18} style={{ color: "#ef4444", flexShrink: 0, marginTop: 2 }} />
+                <AlertCircle size={18} style={{ color: "var(--danger)", flexShrink: 0, marginTop: 2 }} />
                 <div style={{ flex: 1 }}>
-                  <p style={{ color: "#ef4444", fontSize: 14, margin: 0 }}>{sessionError}</p>
+                  <p style={{ color: "var(--danger)", fontSize: 14, margin: 0 }}>{sessionError}</p>
                 </div>
                 <button
                   onClick={() => setSessionError("")}
-                  style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: "#ef4444" }}
+                  style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: "var(--danger)" }}
                   type="button"
                 >
                   <X size={16} />
@@ -272,8 +272,8 @@ export function AssistedRegistrationView() {
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                  <CheckCircle size={18} style={{ color: "#22c55e" }} />
-                  <strong style={{ color: "#22c55e", fontSize: 15 }}>Tạo phiên thành công!</strong>
+                  <CheckCircle size={18} style={{ color: "var(--success)" }} />
+                  <strong style={{ color: "var(--success)", fontSize: 15 }}>Tạo phiên thành công!</strong>
                   <button
                     onClick={clearSessionResult}
                     style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", padding: 0, color: "#888" }}
@@ -395,13 +395,13 @@ export function AssistedRegistrationView() {
                   border: "1px solid rgba(239,68,68,0.3)",
                 }}
               >
-                <AlertCircle size={18} style={{ color: "#ef4444", flexShrink: 0, marginTop: 2 }} />
+                <AlertCircle size={18} style={{ color: "var(--danger)", flexShrink: 0, marginTop: 2 }} />
                 <div style={{ flex: 1 }}>
-                  <p style={{ color: "#ef4444", fontSize: 14, margin: 0 }}>{vehicleError}</p>
+                  <p style={{ color: "var(--danger)", fontSize: 14, margin: 0 }}>{vehicleError}</p>
                 </div>
                 <button
                   onClick={() => setVehicleError("")}
-                  style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: "#ef4444" }}
+                  style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: "var(--danger)" }}
                   type="button"
                 >
                   <X size={16} />
@@ -421,8 +421,8 @@ export function AssistedRegistrationView() {
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                  <CheckCircle size={18} style={{ color: "#22c55e" }} />
-                  <strong style={{ color: "#22c55e", fontSize: 15 }}>Đăng ký xe thành công!</strong>
+                  <CheckCircle size={18} style={{ color: "var(--success)" }} />
+                  <strong style={{ color: "var(--success)", fontSize: 15 }}>Đăng ký xe thành công!</strong>
                   <button
                     onClick={clearVehicleResult}
                     style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", padding: 0, color: "#888" }}
