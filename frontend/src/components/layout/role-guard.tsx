@@ -3,11 +3,7 @@
 import { useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
-import {
-  adminOnlyPaths,
-  getDefaultPathForRole,
-  getNavItemsForRole,
-} from "@/config/nav-items";
+import { getDefaultPathForRole, getNavItemsForRole } from "@/config/nav-items";
 import { useParkingApp } from "@/context/parking-app-context";
 import type { Role } from "@/types";
 
@@ -39,12 +35,6 @@ export function RoleGuard({ allowedRoles, children }: RoleGuardProps) {
       if (!allowedRoles.includes(effectiveRole)) {
         targetPath = getDefaultPathForRole(currentUser.role);
       }
-    } else if (
-      adminOnlyPaths.includes(pathname) &&
-      currentUser.role !== "admin" &&
-      currentUser.role !== "manager"
-    ) {
-      targetPath = getDefaultPathForRole(currentUser.role);
     } else {
       const allowedPaths = getNavItemsForRole(currentUser.role, viewAs).map(
         (item) => item.path,
