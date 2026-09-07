@@ -333,7 +333,7 @@ export function CamerasView() {
                         imgRefs.current[stream.id] = el;
                       }}
                       src={buildStreamUrl(stream)}
-                      alt={stream.name}
+                      alt={`Luồng camera trực tiếp ${stream.name}`}
                       className="cam-stream"
                       onLoad={() => handleLoaded(stream.id)}
                       onError={() => handleError(stream.id)}
