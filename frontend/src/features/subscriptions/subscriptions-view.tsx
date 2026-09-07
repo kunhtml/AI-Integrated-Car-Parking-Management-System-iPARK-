@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Check, CreditCard, Package, ListChecks } from "lucide-react";
 import { useParkingApp } from "@/context/parking-app-context";
 import { apiFetch } from "@/lib/client-api";
+import { currency } from "@/lib/constants";
 import { VehicleDetailModal } from "@/features/vehicles/vehicles-view";
 import type { RegisteredVehicle, Subscription } from "@/types";
 import { AdminPlans } from "./admin-plans";
@@ -636,6 +637,3 @@ export function SubscriptionsView() {
     </>
   );
 }
-
-// Import currency
-import { currency } from "@/lib/constants";
