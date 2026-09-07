@@ -31,7 +31,7 @@ MFRC522 mfrc522(SS_PIN, RST_PIN);
 int readsuccess;
 byte readcard[4];
 char str[32] = "";
-String StrUID, user;
+String StrUID;
 
 // ===== Scan mode =====
 bool scanMode = false;
@@ -214,13 +214,7 @@ int getid() {
   return 1;
 }
 
-// ===== Mở cửa =====
-// Không còn IR vật cản: giữ barrier mở 3 giây rồi tự đóng.
-// Việc xác thực RFID thuộc backend; ESP32 không tự mở theo danh sách cục bộ.
-void mo_cua() {
-  return;
-}
-
+// ===== Mở cửa bằng remote (lệnh từ Python) =====
 void mo_cua_remote() {
   cua_vao.write(90);
   LCD_TRUE();
@@ -287,7 +281,6 @@ void senddata() {
           Serial.print(dsThe[i].hoten); Serial.print(",");
           Serial.print(bienSoOCR); Serial.println(",In");
 
-          mo_cua();
           bienSoOCR = "";
         } else {
           Serial.println("Sai biển số resident!");
@@ -316,7 +309,6 @@ void senddata() {
           Serial.print(bienSoOCR);
           Serial.println(",In");
 
-          mo_cua();
           bienSoOCR = "";
         } else {
           // Guest đã có biển số -> so sánh với normalize
@@ -334,7 +326,6 @@ void senddata() {
             Serial.print(bienSoOCR);
             Serial.println(",In");
 
-            mo_cua();
             bienSoOCR = "";
           } else {
             Serial.println("Sai biển số guest!");
