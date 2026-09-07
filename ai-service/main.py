@@ -4,6 +4,7 @@ import json
 import os
 import re
 import tempfile
+import threading
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
@@ -12,7 +13,8 @@ import cv2
 import numpy as np
 from paddleocr import PaddleOCR
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import JSONResponse
 from PIL import Image, ImageFilter, ImageOps
 from pydantic import BaseModel
 
@@ -21,19 +23,27 @@ _yolo = None
 _plate_yolo = None
 _plate_onnx = None
 
+# Khoá khởi tạo lười: hai request đầu đến đồng thời không được phép
+# cùng nạp model (tránh tốn RAM gấp đôi + race condition).
+_model_init_lock = threading.Lock()
+
 def get_ocr():
     global _ocr
     if _ocr is None:
-        lang = os.environ.get("OCR_LANG", "en")
-        _ocr = PaddleOCR(use_angle_cls=True, lang=lang, show_log=False)
+        with _model_init_lock:
+            if _ocr is None:  # double-checked locking
+                lang = os.environ.get("OCR_LANG", "en")
+                _ocr = PaddleOCR(use_angle_cls=True, lang=lang, show_log=False)
     return _ocr
 
 def get_yolo():
     global _yolo
     if _yolo is None:
-        from ultralytics import YOLO
-        model_path = os.environ.get("YOLO_MODEL", "yolov8m.pt")
-        _yolo = YOLO(model_path)
+        with _model_init_lock:
+            if _yolo is None:  # double-checked locking
+                from ultralytics import YOLO
+                model_path = os.environ.get("YOLO_MODEL", "yolov8m.pt")
+                _yolo = YOLO(model_path)
     return _yolo
 
 def get_plate_model():
@@ -41,6 +51,14 @@ def get_plate_model():
     global _plate_yolo, _plate_onnx
     if _plate_yolo is not None:
         return _plate_yolo
+    with _model_init_lock:
+        if _plate_yolo is not None:  # double-checked locking
+            return _plate_yolo
+        return _load_plate_model_unlocked()
+
+
+def _load_plate_model_unlocked():
+    """Phần nạp model thật — PHẢI được gọi khi đang giữ _model_init_lock."""
 
     # Ưu tiên 1: ONNX (nhe, nhanh)
     onnx_path = os.environ.get("PLATE_ONNX_MODEL", "models/onnx/license_plate.onnx")
@@ -68,6 +86,86 @@ def get_plate_model():
 
 app = FastAPI(title="Bãi Đỗ Xe AI Service")
 
+# ─── Guard chung cho mọi upload ─────────────────────────────────────────
+# Giới hạn kích thước body (mặc định 10MB) — chống DoS bằng ảnh khổng lồ.
+MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", str(10 * 1024 * 1024)))
+
+# Cho phép scheme/host cho input RTSP/HTTP của /snapshot.
+# Mặc định: chỉ rtsp đến bất kỳ host nào (camera LAN), bật thêm http(s)
+# bằng CAMERA_HTTP_ALLOWED=1. Camera-host whitelist qua CAMERA_HOST_WHITELIST
+# (phân tách bởi dấu phẩy; hỗ trợ * cho hậu tố miền, vd "*.mystream.com").
+_RTSP_ALLOWED_SCHEMES = ("rtsp",)
+CAMERA_HTTP_ALLOWED = os.environ.get("CAMERA_HTTP_ALLOWED", "0") in {"1", "true", "yes", "on"}
+_whitelist_env = os.environ.get("CAMERA_HOST_WHITELIST", "").strip()
+
+
+def _host_in_whitelist(hostname: str) -> bool:
+    if not _whitelist_env:
+        return True  # không cấu hình whitelist → cho mọi host
+    host = (hostname or "").lower().rstrip(".")
+    for entry in _whitelist_env.split(","):
+        entry = entry.strip().lower().lstrip(".")
+        if not entry:
+            continue
+        if entry.startswith("*"):
+            suffix = entry[1:]  # "*.foo.com" → ".foo.com"
+            if host.endswith(suffix):
+                return True
+        elif host == entry:
+            return True
+    return False
+
+
+def validate_rtsp_url(raw_url: str) -> str:
+    """Kiểm tra scheme + host của rtspUrl/HTTP camera. Ném 400 nếu vi phạm."""
+    try:
+        parts = urlsplit(raw_url.strip())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="rtspUrl không hợp lệ.")
+
+    allowed = _RTSP_ALLOWED_SCHEMES + (("http", "https") if CAMERA_HTTP_ALLOWED else ())
+    if parts.scheme.lower() not in allowed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"rtspUrl phải dùng scheme {', '.join(allowed)}.",
+        )
+    if not parts.hostname or not _host_in_whitelist(parts.hostname):
+        raise HTTPException(
+            status_code=400,
+            detail="Host camera không nằm trong CAMERA_HOST_WHITELIST.",
+        )
+    return raw_url.strip()
+
+
+_MAGIC_SIGNATURES = (
+    b"\xff\xd8\xff",          # JPEG
+    b"\x89PNG\r\n\x1a\n",      # PNG
+    b"GIF87a", b"GIF89a",         # GIF
+    b"BM",                        # BMP
+    b"II*\x00", b"MM\x00*",      # TIFF
+    b"RIFF",                      # WEBP (RIFF....WEBP)
+)
+
+
+def is_probable_image(data: bytes) -> bool:
+    """Kiểm tra magic bytes: từ chối payload không phải ảnh (vd script, exe)."""
+    if len(data) < 12:
+        return False
+    if data.startswith(b"RIFF"):
+        return data[8:12] == b"WEBP"
+    return any(data.startswith(sig) for sig in _MAGIC_SIGNATURES)
+
+
+def _image_bytes_or_400(raw: bytes, what: str) -> bytes:
+    """Kiểm tra magic bytes + decode PIL. Ném 400 nếu không phải ảnh hợp lệ."""
+    if not is_probable_image(raw):
+        raise HTTPException(status_code=400, detail=f"{what} không phải ảnh hợp lệ (magic bytes).")
+    try:
+        Image.open(io.BytesIO(raw)).verify()
+    except Exception:
+        raise HTTPException(status_code=400, detail=f"{what} không đọc được ảnh.")
+    return raw
+
 
 def read_upload(file: UploadFile) -> bytes:
     """Đọc toàn bộ nội dung upload một cách đồng bộ.
@@ -77,7 +175,27 @@ def read_upload(file: UploadFile) -> bytes:
     endpoint là hàm thường (def) và FastAPI chạy phần OCR/YOLO nặng CPU
     trong threadpool thay vì chặn event loop.
     """
-    return file.file.read()
+    raw = file.file.read(MAX_UPLOAD_BYTES + 1)
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail=f"Ảnh upload vượt quá {MAX_UPLOAD_BYTES // (1024 * 1024)}MB.")
+    return _image_bytes_or_400(raw, "File upload")
+
+
+@app.middleware("http")
+async def _limit_request_body(request: Request, call_next):
+    """Chặn sớm body vượt MAX_UPLOAD_BYTES trước khi Starlette parse form."""
+    if request.method in {"POST", "PUT", "PATCH"}:
+        length_header = request.headers.get("content-length")
+        if length_header:
+            try:
+                if int(length_header) > MAX_UPLOAD_BYTES:
+                    return JSONResponse(
+                        status_code=413,
+                        content={"detail": f"Request body vượt quá {MAX_UPLOAD_BYTES // (1024 * 1024)}MB."},
+                    )
+            except ValueError:
+                pass
+    return await call_next(request)
 
 
 PLATE_PATTERNS = [
@@ -467,11 +585,18 @@ def health():
 def detect(file: UploadFile = File(...)):
     suffix = Path(file.filename or "upload.jpg").suffix or ".jpg"
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp:
-        temp.write(read_upload(file))
+        temp.write(read_upload(file))  # read_upload đã validate magic bytes + size
         temp_path = Path(temp.name)
 
     try:
-        result = detect_plate(temp_path)
+        try:
+            result = detect_plate(temp_path)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            # Nhất quán với các endpoint khác: lỗi đọc/decode ảnh → 400, không 500.
+            print(f"[detect] lỗi xử lý ảnh: {type(exc).__name__}: {exc}")
+            raise HTTPException(status_code=400, detail="Không đọc được ảnh.")
     finally:
         temp_path.unlink(missing_ok=True)
 
@@ -480,6 +605,7 @@ def detect(file: UploadFile = File(...)):
 
 @app.post("/snapshot")
 def snapshot(request: SnapshotRequest):
+    validate_rtsp_url(request.rtspUrl)
     capture = cv2.VideoCapture(camera_url(request.rtspUrl, request.username, request.password))
     if not capture.isOpened():
         raise HTTPException(status_code=502, detail="Không mở được camera RTSP/HTTP.")
@@ -741,9 +867,10 @@ def detect_cars_endpoint(
     else:
         raise HTTPException(status_code=400, detail="Cần cung cấp file ảnh hoặc imageBase64.")
 
+    _image_bytes_or_400(raw, "Ảnh")  # magic bytes + PIL verify → 400 nếu hỏng
     try:
         image = Image.open(io.BytesIO(raw)).convert("RGB")
-    except OSError:
+    except Exception:
         raise HTTPException(status_code=400, detail="Không đọc được ảnh.")
 
     return detect_cars(image, conf, imgsz, model, classAgnostic, minAreaFrac, maxAreaFrac)
@@ -878,9 +1005,10 @@ def detect_occupancy_endpoint(
     else:
         raise HTTPException(status_code=400, detail="Cần cung cấp file ảnh hoặc imageBase64.")
 
+    _image_bytes_or_400(raw, "Ảnh")  # magic bytes + PIL verify → 400 nếu hỏng
     try:
         image = Image.open(io.BytesIO(raw)).convert("RGB")
-    except OSError:
+    except Exception:
         raise HTTPException(status_code=400, detail="Không đọc được ảnh.")
 
     try:
@@ -1030,9 +1158,10 @@ def detect_straddle_endpoint(
     else:
         raise HTTPException(status_code=400, detail="Cần cung cấp file ảnh hoặc imageBase64.")
 
+    _image_bytes_or_400(raw, "Ảnh")  # magic bytes + PIL verify → 400 nếu hỏng
     try:
         image = Image.open(io.BytesIO(raw)).convert("RGB")
-    except OSError:
+    except Exception:
         raise HTTPException(status_code=400, detail="Không đọc được ảnh.")
 
     try:
@@ -1154,9 +1283,10 @@ def suggest_dividers_endpoint(
     else:
         raise HTTPException(status_code=400, detail="Cần cung cấp file ảnh hoặc imageBase64.")
 
+    _image_bytes_or_400(raw, "Ảnh")  # magic bytes + PIL verify → 400 nếu hỏng
     try:
         image = Image.open(io.BytesIO(raw)).convert("RGB")
-    except OSError:
+    except Exception:
         raise HTTPException(status_code=400, detail="Không đọc được ảnh.")
 
     return suggest_dividers(image, minCluster)
