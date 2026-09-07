@@ -4,8 +4,8 @@ import LoginPage from "../app/login/page";
 
 const mockApiFetch = jest.fn();
 
-jest.mock("@/lib/api", () => ({
-  apiFetch: (...args: unknown[]) => mockApiFetch(...args),
+jest.mock("@/lib/client-api", () => ({
+  apiFetchWithApiBase: (...args: unknown[]) => mockApiFetch(...args),
 }));
 
 describe("LoginPage", () => {
