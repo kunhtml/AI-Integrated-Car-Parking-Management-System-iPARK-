@@ -32,7 +32,6 @@ export async function sendExpiryReminders() {
       }
     }
 
-    // Get user email
     let email: string | null = null;
     let phone: string | null = null;
     
@@ -42,7 +41,6 @@ export async function sendExpiryReminders() {
       phone = user.phone || null;
     }
 
-    // Get vehicle email if user email not available
     if (!email) {
       const vehicle = await Vehicle.findOne({ plate: session.plate });
       email = vehicle?.ownerEmail ?? null;
@@ -83,11 +81,9 @@ Hotline: 1900 1234
 
     await sendMail(email, subject, text);
 
-    // Update last reminder timestamp
     (session as any).lastReminderAt = new Date();
     await session.save();
 
-    // Create in-app notification
     if (session.ownerUserId) {
       await createNotification({
         userId: (session.ownerUserId as any)._id?.toString() || session.ownerUserId.toString(),
@@ -131,7 +127,6 @@ export async function sendPrepaidReminders() {
       }
     }
 
-    // Get user email
     let email: string | null = null;
     if (session.ownerUserId) {
       const user = session.ownerUserId as any;
@@ -165,7 +160,6 @@ iPARK
 
     await sendMail(email, subject, text);
 
-    // Update reminder timestamp
     (session as any).lastPrepaidReminderAt = new Date();
     await session.save();
 
