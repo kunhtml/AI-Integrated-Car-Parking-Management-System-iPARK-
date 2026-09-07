@@ -746,7 +746,7 @@ export function DevicesView() {
                       className="small-button"
                       disabled={isActionBusy}
                       onClick={() => setConfirmDelete(device)}
-                      style={{ color: "#dc2626" }}
+                      style={{ color: "var(--danger)" }}
                     >
                       Xóa
                     </button>
