@@ -20,6 +20,7 @@ import {
 
 import { apiFetch, bridgeBaseUrl, bridgeFetch } from "@/lib/client-api";
 import { useParkingApp } from "@/context/parking-app-context";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { PasswordInput } from "@/features/auth/password-input";
 import type { DeviceItem } from "@/types";
 
@@ -72,6 +73,7 @@ function CameraLaneTest({
   const [plateCropUrl, setPlateCropUrl] = useState("");
   const [testing, setTesting] = useState(false);
   const [gateStatus, setGateStatus] = useState("");
+  const [confirmGate, setConfirmGate] = useState(false);
   const [startedAt] = useState(() => Date.now());
 
   async function testRfid() {
@@ -112,8 +114,6 @@ function CameraLaneTest({
   }
 
   async function testGate() {
-    if (!window.confirm(`Mở barie lane ${lane.toUpperCase()} để kiểm tra?`))
-      return;
     setGateStatus("Đang gửi lệnh mở barie...");
     try {
       const response = await bridgeFetch(`/gate/${lane}/open`, {
@@ -218,7 +218,7 @@ function CameraLaneTest({
           <button
             type="button"
             className="small-button"
-            onClick={() => void testGate()}
+            onClick={() => setConfirmGate(true)}
           >
             Test mở barie
           </button>
@@ -227,6 +227,17 @@ function CameraLaneTest({
           <p className="device-test-gate-status">{gateStatus}</p>
         ) : null}
       </div>
+      <ConfirmDialog
+        message={`Bạn có muốn mở barie lane ${lane.toUpperCase()} để kiểm tra?`}
+        onCancel={() => setConfirmGate(false)}
+        onConfirm={() => {
+          setConfirmGate(false);
+          void testGate();
+        }}
+        open={confirmGate}
+        title={`Mở barie lane ${lane.toUpperCase()}?`}
+        tone="primary"
+      />
     </div>
   );
 }
@@ -256,6 +267,8 @@ export function DevicesView() {
   const [testDevice, setTestDevice] = useState<DeviceItem | null>(null);
   const [saving, setSaving] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
+  const [confirmSwap, setConfirmSwap] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<DeviceItem | null>(null);
 
   const loadDevices = useCallback(async (quiet = false) => {
     if (quiet) setRefreshing(true);
@@ -287,12 +300,6 @@ export function DevicesView() {
 
   async function swapCameraRoles() {
     if (actionId) return;
-    if (
-      !window.confirm(
-        "Hoán đổi vai trò hai camera? Sự kiện nhận diện mới sẽ dùng vai trò mới.",
-      )
-    )
-      return;
     setActionId("swap-roles");
     setError("");
     try {
@@ -364,12 +371,6 @@ export function DevicesView() {
   }
 
   async function deleteDevice(device: DeviceItem) {
-    if (
-      !window.confirm(
-        `Xóa camera "${device.name}"? Thao tác này không thể hoàn tác.`,
-      )
-    )
-      return;
     setActionId(`delete:${device.id}`);
     setError("");
     try {
@@ -710,7 +711,7 @@ export function DevicesView() {
                       Luồng đang dùng: <strong>{bridgeStreamUrl}</strong>
                     </span>
                     <span>
-                      Vai trò hiện tại:{" "}
+                      Vai trò hiện tại: {" "}
                       <strong>{gateLabel(device.gate)}</strong>
                     </span>
                   </div>
@@ -744,7 +745,7 @@ export function DevicesView() {
                       type="button"
                       className="small-button"
                       disabled={isActionBusy}
-                      onClick={() => void deleteDevice(device)}
+                      onClick={() => setConfirmDelete(device)}
                       style={{ color: "#dc2626" }}
                     >
                       Xóa
@@ -776,6 +777,33 @@ export function DevicesView() {
           onClose={() => setTestDevice(null)}
         />
       ) : null}
+
+      <ConfirmDialog
+        message="Sự kiện nhận diện mới sẽ dùng vai trò mới."
+        onCancel={() => setConfirmSwap(false)}
+        onConfirm={() => {
+          setConfirmSwap(false);
+          void swapCameraRoles();
+        }}
+        open={confirmSwap}
+        title="Hoán đổi vai trò hai camera?"
+        tone="primary"
+      />
+      <ConfirmDialog
+        message={
+          confirmDelete
+            ? `Xóa camera "${confirmDelete.name}"? Thao tác này không thể hoàn tác.`
+            : ""
+        }
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={() => {
+          if (confirmDelete) void deleteDevice(confirmDelete);
+          setConfirmDelete(null);
+        }}
+        open={confirmDelete !== null}
+        title="Xóa camera?"
+        tone="danger"
+      />
     </section>
   );
 }
