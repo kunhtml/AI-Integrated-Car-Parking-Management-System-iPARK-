@@ -1,21 +1,8 @@
-export function buildApiUrl(path: string) {
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
-
-  if (!baseUrl) {
-    return `http://localhost:4000/api${normalizedPath}`;
-  }
-
-  return baseUrl.endsWith("/api") ? `${baseUrl}${normalizedPath}` : `${baseUrl}/api${normalizedPath}`;
-}
-
-export async function apiFetch(path: string, init?: RequestInit) {
-  return fetch(buildApiUrl(path), {
-    credentials: "include",
-    headers: {
-      Accept: "application/json",
-      ...(init?.headers || {}),
-    },
-    ...init,
-  });
-}
+// DEPRECATED: đã hợp nhất vào lib/client-api.ts.
+// File này hiện chỉ còn là shim tương thích để các consumer chưa chuyển
+// sang @/lib/client-api (3 view trong features/*) vẫn biên dịch bình thường.
+// Khi các view đó chuyển sang @/lib/client-api thì xoá file này.
+export {
+  buildApiUrlWithApiBase as buildApiUrl,
+  apiFetchWithApiBase as apiFetch,
+} from "./client-api";
