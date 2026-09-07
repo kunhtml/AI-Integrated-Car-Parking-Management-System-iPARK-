@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { LogIn, ParkingCircle } from "lucide-react";
-import { apiFetch } from "@/lib/api";
+import { apiFetchWithApiBase as apiFetch } from "@/lib/client-api";
 import { parkingConfig } from "@/lib/parking-config";
 import { PasswordInput } from "@/features/auth/password-input";
 
@@ -70,6 +70,7 @@ export default function LoginPage() {
               autoComplete="email"
             />
           </label>
+
           <label className="block text-sm font-medium text-slate-700">
             Mật khẩu
             <PasswordInput
