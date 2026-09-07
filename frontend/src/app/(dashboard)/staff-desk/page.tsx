@@ -30,7 +30,7 @@ export default function StaffDeskPage() {
   }, []);
 
   return (
-    <RoleGuard allowedRoles={["staff"]}>
+    <RoleGuard allowedRoles={["staff", "manager"]}>
       {status === "loading" ? (
         <div className="staff-desk-access-state" role="status">
           <Loader2 className="spin" size={28} />
