@@ -84,7 +84,10 @@ async function finalizeCheckout(
   if (session.paymentStatus === "fully_paid") {
     const paidUntil =
       session.prepaidCheckoutAt || session.expectedCheckOutAt || null;
-    if (!paidUntil || session.checkOutAt.getTime() <= paidUntil.getTime()) {
+    if (
+      !paidUntil ||
+      (session.checkOutAt ?? new Date()).getTime() <= paidUntil.getTime()
+    ) {
       await freeSlot(session.slotId);
       return session;
     }
@@ -101,7 +104,7 @@ async function finalizeCheckout(
       : currentPricingPaid;
     const lateFee = calculateParkingFee(
       session.checkInAt,
-      session.checkOutAt,
+      session.checkOutAt ?? new Date(),
       pricingPaid,
     );
     session.fee = lateFee.totalFee;
@@ -134,7 +137,7 @@ async function finalizeCheckout(
     : currentPricing;
   const feeBreakdown = calculateParkingFee(
     session.checkInAt,
-    session.checkOutAt,
+    session.checkOutAt ?? new Date(),
     pricing,
   );
   session.fee = feeBreakdown.totalFee;
@@ -774,14 +777,17 @@ export async function completeParkingSession(
     }
   }
 
-  const finalizedSession = await finalizeCheckout(session);
-  if (!finalizedSession) {
+  const finalized = await finalizeCheckout(session);
+  if (!finalized) {
     response.status(409).json({
       message: "Phiên này đã được tất toán trước đó (status không còn 'Đang gửi').",
     });
     return;
   }
-  const session = finalizedSession;
+  Object.assign(session, {
+    status: finalized.status,
+    checkOutAt: finalized.checkOutAt,
+  });
   session.checkOutStaff = objectId(request.user?.id);
   // Ghi đè các trường ảnh checkout nếu payload cung cấp (ưu tiên ảnh mới hơn bridge)
   if (body.exitImageUrl) session.exitImageUrl = body.exitImageUrl;

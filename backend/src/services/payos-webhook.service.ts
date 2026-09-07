@@ -67,9 +67,14 @@ export async function reconcileSessionPayment(
     const result = await checkPayOSPaymentStatus(String(transaction.payosOrderCode));
     if (result.status !== "paid") continue;
 
+    // IDEMPOTENT CLAIM (reconcile): như trên — pending -> paid nguyên tử để
+    // webhook và reconcile không thể cùng áp một giao dịch.
+    const claim = await Transaction.updateOne(
+      { _id: transaction._id, status: { $ne: "paid" } },
+      { $set: { status: "paid", paidAt: new Date() } },
+    );
+    if (claim.modifiedCount === 0) continue;
     transaction.status = "paid";
-    transaction.paidAt = new Date();
-    await transaction.save();
 
     await applyPaidTransactionToSession(transaction, session);
     applied = true;
@@ -165,10 +170,25 @@ export async function handlePayOSWebhook(request: Request, response: Response) {
       // Pending record exists → just update to paid
     }
 
+    // IDEMPOTENT CLAIM: webhook + reconcile có thể cùng xác nhận một orderCode.
+    // Claim nguyên tử pending -> paid: request thua thấy matchedCount 0 và
+    // thoát, KHÔNG cộng tiền lần hai vào phiên/gói.
+    const claim = await Transaction.updateOne(
+      { _id: transaction._id, status: { $ne: "paid" } },
+      {
+        $set: {
+          status: "paid",
+          paidAt: new Date(),
+          note: webhookData.data.reference || String(orderCode),
+        },
+      },
+    );
+    if (claim.modifiedCount === 0) {
+      console.log("[PayOS Webhook] Transaction already claimed as paid by another run:", orderCode);
+      response.json({ message: "Already processed" });
+      return;
+    }
     transaction.status = "paid";
-    transaction.paidAt = new Date();
-    transaction.note = webhookData.data.reference || String(orderCode);
-    await transaction.save();
 
     // Giao dịch bán/cấp lại thẻ RFID → kích hoạt thẻ sau khi PayOS báo paid
     if (transaction.transactionType === "rfid_sale" || transaction.transactionType === "rfid_replacement") {
