@@ -4,7 +4,7 @@ import { RfidScanLog } from "../models/RfidScanLog.js";
 import { ParkingSession } from "../models/ParkingSession.js";
 import { Subscription } from "../models/Subscription.js";
 import { AppError } from "../utils/AppError.js";
-import { allocateSlot, occupySlot } from "./parkingSlot.service.js";
+import { allocateSlot, freeSlot, occupySlot } from "./parkingSlot.service.js";
 import { classifyVehicleByPlate } from "./parkingQuota.service.js";
 import { findActiveSubscriptionByPlate } from "./subscription.service.js";
 
@@ -461,6 +461,8 @@ export async function validateExit(
     await activeSession.save();
     await createPendingTransactionForSession(activeSession);
     releaseGuestCard(card, returnedAt);
+    // SLOT-FIX: phiên kết thúc → nhả slot về empty (như luồng checkout thường).
+    await freeSlot(activeSession.slotId);
   } else {
     activeSession.fee = 0;
     activeSession.paidAmount = 0;
@@ -471,6 +473,10 @@ export async function validateExit(
   }
   card.lastUsedAt = new Date();
   await card.save();
+
+  // SLOT-FIX: cả nhánh guest lẫn subscription đều kết thúc phiên ở đây.
+  // Nhả slot về empty như luồng checkout thường để slot không bị "treo".
+  await freeSlot(activeSession.slotId);
 
   await logScan({
     cardId,
@@ -540,6 +546,8 @@ export async function confirmExitWithMismatch(
     await session.save();
     await createPendingTransactionForSession(session);
     releaseGuestCard(card, returnedAt);
+    // SLOT-FIX: phiên kết thúc → nhả slot về empty (như luồng checkout thường).
+    await freeSlot(session.slotId);
   } else {
     session.fee = 0;
     session.paidAmount = 0;
@@ -550,6 +558,9 @@ export async function confirmExitWithMismatch(
   }
   card.lastUsedAt = new Date();
   await card.save();
+
+  // SLOT-FIX: nhả slot về empty khi xác nhận exit bằng tay (camera hỏng).
+  await freeSlot(session.slotId);
 
   await logScan({
     cardId,

@@ -35,12 +35,6 @@ export async function createReservation(params: {
     throw err;
   }
 
-  if (slot.status !== "empty") {
-    const err = new Error("Slot này không còn trống.") as Error & { status: number };
-    err.status = 409;
-    throw err;
-  }
-
   const overlap = await Reservation.findOne({
     slotId: slot._id,
     status: { $in: ["pending", "active"] },
@@ -53,8 +47,20 @@ export async function createReservation(params: {
     throw err;
   }
 
-  // Atomic: set slot status to reserved
-  await ParkingSlot.findByIdAndUpdate(slot._id, { $set: { status: "reserved" } });
+  // ATOMIC CLAIM: find-then-update trước đây tạo race — hai request cùng lúc
+  // đều thấy slot "empty" rồi cùng đặt reserved. findOneAndUpdate có điều
+  // kiện status:"empty" đảm bảo CHỈ MỘT request thắng; request thua nhận null
+  // → 409, không bao giờ double-reserve.
+  const claimed = await ParkingSlot.findOneAndUpdate(
+    { _id: slot._id, status: "empty" },
+    { $set: { status: "reserved" } },
+    { new: true },
+  );
+  if (!claimed) {
+    const err = new Error("Slot này không còn trống.") as Error & { status: number };
+    err.status = 409;
+    throw err;
+  }
 
   const reservation = await Reservation.create({
     userId: new mongoose.Types.ObjectId(params.userId),

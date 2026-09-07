@@ -38,9 +38,29 @@ import { serializeParkingSession } from "../utils/serializers.js";
 import { classifyVehicleByPlate } from "../services/parkingQuota.service.js";
 import { createAuditLog } from "../services/auditLog.service.js";
 
-async function finalizeCheckout(session: ParkingSessionDocument) {
-  session.status = "Đã hoàn thành";
-  session.checkOutAt = new Date();
+async function finalizeCheckout(
+  sessionOrId: ParkingSessionDocument | string,
+): Promise<ParkingSessionDocument | null> {
+  // IDEMPOTENT CLAIM: webhook + staff checkout + reconcile có thể cùng chạm
+  // một phiên. Chỉ request thắng claim (đổi "Đang gửi" → "Đã hoàn thành")
+  // được chạy phần thân; request thua nhận null → caller trả 409.
+  const claimed = await ParkingSession.findOneAndUpdate(
+    {
+      _id:
+        typeof sessionOrId === "string"
+          ? objectId(sessionOrId)
+          : sessionOrId._id,
+      status: "Đang gửi",
+    },
+    {
+      $set: { status: "Đã hoàn thành", checkOutAt: new Date() },
+    },
+    { new: true },
+  );
+  if (!claimed) {
+    return null;
+  }
+  const session = claimed;
 
   // Trả thẻ RFID guest về kho nếu phiên đang giữ thẻ nhưng được đóng bằng
   // luồng không quét RFID (ra thủ công / camera checkout). Luồng ra bằng RFID
@@ -754,7 +774,14 @@ export async function completeParkingSession(
     }
   }
 
-  await finalizeCheckout(session);
+  const finalizedSession = await finalizeCheckout(session);
+  if (!finalizedSession) {
+    response.status(409).json({
+      message: "Phiên này đã được tất toán trước đó (status không còn 'Đang gửi').",
+    });
+    return;
+  }
+  const session = finalizedSession;
   session.checkOutStaff = objectId(request.user?.id);
   // Ghi đè các trường ảnh checkout nếu payload cung cấp (ưu tiên ảnh mới hơn bridge)
   if (body.exitImageUrl) session.exitImageUrl = body.exitImageUrl;
@@ -926,7 +953,16 @@ export async function uploadParkingImage(request: Request, response: Response) {
     session.verificationStatus = matched ? "Không cần" : "Chờ duyệt";
 
     if (matched) {
-      await finalizeCheckout(session);
+      const finalized = await finalizeCheckout(session);
+      if (!finalized) {
+        // Đã tất toán bởi request khác (webhook/reconcile) — không chạy lại.
+        response.status(409).json({
+          message: "Phiên này đã được tất toán trước đó (status không còn 'Đang gửi').",
+        });
+        return;
+      }
+      session.status = finalized.status;
+      session.checkOutAt = finalized.checkOutAt;
     } else {
       await createNotification({
         title: "Checkout cần admin duyệt",
@@ -1000,7 +1036,15 @@ export async function approveCheckout(request: Request, response: Response) {
   session.verifiedBy = objectId(request.user?.id);
   session.verifiedAt = new Date();
   session.matchStatus = "Khớp";
-  await finalizeCheckout(session);
+  const finalizedSession = await finalizeCheckout(session);
+  if (!finalizedSession) {
+    response.status(409).json({
+      message: "Phiên này đã được tất toán trước đó (status không còn 'Đang gửi').",
+    });
+    return;
+  }
+  session.status = finalizedSession.status;
+  session.checkOutAt = finalizedSession.checkOutAt;
   await session.save();
 
   response.json({
@@ -1156,7 +1200,15 @@ export async function cameraExit(request: Request, response: Response) {
   session.verificationStatus = matched ? "Không cần" : "Chờ duyệt";
 
   if (matched) {
-    await finalizeCheckout(session);
+    const finalizedSession = await finalizeCheckout(session);
+    if (!finalizedSession) {
+      response.status(409).json({
+        message: "Phiên này đã được tất toán trước đó (status không còn 'Đang gửi').",
+      });
+      return;
+    }
+    session.status = finalizedSession.status;
+    session.checkOutAt = finalizedSession.checkOutAt;
   }
 
   await session.save();

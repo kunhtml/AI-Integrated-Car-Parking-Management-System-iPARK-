@@ -278,9 +278,30 @@ export async function deleteSubscriptionHandler(
 
   // Admin có thể xóa gói đang active (đặc quyền dọn dẹp dữ liệu).
   // Customer sẽ không gọi được endpoint này vì route đã requireRole("admin").
+  //
+  // DATA-INTEGRITY: KHÔNG BAO GIỜ xóa Vehicle — xe là dữ liệu của khách,
+  // gói chỉ "liên kết" tới xe. Chỉ UNLINK (nếu Vehicle có back-reference
+  // subscriptionId thì gỡ nó). Xe vẫn nguyên vẹn sau khi xóa gói.
   if (sub.primaryVehicleId) {
-    // Best-effort: xoá Vehicle gắn với sub (chỉ khi Vehicle đó không thuộc sub khác)
-    await Vehicle.deleteMany({ _id: sub.primaryVehicleId });
+    await Vehicle.updateOne(
+      { _id: sub.primaryVehicleId, subscriptionId: sub._id },
+      { $unset: { subscriptionId: 1 } },
+    );
+  }
+
+  // MONEY-SAFETY: không xóa sub còn "sống" (pending_payment) khi link PayOS
+  // vẫn có thể còn hoạt động — hủy lại cho an toàn và giữ dữ liệu đối soát.
+  if (sub.status === "pending_payment") {
+    await cancelSubscription(String(sub._id));
+    console.log(
+      "[deleteSubscription] pending_payment subscription cancelled (kept, not deleted):",
+      sub._id,
+    );
+    response.json({
+      message:
+        "Gói đang chờ thanh toán đã được hủy (không xóa) để đảm bảo an toàn giao dịch PayOS.",
+    });
+    return;
   }
 
   await Subscription.findByIdAndDelete(sub._id);
