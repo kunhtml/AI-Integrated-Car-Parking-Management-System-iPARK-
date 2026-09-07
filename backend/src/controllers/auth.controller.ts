@@ -1099,7 +1099,6 @@ export async function resendOtp(request: Request, response: Response) {
 }
 
 // --- Active Sessions Management (AU-14) ---
-import { ActiveSession } from "../models/ActiveSession.js";
 
 /**
  * Bước 1 đổi email: user đang đăng nhập gửi email mới → backend kiểm tra tính hợp lệ,
