@@ -433,7 +433,7 @@ export function ZonesView() {
       <div className="zones-stats-bar">
         <div className="zones-stat-card">
           <div className="zones-stat-icon" style={{ background: "#3b82f615" }}>
-            <LayoutGrid size={18} style={{ color: "#3b82f6" }} />
+            <LayoutGrid size={18} style={{ color: "var(--primary)" }} />
           </div>
           <div className="zones-stat-info">
             <span className="zones-stat-value">{zoneList.length}</span>
@@ -451,10 +451,10 @@ export function ZonesView() {
         </div>
         <div className="zones-stat-card">
           <div className="zones-stat-icon" style={{ background: "#22c55e15" }}>
-            <Car size={18} style={{ color: "#22c55e" }} />
+            <Car size={18} style={{ color: "var(--success)" }} />
           </div>
           <div className="zones-stat-info">
-            <span className="zones-stat-value" style={{ color: "#22c55e" }}>{totalEmpty}</span>
+            <span className="zones-stat-value" style={{ color: "var(--success)" }}>{totalEmpty}</span>
             <span className="zones-stat-label">Còn trống</span>
           </div>
         </div>
