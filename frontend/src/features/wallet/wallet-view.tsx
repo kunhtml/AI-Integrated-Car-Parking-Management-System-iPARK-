@@ -87,11 +87,11 @@ function getInitials(name?: string): string {
 }
 
 const AVATAR_GRADIENTS = [
-  "linear-gradient(135deg,#2563eb,#7c3aed)",
-  "linear-gradient(135deg,#0ea5e9,#2563eb)",
+  "linear-gradient(135deg,var(--primary),#7c3aed)",
+  "linear-gradient(135deg,#0ea5e9,var(--primary))",
   "linear-gradient(135deg,#10b981,#059669)",
   "linear-gradient(135deg,#f59e0b,#ea580c)",
-  "linear-gradient(135deg,#ef4444,#db2777)",
+  "linear-gradient(135deg,var(--danger),#db2777)",
 ];
 
 function avatarGradient(seed: string) {
@@ -188,7 +188,7 @@ function TransactionCard({ item, isCustomer, isAdmin, onView, onCancel, onConfir
         )}
         {item.status === "pending" && isAdmin && (
           <>
-            <button className="small-button" onClick={() => onCancel(item)} style={{ color: "#ef4444" }} type="button">
+            <button className="small-button" onClick={() => onCancel(item)} style={{ color: "var(--danger)" }} type="button">
               <X size={14} /> Hủy
             </button>
             {!isTopUp && (
@@ -409,7 +409,7 @@ export function WalletView() {
               padding: "10px 14px",
               borderRadius: "8px",
               background: sessionCheckResult.status === "fully_paid" ? "rgba(34,197,94,0.1)" : "rgba(251,191,36,0.1)",
-              color: sessionCheckResult.status === "fully_paid" ? "#22c55e" : "#fbbf24",
+              color: sessionCheckResult.status === "fully_paid" ? "var(--success)" : "#fbbf24",
               fontSize: "0.9rem",
             }}>
               {sessionCheckResult.status === "fully_paid"
