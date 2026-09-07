@@ -437,7 +437,7 @@ function RejectedView({
         >
           <b>Lý do từ chối:</b> {application.reviewNote}
           <div style={{ marginTop: 6, fontSize: "0.76rem" }}>
-            Bạn có thể chỉnh sửa và gửi lại chính đơn này. Lần gửi lại: {" "}
+            Bạn có thể chỉnh sửa và gửi lại chính đơn này. Lần gửi lại:{" "}
             {application.resubmitCount ?? 0}.
           </div>
         </div>
