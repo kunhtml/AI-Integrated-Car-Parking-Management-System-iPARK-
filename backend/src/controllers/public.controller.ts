@@ -4,7 +4,12 @@ import { ParkingSession } from "../models/ParkingSession.js";
 import { Vehicle } from "../models/Vehicle.js";
 import { Zone } from "../models/Zone.js";
 import { getActivePricingConfig, getActivePricingConfigForZone } from "../services/pricing.service.js";
-import { calculateParkingFee } from "../services/pricing.service.js";
+import {
+  calculateParkingFee,
+  getVietnamWallClock,
+  vietnamInstantFromWallClock,
+  viDateAddDays,
+} from "../services/pricing.service.js";
 import { listPlans } from "../services/subscription.service.js";
 import { serializeSubscriptionPlan } from "../utils/serializers.js";
 import { getPendingPenaltiesForSession } from "./penalties.controller.js";
@@ -183,12 +188,8 @@ export async function lookupSession(request: Request, response: Response) {
   // activeSession is guaranteed non-null here (returned early if both are null)
   const session = activeSession!;
 
-  // Convert checkInAt from UTC to local (UTC+7) before calculating fee
-  const activeSessionCheckInLocal = new Date(session.checkInAt);
-  activeSessionCheckInLocal.setHours(activeSessionCheckInLocal.getHours() + 7);
-
   // Tính thời gian đã gửi
-  const parkingMinutes = Math.round((Date.now() - activeSessionCheckInLocal.getTime()) / 60000);
+  const parkingMinutes = Math.round((Date.now() - session.checkInAt.getTime()) / 60000);
   const hours = Math.floor(parkingMinutes / 60);
   const mins = parkingMinutes % 60;
   const duration = hours > 0 ? `${hours} giờ ${mins} phút` : `${mins} phút`;
@@ -196,7 +197,7 @@ export async function lookupSession(request: Request, response: Response) {
   // Lấy thông tin pricing để tính phí
   const slotDoc = session.slotId as any;
   const pricing = await getActivePricingConfigForZone(slotDoc?.zoneId);
-  const feeBreakdown = calculateParkingFee(activeSessionCheckInLocal, new Date(), pricing);
+  const feeBreakdown = calculateParkingFee(session.checkInAt, new Date(), pricing);
 
   // Tiền phạt đang chờ (đỗ lấn vạch) — cộng vào phí hiển thị, trả gộp khi checkout
   const penalty = await getPendingPenaltiesForSession(session._id.toString());
@@ -263,9 +264,6 @@ export async function calculateExitFee(request: Request, response: Response) {
     return;
   }
 
-  // Convert checkInAt from UTC to local (UTC+7) before calculating fee
-  const sessionCheckInLocal = new Date(session.checkInAt);
-  sessionCheckInLocal.setHours(sessionCheckInLocal.getHours() + 7);
 
   // Xác định thời gian ra
   let exitTime: Date;
@@ -280,7 +278,7 @@ export async function calculateExitFee(request: Request, response: Response) {
   // Tính phí
   const slotDoc = session.slotId as any;
   const pricing = await getActivePricingConfigForZone(slotDoc?.zoneId);
-  const feeBreakdown = calculateParkingFee(sessionCheckInLocal, exitTime, pricing);
+  const feeBreakdown = calculateParkingFee(session.checkInAt, exitTime, pricing);
 
   // Cộng tiền phạt (vé đỗ lấn vạch đang chờ) — khách trả gộp với phí gửi
   const penalty = await getPendingPenaltiesForSession(session._id.toString());
@@ -293,7 +291,7 @@ export async function calculateExitFee(request: Request, response: Response) {
   if (session.paymentStatus === "fully_paid") {
     // Đã thanh toán đủ - tính phí bổ sung nếu gia hạn (cộng thêm phạt nếu có)
     const paidAt = session.updatedAt;
-    const currentFee = calculateParkingFee(sessionCheckInLocal, paidAt, pricing);
+    const currentFee = calculateParkingFee(session.checkInAt, paidAt, pricing);
     additionalFee = Math.max(0, feeBreakdown.totalFee - currentFee.totalFee) + penalty.total;
     totalFee = additionalFee;
   }
@@ -355,19 +353,17 @@ export async function calculateFeeQuick(request: Request, response: Response) {
 
   let exitTime: Date;
   if (exitDate) {
-    // Parse date string as LOCAL date to avoid UTC offset issues (server is UTC+7)
+    // Parse y-m-d la ngay gio VIETNAM (Asia/Ho_Chi_Minh), khong dua timezone server.
     const [year, month, day] = exitDate.split("-").map(Number);
-    const d = new Date(year, month - 1, day, exitHour, 0, 0, 0);
-    exitTime = d;
+    exitTime = vietnamInstantFromWallClock(year, month, day, exitHour);
   } else {
     // Mặc định: ngày mai, giờ đã chọn
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    d.setHours(exitHour, 0, 0, 0);
-    exitTime = d;
+    // Mac dinh: ngay mai (gio VN), gio da chon
+    const nowVi = getVietnamWallClock(new Date());
+    const tomorrow = viDateAddDays({ year: nowVi.year, month: nowVi.month, day: nowVi.day }, 1);
+    exitTime = vietnamInstantFromWallClock(tomorrow.year, tomorrow.month, tomorrow.day, exitHour);
   }
 
-  // exitTime is built with server-local getters; compare checkInAt in the same frame.
   const checkInLocal = new Date(session.checkInAt);
 
   // Không cho ra quá khứ
@@ -677,11 +673,8 @@ export async function quickLookup(request: Request, response: Response) {
     return;
   }
 
-  // Convert checkInAt from UTC to local (UTC+7)
-  const lookupCheckInLocal = new Date(session.checkInAt);
-  lookupCheckInLocal.setHours(lookupCheckInLocal.getHours() + 7);
-
-  const parkingMinutes = Math.round((Date.now() - lookupCheckInLocal.getTime()) / 60000);
+  // Gio VN qua Intl (khoi +7 thu cong) - so khop truc tiep tren instant UTC.
+  const parkingMinutes = Math.round((Date.now() - session.checkInAt.getTime()) / 60000);
   const hours = Math.floor(parkingMinutes / 60);
   const minutes = parkingMinutes % 60;
   const duration = hours > 0 ? `${hours}h ${minutes}p` : `${minutes} phút`;

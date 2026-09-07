@@ -62,6 +62,44 @@ async function finalizeCheckout(session: ParkingSessionDocument) {
 
   // Đã trả đủ trước đó (prepaid) → chỉ hoàn tất + nhả slot, KHÔNG tính lại phí.
   if (session.paymentStatus === "fully_paid") {
+    const paidUntil =
+      session.prepaidCheckoutAt || session.expectedCheckOutAt || null;
+    if (!paidUntil || session.checkOutAt.getTime() <= paidUntil.getTime()) {
+      await freeSlot(session.slotId);
+      return session;
+    }
+
+    // Late exit: recompute full fee checkIn -> actual checkOut.
+    const slotDocPaid = session.slotId
+      ? await ParkingSlot.findById(session.slotId)
+      : null;
+    const currentPricingPaid = await getActivePricingConfigForZone(
+      slotDocPaid?.zoneId,
+    );
+    const pricingPaid = (session as any).checkInPricingSnapshot
+      ? { ...currentPricingPaid, ...(session as any).checkInPricingSnapshot }
+      : currentPricingPaid;
+    const lateFee = calculateParkingFee(
+      session.checkInAt,
+      session.checkOutAt,
+      pricingPaid,
+    );
+    session.fee = lateFee.totalFee;
+    session.feeBreakdown = lateFee;
+
+    // Ha ve partial_paid neu con no va tao pending transaction cho phan chenh
+    // lech (mirror extendSession / createPendingTransactionForSession).
+    await createPendingTransactionForSession(session);
+    await ParkingSession.updateOne(
+      { _id: session._id },
+      {
+        $set: {
+          fee: session.fee,
+          feeBreakdown: session.feeBreakdown,
+          paymentStatus: session.paymentStatus,
+        },
+      },
+    );
     await freeSlot(session.slotId);
     return session;
   }
