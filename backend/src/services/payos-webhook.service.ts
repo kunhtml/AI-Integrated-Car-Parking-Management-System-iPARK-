@@ -88,7 +88,6 @@ export async function handlePayOSWebhook(request: Request, response: Response) {
     // Log webhook data for debugging
     console.log("[PayOS Webhook] Received:", JSON.stringify(webhookData, null, 2));
 
-    // Get checksum key from env (đồng bộ với getPayOSConfig: PAYTOS_*)
     const checksumKey = process.env.PAYTOS_CHECKSUM_KEY;
     const isDev = process.env.NODE_ENV !== "production";
 
@@ -112,7 +111,6 @@ export async function handlePayOSWebhook(request: Request, response: Response) {
       }
     }
 
-    // Check if payment successful
     if (webhookData.code !== "00" || !webhookData.success) {
       console.log("[PayOS Webhook] Payment not successful:", webhookData.desc);
       response.json({ message: "Payment not successful" });
@@ -186,7 +184,6 @@ export async function handlePayOSWebhook(request: Request, response: Response) {
       }
     }
 
-    // Update to paid (handles both newly created and existing pending)
     transaction.status = "paid";
     transaction.paidAt = new Date();
     transaction.note = webhookData.data.reference || String(orderCode);
@@ -232,7 +229,6 @@ export async function handlePayOSWebhook(request: Request, response: Response) {
       return;
     }
 
-    // Update parking session - mark as paid and set checkOutAt
     if (session) {
       await applyPaidTransactionToSession(transaction, session);
     } else {
