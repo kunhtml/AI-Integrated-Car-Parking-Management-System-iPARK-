@@ -16,7 +16,8 @@ CAMERA_IN_INDEX = int(os.getenv("CAMERA_IN_INDEX", os.getenv("CAMERA_INDEX_IN", 
 CAMERA_OUT_INDEX = int(os.getenv("CAMERA_OUT_INDEX", os.getenv("CAMERA_INDEX_OUT", "0")))
 ESP32_IN_PORT = os.getenv("ESP32_IN_PORT", os.getenv("SERIAL_PORT_IN", "COM3"))
 ESP32_OUT_PORT = os.getenv("ESP32_OUT_PORT", os.getenv("SERIAL_PORT_OUT", "COM5"))
-SERIAL_BAUDRATE = int(os.getenv("SERIAL_BAUDRATE", "115200"))
+# Baudrate khớp firmware ESP32 (Serial.begin(9600)) — một nguồn duy nhất cho cả app.py.
+SERIAL_BAUDRATE = int(os.getenv("SERIAL_BAUDRATE", "9600"))
 OCR_ENABLED = os.getenv("OCR_ENABLED", "true").lower() not in {"0", "false", "no", "off"}
 PLATE_DETECTOR = os.getenv("PLATE_DETECTOR", "yolo").lower()
 # Model biển số đang dùng cho modular runtime. Có thể ghi đè bằng YOLO_MODEL_PATH.
