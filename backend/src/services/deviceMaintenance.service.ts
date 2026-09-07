@@ -34,7 +34,6 @@ export async function createMaintenanceLog(params: {
     status: params.status ?? "completed",
   });
 
-  // Update device maintenance schedule
   if (params.status === "completed" || !params.status) {
     const now = new Date();
     const intervalDays = device.maintenanceSchedule?.intervalDays ?? 30;
