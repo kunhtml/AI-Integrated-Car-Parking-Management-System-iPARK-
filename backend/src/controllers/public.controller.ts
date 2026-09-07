@@ -2,10 +2,14 @@ import { Request, Response } from "express";
 import { ParkingSlot } from "../models/ParkingSlot.js";
 import { ParkingSession } from "../models/ParkingSession.js";
 import { Vehicle } from "../models/Vehicle.js";
-import { User } from "../models/User.js";
 import { Zone } from "../models/Zone.js";
 import { getActivePricingConfig, getActivePricingConfigForZone } from "../services/pricing.service.js";
-import { calculateParkingFee } from "../services/pricing.service.js";
+import {
+  calculateParkingFee,
+  getVietnamWallClock,
+  vietnamInstantFromWallClock,
+  viDateAddDays,
+} from "../services/pricing.service.js";
 import { listPlans } from "../services/subscription.service.js";
 import { serializeSubscriptionPlan } from "../utils/serializers.js";
 import { getPendingPenaltiesForSession } from "./penalties.controller.js";
@@ -131,7 +135,6 @@ export async function lookupSession(request: Request, response: Response) {
       plate,
       vehicle: vehicle ? {
         plate: vehicle.plate,
-        ownerName: vehicle.ownerName,
         vehicleType: vehicle.vehicleType,
         status: vehicle.status,
         brand: vehicle.brand,
@@ -158,7 +161,6 @@ export async function lookupSession(request: Request, response: Response) {
       plate,
       vehicle: vehicle ? {
         plate: vehicle.plate,
-        ownerName: vehicle.ownerName,
         vehicleType: vehicle.vehicleType,
         status: vehicle.status,
         brand: vehicle.brand,
@@ -167,8 +169,6 @@ export async function lookupSession(request: Request, response: Response) {
       session: {
         id: completedSession._id,
         plate: completedSession.plate,
-        ownerName: completedSession.ownerName,
-        ownerEmail: completedSession.ownerEmail || null,
         slot: completedSession.slot,
         zone: slotDoc?.zoneId ? (await Zone.findById(slotDoc.zoneId))?.name : null,
         checkInAt: completedSession.checkInAt.toISOString(),
@@ -188,12 +188,8 @@ export async function lookupSession(request: Request, response: Response) {
   // activeSession is guaranteed non-null here (returned early if both are null)
   const session = activeSession!;
 
-  // Convert checkInAt from UTC to local (UTC+7) before calculating fee
-  const activeSessionCheckInLocal = new Date(session.checkInAt);
-  activeSessionCheckInLocal.setHours(activeSessionCheckInLocal.getHours() + 7);
-
   // Tính thời gian đã gửi
-  const parkingMinutes = Math.round((Date.now() - activeSessionCheckInLocal.getTime()) / 60000);
+  const parkingMinutes = Math.round((Date.now() - session.checkInAt.getTime()) / 60000);
   const hours = Math.floor(parkingMinutes / 60);
   const mins = parkingMinutes % 60;
   const duration = hours > 0 ? `${hours} giờ ${mins} phút` : `${mins} phút`;
@@ -201,7 +197,7 @@ export async function lookupSession(request: Request, response: Response) {
   // Lấy thông tin pricing để tính phí
   const slotDoc = session.slotId as any;
   const pricing = await getActivePricingConfigForZone(slotDoc?.zoneId);
-  const feeBreakdown = calculateParkingFee(activeSessionCheckInLocal, new Date(), pricing);
+  const feeBreakdown = calculateParkingFee(session.checkInAt, new Date(), pricing);
 
   // Tiền phạt đang chờ (đỗ lấn vạch) — cộng vào phí hiển thị, trả gộp khi checkout
   const penalty = await getPendingPenaltiesForSession(session._id.toString());
@@ -210,21 +206,13 @@ export async function lookupSession(request: Request, response: Response) {
   // Kiểm tra xem đã thanh toán trước chưa
   const isPrepaid = session.paymentStatus === "fully_paid" || session.paymentStatus === "partial_paid";
 
-  // Lấy thông tin user nếu có
-  let userEmail: string | null = null;
-  let userPhone: string | null = null;
-  if (session.ownerUserId) {
-    const user = await User.findById(session.ownerUserId).select("email phone");
-    userEmail = user?.email || null;
-    userPhone = user?.phone || null;
-  }
-
+  // BẢO MẬT: công khai chỉ trả dữ liệu phiên gửi xe, không trả PII chủ xe
+  // (tên, email, số điện thoại) — endpoint này không yêu cầu xác thực.
   response.json({
     found: true,
     plate,
     vehicle: vehicle ? {
       plate: vehicle.plate,
-      ownerName: vehicle.ownerName,
       vehicleType: vehicle.vehicleType,
       status: vehicle.status,
       brand: vehicle.brand,
@@ -233,8 +221,6 @@ export async function lookupSession(request: Request, response: Response) {
     session: {
       id: session._id,
       plate: session.plate,
-      ownerName: session.ownerName,
-      ownerEmail: session.ownerEmail || userEmail || null,
       slot: session.slot,
       zone: slotDoc?.zoneId ? (await Zone.findById(slotDoc.zoneId))?.name : null,
       checkInAt: session.checkInAt.toISOString(),
@@ -253,10 +239,6 @@ export async function lookupSession(request: Request, response: Response) {
       expectedCheckOutAt: session.expectedCheckOutAt?.toISOString(),
       isPrepaid,
       entryGate: session.entryGate || null,
-    },
-    user: {
-      email: userEmail || null,
-      phone: userPhone || null,
     },
   });
 }
@@ -282,9 +264,6 @@ export async function calculateExitFee(request: Request, response: Response) {
     return;
   }
 
-  // Convert checkInAt from UTC to local (UTC+7) before calculating fee
-  const sessionCheckInLocal = new Date(session.checkInAt);
-  sessionCheckInLocal.setHours(sessionCheckInLocal.getHours() + 7);
 
   // Xác định thời gian ra
   let exitTime: Date;
@@ -299,7 +278,7 @@ export async function calculateExitFee(request: Request, response: Response) {
   // Tính phí
   const slotDoc = session.slotId as any;
   const pricing = await getActivePricingConfigForZone(slotDoc?.zoneId);
-  const feeBreakdown = calculateParkingFee(sessionCheckInLocal, exitTime, pricing);
+  const feeBreakdown = calculateParkingFee(session.checkInAt, exitTime, pricing);
 
   // Cộng tiền phạt (vé đỗ lấn vạch đang chờ) — khách trả gộp với phí gửi
   const penalty = await getPendingPenaltiesForSession(session._id.toString());
@@ -312,7 +291,7 @@ export async function calculateExitFee(request: Request, response: Response) {
   if (session.paymentStatus === "fully_paid") {
     // Đã thanh toán đủ - tính phí bổ sung nếu gia hạn (cộng thêm phạt nếu có)
     const paidAt = session.updatedAt;
-    const currentFee = calculateParkingFee(sessionCheckInLocal, paidAt, pricing);
+    const currentFee = calculateParkingFee(session.checkInAt, paidAt, pricing);
     additionalFee = Math.max(0, feeBreakdown.totalFee - currentFee.totalFee) + penalty.total;
     totalFee = additionalFee;
   }
@@ -374,19 +353,17 @@ export async function calculateFeeQuick(request: Request, response: Response) {
 
   let exitTime: Date;
   if (exitDate) {
-    // Parse date string as LOCAL date to avoid UTC offset issues (server is UTC+7)
+    // Parse y-m-d la ngay gio VIETNAM (Asia/Ho_Chi_Minh), khong dua timezone server.
     const [year, month, day] = exitDate.split("-").map(Number);
-    const d = new Date(year, month - 1, day, exitHour, 0, 0, 0);
-    exitTime = d;
+    exitTime = vietnamInstantFromWallClock(year, month, day, exitHour);
   } else {
     // Mặc định: ngày mai, giờ đã chọn
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    d.setHours(exitHour, 0, 0, 0);
-    exitTime = d;
+    // Mac dinh: ngay mai (gio VN), gio da chon
+    const nowVi = getVietnamWallClock(new Date());
+    const tomorrow = viDateAddDays({ year: nowVi.year, month: nowVi.month, day: nowVi.day }, 1);
+    exitTime = vietnamInstantFromWallClock(tomorrow.year, tomorrow.month, tomorrow.day, exitHour);
   }
 
-  // exitTime is built with server-local getters; compare checkInAt in the same frame.
   const checkInLocal = new Date(session.checkInAt);
 
   // Không cho ra quá khứ
@@ -479,9 +456,16 @@ export async function preCheckout(request: Request, response: Response) {
 /**
  * HM-06: Xác nhận thanh toán thành công
  * POST /api/public/confirm-payment
+ *
+ * BẢO MẬT: endpoint này từng đặt "fully_paid" chỉ dựa vào sessionId do khách
+ * gửi lên — bất kỳ ai cũng có thể tự trả-free cho phiên của mình. Giờ đây
+ * trạng thái chỉ được nâng khi tồn tại giao dịch PayOS ĐÃ thanh toán của
+ * chính phiên này (được webhook/reconcile xác thực trước đó). Endpoint chỉ
+ * đọc lại trạng thái sau khi đối chiếu với PayOS, không tự tạo hay nâng
+ * trạng thái thanh toán từ dữ liệu client.
  */
 export async function confirmPayment(request: Request, response: Response) {
-  const { sessionId, paymentCode } = request.body;
+  const { sessionId } = request.body;
 
   if (!sessionId) {
     response.status(400).json({ message: "Thiếu mã phiên." });
@@ -494,18 +478,49 @@ export async function confirmPayment(request: Request, response: Response) {
     return;
   }
 
-  // Cập nhật trạng thái thanh toán
-  session.paymentStatus = "fully_paid";
-  session.paidAmount = session.fee;
-  session.paymentMethod = "payos";
-  await session.save();
+  // Chưa trả đủ phí → chủ động hỏi PayOS về các giao dịch pending của phiên
+  // (webhook có thể không với tới server, ví dụ khi chạy localhost).
+  if (
+    session.paymentStatus !== "fully_paid" &&
+    (session.fee || 0) - (session.paidAmount || 0) > 0
+  ) {
+    try {
+      const { reconcileSessionPayment } = await import("../services/payos-webhook.service.js");
+      await reconcileSessionPayment(session);
+      const reloaded = await ParkingSession.findById(sessionId);
+      if (reloaded) Object.assign(session, reloaded.toObject());
+    } catch (err) {
+      console.warn("[confirmPayment] reconcile failed:", err);
+    }
+  }
+
+  // Chỉ xác nhận khi có giao dịch "paid" đã được xác thực của phiên này.
+  const { Transaction } = await import("../models/Transaction.js");
+  const verifiedPaid = await Transaction.findOne({
+    sessionId: session._id,
+    status: "paid",
+  }).sort({ paidAt: -1 });
+
+  if (!verifiedPaid) {
+    response.status(402).json({
+      success: false,
+      plate: session.plate,
+      sessionId: session._id,
+      paymentStatus: session.paymentStatus,
+      message: "Chưa ghi nhận thanh toán hợp lệ cho phiên này. Vui lòng hoàn tất thanh toán qua PayOS.",
+    });
+    return;
+  }
 
   response.json({
     success: true,
     plate: session.plate,
     sessionId: session._id,
-    paymentStatus: "fully_paid",
-    message: "Thanh toán thành công. Bạn có thể ra bãi xe khi sẵn sàng.",
+    paymentStatus: session.paymentStatus,
+    message:
+      session.paymentStatus === "fully_paid"
+        ? "Thanh toán thành công. Bạn có thể ra bãi xe khi sẵn sàng."
+        : "Đã ghi nhận một khoản thanh toán cho phiên này. Vui lòng thanh toán phần còn lại.",
   });
 }
 
@@ -646,7 +661,7 @@ export async function quickLookup(request: Request, response: Response) {
   }
 
   const session = await ParkingSession.findOne({ plate, status: "Đang gửi" })
-    .select("plate ownerName checkInAt slot fee paymentStatus")
+    .select("plate checkInAt slot fee paymentStatus")
     .sort({ checkInAt: -1 });
 
   if (!session) {
@@ -658,11 +673,8 @@ export async function quickLookup(request: Request, response: Response) {
     return;
   }
 
-  // Convert checkInAt from UTC to local (UTC+7)
-  const lookupCheckInLocal = new Date(session.checkInAt);
-  lookupCheckInLocal.setHours(lookupCheckInLocal.getHours() + 7);
-
-  const parkingMinutes = Math.round((Date.now() - lookupCheckInLocal.getTime()) / 60000);
+  // Gio VN qua Intl (khoi +7 thu cong) - so khop truc tiep tren instant UTC.
+  const parkingMinutes = Math.round((Date.now() - session.checkInAt.getTime()) / 60000);
   const hours = Math.floor(parkingMinutes / 60);
   const minutes = parkingMinutes % 60;
   const duration = hours > 0 ? `${hours}h ${minutes}p` : `${minutes} phút`;
@@ -671,7 +683,6 @@ export async function quickLookup(request: Request, response: Response) {
     found: true,
     session: {
       plate: session.plate,
-      ownerName: session.ownerName,
       slot: session.slot,
       checkInAt: session.checkInAt,
       duration,

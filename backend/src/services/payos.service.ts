@@ -233,6 +233,9 @@ export async function createPayOSPaymentLink(
 
 /**
  * Xác minh chữ ký webhook
+ *
+ * BẢO MẬT: so sánh chữ ký bằng timing-safeEqual (so sánh chuỗi === có thể bị
+ * đoán dần theo thời gian). Thiếu signature → luôn từ chối.
  */
 export function verifyWebhookSignature(
   webhookBody: WebhookData,
@@ -240,8 +243,16 @@ export function verifyWebhookSignature(
 ): boolean {
   try {
     const { signature, ...data } = webhookBody;
+    if (!signature || typeof signature !== "string") return false;
     const expectedSignature = createSignatureFromObject(data, checksumKey);
-    return signature === expectedSignature;
+    const a = Buffer.from(signature, "utf8");
+    const b = Buffer.from(expectedSignature, "utf8");
+    if (a.length !== b.length) {
+      // Vẫn tiêu tốn thời gian so sánh để tránh lộ thông tin qua độ trễ
+      crypto.timingSafeEqual(b, b);
+      return false;
+    }
+    return crypto.timingSafeEqual(a, b);
   } catch {
     return false;
   }

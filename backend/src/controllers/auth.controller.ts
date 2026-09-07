@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import { randomInt, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { env } from "../config/env.js";
+import { ActiveSession } from "../models/ActiveSession.js";
 import { OtpToken } from "../models/OtpToken.js";
 import { User } from "../models/User.js";
 import { sendMail, smtpConfigured } from "../services/mail.service.js";
@@ -172,7 +173,13 @@ export async function verifyEmailOtp(request: Request, response: Response) {
   }).sort({ createdAt: -1 });
 
   if (!token || !(await bcrypt.compare(body.otp, token.otpHash))) {
-    response.status(400).json({ message: "OTP không đúng hoặc đã hết hạn." });
+    if (token) {
+      await rejectInvalidOtp(token, response, 400);
+    } else {
+      response
+        .status(400)
+        .json({ message: "OTP không đúng hoặc đã hết hạn." });
+    }
     return;
   }
 
@@ -580,7 +587,13 @@ export async function resetPassword(request: Request, response: Response) {
   }).sort({ createdAt: -1 });
 
   if (!token || !(await bcrypt.compare(body.otp, token.otpHash))) {
-    response.status(400).json({ message: "OTP không đúng hoặc đã hết hạn." });
+    if (token) {
+      await rejectInvalidOtp(token, response, 400);
+    } else {
+      response
+        .status(400)
+        .json({ message: "OTP không đúng hoặc đã hết hạn." });
+    }
     return;
   }
 
@@ -594,6 +607,9 @@ export async function resetPassword(request: Request, response: Response) {
   user.provider = user.provider === "google" ? "mixed" : user.provider;
   token.usedAt = new Date();
   await Promise.all([user.save(), token.save()]);
+
+  // SEC: mọi phiên đăng nhập cũ của user này phải chết sau khi đổi mật khẩu.
+  await revokeUserSessions(user._id);
 
   response.json({ ok: true, message: "Đã đặt lại mật khẩu." });
 }
@@ -658,9 +674,13 @@ export async function verifyTwoFactor(request: Request, response: Response) {
   });
 
   if (!token || !(await bcrypt.compare(body.code, token.otpHash))) {
-    response
-      .status(400)
-      .json({ message: "Mã 2FA không đúng hoặc đã hết hạn." });
+    if (token) {
+      await rejectInvalidOtp(token, response, 400);
+    } else {
+      response
+        .status(400)
+        .json({ message: "Mã 2FA không đúng hoặc đã hết hạn." });
+    }
     return;
   }
 
@@ -744,7 +764,7 @@ export async function disableTwoFactor(request: Request, response: Response) {
   }
 
   if (!(await bcrypt.compare(body.code, token.otpHash))) {
-    response.status(400).json({ message: "Mã 2FA không đúng." });
+    await rejectInvalidOtp(token, response, 400);
     return;
   }
 
@@ -827,9 +847,13 @@ export async function verifyLoginTwoFactor(
   });
 
   if (!otpToken || !(await bcrypt.compare(body.code, otpToken.otpHash))) {
-    response
-      .status(401)
-      .json({ message: "Mã 2FA không đúng hoặc đã hết hạn." });
+    if (otpToken) {
+      await rejectInvalidOtp(otpToken, response, 401);
+    } else {
+      response
+        .status(401)
+        .json({ message: "Mã 2FA không đúng hoặc đã hết hạn." });
+    }
     return;
   }
 
@@ -858,7 +882,16 @@ export async function verifyLoginTwoFactor(
   });
 }
 
-export function logout(_request: Request, response: Response) {
+export async function logout(request: Request, response: Response) {
+  const sid = request.user?.sid;
+  if (sid && mongoose.isValidObjectId(sid)) {
+    // SEC: thu hồi ActiveSession hiện tại (khớp sid trong JWT) thay vì
+    // chỉ xoá cookie — nếu không, token vẫn còn hiệu lực 8h phía server.
+    await ActiveSession.updateOne(
+      { _id: sid, isRevoked: false },
+      { $set: { isRevoked: true } },
+    );
+  }
   response.clearCookie(cookieName, { path: "/" }).json({ ok: true });
 }
 
@@ -1066,7 +1099,6 @@ export async function resendOtp(request: Request, response: Response) {
 }
 
 // --- Active Sessions Management (AU-14) ---
-import { ActiveSession } from "../models/ActiveSession.js";
 
 /**
  * Bước 1 đổi email: user đang đăng nhập gửi email mới → backend kiểm tra tính hợp lệ,
@@ -1178,7 +1210,13 @@ export async function verifyChangeEmail(request: Request, response: Response) {
   });
 
   if (!token || !(await bcrypt.compare(body.otp, token.otpHash))) {
-    response.status(400).json({ message: "OTP không đúng hoặc đã hết hạn." });
+    if (token) {
+      await rejectInvalidOtp(token, response, 400);
+    } else {
+      response
+        .status(400)
+        .json({ message: "OTP không đúng hoặc đã hết hạn." });
+    }
     return;
   }
 

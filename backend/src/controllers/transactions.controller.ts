@@ -259,6 +259,27 @@ export async function confirmTransaction(request: Request, response: Response) {
     return;
   }
 
+  // SEC: số tiền xác nhận phải khớp đúng số tiền của giao dịch PayOS.
+  if (transaction.sessionId) {
+    const session = await ParkingSession.findById(transaction.sessionId);
+    if (!session) {
+      response
+        .status(400)
+        .json({ message: "Phiên đỗ xe của giao dịch không tồn tại." });
+      return;
+    }
+    const expected = Math.max(
+      0,
+      (session.fee || 0) - (session.paidAmount || 0),
+    );
+    if (transaction.amount !== expected) {
+      response.status(400).json({
+        message: `Số tiền xác nhận (${transaction.amount}) không khớp số còn phải thu (${expected}). Vui lòng kiểm tra lại.`,
+      });
+      return;
+    }
+  }
+
   transaction.status = "paid";
   transaction.paidAt = new Date();
   transaction.note = body.note;
@@ -377,6 +398,18 @@ export async function cancelTransaction(request: Request, response: Response) {
   const transaction = await Transaction.findById(request.params.id);
   if (!transaction) {
     response.status(404).json({ message: "Không tìm thấy giao dịch." });
+    return;
+  }
+
+  // SEC: ownership check — staff chỉ được hủy giao dịch do chính mình tạo,
+  // admin được hủy mọi giao dịch (customer không tới được route này).
+  if (
+    request.user?.role !== "admin" &&
+    transaction.createdBy?.toString() !== request.user?.id
+  ) {
+    response
+      .status(403)
+      .json({ message: "Không có quyền hủy giao dịch này." });
     return;
   }
 

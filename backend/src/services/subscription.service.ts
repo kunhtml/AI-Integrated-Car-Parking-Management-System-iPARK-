@@ -94,11 +94,30 @@ const PURCHASE_STATUS_IN_USE: SubscriptionDocument["status"][] = [
   "active",
   "cancelled",
 ];
+// Trùng với partialFilterExpression của unique index trên activeVehicleId
+// (models/Subscription.ts): đây là tập trạng thái "còn giữ xe".
+const LIVE_VEHICLE_HOLD_STATUSES = PURCHASE_STATUS_IN_USE;
+
+/**
+ * Đặt / gỡ "xe đang bị giữ" (activeVehicleId) khớp với partial unique index.
+ * Gọi trước MỌI lần đổi status để index luôn phản ánh đúng trạng thái sống.
+ */
+async function setLiveVehicleHold(
+  sub: HydratedSubscription,
+  hold: boolean,
+): Promise<void> {
+  if (hold) {
+    sub.activeVehicleId = sub.primaryVehicleId;
+  } else {
+    sub.activeVehicleId = null;
+  }
+}
 const PENDING_PAYMENT_TIMEOUT_MS = 10 * 60 * 1000;
 
 /**
- * Hủy các đơn mua gói chưa thanh toán sau 10 phút. Subscription tạm được xóa
- * để xe có thể tạo đơn mua mới; Transaction được giữ lại làm lịch sử audit.
+ * Hủy các đơn mua gói chưa thanh toán sau 10 phút. Subscription KHÔNG bị xóa
+ * (link PayOS còn sống, tiền có thể vào muộn) mà chuyển sang "cancelled" và
+ * nhả giữ xe để xe được mua gói mới; Transaction được hủy để làm lịch sử audit.
  */
 export async function expirePendingSubscriptionPayments(
   now = new Date(),
@@ -125,10 +144,20 @@ export async function expirePendingSubscriptionPayments(
       },
     },
   );
-  await Subscription.deleteMany({
-    _id: { $in: subscriptionIds },
-    status: "pending_payment",
-  });
+  // MONEY-SAFETY: KHÔNG hard-delete sub pending_payment — link PayOS vẫn còn
+  // sống và tiền vẫn có thể vào. Sub được chuyển sang "cancelled" (vẫn tra cứu
+  // được theo payosOrderCode qua Transaction) + nhả giữ xe để khách mua lại.
+  // Nếu tiền vẫn vào sau đó, webhook sẽ đánh dấu transaction cần xử lý tay.
+  await Subscription.updateMany(
+    {
+      _id: { $in: subscriptionIds },
+      status: "pending_payment",
+    },
+    {
+      $set: { status: "cancelled" },
+      $unset: { activeVehicleId: 1 },
+    },
+  );
   return subscriptionIds.length;
 }
 
@@ -250,6 +279,7 @@ export async function purchaseSubscription(params: {
       planId: plan._id,
       planName: plan.name,
       primaryVehicleId: vehicle._id,
+      activeVehicleId: vehicle._id, // giữ slot index trong lúc gói còn sống
       rfidCardId: rfidCard._id,
       startDate: now,
       endDate,
@@ -373,6 +403,7 @@ export async function activateSubscription(
   rfidCard.userType = "resident";
   await rfidCard.save();
 
+  await setLiveVehicleHold(sub, true); // gói sống lại → giữ xe (partial index)
   sub.status = "active";
 
   if (!sub.memberCode) {
@@ -537,6 +568,7 @@ export async function renewSubscription(
     sub.endDate = new Date(
       baseDate.getTime() + plan.durationDays * 24 * 60 * 60 * 1000,
     );
+    await setLiveVehicleHold(sub, true); // gói sống lại → giữ xe (partial index)
     sub.status = "active";
     sub.renewalCount += 1;
     await sub.save();
@@ -607,16 +639,84 @@ export async function renewSubscription(
 export async function applyPaidSubscriptionTransaction(transaction: {
   subscriptionId?: mongoose.Types.ObjectId;
   note?: string;
+  payosOrderCode?: string;
+  _id?: mongoose.Types.ObjectId;
 }): Promise<void> {
   if (!transaction.subscriptionId) return;
   const sub = await Subscription.findById(transaction.subscriptionId);
-  if (!sub) return;
+
+  // MONEY-SAFETY: sub đã bị dọn (hoặc không còn) nhưng tiền ĐÃ VÀO.
+  // Không bao giờ drop im lặng — đánh dấu transaction cần xử lý tay (refund)
+  // và báo admin. Tra cứu lại theo payosOrderCode để chắc chắn transaction
+  // trong DB vẫn map được với đơn PayOS.
+  if (!sub) {
+    const { createNotificationsForRoles } = await import(
+      "./notification.service.js"
+    );
+    if (transaction.payosOrderCode) {
+      await Transaction.updateOne(
+        { payosOrderCode: transaction.payosOrderCode },
+        {
+          $set: {
+            refundReason:
+              "[CẦN XỬ LÝ TAY] Gói đăng ký đã bị xóa/hủy trước khi thanh toán thành công — cần hoàn tiền cho khách.",
+          },
+        },
+      );
+    }
+    await createNotificationsForRoles({
+      title: "Cần hoàn tiền: thanh toán gói sau khi gói đã bị xóa",
+      content: `Giao dịch PayOS ${transaction.payosOrderCode ?? transaction._id ?? "?"} (số tiền đã vào) không còn gói đăng ký tương ứng. Vui lòng kiểm tra và hoàn tiền cho khách hàng.`,
+      type: "subscription_payment_needs_review",
+      roles: ["admin"],
+    });
+    console.error(
+      "[applyPaidSubscriptionTransaction] ORPHAN PAYMENT for missing subscription:",
+      transaction.subscriptionId?.toString?.(),
+      "payosOrderCode:",
+      transaction.payosOrderCode,
+    );
+    return;
+  }
+
+  // Sub tồn tại nhưng đã bị hủy/cleaned trước khi tiền vào → vẫn không drop:
+  // mark needs-review và trả về, KHÔNG kích hoạt lại gói đã hủy.
+  if (sub.status === "cancelled") {
+    const { createNotificationsForRoles } = await import(
+      "./notification.service.js"
+    );
+    if (transaction.payosOrderCode) {
+      await Transaction.updateOne(
+        { payosOrderCode: transaction.payosOrderCode },
+        {
+          $set: {
+            refundReason:
+              "[CẦN XỬ LÝ TAY] Gói đăng ký đã bị hủy trước khi thanh toán thành công — cần hoàn tiền cho khách.",
+          },
+        },
+      );
+    }
+    await createNotificationsForRoles({
+      title: "Cần hoàn tiền: thanh toán vào gói đã bị hủy",
+      content: `Giao dịch PayOS ${transaction.payosOrderCode ?? "?"} đã vào cho gói ${sub.planName} ở trạng thái cancelled. Vui lòng kiểm tra và hoàn tiền cho khách hàng.`,
+      type: "subscription_payment_needs_review",
+      roles: ["admin"],
+    });
+    console.error(
+      "[applyPaidSubscriptionTransaction] Payment arrived for cancelled subscription:",
+      sub._id.toString(),
+      "payosOrderCode:",
+      transaction.payosOrderCode,
+    );
+    return;
+  }
 
   if (transaction.note && /^RENEW-/.test(transaction.note)) {
     const plan = await SubscriptionPlan.findById(sub.planId);
     const days = plan?.durationDays ?? 30;
     const baseDate = sub.endDate > new Date() ? sub.endDate : new Date();
     sub.endDate = new Date(baseDate.getTime() + days * 24 * 60 * 60 * 1000);
+    await setLiveVehicleHold(sub, true); // RENEW thành công → gói sống lại → giữ xe
     sub.status = "active";
     sub.renewalCount += 1;
     await sub.save();
@@ -652,12 +752,17 @@ export async function cancelSubscription(
         },
       );
     }
-    await Subscription.findByIdAndDelete(sub._id);
+    // MONEY-SAFETY: KHÔNG xóa sub — link PayOS vẫn có thể còn sống và tiền
+    // vẫn có thể vào sau khi user hủy. Sub giữ lại ở trạng thái "cancelled"
+    // (tra cứu được qua Transaction.payosOrderCode) và nhả giữ xe.
+    sub.status = "cancelled";
+    await setLiveVehicleHold(sub, false);
+    await sub.save();
     console.log(
-      "[cancelSubscription] Deleted pending_payment subscription:",
+      "[cancelSubscription] Cancelled pending_payment subscription (kept for money-traceability):",
       sub._id,
     );
-    return null;
+    return sub;
   }
 
   if (sub.status !== "active") {
@@ -669,6 +774,7 @@ export async function cancelSubscription(
   }
 
   sub.status = "cancelled";
+  await setLiveVehicleHold(sub, false); // hủy → không còn giữ xe cho gói mới
   await sub.save();
   await (
     await import("./parkingQuota.service.js")
@@ -722,13 +828,43 @@ export async function getSubscriptionPaymentInfo(subscriptionId: string) {
 
       if (payosResult.success) {
         if (transaction) {
-          transaction.payosOrderCode = String(payosResult.orderCode);
-          transaction.payosQrCode = payosResult.qrCode;
-          transaction.payosCheckoutUrl = payosResult.checkoutUrl;
-          transaction.payosAccountNumber = payosResult.accountNumber;
-          transaction.payosAccountName = payosResult.accountName;
-          transaction.payosBin = payosResult.bin;
-          await transaction.save();
+          // ORDER-CODE SAFETY: không đè payosOrderCode cũ — đơn PayOS cũ vẫn
+          // phải tra cứu được (webhook/reconcile map theo orderCode).
+          // Transaction cũ bị hủy và tạo transaction mới cho đơn mới.
+          if (
+            transaction.payosOrderCode &&
+            transaction.payosOrderCode !== String(payosResult.orderCode)
+          ) {
+            transaction.status = "cancelled";
+            transaction.refundReason =
+              "Thay thế bằng đơn PayOS mới (tạo lại QR) — mã đơn cũ được giữ nguyên để đối soát.";
+            await transaction.save();
+            transaction = await Transaction.create({
+              userId: sub.userId,
+              subscriptionId: sub._id,
+              method: "payos",
+              amount: plan.price,
+              status: "pending",
+              note: transaction.note || `SUB-${String(sub._id)}`,
+              payosOrderCode: String(payosResult.orderCode),
+              payosQrCode: payosResult.qrCode,
+              payosCheckoutUrl: payosResult.checkoutUrl,
+              payosAccountNumber: payosResult.accountNumber,
+              payosAccountName: payosResult.accountName,
+              payosBin: payosResult.bin,
+            });
+            sub.transactionId = transaction._id;
+            await sub.save();
+          } else {
+            // Chưa từng có orderCode (transaction rỗng QR) → gán lần đầu.
+            transaction.payosOrderCode = String(payosResult.orderCode);
+            transaction.payosQrCode = payosResult.qrCode;
+            transaction.payosCheckoutUrl = payosResult.checkoutUrl;
+            transaction.payosAccountNumber = payosResult.accountNumber;
+            transaction.payosAccountName = payosResult.accountName;
+            transaction.payosBin = payosResult.bin;
+            await transaction.save();
+          }
         } else {
           transaction = await Transaction.create({
             userId: sub.userId,
@@ -1024,7 +1160,11 @@ export async function expireSubscriptions(): Promise<number> {
       _id: { $in: expiredSubscriptions.map((sub) => sub._id) },
       status: "active",
     },
-    { $set: { status: "expired" } },
+    {
+      $set: { status: "expired" },
+      // Gói hết hạn → nhả giữ xe (thoát partial unique index) để mua lại.
+      $unset: { activeVehicleId: 1 },
+    },
   );
   const { createNotification, createNotificationsForRoles } =
     await import("./notification.service.js");

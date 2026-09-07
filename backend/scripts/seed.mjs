@@ -128,7 +128,7 @@ await PricingConfig.updateOne(
       nightRate: 10000,
       dayStartHour: 6,
       nightStartHour: 22,
-      gracePeriod: 0,
+      gracePeriod: 20,
       maxMinutes: 1440,
       isActive: true,
     },

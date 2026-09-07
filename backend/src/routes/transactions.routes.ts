@@ -27,4 +27,4 @@ transactionsRoutes.get("/", asyncHandler(listTransactions));
 transactionsRoutes.get("/:id", asyncHandler(getTransaction));
 transactionsRoutes.post("/session/:sessionId/cash", requireRole("admin", "staff"), asyncHandler(payCashForSession));
 transactionsRoutes.post("/:id/confirm", requireRole("admin"), asyncHandler(confirmTransaction));
-transactionsRoutes.post("/:id/cancel", asyncHandler(cancelTransaction));
+transactionsRoutes.post("/:id/cancel", requireRole("admin", "staff"), asyncHandler(cancelTransaction));
