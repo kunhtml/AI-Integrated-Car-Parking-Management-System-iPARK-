@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+
+import { RoleGuard } from "@/components/layout/role-guard";
 import { ZonesView } from "@/features/zones/zones-view";
 
 export const metadata: Metadata = {
@@ -7,5 +9,9 @@ export const metadata: Metadata = {
 };
 
 export default function ZonesPage() {
-  return <ZonesView />;
+  return (
+    <RoleGuard allowedRoles={["admin", "manager", "staff"]}>
+      <ZonesView />
+    </RoleGuard>
+  );
 }
