@@ -41,7 +41,6 @@ export async function createReservation(params: {
     throw err;
   }
 
-  // Check for overlapping reservations on same slot
   const overlap = await Reservation.findOne({
     slotId: slot._id,
     status: { $in: ["pending", "active"] },
@@ -142,7 +141,6 @@ export async function confirmArrival(
   // Mark slot as occupied
   await occupySlot(reservation.slotId, session._id);
 
-  // Update reservation
   reservation.status = "completed";
   reservation.sessionId = session._id;
   await reservation.save();
