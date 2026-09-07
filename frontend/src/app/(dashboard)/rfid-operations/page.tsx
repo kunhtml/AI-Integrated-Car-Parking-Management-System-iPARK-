@@ -57,7 +57,6 @@ function sessionIdOf(session?: ScanResult["session"]) {
   return session?._id || session?.id || "";
 }
 
-/* ─── Mismatch Panel ─── */
 function MismatchPanel({
   result,
   plateDetected,
@@ -208,7 +207,6 @@ function MismatchPanel({
   );
 }
 
-/* ─── Scanner Panel ─── */
 function ScannerPanel({
   title,
   icon,
@@ -397,7 +395,6 @@ function ScannerPanel({
   );
 }
 
-/* ─── Assign Card Panel ─── */
 function AssignCardPanel({ onDone }: { onDone: () => void }) {
   const [cardId, setCardId] = useState("");
   const [sessionId, setSessionId] = useState("");
@@ -527,7 +524,6 @@ function AssignCardPanel({ onDone }: { onDone: () => void }) {
   );
 }
 
-/* ─── Return Card Panel ─── */
 function ReturnCardPanel({ onDone }: { onDone: () => void }) {
   const [cardId, setCardId] = useState("");
   const [sessionId, setSessionId] = useState("");
@@ -646,7 +642,6 @@ function ReturnCardPanel({ onDone }: { onDone: () => void }) {
   );
 }
 
-/* ─── Active Sessions with RFID ─── */
 type ActiveSession = {
   id: string;
   plate?: string;
