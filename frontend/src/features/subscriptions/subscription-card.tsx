@@ -33,20 +33,20 @@ export function SubscriptionCard({ subscription, renewing, cancelling, onRenew, 
   const isExpired = s.status === "expired" || days === 0;
   const isPending = s.status === "pending_payment";
 
-  const daysColor = isExpired ? "var(--danger)" : isExpiring ? "#f59e0b" : "#10b981";
-  const accentColor = isActive ? "var(--primary)" : isPending ? "#f59e0b" : isExpired ? "#6b7280" : "var(--primary)";
-  const bgAccentSoft = isActive ? "#eff6ff" : isPending ? "#fffbeb" : "#f9fafb";
-  const borderColor = isActive ? "#bfdbfe" : isPending ? "#fde68a" : "#e5e7eb";
+  const daysColor = isExpired ? "var(--danger)" : isExpiring ? "var(--warning)" : "var(--success)";
+  const accentColor = isActive ? "var(--primary)" : isPending ? "var(--warning)" : isExpired ? "var(--fg-muted)" : "var(--primary)";
+  const bgAccentSoft = isActive ? "var(--primary-soft)" : isPending ? "var(--warning-soft)" : "var(--bg)";
+  const borderColor = isActive ? "var(--primary)" : isPending ? "var(--warning)" : "var(--border)";
 
   return (
     <div
       style={{
-        background: "#ffffff",
+        background: "var(--surface)",
         border: `1px solid ${borderColor}`,
         borderRadius: 16,
         overflow: "hidden",
         transition: "all 0.2s",
-        boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
+        boxShadow: "var(--shadow-sm)",
       }}
     >
       {/* Status top bar */}
@@ -54,12 +54,12 @@ export function SubscriptionCard({ subscription, renewing, cancelling, onRenew, 
         style={{
           height: 4,
           background: isActive
-            ? "linear-gradient(90deg, var(--primary), #06b6d4)"
+            ? "linear-gradient(90deg, var(--primary), var(--primary-hover))"
             : isPending
-              ? "linear-gradient(90deg, #f59e0b, #fbbf24)"
+              ? "linear-gradient(90deg, var(--warning), var(--warning))"
               : isExpired
-                ? "linear-gradient(90deg, #9ca3af, #d1d5db)"
-                : "#e5e7eb",
+                ? "linear-gradient(90deg, var(--fg-muted), var(--border))"
+                : "var(--border)",
         }}
       />
 
@@ -69,12 +69,12 @@ export function SubscriptionCard({ subscription, renewing, cancelling, onRenew, 
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <Star size={13} color={accentColor} fill={isActive ? accentColor : "none"} />
-              <span style={{ fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.06em", color: "#94a3b8", fontWeight: 700 }}>
+              <span style={{ fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--fg-subtle)", fontWeight: 700 }}>
                 {s.planName}
               </span>
             </div>
             {s.memberCode && (
-              <div style={{ fontSize: "1.05rem", fontWeight: 800, fontFamily: "monospace", color: "#0f172a", letterSpacing: 0.5 }}>
+              <div style={{ fontSize: "1.05rem", fontWeight: 800, fontFamily: "monospace", color: "var(--fg)", letterSpacing: 0.5 }}>
                 {s.memberCode}
               </div>
             )}
@@ -89,8 +89,8 @@ export function SubscriptionCard({ subscription, renewing, cancelling, onRenew, 
               display: "flex",
               alignItems: "center",
               gap: 12,
-              background: "#f8fafc",
-              border: "1px solid #f1f5f9",
+              background: "var(--bg)",
+              border: "1px solid var(--border)",
               borderRadius: 12,
               padding: "12px 14px",
             }}
@@ -111,8 +111,8 @@ export function SubscriptionCard({ subscription, renewing, cancelling, onRenew, 
               <Car size={18} color={accentColor} />
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 700, fontSize: "0.95rem", color: "#0f172a" }}>{primary.plate}</div>
-              <div style={{ fontSize: "0.8rem", color: "#64748b" }}>{describeVehicle(primary)}</div>
+              <div style={{ fontWeight: 700, fontSize: "0.95rem", color: "var(--fg)" }}>{primary.plate}</div>
+              <div style={{ fontSize: "0.8rem", color: "var(--fg-muted)" }}>{describeVehicle(primary)}</div>
               {blocked && (
                 <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 4, color: "var(--danger)", fontSize: "0.78rem", fontWeight: 600 }}>
                   <ShieldAlert size={12} /> "{primary.status}" — không đủ điều kiện gửi xe.
@@ -123,9 +123,9 @@ export function SubscriptionCard({ subscription, renewing, cancelling, onRenew, 
               type="button"
               onClick={() => onViewVehicle(primary.id)}
               style={{
-                background: "#ffffff",
-                border: "1px solid #e2e8f0",
-                color: "#64748b",
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+                color: "var(--fg-muted)",
                 borderRadius: 8,
                 padding: "6px 12px",
                 fontSize: 12,
@@ -144,23 +144,23 @@ export function SubscriptionCard({ subscription, renewing, cancelling, onRenew, 
         {/* Stats row */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <span style={{ fontSize: "0.68rem", color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+            <span style={{ fontSize: "0.68rem", color: "var(--fg-subtle)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>
               Bắt đầu
             </span>
-            <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: "0.85rem", color: "#475569" }}>
-              <CalendarClock size={12} color="#94a3b8" /> {formatDate(s.startDate)}
+            <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: "0.85rem", color: "var(--fg-muted)" }}>
+              <CalendarClock size={12} color="var(--fg-subtle)" /> {formatDate(s.startDate)}
             </span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <span style={{ fontSize: "0.68rem", color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+            <span style={{ fontSize: "0.68rem", color: "var(--fg-subtle)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>
               Hết hạn
             </span>
-            <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: "0.85rem", color: "#475569" }}>
-              <CalendarClock size={12} color="#94a3b8" /> {formatDate(s.endDate)}
+            <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: "0.85rem", color: "var(--fg-muted)" }}>
+              <CalendarClock size={12} color="var(--fg-subtle)" /> {formatDate(s.endDate)}
             </span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <span style={{ fontSize: "0.68rem", color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+            <span style={{ fontSize: "0.68rem", color: "var(--fg-subtle)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>
               Còn lại
             </span>
             <span
@@ -182,9 +182,9 @@ export function SubscriptionCard({ subscription, renewing, cancelling, onRenew, 
             style={{
               padding: "10px 14px",
               borderRadius: 10,
-              background: "#fffbeb",
-              border: "1px solid #fde68a",
-              color: "#92400e",
+              background: "var(--warning-soft)",
+              border: "1px solid var(--border)",
+              color: "var(--warning)",
               fontSize: "0.83rem",
               display: "flex",
               alignItems: "flex-start",
@@ -192,7 +192,7 @@ export function SubscriptionCard({ subscription, renewing, cancelling, onRenew, 
               lineHeight: 1.45,
             }}
           >
-            <CreditCard size={15} color="#f59e0b" style={{ flexShrink: 0, marginTop: 1 }} />
+            <CreditCard size={15} color="var(--warning)" style={{ flexShrink: 0, marginTop: 1 }} />
             <span>Đang chờ thanh toán. Bấm <strong>Tiếp tục thanh toán</strong> để mở lại QR.</span>
           </div>
         )}
@@ -212,9 +212,9 @@ export function SubscriptionCard({ subscription, renewing, cancelling, onRenew, 
                 gap: 6,
                 padding: "10px 16px",
                 borderRadius: 10,
-                border: "1.5px solid #fde68a",
-                background: "#fffbeb",
-                color: "#b45309",
+                border: "1.5px solid var(--warning)",
+                background: "var(--warning-soft)",
+                color: "var(--warning)",
                 fontWeight: 700,
                 fontSize: "0.85rem",
                 cursor: renewing ? "not-allowed" : "pointer",
@@ -240,9 +240,9 @@ export function SubscriptionCard({ subscription, renewing, cancelling, onRenew, 
                 gap: 6,
                 padding: "10px 16px",
                 borderRadius: 10,
-                border: "1.5px solid #fecaca",
-                background: "#fff1f2",
-                color: "#be123c",
+                border: "1.5px solid var(--danger)",
+                background: "var(--danger-soft)",
+                color: "var(--danger)",
                 fontWeight: 700,
                 fontSize: "0.85rem",
                 cursor: renewing || cancelling ? "not-allowed" : "pointer",
@@ -269,14 +269,14 @@ export function SubscriptionCard({ subscription, renewing, cancelling, onRenew, 
                 padding: "10px 16px",
                 borderRadius: 10,
                 border: "none",
-                background: "linear-gradient(135deg, var(--primary), #06b6d4)",
-                color: "#ffffff",
+                background: "linear-gradient(135deg, var(--primary), var(--primary-hover))",
+                color: "var(--primary-fg)",
                 fontWeight: 700,
                 fontSize: "0.85rem",
                 cursor: renewing ? "not-allowed" : "pointer",
                 opacity: renewing ? 0.6 : 1,
                 transition: "all 0.15s",
-                boxShadow: "0 2px 8px rgba(59,130,246,0.35)",
+                boxShadow: "var(--shadow-md)",
                 minHeight: 40,
               }}
             >

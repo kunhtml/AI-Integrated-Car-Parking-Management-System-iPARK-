@@ -167,7 +167,7 @@ export function AdminSubscriptions({
             const days = daysRemaining(s.endDate);
             const isActive = s.status === "active" && days > 0;
             const isExpiring = isActive && days <= 7;
-            const daysColor = s.status === "expired" || days === 0 ? "var(--danger)" : isExpiring ? "#f59e0b" : "#10b981";
+            const daysColor = s.status === "expired" || days === 0 ? "var(--danger)" : isExpiring ? "var(--warning)" : "var(--success)";
 
             return (
               <div key={s.id} className="sub-card">
@@ -310,7 +310,7 @@ export function AdminSubscriptions({
               </div>
               <div className="sub-detail-row">
                 <span>Còn lại</span>
-                <span style={{ color: daysRemaining(viewingSub.endDate) > 0 ? "#10b981" : "var(--danger)" }}>
+                <span style={{ color: daysRemaining(viewingSub.endDate) > 0 ? "var(--success)" : "var(--danger)" }}>
                   {daysRemaining(viewingSub.endDate)} ngày
                 </span>
               </div>

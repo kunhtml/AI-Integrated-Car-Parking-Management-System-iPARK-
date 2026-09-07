@@ -6,7 +6,7 @@ export const sectionStyle: CSSProperties = {
   background: "var(--surface)",
   borderRadius: 16,
   padding: "clamp(16px, 3vw, 24px) clamp(16px, 3vw, 28px)",
-  border: "1px solid var(--border, #e2e6ef)",
+  border: "1px solid var(--border)",
 };
 
 export const sectionHeadingStyle: CSSProperties = {
@@ -29,7 +29,7 @@ export const labelStyle: CSSProperties = {
 
 export const inputStyle: CSSProperties = {
   padding: "8px 12px",
-  border: "1px solid var(--border, #e2e6ef)",
+  border: "1px solid var(--border)",
   borderRadius: 8,
   fontSize: "0.9rem",
   background: "var(--surface)",

@@ -16,20 +16,20 @@ export function StatusBadge({ status }: { status: string }) {
         padding: "4px 10px",
         background:
           status === "active"
-            ? "#dcfce7"
+            ? "var(--success-soft)"
             : status === "pending_payment" || status === "expired"
-              ? "#fef9c3"
+              ? "var(--warning-soft)"
               : status === "cancelled"
-                ? "#fee2e2"
-                : "#f1f5f9",
+                ? "var(--danger-soft)"
+                : "var(--surface-2)",
         color:
           status === "active"
             ? "var(--success)"
             : status === "pending_payment" || status === "expired"
-              ? "#854d0e"
+              ? "var(--warning)"
               : status === "cancelled"
                 ? "var(--danger)"
-                : "#475569",
+                : "var(--fg-muted)",
         border: "1px solid transparent",
         whiteSpace: "nowrap",
       }}
