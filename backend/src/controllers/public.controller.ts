@@ -2,7 +2,6 @@ import { Request, Response } from "express";
 import { ParkingSlot } from "../models/ParkingSlot.js";
 import { ParkingSession } from "../models/ParkingSession.js";
 import { Vehicle } from "../models/Vehicle.js";
-import { User } from "../models/User.js";
 import { Zone } from "../models/Zone.js";
 import { getActivePricingConfig, getActivePricingConfigForZone } from "../services/pricing.service.js";
 import { calculateParkingFee } from "../services/pricing.service.js";
@@ -131,7 +130,6 @@ export async function lookupSession(request: Request, response: Response) {
       plate,
       vehicle: vehicle ? {
         plate: vehicle.plate,
-        ownerName: vehicle.ownerName,
         vehicleType: vehicle.vehicleType,
         status: vehicle.status,
         brand: vehicle.brand,
@@ -158,7 +156,6 @@ export async function lookupSession(request: Request, response: Response) {
       plate,
       vehicle: vehicle ? {
         plate: vehicle.plate,
-        ownerName: vehicle.ownerName,
         vehicleType: vehicle.vehicleType,
         status: vehicle.status,
         brand: vehicle.brand,
@@ -167,8 +164,6 @@ export async function lookupSession(request: Request, response: Response) {
       session: {
         id: completedSession._id,
         plate: completedSession.plate,
-        ownerName: completedSession.ownerName,
-        ownerEmail: completedSession.ownerEmail || null,
         slot: completedSession.slot,
         zone: slotDoc?.zoneId ? (await Zone.findById(slotDoc.zoneId))?.name : null,
         checkInAt: completedSession.checkInAt.toISOString(),
@@ -210,21 +205,13 @@ export async function lookupSession(request: Request, response: Response) {
   // Kiểm tra xem đã thanh toán trước chưa
   const isPrepaid = session.paymentStatus === "fully_paid" || session.paymentStatus === "partial_paid";
 
-  // Lấy thông tin user nếu có
-  let userEmail: string | null = null;
-  let userPhone: string | null = null;
-  if (session.ownerUserId) {
-    const user = await User.findById(session.ownerUserId).select("email phone");
-    userEmail = user?.email || null;
-    userPhone = user?.phone || null;
-  }
-
+  // BẢO MẬT: công khai chỉ trả dữ liệu phiên gửi xe, không trả PII chủ xe
+  // (tên, email, số điện thoại) — endpoint này không yêu cầu xác thực.
   response.json({
     found: true,
     plate,
     vehicle: vehicle ? {
       plate: vehicle.plate,
-      ownerName: vehicle.ownerName,
       vehicleType: vehicle.vehicleType,
       status: vehicle.status,
       brand: vehicle.brand,
@@ -233,8 +220,6 @@ export async function lookupSession(request: Request, response: Response) {
     session: {
       id: session._id,
       plate: session.plate,
-      ownerName: session.ownerName,
-      ownerEmail: session.ownerEmail || userEmail || null,
       slot: session.slot,
       zone: slotDoc?.zoneId ? (await Zone.findById(slotDoc.zoneId))?.name : null,
       checkInAt: session.checkInAt.toISOString(),
@@ -253,10 +238,6 @@ export async function lookupSession(request: Request, response: Response) {
       expectedCheckOutAt: session.expectedCheckOutAt?.toISOString(),
       isPrepaid,
       entryGate: session.entryGate || null,
-    },
-    user: {
-      email: userEmail || null,
-      phone: userPhone || null,
     },
   });
 }
@@ -479,9 +460,16 @@ export async function preCheckout(request: Request, response: Response) {
 /**
  * HM-06: Xác nhận thanh toán thành công
  * POST /api/public/confirm-payment
+ *
+ * BẢO MẬT: endpoint này từng đặt "fully_paid" chỉ dựa vào sessionId do khách
+ * gửi lên — bất kỳ ai cũng có thể tự trả-free cho phiên của mình. Giờ đây
+ * trạng thái chỉ được nâng khi tồn tại giao dịch PayOS ĐÃ thanh toán của
+ * chính phiên này (được webhook/reconcile xác thực trước đó). Endpoint chỉ
+ * đọc lại trạng thái sau khi đối chiếu với PayOS, không tự tạo hay nâng
+ * trạng thái thanh toán từ dữ liệu client.
  */
 export async function confirmPayment(request: Request, response: Response) {
-  const { sessionId, paymentCode } = request.body;
+  const { sessionId } = request.body;
 
   if (!sessionId) {
     response.status(400).json({ message: "Thiếu mã phiên." });
@@ -494,18 +482,49 @@ export async function confirmPayment(request: Request, response: Response) {
     return;
   }
 
-  // Cập nhật trạng thái thanh toán
-  session.paymentStatus = "fully_paid";
-  session.paidAmount = session.fee;
-  session.paymentMethod = "payos";
-  await session.save();
+  // Chưa trả đủ phí → chủ động hỏi PayOS về các giao dịch pending của phiên
+  // (webhook có thể không với tới server, ví dụ khi chạy localhost).
+  if (
+    session.paymentStatus !== "fully_paid" &&
+    (session.fee || 0) - (session.paidAmount || 0) > 0
+  ) {
+    try {
+      const { reconcileSessionPayment } = await import("../services/payos-webhook.service.js");
+      await reconcileSessionPayment(session);
+      const reloaded = await ParkingSession.findById(sessionId);
+      if (reloaded) Object.assign(session, reloaded.toObject());
+    } catch (err) {
+      console.warn("[confirmPayment] reconcile failed:", err);
+    }
+  }
+
+  // Chỉ xác nhận khi có giao dịch "paid" đã được xác thực của phiên này.
+  const { Transaction } = await import("../models/Transaction.js");
+  const verifiedPaid = await Transaction.findOne({
+    sessionId: session._id,
+    status: "paid",
+  }).sort({ paidAt: -1 });
+
+  if (!verifiedPaid) {
+    response.status(402).json({
+      success: false,
+      plate: session.plate,
+      sessionId: session._id,
+      paymentStatus: session.paymentStatus,
+      message: "Chưa ghi nhận thanh toán hợp lệ cho phiên này. Vui lòng hoàn tất thanh toán qua PayOS.",
+    });
+    return;
+  }
 
   response.json({
     success: true,
     plate: session.plate,
     sessionId: session._id,
-    paymentStatus: "fully_paid",
-    message: "Thanh toán thành công. Bạn có thể ra bãi xe khi sẵn sàng.",
+    paymentStatus: session.paymentStatus,
+    message:
+      session.paymentStatus === "fully_paid"
+        ? "Thanh toán thành công. Bạn có thể ra bãi xe khi sẵn sàng."
+        : "Đã ghi nhận một khoản thanh toán cho phiên này. Vui lòng thanh toán phần còn lại.",
   });
 }
 
@@ -646,7 +665,7 @@ export async function quickLookup(request: Request, response: Response) {
   }
 
   const session = await ParkingSession.findOne({ plate, status: "Đang gửi" })
-    .select("plate ownerName checkInAt slot fee paymentStatus")
+    .select("plate checkInAt slot fee paymentStatus")
     .sort({ checkInAt: -1 });
 
   if (!session) {
@@ -671,7 +690,6 @@ export async function quickLookup(request: Request, response: Response) {
     found: true,
     session: {
       plate: session.plate,
-      ownerName: session.ownerName,
       slot: session.slot,
       checkInAt: session.checkInAt,
       duration,
