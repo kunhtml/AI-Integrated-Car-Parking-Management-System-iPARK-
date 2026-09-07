@@ -79,7 +79,7 @@ function UserAvatar({
     .toUpperCase();
 
   const colors = [
-    "#3b82f6",
+    "var(--primary)",
     "#8b5cf6",
     "#ec4899",
     "#f59e0b",
@@ -123,14 +123,14 @@ function UserCard({
         }
       : {
           bg: "#fef2f2",
-          color: "#dc2626",
+          color: "var(--danger)",
           icon: <Ban size={14} />,
           text: "Đã khóa",
         };
 
   const roleConfig: Record<string, { bg: string; color: string }> = {
     admin: { bg: "#fef3c7", color: "#d97706" },
-    staff: { bg: "#eff6ff", color: "#2563eb" },
+    staff: { bg: "#eff6ff", color: "var(--primary)" },
     customer: { bg: "#f3f4f6", color: "#6b7280" },
   };
   const roleStyle = roleConfig[user.role] || roleConfig.customer;
@@ -240,7 +240,7 @@ export function UsersView() {
   const { currentUser, userList, createUser, updateUser, deleteUser } =
     useParkingApp();
   const [search, setSearch] = useState("");
-  const [filterRole, setFilterRole] = useState<Role | "">("");
+  const [filterRole, setFilterRole] = useState<Role | "">")("");
   const [filterStatus, setFilterStatus] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [viewing, setViewing] = useState<DemoUser | null>(null);
@@ -257,7 +257,7 @@ export function UsersView() {
       : ["customer"];
 
   const visibleUsers = useMemo(
-    () => userList.filter((u) => manageableRoles.includes(u.role)),
+    () => visibleUsers.filter((u) => manageableRoles.includes(u.role)),
     [userList, isAdmin],
   );
 
