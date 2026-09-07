@@ -257,7 +257,7 @@ export function UsersView() {
       : ["customer"];
 
   const visibleUsers = useMemo(
-    () => visibleUsers.filter((u) => manageableRoles.includes(u.role)),
+    () => userList.filter((u) => manageableRoles.includes(u.role)),
     [userList, isAdmin],
   );
 
