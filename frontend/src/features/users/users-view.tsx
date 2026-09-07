@@ -240,7 +240,7 @@ export function UsersView() {
   const { currentUser, userList, createUser, updateUser, deleteUser } =
     useParkingApp();
   const [search, setSearch] = useState("");
-  const [filterRole, setFilterRole] = useState<Role | "">")("");
+  const [filterRole, setFilterRole] = useState<Role | "">("");
   const [filterStatus, setFilterStatus] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [viewing, setViewing] = useState<DemoUser | null>(null);
