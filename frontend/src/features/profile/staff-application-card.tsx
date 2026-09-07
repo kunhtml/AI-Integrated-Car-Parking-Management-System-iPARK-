@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { showError, showSuccess } from "@/lib/toast";
 import {
   cancelMyStaffApplication,
@@ -108,6 +109,7 @@ export function StaffApplicationCard() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -130,14 +132,12 @@ export function StaffApplicationCard() {
     reload();
   }, [reload]);
 
-  async function handleCancel() {
+  function handleCancel() {
+    setConfirmCancel(true);
+  }
+
+  async function handleCancelConfirmed() {
     if (!application) return;
-    if (typeof window !== "undefined") {
-      const ok = window.confirm(
-        "Bạn có chắc muốn hủy đơn đăng ký đang chờ duyệt?",
-      );
-      if (!ok) return;
-    }
     setCancelling(true);
     try {
       const updated = await cancelMyStaffApplication();
@@ -251,6 +251,18 @@ export function StaffApplicationCard() {
           onSubmitted={handleSubmitted}
         />
       )}
+
+      <ConfirmDialog
+        message="Bạn có chắc muốn hủy đơn đăng ký đang chờ duyệt?"
+        onCancel={() => setConfirmCancel(false)}
+        onConfirm={() => {
+          setConfirmCancel(false);
+          void handleCancelConfirmed();
+        }}
+        open={confirmCancel}
+        title="Hủy đơn đăng ký?"
+        tone="danger"
+      />
     </section>
   );
 }
@@ -437,7 +449,7 @@ function RejectedView({
         >
           <b>Lý do từ chối:</b> {application.reviewNote}
           <div style={{ marginTop: 6, fontSize: "0.76rem" }}>
-            Bạn có thể chỉnh sửa và gửi lại chính đơn này. Lần gửi lại:{" "}
+            Bạn có thể chỉnh sửa và gửi lại chính đơn này. Lần gửi lại: {" "}
             {application.resubmitCount ?? 0}.
           </div>
         </div>
