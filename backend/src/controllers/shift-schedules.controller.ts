@@ -330,7 +330,6 @@ export async function createShiftSchedule(
       return;
     }
 
-    // Check for existing schedule on same day and shift type
     const existingSchedule = await findConflict({
       staffId: body.staffId,
       date: new Date(body.date),
@@ -418,7 +417,6 @@ export async function bulkCreateShiftSchedules(
       const staffCheck = await getAssignableStaff(scheduleData.staffId);
       if ("error" in staffCheck) continue;
 
-      // Check for existing schedule
       const existingSchedule = await findConflict({
         staffId: scheduleData.staffId,
         date: new Date(scheduleData.date),
