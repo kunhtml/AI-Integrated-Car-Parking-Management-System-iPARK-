@@ -77,13 +77,11 @@ export async function getCardDetail(id: string) {
     throw new AppError("Không tìm thấy thẻ RFID.", 404);
   }
 
-  // Get current active session using this card
   const activeSession = await ParkingSession.findOne({
     rfidCardId: card.cardId,
     status: "Đang gửi",
   });
 
-  // Get scan log count
   const scanCount = await RfidScanLog.countDocuments({ cardId: card.cardId });
 
   return { card, activeSession, scanCount };
