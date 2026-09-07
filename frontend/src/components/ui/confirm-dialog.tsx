@@ -15,10 +15,10 @@ type ConfirmDialogProps = {
 };
 
 /**
- * Hộp thoại xác nhận dùng chung, thay thế window.confirm (chặn luồng, không
- * tùy biến được) bằng dialog cùng hệ thống CSS với các modal khác của app
- * (modal-overlay / modal-card — giống pattern payment-modal, devices-view).
- * Không thêm CSS mới.
+ * Hộp thoại xác nhận dùng chung, thay thế hộp thoại confirm mặc định của
+ * trình duyệt (chặn luồng, không tùy biến được) bằng dialog cùng hệ thống CSS
+ * với các modal khác của app (modal-overlay / modal-card — giống pattern
+ * payment-modal, devices-view). Không thêm CSS mới.
  */
 export function ConfirmDialog({
   open,
@@ -33,7 +33,8 @@ export function ConfirmDialog({
   const titleId = useId();
   const cancelRef = useRef<HTMLButtonElement>(null);
 
-  // Tự focus nút "Hủy" mỗi khi dialog mở — hành vi an toàn giống window.confirm.
+  // Tự focus nút "Hủy" mỗi khi dialog mở — hành vi an toàn mặc định của hộp
+  // thoại confirm gốc.
   useEffect(() => {
     if (open) cancelRef.current?.focus();
   }, [open]);
