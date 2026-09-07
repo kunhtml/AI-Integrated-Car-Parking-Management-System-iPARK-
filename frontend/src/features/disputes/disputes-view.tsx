@@ -303,7 +303,7 @@ export function DisputesView() {
               ))}
             </select>
             {errors.sessionId && (
-              <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>
+              <span style={{ color: "var(--danger)", fontSize: "0.75rem" }}>
                 {errors.sessionId}
               </span>
             )}
@@ -348,7 +348,7 @@ export function DisputesView() {
               })}
             </select>
             {errors.transactionId && (
-              <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>
+              <span style={{ color: "var(--danger)", fontSize: "0.75rem" }}>
                 {errors.transactionId}
               </span>
             )}
@@ -378,7 +378,7 @@ export function DisputesView() {
               maxLength={2000}
             />
             {errors.content && (
-              <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>
+              <span style={{ color: "var(--danger)", fontSize: "0.75rem" }}>
                 {errors.content}
               </span>
             )}
@@ -391,7 +391,7 @@ export function DisputesView() {
               onChange={(e) => update("contactName", e.target.value)}
             />
             {errors.contactName && (
-              <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>
+              <span style={{ color: "var(--danger)", fontSize: "0.75rem" }}>
                 {errors.contactName}
               </span>
             )}
@@ -406,7 +406,7 @@ export function DisputesView() {
               inputMode="tel"
             />
             {errors.contactPhone && (
-              <span style={{ color: "#ef4444", fontSize: "0.75rem" }}>
+              <span style={{ color: "var(--danger)", fontSize: "0.75rem" }}>
                 {errors.contactPhone}
               </span>
             )}
@@ -522,7 +522,7 @@ export function DisputesView() {
             </label>
             {errors.attachments ? (
               <div
-                style={{ fontSize: "0.75rem", color: "#ef4444", marginTop: 4 }}
+                style={{ fontSize: "0.75rem", color: "var(--danger)", marginTop: 4 }}
               >
                 {errors.attachments}
               </div>
