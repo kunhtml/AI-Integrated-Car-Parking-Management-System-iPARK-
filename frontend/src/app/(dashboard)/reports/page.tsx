@@ -5,7 +5,7 @@ import { ReportsView } from "@/features/reports/reports-view";
 
 export default function ReportsPage() {
   return (
-    <RoleGuard allowedRoles={["admin"]}>
+    <RoleGuard allowedRoles={["admin", "manager"]}>
       <ReportsView />
     </RoleGuard>
   );
