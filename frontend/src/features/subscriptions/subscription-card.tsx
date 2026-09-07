@@ -33,8 +33,8 @@ export function SubscriptionCard({ subscription, renewing, cancelling, onRenew, 
   const isExpired = s.status === "expired" || days === 0;
   const isPending = s.status === "pending_payment";
 
-  const daysColor = isExpired ? "#ef4444" : isExpiring ? "#f59e0b" : "#10b981";
-  const accentColor = isActive ? "#3b82f6" : isPending ? "#f59e0b" : isExpired ? "#6b7280" : "#3b82f6";
+  const daysColor = isExpired ? "var(--danger)" : isExpiring ? "#f59e0b" : "#10b981";
+  const accentColor = isActive ? "var(--primary)" : isPending ? "#f59e0b" : isExpired ? "#6b7280" : "var(--primary)";
   const bgAccentSoft = isActive ? "#eff6ff" : isPending ? "#fffbeb" : "#f9fafb";
   const borderColor = isActive ? "#bfdbfe" : isPending ? "#fde68a" : "#e5e7eb";
 
@@ -54,7 +54,7 @@ export function SubscriptionCard({ subscription, renewing, cancelling, onRenew, 
         style={{
           height: 4,
           background: isActive
-            ? "linear-gradient(90deg, #3b82f6, #06b6d4)"
+            ? "linear-gradient(90deg, var(--primary), #06b6d4)"
             : isPending
               ? "linear-gradient(90deg, #f59e0b, #fbbf24)"
               : isExpired
@@ -114,7 +114,7 @@ export function SubscriptionCard({ subscription, renewing, cancelling, onRenew, 
               <div style={{ fontWeight: 700, fontSize: "0.95rem", color: "#0f172a" }}>{primary.plate}</div>
               <div style={{ fontSize: "0.8rem", color: "#64748b" }}>{describeVehicle(primary)}</div>
               {blocked && (
-                <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 4, color: "#dc2626", fontSize: "0.78rem", fontWeight: 600 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 4, color: "var(--danger)", fontSize: "0.78rem", fontWeight: 600 }}>
                   <ShieldAlert size={12} /> "{primary.status}" — không đủ điều kiện gửi xe.
                 </div>
               )}
@@ -269,7 +269,7 @@ export function SubscriptionCard({ subscription, renewing, cancelling, onRenew, 
                 padding: "10px 16px",
                 borderRadius: 10,
                 border: "none",
-                background: "linear-gradient(135deg, #3b82f6, #06b6d4)",
+                background: "linear-gradient(135deg, var(--primary), #06b6d4)",
                 color: "#ffffff",
                 fontWeight: 700,
                 fontSize: "0.85rem",
