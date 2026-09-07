@@ -39,7 +39,7 @@ const STATUS_LABELS: Record<
   approved: {
     label: "Đã được duyệt",
     bg: "rgba(34,197,94,0.1)",
-    color: "#22c55e",
+    color: "var(--success)",
     icon: CheckCircle2,
   },
   draft: {
@@ -51,7 +51,7 @@ const STATUS_LABELS: Record<
   rejected: {
     label: "Đã từ chối",
     bg: "rgba(239,68,68,0.1)",
-    color: "#ef4444",
+    color: "var(--danger)",
     icon: XCircle,
   },
   cancelled: {
@@ -437,7 +437,7 @@ function RejectedView({
         >
           <b>Lý do từ chối:</b> {application.reviewNote}
           <div style={{ marginTop: 6, fontSize: "0.76rem" }}>
-            Bạn có thể chỉnh sửa và gửi lại chính đơn này. Lần gửi lại:{" "}
+            Bạn có thể chỉnh sửa và gửi lại chính đơn này. Lần gửi lại: {" "}
             {application.resubmitCount ?? 0}.
           </div>
         </div>
