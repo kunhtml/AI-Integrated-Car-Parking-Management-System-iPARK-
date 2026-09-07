@@ -5,7 +5,7 @@ import { DevicesView } from "@/features/devices/devices-view";
 
 export default function DevicesPage() {
   return (
-    <RoleGuard allowedRoles={["admin"]}>
+    <RoleGuard allowedRoles={["admin", "manager"]}>
       <DevicesView />
     </RoleGuard>
   );
