@@ -61,9 +61,9 @@ export function AlertsView() {
   }
 
   function getOccupancyColor(percent: number): string {
-    if (percent >= 90) return "#ef4444";
+    if (percent >= 90) return "var(--danger)";
     if (percent >= 80) return "#eab308";
-    return "#22c55e";
+    return "var(--success)";
   }
 
   function getOccupancyBgColor(percent: number): string {
@@ -178,7 +178,7 @@ export function AlertsView() {
                     style={{
                       fontSize: 28,
                       fontWeight: 700,
-                      color: capacity.available === 0 ? "#ef4444" : undefined,
+                      color: capacity.available === 0 ? "var(--danger)" : undefined,
                     }}
                   >
                     {capacity.available}
