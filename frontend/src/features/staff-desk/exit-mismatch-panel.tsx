@@ -149,16 +149,16 @@ export function ExitMismatchPanel({
       {error ? <p className="text-xs leading-[1.45] font-semibold text-[#a16207]">{error}</p> : null}
 
       <div className="flex flex-wrap gap-2">
-        <button className="btn btn-ghost" disabled={pending} onClick={onReject} type="button">
+        <button className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55" disabled={pending} onClick={onReject} type="button">
           {pending ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={14} />}
           Từ chối
         </button>
-        <button className="btn btn-primary" disabled={pending} onClick={onRetry} type="button">
+        <button className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed border-transparent bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)] disabled:opacity-55" disabled={pending} onClick={onRetry} type="button">
           Quẹt lại
         </button>
         {can(mismatch, "confirm") ? (
           <button
-            className="btn btn-primary"
+            className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed border-transparent bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)] disabled:opacity-55"
             disabled={pending || !noteOk}
             onClick={() => onResolve("confirm", manualPlate, note)}
             type="button"
@@ -168,7 +168,7 @@ export function ExitMismatchPanel({
         ) : null}
         {can(mismatch, "correct_exit_plate") ? (
           <button
-            className="btn btn-primary"
+            className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed border-transparent bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)] disabled:opacity-55"
             disabled={pending || !noteOk || manualPlate.trim().length < 5}
             onClick={() => onResolve("correct_exit_plate", manualPlate, note)}
             type="button"
@@ -178,7 +178,7 @@ export function ExitMismatchPanel({
         ) : null}
         {can(mismatch, "correct_session_plate") ? (
           <button
-            className="btn btn-primary"
+            className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed border-transparent bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)] disabled:opacity-55"
             disabled={pending || !noteOk || manualPlate.trim().length < 5}
             onClick={() => onResolve("correct_session_plate", manualPlate, note)}
             type="button"
@@ -188,7 +188,7 @@ export function ExitMismatchPanel({
         ) : null}
         {can(mismatch, "accept_uid") ? (
           <button
-            className="btn btn-primary"
+            className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed border-transparent bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)] disabled:opacity-55"
             disabled={pending || !noteOk}
             onClick={() => onResolve("accept_uid", manualPlate, note)}
             type="button"

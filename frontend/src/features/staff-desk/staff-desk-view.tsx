@@ -1567,7 +1567,7 @@ export function StaffDeskView() {
                 ) : null}
                 <button
                   type="button"
-                  className="btn btn-primary"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed border-transparent bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)] disabled:opacity-55"
                   style={{ marginTop: "1rem" }}
                   onClick={() => {
                     setPhase("idle");
@@ -1616,7 +1616,7 @@ export function StaffDeskView() {
                 <div className="flex flex-wrap gap-2.5">
                   <button
                     type="button"
-                    className="btn btn-primary"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed border-transparent bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)] disabled:opacity-55"
                     disabled={
                       entryRfidExceptionReason.trim().length < 8 ||
                       /đang có phiên|chưa checkout/i.test(
@@ -1633,7 +1633,7 @@ export function StaffDeskView() {
                   </button>
                   <button
                     type="button"
-                    className="btn btn-ghost"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55"
                     onClick={() => {
                       setShowEntryRfidExceptionForm(false);
                       void startScan();
@@ -1963,7 +1963,7 @@ function WaitingCard({
           ) : null}
           <button
             type="submit"
-            className="btn btn-primary w-full"
+            className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed border-transparent bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)] disabled:opacity-55 w-full"
             disabled={Boolean(manualLoading)}
           >
             {manualLoading ? (
@@ -1976,7 +1976,7 @@ function WaitingCard({
           </button>
           <button
             type="button"
-            className="btn btn-ghost w-full"
+            className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55 w-full"
             onClick={onToggleManual}
             disabled={Boolean(manualLoading)}
           >
@@ -2027,7 +2027,7 @@ function WaitingCard({
         {isEntry && manualEntryVehicle?.cardUid && !showManualForm ? (
           <button
             type="button"
-            className="btn btn-primary min-h-12 w-full font-bold"
+            className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed border-transparent bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)] disabled:opacity-55 min-h-12 w-full font-bold"
             onClick={onOpenVerifiedMember}
             disabled={Boolean(manualLoading)}
           >
@@ -2037,7 +2037,7 @@ function WaitingCard({
         {!showManualForm ? (
           <button
             type="button"
-            className="btn btn-primary min-h-12 w-full font-bold"
+            className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed border-transparent bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)] disabled:opacity-55 min-h-12 w-full font-bold"
             onClick={onToggleManual}
           >
             Nhập thủ công biển số xe
@@ -2073,7 +2073,7 @@ function WaitingCard({
             <div className="flex flex-wrap gap-2.5">
               <button
                 type="submit"
-                className="btn btn-primary"
+                className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed border-transparent bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)] disabled:opacity-55"
                 disabled={Boolean(manualLoading)}
               >
                 {manualLoading ? (
@@ -2087,7 +2087,7 @@ function WaitingCard({
               </button>
               <button
                 type="button"
-                className="btn btn-ghost"
+                className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55"
                 onClick={onToggleManual}
                 disabled={Boolean(manualLoading)}
               >
@@ -2106,22 +2106,22 @@ function WaitingCard({
                 <Nfc size={28} className="animate-pulse" />
               </div>
               <p>Đang chờ quẹt thẻ RFID…</p>
-              <button className="btn btn-ghost" onClick={onCancelScan}>
+              <button className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55" onClick={onCancelScan}>
                 Hủy
               </button>
               {onManualRfidFailure ? (
-                <button className="btn btn-ghost" onClick={onManualRfidFailure}>
+                <button className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55" onClick={onManualRfidFailure}>
                   RFID không đọc được
                 </button>
               ) : null}
             </div>
           ) : (
             <>
-              <button className="btn btn-ghost" onClick={onStartScan}>
+              <button className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55" onClick={onStartScan}>
                 <Nfc size={16} /> Quét thẻ RFID
               </button>
               {onManualRfidFailure ? (
-                <button className="btn btn-ghost" onClick={onManualRfidFailure}>
+                <button className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55" onClick={onManualRfidFailure}>
                   RFID không đọc được
                 </button>
               ) : null}
@@ -2154,7 +2154,7 @@ function ManualUidInput({ onSubmit }: { onSubmit: (uid: string) => void }) {
     return (
       <button
         type="button"
-        className="btn btn-ghost"
+        className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55"
         onClick={() => setOpen(true)}
       >
         <CreditCard size={16} /> Nhập UID thủ công
@@ -2189,14 +2189,14 @@ function ManualUidInput({ onSubmit }: { onSubmit: (uid: string) => void }) {
       <div className="flex flex-wrap gap-2.5">
         <button
           type="submit"
-          className="btn btn-primary"
+          className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed border-transparent bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)] disabled:opacity-55"
           disabled={!uid.trim()}
         >
           <CheckCircle2 size={16} /> Xác nhận
         </button>
         <button
           type="button"
-          className="btn btn-ghost"
+          className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55"
           onClick={() => {
             setOpen(false);
             setUid("");
@@ -2276,7 +2276,7 @@ function ManualPlateCard({
                 : "Camera chưa nhận biển số — nhập thủ công"}
           </p>
         </div>
-        <button className="btn btn-ghost" onClick={onDismiss} aria-label="Hủy">
+        <button className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55" onClick={onDismiss} aria-label="Hủy">
           <XCircle size={16} />
         </button>
       </div>
@@ -2403,25 +2403,25 @@ function ManualPlateCard({
             )}
           </label>
           {plateConfirmed && phase === "error" ? (
-            <button className="btn btn-primary" onClick={onRescan}>
+            <button className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed border-transparent bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)] disabled:opacity-55" onClick={onRescan}>
               <Nfc size={16} /> Quét lại RFID
             </button>
           ) : blockingSession ? (
             <>
               <button
-                className="btn btn-primary"
+                className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed border-transparent bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)] disabled:opacity-55"
                 disabled
                 title="Biển/thẻ này đang có phiên gửi xe chưa kết thúc"
               >
                 <LogIn size={16} /> Đang có phiên — không thể tạo
               </button>
-              <button className="btn btn-ghost" onClick={onRescan}>
+              <button className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55" onClick={onRescan}>
                 <Nfc size={16} /> Quét lại RFID
               </button>
             </>
           ) : (
             <button
-              className="btn btn-primary"
+              className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed border-transparent bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)] disabled:opacity-55"
               onClick={onConfirm}
               disabled={manualPlate.trim().length < 5}
             >
@@ -2531,7 +2531,7 @@ function IngestCard(props: {
           ) : null}
         </div>
         <button
-          className="btn btn-ghost"
+          className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55"
           onClick={props.onDismiss}
           aria-label="Bỏ qua"
         >
@@ -2652,7 +2652,7 @@ function IngestCard(props: {
               <div className="flex flex-wrap gap-2.5">
                 <button
                   type="submit"
-                  className="btn btn-primary"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed border-transparent bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)] disabled:opacity-55"
                   disabled={!canConfirmManual}
                 >
                   {props.phase === "creating" || props.phase === "opening" ? (
@@ -2668,7 +2668,7 @@ function IngestCard(props: {
                 {!aiPlateMissing ? (
                   <button
                     type="button"
-                    className="btn btn-ghost"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55"
                     onClick={props.onCancelManualEntry}
                     disabled={
                       props.phase === "creating" || props.phase === "opening"
@@ -2689,7 +2689,7 @@ function IngestCard(props: {
                   </div>
                   <p>Đang chờ nhân viên quẹt thẻ RFID lên đầu đọc cổng vào…</p>
                   <button
-                    className="btn btn-ghost"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55"
                     onClick={props.onCancelScan}
                   >
                     Hủy quét
@@ -2710,7 +2710,7 @@ function IngestCard(props: {
               ) : (
                 <div className="grid gap-2">
                   <button
-                    className="btn btn-primary btn-lg"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed border-transparent bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)] disabled:opacity-55 btn-lg"
                     onClick={props.onStartScan}
                   >
                     <Nfc size={18} />{" "}
@@ -2763,7 +2763,7 @@ function IngestCard(props: {
               {props.phase === "idle" || props.phase === "error" ? (
                 <button
                   type="button"
-                  className="btn btn-ghost min-h-12 w-full font-bold"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55 min-h-12 w-full font-bold"
                   onClick={props.onOpenManualEntry}
                   style={{ marginTop: "0.5rem" }}
                 >
@@ -2814,7 +2814,7 @@ function IngestCard(props: {
                 <p className="text-xs leading-[1.45] text-[#667085]">{props.barrierMsg}</p>
               )}
               {props.phase === "error" && (
-                <button className="btn btn-ghost" onClick={props.onStartScan}>
+                <button className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55" onClick={props.onStartScan}>
                   <RefreshCcw size={14} /> Quét lại RFID
                 </button>
               )}
@@ -2845,7 +2845,7 @@ function IngestCard(props: {
                 <p className="text-xs leading-[1.45] text-[#667085]">{props.barrierMsg}</p>
               )}
               {props.phase === "error" && (
-                <button className="btn btn-ghost" onClick={props.onStartScan}>
+                <button className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55" onClick={props.onStartScan}>
                   <RefreshCcw size={14} /> Quét lại RFID
                 </button>
               )}
@@ -3153,7 +3153,7 @@ function ExitCard({
               </h2>
             </div>
             <button
-              className="btn btn-ghost"
+              className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55"
               type="button"
               onClick={onDismiss}
               aria-label="Đóng cảnh báo"
@@ -3203,7 +3203,7 @@ function ExitCard({
             </h2>
           </div>
           <button
-            className="btn btn-ghost"
+            className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55"
             type="button"
             onClick={onDismiss}
             aria-label="Bỏ qua"
@@ -3363,7 +3363,7 @@ function ExitCard({
             (event.fee ?? 0) <= 0 ? (
               <button
                 type="button"
-                className="btn btn-primary btn-lg"
+                className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed border-transparent bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)] disabled:opacity-55 btn-lg"
                 onClick={onOpenGate || onOpenBarrier}
                 disabled={didCheckout || event.barrierOpened}
               >
@@ -3389,7 +3389,7 @@ function ExitCard({
                 <span>{gateError}</span>
                 <button
                   type="button"
-                  className="btn btn-ghost"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55"
                   onClick={onOpenGate || onOpenBarrier}
                 >
                   <RefreshCcw size={16} /> Thử lại
@@ -3406,7 +3406,7 @@ function ExitCard({
                 {!showManualRfidForm ? (
                   <button
                     type="button"
-                    className="btn btn-ghost"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55"
                     onClick={() => setShowManualRfidForm(true)}
                   >
                     Xử lý thủ công
@@ -3424,7 +3424,7 @@ function ExitCard({
                     <div>
                       <button
                         type="button"
-                        className="btn btn-primary"
+                        className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed border-transparent bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)] disabled:opacity-55"
                         disabled={
                           mismatchPending || manualRfidNote.trim().length < 8
                         }
@@ -3439,7 +3439,7 @@ function ExitCard({
                       </button>
                       <button
                         type="button"
-                        className="btn btn-ghost"
+                        className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55"
                         onClick={() => setShowManualRfidForm(false)}
                       >
                         Hủy
@@ -3468,7 +3468,7 @@ function ExitCard({
                   <div className="grid w-full grid-cols-2 gap-3 max-[520px]:grid-cols-1">
                     <button
                       type="button"
-                      className="btn btn-ghost min-h-11 border-[#cbd5e1] bg-white font-semibold text-[#0f172a]"
+                      className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55 min-h-11 border-[#cbd5e1] bg-white font-semibold text-[#0f172a]"
                       onClick={() => setShowCashForm(true)}
                       disabled={!onPayCash}
                     >
@@ -3476,7 +3476,7 @@ function ExitCard({
                     </button>
                     <button
                       type="button"
-                      className="btn btn-ghost min-h-11 border-[#cbd5e1] bg-white font-semibold text-[#0f172a]"
+                      className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55 min-h-11 border-[#cbd5e1] bg-white font-semibold text-[#0f172a]"
                       onClick={onPayPayos}
                       disabled={!onPayPayos}
                     >
@@ -3493,7 +3493,7 @@ function ExitCard({
                     <div>
                       <button
                         type="button"
-                        className="btn btn-primary"
+                        className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed border-transparent bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)] disabled:opacity-55"
                         disabled={!onPayCash}
                         onClick={() => onPayCash?.(amountDue)}
                       >
@@ -3501,7 +3501,7 @@ function ExitCard({
                       </button>
                       <button
                         type="button"
-                        className="btn btn-ghost"
+                        className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55"
                         onClick={() => setShowCashForm(false)}
                       >
                         Hủy
@@ -3518,7 +3518,7 @@ function ExitCard({
                   <div>
                     <button
                       type="button"
-                      className="btn btn-primary"
+                      className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed border-transparent bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)] disabled:opacity-55"
                       disabled={!onPayCash}
                       onClick={() => onPayCash?.(amountDue)}
                     >
@@ -3526,7 +3526,7 @@ function ExitCard({
                     </button>
                     <button
                       type="button"
-                      className="btn btn-ghost"
+                      className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55"
                       onClick={() => setShowCashForm(false)}
                     >
                       Hủy
@@ -3554,7 +3554,7 @@ function ExitCard({
                   <div className="flex flex-wrap justify-center gap-2">
                     {paymentData?.checkoutUrl ? (
                       <button
-                        className="btn btn-ghost"
+                        className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55"
                         onClick={() =>
                           window.open(paymentData.checkoutUrl, "_blank")
                         }
@@ -3564,7 +3564,7 @@ function ExitCard({
                     ) : null}
                     {onPayCash ? (
                       <button
-                        className="btn btn-primary"
+                        className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed border-transparent bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)] disabled:opacity-55"
                         onClick={() => setShowCashForm(true)}
                       >
                         Đổi sang tiền mặt
@@ -3596,7 +3596,7 @@ function ExitCard({
                         placeholder="Nhập lý do xử lý thủ công (tối thiểu 8 ký tự)"
                       />
                       <button
-                        className="btn btn-ghost btn-lg"
+                        className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55 btn-lg"
                         disabled={manualRfidNote.trim().length < 8}
                         onClick={() =>
                           onManualMissingEntryRfid(manualRfidNote.trim())
@@ -3620,7 +3620,7 @@ function ExitCard({
                 </div>
                 {onScanRfid ? (
                   <button
-                    className="btn btn-primary btn-lg"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed border-transparent bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)] disabled:opacity-55 btn-lg"
                     onClick={onScanRfid}
                   >
                     <Nfc size={18} /> Quét lại thẻ RFID
@@ -3641,7 +3641,7 @@ function ExitCard({
                       rows={3}
                     />
                     <button
-                      className="btn btn-ghost btn-lg"
+                      className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55 btn-lg"
                       disabled={
                         manualRfidNote.trim().length < 8 ||
                         !onManualMissingEntryRfid
@@ -3674,7 +3674,7 @@ function ExitCard({
                 </div>
                 <div className="flex flex-wrap justify-center gap-2.5">
                   <button
-                    className="btn btn-primary btn-lg"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed border-transparent bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)] disabled:opacity-55 btn-lg"
                     onClick={onOpenGate || onOpenBarrier}
                     disabled={
                       didCheckout ||
@@ -3690,7 +3690,7 @@ function ExitCard({
                         : "Mở barie"}
                   </button>
                   {onScanRfid ? (
-                    <button className="btn btn-ghost" onClick={onScanRfid}>
+                    <button className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed bg-transparent border-[var(--border)] text-[var(--fg)] hover:bg-[var(--primary-soft)] hover:border-[var(--primary)] hover:text-[var(--primary-hover)] disabled:opacity-55" onClick={onScanRfid}>
                       <Nfc size={16} /> Quét thẻ khác
                     </button>
                   ) : null}
@@ -3704,7 +3704,7 @@ function ExitCard({
                 <span>Đang chờ quét thẻ…</span>
                 {onScanRfid ? (
                   <button
-                    className="btn btn-primary btn-lg"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius,8px)] border text-[13px] font-medium min-h-[34px] px-3 transition-colors cursor-pointer disabled:cursor-not-allowed border-transparent bg-[var(--primary)] text-[var(--primary-fg)] hover:bg-[var(--primary-hover)] disabled:opacity-55 btn-lg"
                     onClick={onScanRfid}
                     disabled={noSession || didCheckout || event.barrierOpened}
                   >
