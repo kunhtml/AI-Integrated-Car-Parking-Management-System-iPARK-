@@ -3529,7 +3529,7 @@ export function VehiclesView() {
         </div>
 
         {/* Stats summary — always visible, clickable */}
-        <div className="veh-stats">
+        <div className="grid grid-cols-4 gap-4 max-[980px]:grid-cols-2 max-[640px]:grid-cols-1 mb-6">
           <div
             className={`veh-stat${activeTab === "all" ? " active" : ""}`}
             onClick={() => {
@@ -3604,7 +3604,7 @@ export function VehiclesView() {
         {activeTab !== "requests" && (
           <>
             {/* Toolbar */}
-            <div className="veh-toolbar">
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
               {/* Always-visible filters */}
               <div className="veh-toolbar-left">
                 <select
@@ -3612,7 +3612,7 @@ export function VehiclesView() {
                   onChange={(e) =>
                     setStatusFilter(e.target.value as StatusFilter)
                   }
-                  className="veh-select"
+                  className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--fg)] outline-none focus:border-[var(--primary)]"
                   style={{ maxWidth: 140 }}
                   aria-label="Lọc theo trạng thái"
                 >
@@ -3625,7 +3625,7 @@ export function VehiclesView() {
                 <select
                   value={brandFilter}
                   onChange={(e) => setBrandFilter(e.target.value)}
-                  className="veh-select"
+                  className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--fg)] outline-none focus:border-[var(--primary)]"
                   style={{ maxWidth: 180 }}
                   aria-label="Lọc theo hãng xe"
                 >
@@ -3644,7 +3644,7 @@ export function VehiclesView() {
                     value={dateFrom}
                     onChange={(e) => setDateFrom(e.target.value)}
                     aria-label="Ngày tạo từ"
-                    className="veh-input"
+                    className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--fg)] outline-none focus:border-[var(--primary)]"
                     title="Ngày tạo từ"
                   />
                   <span className="veh-date-sep">–</span>
@@ -3653,7 +3653,7 @@ export function VehiclesView() {
                     value={dateTo}
                     onChange={(e) => setDateTo(e.target.value)}
                     aria-label="Ngày tạo đến"
-                    className="veh-input"
+                    className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--fg)] outline-none focus:border-[var(--primary)]"
                     title="Ngày tạo đến"
                   />
                   {(dateFrom || dateTo) && (
@@ -3895,7 +3895,7 @@ export function VehiclesView() {
                   <select
                     value={pageSize}
                     onChange={(e) => setPageSize(Number(e.target.value))}
-                    className="veh-select"
+                    className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--fg)] outline-none focus:border-[var(--primary)]"
                     style={{ fontSize: "0.8rem", padding: "4px 8px" }}
                   >
                     {PAGE_SIZE_OPTIONS.map((n) => (
@@ -3953,7 +3953,7 @@ export function VehiclesView() {
         {/* ─── Tab: Yêu cầu ─── */}
         {activeTab === "requests" && (
           <>
-            <div className="veh-toolbar" style={{ marginBottom: 16 }}>
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-4" style={{ marginBottom: 16 }}>
               <div className="veh-toolbar-left">
                 <select
                   value={requestStatusFilter}
@@ -3966,7 +3966,7 @@ export function VehiclesView() {
                         | "rejected",
                     )
                   }
-                  className="veh-select"
+                  className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--fg)] outline-none focus:border-[var(--primary)]"
                   aria-label="Lọc theo trạng thái yêu cầu"
                 >
                   <option value="all">Tất cả yêu cầu</option>
