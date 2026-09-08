@@ -81,7 +81,7 @@ function UserAvatar({
     .toUpperCase();
 
   const colors = [
-    "var(--primary)",
+    "#3b82f6",
     "#8b5cf6",
     "#ec4899",
     "#f59e0b",
@@ -125,23 +125,23 @@ function UserCard({
         }
       : {
           bg: "#fef2f2",
-          color: "var(--danger)",
+          color: "#dc2626",
           icon: <Ban size={14} />,
           text: "Đã khóa",
         };
 
   const roleConfig: Record<string, { bg: string; color: string }> = {
     admin: { bg: "#fef3c7", color: "#d97706" },
-    staff: { bg: "#eff6ff", color: "var(--primary)" },
+    staff: { bg: "#eff6ff", color: "#2563eb" },
     customer: { bg: "#f3f4f6", color: "#6b7280" },
   };
   const roleStyle = roleConfig[user.role] || roleConfig.customer;
 
   return (
-    <div className="flex flex-col rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] p-5 shadow-sm transition-all hover:border-[var(--primary)] hover:shadow-md">
-      <div className="mb-4 flex items-center gap-3.5">
+    <div className="user-card">
+      <div className="user-card-header">
         <UserAvatar name={user.name} />
-        <div className="flex flex-1 flex-col gap-0.5 [&>h3]:m-0 [&>h3]:text-base [&>h3]:font-bold [&>h3]:text-[var(--fg)] [&>p]:m-0 [&>p]:text-xs [&>p]:text-[var(--fg-muted)]">
+        <div className="user-card-info">
           <h4>{user.name}</h4>
           <span className="user-email">{user.email}</span>
         </div>
@@ -155,7 +155,7 @@ function UserCard({
         </div>
       </div>
 
-      <div className="mb-4 flex flex-col gap-2 rounded-[var(--radius)] bg-[var(--bg)] p-3 text-xs">
+      <div className="user-card-details">
         {user.phone && (
           <div className="user-detail">
             <Phone size={14} />
@@ -173,7 +173,7 @@ function UserCard({
         </div>
       </div>
 
-      <div className="mt-auto flex items-center justify-end gap-2 border-t border-[var(--border)] pt-3">
+      <div className="user-card-actions">
         <button
           className="user-action-btn view"
           onClick={onView}
@@ -228,7 +228,7 @@ function DetailRow({
   value: string;
 }) {
   return (
-    <div className="flex items-center justify-between [&>span]:text-[var(--fg-muted)] [&>strong]:font-semibold [&>strong]:text-[var(--fg)]">
+    <div className="user-detail-row">
       <span className="user-detail-label">
         {icon}
         {label}
@@ -247,8 +247,8 @@ export function UsersView() {
   const [showCreate, setShowCreate] = useState(false);
   const [viewing, setViewing] = useState<DemoUser | null>(null);
   const [editing, setEditing] = useState<DemoUser | null>(null);
-  const [form, setForm] = useState<EditState>({});
   const [confirmDelete, setConfirmDelete] = useState<DemoUser | null>(null);
+  const [form, setForm] = useState<EditState>({});
 
   const isAdmin = currentUser?.role === "admin";
   const canManageStaff =
@@ -329,14 +329,14 @@ export function UsersView() {
   }
 
   return (
-    <section className="mx-auto max-w-[1400px] p-[28px_32px] max-[768px]:p-4">
+    <section className="users-page">
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between gap-4 max-[768px]:flex-col max-[768px]:items-start">
-        <div className="flex items-center gap-3.5">
-          <div className="flex h-12 w-12 items-center justify-center rounded-[var(--radius)] bg-[var(--primary-soft)] text-[var(--primary)]">
+      <div className="users-header">
+        <div className="header-left">
+          <div className="header-icon">
             <UsersRound size={24} />
           </div>
-          <div className="flex flex-col gap-0.5 [&>h1]:m-0 [&>h1]:text-xl [&>h1]:font-bold [&>h1]:text-[var(--fg)] [&>p]:m-0 [&>p]:text-xs [&>p]:text-[var(--fg-muted)]">
+          <div className="header-text">
             <h1>Quản lý tài khoản</h1>
             <p>{isAdmin ? "Quản trị viên" : "Nhân viên"}</p>
           </div>
@@ -429,7 +429,7 @@ export function UsersView() {
       </div>
 
       {/* Users Grid */}
-      <div className="grid grid-cols-3 gap-6 max-[1100px]:grid-cols-2 max-[768px]:grid-cols-1">
+      <div className="users-grid">
         {filtered.map((user) => (
           <UserCard
             key={String(user.id)}
