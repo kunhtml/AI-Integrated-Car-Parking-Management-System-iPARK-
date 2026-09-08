@@ -72,7 +72,7 @@ export function VehicleCreateModal({ open, onClose, onCreated }: Props) {
   const inputStyle = {
     padding: "8px 10px",
     borderRadius: 8,
-    border: "1px solid var(--border)",
+    border: "1px solid var(--border, #e2e6ef)",
     background: "var(--surface)",
     color: "var(--text)",
     fontSize: "0.92rem",
@@ -187,11 +187,11 @@ export function VehicleCreateModal({ open, onClose, onCreated }: Props) {
           {error && (
             <div
               style={{
-                color: "var(--danger)",
+                color: "var(--danger, #dc2626)",
                 fontSize: "0.85rem",
                 padding: 8,
                 borderRadius: 8,
-                background: "var(--danger-soft)",
+                background: "rgba(220, 38, 38, 0.08)",
               }}
             >
               {error}

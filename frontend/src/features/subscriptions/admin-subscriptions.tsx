@@ -85,9 +85,9 @@ export function AdminSubscriptions({
   }
 
   return (
-    <section className="mx-auto max-w-[1400px] p-[28px_32px] max-[768px]:p-4">
+    <section className="admin-subs-page">
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between gap-4 max-[768px]:flex-col max-[768px]:items-start">
+      <div className="admin-subs-header">
         <div className="header-left">
           <div className="header-icon">
             <Package size={24} />
@@ -167,7 +167,7 @@ export function AdminSubscriptions({
             const days = daysRemaining(s.endDate);
             const isActive = s.status === "active" && days > 0;
             const isExpiring = isActive && days <= 7;
-            const daysColor = s.status === "expired" || days === 0 ? "var(--danger)" : isExpiring ? "var(--warning)" : "var(--success)";
+            const daysColor = s.status === "expired" || days === 0 ? "#ef4444" : isExpiring ? "#f59e0b" : "#10b981";
 
             return (
               <div key={s.id} className="sub-card">
@@ -310,7 +310,7 @@ export function AdminSubscriptions({
               </div>
               <div className="sub-detail-row">
                 <span>Còn lại</span>
-                <span style={{ color: daysRemaining(viewingSub.endDate) > 0 ? "var(--success)" : "var(--danger)" }}>
+                <span style={{ color: daysRemaining(viewingSub.endDate) > 0 ? "#10b981" : "#ef4444" }}>
                   {daysRemaining(viewingSub.endDate)} ngày
                 </span>
               </div>

@@ -95,7 +95,7 @@ export function VehiclePickerModal({
             style={{
               padding: 16,
               borderRadius: 10,
-              background: "var(--primary-soft)",
+              background: "var(--primary-soft, #eff6ff)",
               color: "var(--primary)",
               textAlign: "center",
               fontSize: "0.92rem",
@@ -129,8 +129,8 @@ export function VehiclePickerModal({
                     gap: 12,
                     padding: 12,
                     borderRadius: 10,
-                    border: "1px solid var(--border)",
-                    background: disabled ? "var(--surface-2)" : "var(--surface)",
+                    border: "1px solid var(--border, #e2e6ef)",
+                    background: disabled ? "var(--surface-soft, #f3f4f6)" : "var(--surface)",
                     cursor: disabled ? "not-allowed" : "pointer",
                     textAlign: "left",
                     opacity: disabled ? 0.7 : 1,
@@ -146,7 +146,7 @@ export function VehiclePickerModal({
                       style={{
                         fontSize: "0.78rem",
                         marginTop: 4,
-                        color: disabled ? "var(--danger)" : "var(--success)",
+                        color: disabled ? "var(--danger, #dc2626)" : "var(--success, #16a34a)",
                         fontWeight: 600,
                       }}
                     >

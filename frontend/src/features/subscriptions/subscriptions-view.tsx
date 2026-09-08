@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import { Check, CreditCard, Package, ListChecks } from "lucide-react";
 import { useParkingApp } from "@/context/parking-app-context";
 import { apiFetch } from "@/lib/client-api";
-import { currency } from "@/lib/constants";
 import { VehicleDetailModal } from "@/features/vehicles/vehicles-view";
 import type { RegisteredVehicle, Subscription } from "@/types";
 import { AdminPlans } from "./admin-plans";
@@ -404,7 +403,7 @@ export function SubscriptionsView() {
         onVehicleCreated={() => loadVehicles()}
       />
 
-      <div className="mx-auto max-w-[1400px] p-[28px_32px] max-[768px]:p-4">
+      <div className="subscriptions-page">
         {/* Feedback banner */}
         {feedback && (
           <div className={`feedback-banner ${feedback.type}`}>
@@ -419,7 +418,7 @@ export function SubscriptionsView() {
 
         {/* Customer: all subscription cards */}
         {isCustomer && (
-          <section className="mb-8 flex flex-col gap-6">
+          <section className="customer-subs-section">
             <h2 className="section-title">
               <CreditCard size={18} />
               Gói của bạn
@@ -434,7 +433,7 @@ export function SubscriptionsView() {
               />
             ) : (
               <>
-                <div className="grid grid-cols-3 gap-6 max-[1100px]:grid-cols-2 max-[768px]:grid-cols-1">
+                <div className="subs-cards-grid">
                   {myActiveSubs.map((sub) => (
                     <SubscriptionCard
                       key={sub.id}
@@ -451,26 +450,26 @@ export function SubscriptionsView() {
 
                 {/* Plans horizontal */}
                 {visiblePlans.length > 0 && (
-                  <div className="flex flex-col gap-4">
+                  <div className="plans-horizontal">
                     <h3>Mua thêm gói cho xe khác</h3>
-                    <div className="grid grid-cols-3 gap-6 max-[1100px]:grid-cols-2 max-[768px]:grid-cols-1">
+                    <div className="plans-row">
                       {visiblePlans.map((plan, idx) => (
                         <div
                           key={plan.id}
                           className={`plan-horizontal-card ${idx === 0 ? "featured" : ""}`}
                         >
-                          <div className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider">
+                          <div className="plan-badge">
                             {idx === 0 ? "Phổ biến" : plan.duration}
                           </div>
                           <h4>{plan.name}</h4>
-                          <p className="text-2xl font-extrabold text-[var(--primary)]">
+                          <p className="plan-price">
                             {currency.format(plan.price)}
                           </p>
-                          <span className="text-xs text-[var(--fg-muted)]">
+                          <span className="plan-days">
                             {plan.durationDays} ngày
                           </span>
                           <button
-                            className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-[var(--radius)] border-none bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-[var(--primary-hover)]"
+                            className="plan-buy-btn"
                             onClick={() => handlePurchase(plan.id)}
                             disabled={purchasing}
                           >
@@ -484,11 +483,11 @@ export function SubscriptionsView() {
                   </div>
                 )}
                 {subscriptionHistory.length > 0 && (
-                  <div className="flex flex-col gap-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] p-6">
+                  <div className="subscription-history">
                     <h3>Lịch sử gói đã mua</h3>
-                    <div className="flex flex-col divide-y divide-[var(--border)]">
+                    <div className="subscription-history-list">
                       {subscriptionHistory.map((sub) => (
-                        <div className="flex items-center justify-between py-3 text-sm" key={sub.id}>
+                        <div className="subscription-history-row" key={sub.id}>
                           <div>
                             <strong>{sub.planName}</strong>
                             <span>
@@ -637,3 +636,6 @@ export function SubscriptionsView() {
     </>
   );
 }
+
+// Import currency
+import { currency } from "@/lib/constants";
