@@ -2023,11 +2023,11 @@ function WaitingCard({
         </div>
       ) : null}
 
-      <div className="staff-desk__exit-idle-actions">
+      <div className="mt-2 flex w-[min(420px,100%)] flex-col items-stretch gap-3">
         {isEntry && manualEntryVehicle?.cardUid && !showManualForm ? (
           <button
             type="button"
-            className="btn btn-primary staff-desk__exit-manual-btn"
+            className="btn btn-primary min-h-12 w-full font-bold"
             onClick={onOpenVerifiedMember}
             disabled={Boolean(manualLoading)}
           >
@@ -2037,28 +2037,28 @@ function WaitingCard({
         {!showManualForm ? (
           <button
             type="button"
-            className="btn btn-primary staff-desk__exit-manual-btn"
+            className="btn btn-primary min-h-12 w-full font-bold"
             onClick={onToggleManual}
           >
             Nhập thủ công biển số xe
           </button>
         ) : (
           <form
-            className="staff-desk__exit-manual-form"
+            className="flex flex-col gap-2.5 rounded-xl border border-[#dbe3ee] bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
             onSubmit={(e) => {
               e.preventDefault();
               onSubmitManual?.();
             }}
           >
             <label
-              className="staff-desk__exit-manual-label"
+              className="text-[0.85rem] font-semibold text-[#334155]"
               htmlFor={plateInputId}
             >
               Biển số xe
             </label>
             <input
               id={plateInputId}
-              className="staff-desk__exit-manual-input"
+              className="min-h-11 w-full rounded-[10px] border border-[#cbd5e1] px-3 py-2.5 font-mono text-[1.05rem] font-bold uppercase tracking-[0.06em]"
               value={manualPlateValue || ""}
               onChange={(e) => onManualPlateChange?.(e.target.value)}
               placeholder="VD: 30A12345"
@@ -2099,10 +2099,10 @@ function WaitingCard({
       </div>
 
       {isEntry && onStartScan && !showManualForm ? (
-        <div className="staff-desk__action" style={{ marginTop: "0.75rem" }}>
+        <div className="grid gap-2.5 pt-1" style={{ marginTop: "0.75rem" }}>
           {scanPhase === "waiting" || scanPhase === "starting" ? (
-            <div className="staff-desk__scan-active">
-              <div className="staff-desk__scan-pulse">
+            <div className="grid justify-items-center gap-3 rounded-lg border border-[#bed4ff] bg-[#f1f6ff] p-[18px] text-center">
+              <div className="grid h-[58px] w-[58px] place-items-center rounded-full bg-[#dbe9ff] text-[#2563eb]">
                 <Nfc size={28} className="animate-pulse" />
               </div>
               <p>Đang chờ quẹt thẻ RFID…</p>
@@ -2163,7 +2163,7 @@ function ManualUidInput({ onSubmit }: { onSubmit: (uid: string) => void }) {
   }
   return (
     <form
-      className="staff-desk__exit-manual-form"
+      className="flex flex-col gap-2.5 rounded-xl border border-[#dbe3ee] bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
       onSubmit={(e) => {
         e.preventDefault();
         const value = uid.trim();
@@ -2172,14 +2172,14 @@ function ManualUidInput({ onSubmit }: { onSubmit: (uid: string) => void }) {
       }}
     >
       <label
-        className="staff-desk__exit-manual-label"
+        className="text-[0.85rem] font-semibold text-[#334155]"
         htmlFor="manual-uid-input"
       >
         UID thẻ RFID
       </label>
       <input
         id="manual-uid-input"
-        className="staff-desk__exit-manual-input"
+        className="min-h-11 w-full rounded-[10px] border border-[#cbd5e1] px-3 py-2.5 font-mono text-[1.05rem] font-bold uppercase tracking-[0.06em]"
         value={uid}
         onChange={(e) => setUid(e.target.value)}
         placeholder="VD: 60A99999 hoặc 04AABB12"
@@ -2256,19 +2256,19 @@ function ManualPlateCard({
   const blockingSession =
     cardInfo?.activeSession ?? cardInfo?.plateActiveSession;
   return (
-    <div className="staff-desk__ingest">
-      <div className="staff-desk__ingest-head">
+    <div className="grid gap-4">
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <span className="staff-desk__chip staff-desk__chip--in">
+          <span className="inline-flex items-center gap-1 rounded-[5px] bg-[#e9f8f2] px-[7px] py-[3px] text-[10px] font-extrabold uppercase tracking-[0.06em] text-[#079669]">
             <Nfc size={12} /> Thẻ RFID
           </span>
           <h2
-            className="staff-desk__plate"
+            className="m-0 font-mono font-extrabold tracking-[0.04em] text-[#172033]"
             style={{ fontSize: "1rem", fontFamily: "monospace" }}
           >
             {scanUid}
           </h2>
-          <p className="staff-desk__plate-sub">
+          <p className="m-0 mt-1.5 text-xs text-[#667085]">
             {cardInfo?.card
               ? "Thẻ đã tra cứu — đối chiếu biển số với xe tại cổng rồi xác nhận"
               : plateConfirmed
@@ -2281,27 +2281,27 @@ function ManualPlateCard({
         </button>
       </div>
 
-      <div className="staff-desk__ingest-img staff-desk__ingest-img--empty">
+      <div className="grid min-h-[110px] place-items-center gap-2 overflow-hidden rounded-lg border border-[#e5e9f0] bg-[#edf1f5] text-xs text-[#98a2b3]">
         <Camera size={32} />
         <span>Chưa có ảnh camera</span>
       </div>
 
       {cardInfo ? (
         <div
-          className="staff-desk__rfid-conflict"
+          className="mt-2.5 grid gap-2.5 rounded-[9px] border border-[#fecaca] bg-[#fff7f7] p-3 text-[#991b1b]"
           role="status"
           style={{ marginTop: "0.5rem" }}
         >
           {cardInfo.card ? (
             <>
-              <div className="staff-desk__rfid-conflict-title">
+              <div className="flex items-center gap-1.5 text-xs font-extrabold">
                 <Nfc size={15} />
                 {cardInfo.card.cardType === "member"
                   ? "Thẻ Member"
                   : "Thẻ Guest"}{" "}
                 · {cardInfo.card.status}
               </div>
-              <div className="staff-desk__rfid-conflict-grid">
+              <div className="grid grid-cols-3 gap-2">
                 <div>
                   <span>UID</span>
                   <strong>{cardInfo.card.uid}</strong>
@@ -2368,7 +2368,7 @@ function ManualPlateCard({
       ) : null}
 
       {phase === "idle" || phase === "error" ? (
-        <div className="staff-desk__action">
+        <div className="grid gap-2.5 pt-1">
           <label
             style={{
               display: "flex",
@@ -2436,7 +2436,7 @@ function ManualPlateCard({
           )}
         </div>
       ) : (
-        <div className={`staff-desk__progress staff-desk__progress--${phase}`}>
+        <div className={`grid gap-[7px] border-t border-[#e5e9f0] p-3 text-xs ${phase === "parsing" ? "opacity-70" : ""}`}>
           {phase === "creating" && (
             <p>
               <Loader2 size={16} className="animate-spin" /> Đang tạo phiên đỗ
@@ -2510,22 +2510,22 @@ function IngestCard(props: {
     props.phase !== "opening";
 
   return (
-    <div className="staff-desk__ingest">
-      <div className="staff-desk__ingest-head">
+    <div className="grid gap-4">
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <span className="staff-desk__chip staff-desk__chip--in">
+          <span className="inline-flex items-center gap-1 rounded-[5px] bg-[#e9f8f2] px-[7px] py-[3px] text-[10px] font-extrabold uppercase tracking-[0.06em] text-[#079669]">
             <LogIn size={12} /> Xe vào
           </span>
-          <h2 className="staff-desk__plate">
+          <h2 className="m-0 font-mono font-extrabold tracking-[0.04em] text-[#172033]">
             {event.detectedPlate || event.plate || "Chưa nhận diện biển"}
           </h2>
           {event.plate && event.plate !== event.detectedPlate && (
-            <p className="staff-desk__plate-sub">
+            <p className="m-0 mt-1.5 text-xs text-[#667085]">
               Khớp với biển đã đăng ký: <strong>{event.plate}</strong>
             </p>
           )}
           {aiPlateMissing ? (
-            <p className="staff-desk__plate-sub staff-desk__hint--warn">
+            <p className="m-0 mt-1.5 text-xs font-semibold text-[#a16207]">
               AI chưa đọc được biển — nhập thủ công bên dưới
             </p>
           ) : null}
@@ -2540,7 +2540,7 @@ function IngestCard(props: {
       </div>
 
       {imgUrl ? (
-        <div className="staff-desk__ingest-img">
+        <div className="grid min-h-[110px] place-items-center overflow-hidden rounded-lg border border-[#e5e9f0] bg-[#edf1f5]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={imgUrl}
@@ -2548,13 +2548,13 @@ function IngestCard(props: {
           />
         </div>
       ) : (
-        <div className="staff-desk__ingest-img staff-desk__ingest-img--empty">
+        <div className="grid min-h-[110px] place-items-center gap-2 overflow-hidden rounded-lg border border-[#e5e9f0] bg-[#edf1f5] text-xs text-[#98a2b3]">
           <Camera size={32} />
           <span>Không có ảnh crop</span>
         </div>
       )}
 
-      <div className="staff-desk__meta">
+      <div className="grid grid-cols-2 gap-2">
         <MetaRow
           icon={<Radio size={14} />}
           label="Loại xe"
@@ -2588,7 +2588,7 @@ function IngestCard(props: {
       </div>
 
       {duplicateSession ? (
-        <div className="staff-desk__alert staff-desk__alert--warn" role="alert">
+        <div className="flex items-start gap-2 rounded-[7px] border border-[#f4d79a] bg-[#fff8e8] px-3 py-2.5 text-xs leading-[1.45] text-[#8a5a08]" role="alert">
           <CircleAlert size={18} />
           <div>
             <strong>Xe đang có phiên gửi trong bãi</strong>
@@ -2599,7 +2599,7 @@ function IngestCard(props: {
           </div>
         </div>
       ) : eventIsStale ? (
-        <div className="staff-desk__alert staff-desk__alert--warn" role="alert">
+        <div className="flex items-start gap-2 rounded-[7px] border border-[#f4d79a] bg-[#fff8e8] px-3 py-2.5 text-xs leading-[1.45] text-[#8a5a08]" role="alert">
           <CircleAlert size={18} />
           <span>Phiên xe này đã được xử lý. Chờ xe tiếp theo.</span>
         </div>
@@ -2607,16 +2607,16 @@ function IngestCard(props: {
 
       {/* Khu vực quét thẻ + xác nhận / nhập biển thủ công */}
       {!eventIsStale && !duplicateSession && (
-        <div className="staff-desk__action">
+        <div className="grid gap-2.5 pt-1">
           {showManual ? (
             <form
-              className="staff-desk__ingest-manual"
+              className="grid gap-2.5 rounded-[var(--radius,8px)] border border-[#e5e9f0] bg-white p-3.5"
               onSubmit={(e) => {
                 e.preventDefault();
                 if (canConfirmManual) props.onConfirmManualEntry?.();
               }}
             >
-              <p className="staff-desk__ingest-manual-title">
+              <p className="m-0 text-sm font-semibold text-[#172033]">
                 {aiPlateMissing
                   ? "Nhập biển số xe thủ công"
                   : "Sửa biển số AI nhận sai"}
@@ -2683,8 +2683,8 @@ function IngestCard(props: {
             <>
               {props.scanPhase === "waiting" ||
               props.scanPhase === "starting" ? (
-                <div className="staff-desk__scan-active">
-                  <div className="staff-desk__scan-pulse">
+                <div className="grid justify-items-center gap-3 rounded-lg border border-[#bed4ff] bg-[#f1f6ff] p-[18px] text-center">
+                  <div className="grid h-[58px] w-[58px] place-items-center rounded-full bg-[#dbe9ff] text-[#2563eb]">
                     <Nfc size={32} className="animate-pulse" />
                   </div>
                   <p>Đang chờ nhân viên quẹt thẻ RFID lên đầu đọc cổng vào…</p>
@@ -2696,19 +2696,19 @@ function IngestCard(props: {
                   </button>
                 </div>
               ) : props.scanPhase === "success" && props.scanUid ? (
-                <div className="staff-desk__scan-success">
+                <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2.5 rounded-lg border border-[#b9e8d5] bg-[#effbf6] p-3">
                   <CheckCircle2 size={20} className="text-emerald-500" />
                   <div>
-                    <p className="staff-desk__scan-success-title">
+                    <p className="m-0 mb-[3px] text-xs font-bold text-[#079669]">
                       Đã nhận thẻ
                     </p>
-                    <code className="staff-desk__scan-uid">
+                    <code className="text-xs text-[#172033]">
                       {props.scanUid}
                     </code>
                   </div>
                 </div>
               ) : (
-                <div className="staff-desk__scan-cta">
+                <div className="grid gap-2">
                   <button
                     className="btn btn-primary btn-lg"
                     onClick={props.onStartScan}
@@ -2726,12 +2726,12 @@ function IngestCard(props: {
                   {props.scanPhase === "error" &&
                     props.scanError &&
                     (rfidConflict ? (
-                      <div className="staff-desk__rfid-conflict" role="alert">
-                        <div className="staff-desk__rfid-conflict-title">
+                      <div className="mt-2.5 grid gap-2.5 rounded-[9px] border border-[#fecaca] bg-[#fff7f7] p-3 text-[#991b1b]" role="alert">
+                        <div className="flex items-center gap-1.5 text-xs font-extrabold">
                           <CircleAlert size={15} /> Không thể cấp RFID Guest cho
                           xe này
                         </div>
-                        <div className="staff-desk__rfid-conflict-grid">
+                        <div className="grid grid-cols-3 gap-2">
                           <div>
                             <span>UID RFID</span>
                             <strong>{rfidConflict.uid}</strong>
@@ -2763,7 +2763,7 @@ function IngestCard(props: {
               {props.phase === "idle" || props.phase === "error" ? (
                 <button
                   type="button"
-                  className="btn btn-ghost staff-desk__exit-manual-btn"
+                  className="btn btn-ghost min-h-12 w-full font-bold"
                   onClick={props.onOpenManualEntry}
                   style={{ marginTop: "0.5rem" }}
                 >
@@ -2776,7 +2776,7 @@ function IngestCard(props: {
           {/* Trạng thái tạo phiên / mở barie */}
           {props.phase !== "idle" && !showManual && (
             <div
-              className={`staff-desk__progress staff-desk__progress--${props.phase}`}
+              className={`grid gap-[7px] border-t border-[#e5e9f0] p-3 text-xs ${props.phase === "parsing" ? "opacity-70" : ""}`}
             >
               {props.phase === "creating" && (
                 <p>
@@ -2825,7 +2825,7 @@ function IngestCard(props: {
           props.phase !== "creating" &&
           props.phase !== "opening" ? (
             <div
-              className={`staff-desk__progress staff-desk__progress--${props.phase}`}
+              className={`grid gap-[7px] border-t border-[#e5e9f0] p-3 text-xs ${props.phase === "parsing" ? "opacity-70" : ""}`}
             >
               {props.phase === "done" && (
                 <p className="text-emerald-600">
@@ -2882,10 +2882,10 @@ function EvidenceImage({
 
   return imageUrl ? (
     <>
-      <figure className="staff-desk__evidence">
+      <figure className="relative min-h-[140px] m-0 overflow-hidden rounded-[10px] border border-[#dbe3ee] bg-white">
         <button
           type="button"
-          className="staff-desk__evidence-button"
+          className="block w-full cursor-zoom-in border-0 bg-transparent p-0"
           onClick={() => setOpen(true)}
           aria-label={`Phóng to ${label.toLowerCase()}`}
         >
@@ -2896,12 +2896,12 @@ function EvidenceImage({
       </figure>
       {open ? (
         <div
-          className="staff-desk__image-modal"
+          className="fixed inset-0 z-[100] grid place-items-center bg-[rgb(15_23_42/82%)] p-6"
           role="presentation"
           onMouseDown={() => setOpen(false)}
         >
           <div
-            className="staff-desk__image-modal-dialog"
+            className="relative max-h-[92vh] w-[min(96vw,1200px)] overflow-auto rounded-[14px] bg-white p-3 shadow-[0_25px_70px_rgb(0_0_0/35%)]"
             role="dialog"
             aria-modal="true"
             aria-label={label}
@@ -2909,7 +2909,7 @@ function EvidenceImage({
           >
             <button
               type="button"
-              className="staff-desk__image-modal-close"
+              className="absolute top-5 right-5 z-[1] grid h-9 w-9 place-items-center rounded-full border-0 bg-[rgb(15_23_42/55%)] p-0 text-white"
               onClick={() => setOpen(false)}
               aria-label="Đóng ảnh"
             >
@@ -2923,7 +2923,7 @@ function EvidenceImage({
       ) : null}
     </>
   ) : (
-    <div className="staff-desk__evidence staff-desk__exit-crop--empty">
+    <div className="relative m-0 flex min-h-[140px] flex-col gap-2 overflow-hidden rounded-[10px] border border-[#dbe3ee] bg-white text-[#64748b]">
       <Camera size={28} />
       <span>{label}: chưa có ảnh</span>
     </div>
@@ -3143,12 +3143,12 @@ function ExitCard({
   // thanh toán hoặc xác nhận thủ công chạy khi backend chưa xác định session.
   if (noSession) {
     return (
-      <div className="staff-desk__exit-console">
-        <div className="staff-desk__exit-top">
-          <div className="staff-desk__exit-title-row">
+      <div className="flex min-h-full flex-col bg-[#e8edf3]">
+        <div className="flex flex-col gap-4 px-[18px] pt-[18px] pb-3">
+          <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="staff-desk__exit-kicker">Xe ra</p>
-              <h2 className="staff-desk__exit-plate">
+              <p className="m-0 mb-1 text-[0.95rem] font-semibold text-[#334155]">Xe ra</p>
+              <h2 className="m-0 font-mono text-[clamp(1.75rem,2.4vw,2.4rem)] font-extrabold leading-[1.1] tracking-[0.08em] text-[#0f172a]">
                 {event.detectedPlate || event.plate || "—"}
               </h2>
             </div>
@@ -3161,7 +3161,7 @@ function ExitCard({
               <XCircle size={16} />
             </button>
           </div>
-          <div className="staff-desk__alert staff-desk__alert--warn" role="alert">
+          <div className="flex items-start gap-2 rounded-[7px] border border-[#f4d79a] bg-[#fff8e8] px-3 py-2.5 text-xs leading-[1.45] text-[#8a5a08]" role="alert">
             <CircleAlert size={18} />
             <div>
               <strong>Không tìm thấy phiên đang gửi cho biển số này</strong>
@@ -3177,9 +3177,9 @@ function ExitCard({
   }
 
   return (
-    <div className="staff-desk__exit-console">
+    <div className="flex min-h-full flex-col bg-[#e8edf3]">
       {event.barrierOpened && (
-        <div className="staff-desk__gate-success" role="status">
+        <div className="flex items-center gap-2.5 border-b border-[#9bd8ad] bg-[#ecfdf3] px-3.5 py-3 text-[#167044]" role="status">
           <CheckCircle2 size={22} />
           <div>
             <strong>Mở barie thành công</strong>
@@ -3187,10 +3187,10 @@ function ExitCard({
           </div>
         </div>
       )}
-      <div className="staff-desk__exit-top">
-        <div className="staff-desk__exit-title-row">
+      <div className="flex flex-col gap-4 px-[18px] pt-[18px] pb-3">
+        <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="staff-desk__exit-kicker">
+            <p className="m-0 mb-1 text-[0.95rem] font-semibold text-[#334155]">
               Xe ra -{" "}
               {customerType === "member"
                 ? event.metadata?.quotaType === "member"
@@ -3198,7 +3198,7 @@ function ExitCard({
                   : "Thành Viên (chưa có gói)"
                 : "Khách Vãng Lai"}
             </p>
-            <h2 className="staff-desk__exit-plate">
+            <h2 className="m-0 font-mono text-[clamp(1.75rem,2.4vw,2.4rem)] font-extrabold leading-[1.1] tracking-[0.08em] text-[#0f172a]">
               {event.detectedPlate || event.plate || "—"}
             </h2>
           </div>
@@ -3228,7 +3228,7 @@ function ExitCard({
         ) : null}
 
         {!mismatch ? (
-          <div className="staff-desk__evidence-grid">
+          <div className="grid grid-cols-2 gap-3">
             <EvidenceImage
               label="Ảnh lúc vào"
               imageUrl={entryImgUrl}
@@ -3243,60 +3243,64 @@ function ExitCard({
         ) : null}
 
         {!mismatch ? (
-          <div className="staff-desk__exit-grid">
-            <div className="staff-desk__exit-field">
-              <span className="staff-desk__exit-label">ID PHIÊN</span>
+          <div className="grid grid-cols-3 gap-x-4 gap-y-3.5 pt-1 max-[900px]:grid-cols-2">
+            <div className="flex min-w-0 flex-col gap-1 [&>strong]:text-[0.95rem] [&>strong]:font-bold [&>strong]:text-[#0f172a] [&>strong]:[overflow-wrap:anywhere]">
+              <span className="text-[0.78rem] font-semibold tracking-[0.01em] text-[#475569]">ID PHIÊN</span>
               <strong>{event.sessionId || "—"}</strong>
             </div>
-            <div className="staff-desk__exit-field">
-              <span className="staff-desk__exit-label">Thời gian vào</span>
+            <div className="flex min-w-0 flex-col gap-1 [&>strong]:text-[0.95rem] [&>strong]:font-bold [&>strong]:text-[#0f172a] [&>strong]:[overflow-wrap:anywhere]">
+              <span className="text-[0.78rem] font-semibold tracking-[0.01em] text-[#475569]">Thời gian vào</span>
               <strong>{formatDateTime(event.checkInAt)}</strong>
             </div>
-            <div className="staff-desk__exit-field">
-              <span className="staff-desk__exit-label">Thời gian ra</span>
+            <div className="flex min-w-0 flex-col gap-1 [&>strong]:text-[0.95rem] [&>strong]:font-bold [&>strong]:text-[#0f172a] [&>strong]:[overflow-wrap:anywhere]">
+              <span className="text-[0.78rem] font-semibold tracking-[0.01em] text-[#475569]">Thời gian ra</span>
               <strong>{formatDateTime(event.createdAt)}</strong>
             </div>
-            <div className="staff-desk__exit-field">
-              <span className="staff-desk__exit-label">Loại xe</span>
+            <div className="flex min-w-0 flex-col gap-1 [&>strong]:text-[0.95rem] [&>strong]:font-bold [&>strong]:text-[#0f172a] [&>strong]:[overflow-wrap:anywhere]">
+              <span className="text-[0.78rem] font-semibold tracking-[0.01em] text-[#475569]">Loại xe</span>
               <strong>{vehicleTypeLabel}</strong>
             </div>
-            <div className="staff-desk__exit-field">
-              <span className="staff-desk__exit-label">Tên chủ xe</span>
+            <div className="flex min-w-0 flex-col gap-1 [&>strong]:text-[0.95rem] [&>strong]:font-bold [&>strong]:text-[#0f172a] [&>strong]:[overflow-wrap:anywhere]">
+              <span className="text-[0.78rem] font-semibold tracking-[0.01em] text-[#475569]">Tên chủ xe</span>
               <strong>{displayOwnerName}</strong>
             </div>
-            <div className="staff-desk__exit-field">
-              <span className="staff-desk__exit-label">Phí phiên gửi xe</span>
+            <div className="flex min-w-0 flex-col gap-1 [&>strong]:text-[0.95rem] [&>strong]:font-bold [&>strong]:text-[#0f172a] [&>strong]:[overflow-wrap:anywhere]">
+              <span className="text-[0.78rem] font-semibold tracking-[0.01em] text-[#475569]">Phí phiên gửi xe</span>
               <strong>{feeLabel}</strong>
             </div>
-            <div className="staff-desk__exit-field">
-              <span className="staff-desk__exit-label">Trạng thái barie</span>
+            <div className="flex min-w-0 flex-col gap-1 [&>strong]:text-[0.95rem] [&>strong]:font-bold [&>strong]:text-[#0f172a] [&>strong]:[overflow-wrap:anywhere]">
+              <span className="text-[0.78rem] font-semibold tracking-[0.01em] text-[#475569]">Trạng thái barie</span>
               <strong
                 className={
-                  "staff-desk__exit-status staff-desk__exit-status--" +
-                  barrierTone
+                  barrierTone === "warn"
+                    ? "text-[0.9rem] font-bold text-[#b45309]"
+                    : "font-mono text-[0.9rem] font-bold text-[#334155]"
                 }
               >
                 {barrierStatus}
               </strong>
             </div>
-            <div className="staff-desk__exit-field">
-              <span className="staff-desk__exit-label">
+            <div className="flex min-w-0 flex-col gap-1 [&>strong]:text-[0.95rem] [&>strong]:font-bold [&>strong]:text-[#0f172a] [&>strong]:[overflow-wrap:anywhere]">
+              <span className="text-[0.78rem] font-semibold tracking-[0.01em] text-[#475569]">
                 Trạng thái thanh toán
               </span>
               <strong
                 className={
-                  "staff-desk__exit-status staff-desk__exit-status--" +
-                  paymentTone
+                  paymentTone === "ok"
+                    ? "text-[0.9rem] font-bold text-[#334155]"
+                    : paymentTone === "warn"
+                      ? "text-[0.9rem] font-bold text-[#b45309]"
+                      : "font-mono text-[0.9rem] font-bold text-[#334155]"
                 }
               >
                 {paymentLabel}
               </strong>
             </div>
-            <div className="staff-desk__exit-field">
-              <span className="staff-desk__exit-label">
+            <div className="flex min-w-0 flex-col gap-1 [&>strong]:text-[0.95rem] [&>strong]:font-bold [&>strong]:text-[#0f172a] [&>strong]:[overflow-wrap:anywhere]">
+              <span className="text-[0.78rem] font-semibold tracking-[0.01em] text-[#475569]">
                 UID Thẻ RFID Lúc Vào
               </span>
-              <strong className="staff-desk__exit-status staff-desk__exit-status--muted">
+              <strong className="font-mono text-[0.9rem] font-bold text-[#334155]">
                 {entryRfidUid
                   ? entryRfidIsExpected
                     ? `${entryRfidUid} (chưa xác minh)`
@@ -3305,20 +3309,20 @@ function ExitCard({
               </strong>
             </div>
             {replacementCardUid && replacementCardUid !== entryRfidUid ? (
-              <div className="staff-desk__exit-field">
-                <span className="staff-desk__exit-label">
+              <div className="flex min-w-0 flex-col gap-1 [&>strong]:text-[0.95rem] [&>strong]:font-bold [&>strong]:text-[#0f172a] [&>strong]:[overflow-wrap:anywhere]">
+                <span className="text-[0.78rem] font-semibold tracking-[0.01em] text-[#475569]">
                   Thẻ thay thế (đã đổi)
                 </span>
-                <strong className="staff-desk__exit-status staff-desk__exit-status--muted">
+                <strong className="font-mono text-[0.9rem] font-bold text-[#334155]">
                   {replacementCardUid}
                 </strong>
               </div>
             ) : null}
-            <div className="staff-desk__exit-field">
-              <span className="staff-desk__exit-label">
+            <div className="flex min-w-0 flex-col gap-1 [&>strong]:text-[0.95rem] [&>strong]:font-bold [&>strong]:text-[#0f172a] [&>strong]:[overflow-wrap:anywhere]">
+              <span className="text-[0.78rem] font-semibold tracking-[0.01em] text-[#475569]">
                 UID Thẻ RFID Lúc Ra
               </span>
-              <strong className="staff-desk__exit-status staff-desk__exit-status--muted">
+              <strong className="font-mono text-[0.9rem] font-bold text-[#334155]">
                 {scanUid ||
                   (exitRfidManuallyVerified
                     ? "Xác nhận thủ công"
@@ -3326,22 +3330,22 @@ function ExitCard({
               </strong>
             </div>
             {exitRfidManuallyVerified ? (
-              <div className="staff-desk__exit-field staff-desk__exit-field--full">
-                <span className="staff-desk__exit-label">
+              <div className="col-span-full flex min-w-0 flex-col gap-1 [&>strong]:text-[0.95rem] [&>strong]:font-bold [&>strong]:text-[#0f172a] [&>strong]:[overflow-wrap:anywhere]">
+                <span className="text-[0.78rem] font-semibold tracking-[0.01em] text-[#475569]">
                   Ghi chú xử lý RFID
                 </span>
-                <strong className="staff-desk__exit-status staff-desk__exit-status--muted">
+                <strong className="font-mono text-[0.9rem] font-bold text-[#334155]">
                   {exitRfidManualNote || "Đã xác nhận thủ công do RFID lỗi."}
                 </strong>
               </div>
             ) : null}
             {entryWasManual ? (
-              <div className="staff-desk__exit-field staff-desk__exit-field--full">
-                <span className="staff-desk__exit-label">Ngoại lệ lúc vào</span>
-                <strong className="staff-desk__exit-status staff-desk__exit-status--warn">
+              <div className="col-span-full flex min-w-0 flex-col gap-1 [&>strong]:text-[0.95rem] [&>strong]:font-bold [&>strong]:text-[#0f172a] [&>strong]:[overflow-wrap:anywhere]">
+                <span className="text-[0.78rem] font-semibold tracking-[0.01em] text-[#475569]">Ngoại lệ lúc vào</span>
+                <strong className="text-[0.9rem] font-bold text-[#b45309]">
                   Nhập tay biển số
                 </strong>
-                <span className="staff-desk__entry-exception-note">
+                <span className="text-[0.84rem] font-medium leading-[1.4] text-[#92400e]">
                   {manualEntryReason ||
                     "Nhân viên đã nhập biển số thủ công khi xe vào."}
                 </span>
@@ -3352,8 +3356,8 @@ function ExitCard({
       </div>
 
       {!mismatch ? (
-        <div className="staff-desk__exit-rfid">
-          <div className="staff-desk__exit-rfid-card">
+        <div className="mt-auto border-t border-[#d5dee9] bg-[#e8edf3] px-[18px] pt-3 pb-[18px]">
+          <div className="flex flex-col items-center gap-3.5 rounded-xl border border-[#dbe3ee] bg-white px-4 py-[18px] text-center shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
             {!entryRfidUid &&
             (exitRfidManuallyVerified || Boolean(exitRfidManualNote)) &&
             (event.fee ?? 0) <= 0 ? (
@@ -3366,11 +3370,11 @@ function ExitCard({
                 <ArrowUpFromLine size={18} /> Mở barie
               </button>
             ) : exitRfidManuallyVerified && needsPaymentChoice ? null : (
-              <p className="staff-desk__exit-rfid-prompt">{rfidPrompt}</p>
+              <p className="m-0 text-base font-semibold text-[#1e293b]">{rfidPrompt}</p>
             )}
 
             {noSession ? (
-              <div className="staff-desk__alert staff-desk__alert--danger">
+              <div className="flex items-start gap-2 rounded-[7px] border border-[#f0b4b4] bg-[#fef2f2] px-3 py-2.5 text-xs leading-[1.45] text-[#9f1239]">
                 <CircleAlert size={18} />
                 <span>Không tìm thấy phiên đang gửi cho biển số này.</span>
               </div>
@@ -3378,7 +3382,7 @@ function ExitCard({
 
             {gateError ? (
               <div
-                className="staff-desk__alert staff-desk__alert--danger"
+                className="flex items-start gap-2 rounded-[7px] border border-[#f0b4b4] bg-[#fef2f2] px-3 py-2.5 text-xs leading-[1.45] text-[#9f1239]"
                 role="alert"
               >
                 <CircleAlert size={18} />
@@ -3394,7 +3398,7 @@ function ExitCard({
             ) : null}
 
             {canHandleMissingEntryRfid && !exitVerifyData && !hasPaymentData ? (
-              <div className="staff-desk__manual-rfid">
+              <div className="my-3.5 rounded-[var(--radius,8px)] border border-[#f7d99b] bg-[#fffbeb] p-3">
                 <p>
                   Không có UID RFID lúc vào. Nhân viên có thể xác nhận thủ công
                   sau khi kiểm tra xe và biển số.
@@ -3408,7 +3412,7 @@ function ExitCard({
                     Xử lý thủ công
                   </button>
                 ) : (
-                  <div className="staff-desk__manual-rfid-form">
+                  <div className="grid gap-2">
                     <textarea
                       rows={2}
                       value={manualRfidNote}
@@ -3447,7 +3451,7 @@ function ExitCard({
             ) : null}
 
             {didCheckout || event.barrierOpened ? (
-              <div className="staff-desk__alert staff-desk__alert--success">
+              <div className="flex items-start gap-2 rounded-[7px] border border-[#9bd8ad] bg-[#ecfdf3] px-3 py-2.5 text-xs leading-[1.45] text-[#167044]">
                 <CheckCircle2 size={18} />
                 <span>
                   {event.barrierOpened
@@ -3457,14 +3461,14 @@ function ExitCard({
               </div>
             ) : needsPaymentChoice ? (
               <>
-                <div className="staff-desk__exit-pay-choice">
-                  <p className="staff-desk__exit-pay-question">
+                <div className="flex w-full flex-col items-center gap-3.5">
+                  <p className="m-0 text-center text-[0.98rem] font-semibold text-[#334155]">
                     Khách cần thanh toán bằng hình thức nào
                   </p>
-                  <div className="staff-desk__exit-pay-buttons">
+                  <div className="grid w-full grid-cols-2 gap-3 max-[520px]:grid-cols-1">
                     <button
                       type="button"
-                      className="btn btn-ghost staff-desk__exit-pay-btn"
+                      className="btn btn-ghost min-h-11 border-[#cbd5e1] bg-white font-semibold text-[#0f172a]"
                       onClick={() => setShowCashForm(true)}
                       disabled={!onPayCash}
                     >
@@ -3472,7 +3476,7 @@ function ExitCard({
                     </button>
                     <button
                       type="button"
-                      className="btn btn-ghost staff-desk__exit-pay-btn"
+                      className="btn btn-ghost min-h-11 border-[#cbd5e1] bg-white font-semibold text-[#0f172a]"
                       onClick={onPayPayos}
                       disabled={!onPayPayos}
                     >
@@ -3481,7 +3485,7 @@ function ExitCard({
                   </div>
                 </div>
                 {showCashForm ? (
-                  <div className="staff-desk__cash-form">
+                  <div className="mx-auto mt-3.5 grid w-[min(100%,360px)] gap-2 rounded-[0.65rem] border border-[#bfdbfe] bg-[#f8fbff] p-3.5 text-left">
                     <strong>Thu tiền mặt</strong>
                     <span>
                       Phí cần thu: {amountDue.toLocaleString("vi-VN")}đ
@@ -3508,7 +3512,7 @@ function ExitCard({
               </>
             ) : hasPaymentData ? (
               showCashForm ? (
-                <div className="staff-desk__cash-form">
+                <div className="mx-auto mt-3.5 grid w-[min(100%,360px)] gap-2 rounded-[0.65rem] border border-[#bfdbfe] bg-[#f8fbff] p-3.5 text-left">
                   <strong>Thu tiền mặt</strong>
                   <span>Phí cần thu: {amountDue.toLocaleString("vi-VN")}đ</span>
                   <div>
@@ -3530,24 +3534,24 @@ function ExitCard({
                   </div>
                 </div>
               ) : (
-                <div className="staff-desk__qr-box">
-                  <p className="staff-desk__qr-amount">
+                <div className="flex w-full flex-col items-center gap-2.5">
+                  <p className="m-0 text-2xl font-extrabold tracking-tight text-[#0f172a]">
                     {(paymentData?.amount || amountDue).toLocaleString("vi-VN")}
                     đ
                   </p>
                   {paymentData?.qrCode ? (
-                    <div className="staff-desk__qr-frame">
+                    <div className="grid place-items-center rounded-xl border border-[#e5e9f0] bg-white p-3">
                       <QRCodeSVG
                         value={paymentData.qrCode}
                         size={200}
                         level="M"
                         marginSize={2}
-                        className="staff-desk__qr-code"
+                        className="h-[200px] w-[200px]"
                         aria-label="Mã QR thanh toán PayOS"
                       />
                     </div>
                   ) : null}
-                  <div className="staff-desk__qr-actions">
+                  <div className="flex flex-wrap justify-center gap-2">
                     {paymentData?.checkoutUrl ? (
                       <button
                         className="btn btn-ghost"
@@ -3572,13 +3576,13 @@ function ExitCard({
               )
             ) : scanPhase === "starting" || scanPhase === "waiting" ? (
               entryRfidUid ? (
-                <div className="staff-desk__exit-rfid-waiting">
-                  <div className="staff-desk__scan-pulse">
+                <div className="flex w-full flex-col items-center gap-3 text-[0.9rem] text-[#475569]">
+                  <div className="grid h-[58px] w-[58px] place-items-center rounded-full bg-[#dbe9ff] text-[#2563eb]">
                     <Nfc size={32} className="animate-pulse" />
                   </div>
                   <span>Đang chờ quét thẻ…</span>
                   {onManualMissingEntryRfid && entryRfidUid ? (
-                    <div className="staff-desk__manual-rfid-form">
+                    <div className="grid gap-2">
                       <label htmlFor="manual-rfid-note-waiting">
                         Đầu đọc không hoạt động?
                       </label>
@@ -3605,8 +3609,8 @@ function ExitCard({
                 </div>
               ) : null
             ) : scanPhase === "error" || scanPhase === "timeout" ? (
-              <div className="staff-desk__exit-rfid-waiting">
-                <div className="staff-desk__alert staff-desk__alert--danger">
+              <div className="flex w-full flex-col items-center gap-3 text-[0.9rem] text-[#475569]">
+                <div className="flex items-start gap-2 rounded-[7px] border border-[#f0b4b4] bg-[#fef2f2] px-3 py-2.5 text-xs leading-[1.45] text-[#9f1239]">
                   <XCircle size={18} />
                   <span>
                     {scanPhase === "timeout"
@@ -3623,7 +3627,7 @@ function ExitCard({
                   </button>
                 ) : null}
                 {
-                  <div className="staff-desk__manual-rfid-form">
+                  <div className="grid gap-2">
                     <label htmlFor="manual-rfid-note">
                       Lý do xử lý thủ công
                     </label>
@@ -3652,15 +3656,15 @@ function ExitCard({
                 }
               </div>
             ) : scanPhase === "success" && !exitVerifyData ? (
-              <div className="staff-desk__exit-rfid-waiting">
-                <div className="staff-desk__scan-pulse">
+              <div className="flex w-full flex-col items-center gap-3 text-[0.9rem] text-[#475569]">
+                <div className="grid h-[58px] w-[58px] place-items-center rounded-full bg-[#dbe9ff] text-[#2563eb]">
                   <Loader2 size={32} className="animate-spin" />
                 </div>
                 <span>Đang xác minh thẻ RFID…</span>
               </div>
             ) : exitVerifyData ? (
-              <div className="staff-desk__exit-rfid-actions">
-                <div className="staff-desk__alert staff-desk__alert--success">
+              <div className="flex w-full flex-col gap-3">
+                <div className="flex items-start gap-2 rounded-[7px] border border-[#9bd8ad] bg-[#ecfdf3] px-3 py-2.5 text-xs leading-[1.45] text-[#167044]">
                   <CheckCircle2 size={18} />
                   <span>
                     {isSubscriber
@@ -3668,7 +3672,7 @@ function ExitCard({
                       : "Xác minh thành công — sẵn sàng mở barie."}
                   </span>
                 </div>
-                <div className="staff-desk__exit-rfid-buttons">
+                <div className="flex flex-wrap justify-center gap-2.5">
                   <button
                     className="btn btn-primary btn-lg"
                     onClick={onOpenGate || onOpenBarrier}
@@ -3693,8 +3697,8 @@ function ExitCard({
                 </div>
               </div>
             ) : (
-              <div className="staff-desk__exit-rfid-waiting">
-                <div className="staff-desk__scan-pulse">
+              <div className="flex w-full flex-col items-center gap-3 text-[0.9rem] text-[#475569]">
+                <div className="grid h-[58px] w-[58px] place-items-center rounded-full bg-[#dbe9ff] text-[#2563eb]">
                   <Nfc size={32} />
                 </div>
                 <span>Đang chờ quét thẻ…</span>
@@ -3726,12 +3730,12 @@ function MetaRow({
   value: React.ReactNode;
 }) {
   return (
-    <div className="staff-desk__meta-row">
-      <span className="staff-desk__meta-label">
+    <div className="grid min-w-0 gap-[5px] rounded-[7px] border border-[#e5e9f0] bg-[#f6f8fb] p-[9px]">
+      <span className="flex items-center gap-[5px] text-[11px] text-[#667085]">
         {icon}
         {label}
       </span>
-      <span className="staff-desk__meta-value">{value}</span>
+      <span className="overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-bold text-[#172033]">{value}</span>
     </div>
   );
 }

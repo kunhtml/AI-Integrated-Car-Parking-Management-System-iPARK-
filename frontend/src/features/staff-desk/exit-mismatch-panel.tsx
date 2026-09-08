@@ -28,16 +28,22 @@ function can(mismatch: ExitMismatch, action: string) {
 function PlateImage({ src, label, plate, warn }: { src?: string; label: string; plate: string; warn?: boolean }) {
   const url = resolveBridgeImageUrl(src || "");
   return (
-    <div className={`staff-desk__mismatch-shot ${warn ? "is-warn" : ""}`}>
+    <div
+      className={`overflow-hidden rounded-lg border bg-[#f8fafc] ${
+        warn ? "border-[#f0b4b4]" : "border-[#e5e7eb]"
+      }`}
+    >
       {url ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={url} alt={label} />
+        <img src={url} alt={label} className="block h-[92px] w-full object-cover" />
       ) : (
-        <div className="staff-desk__mismatch-shot-empty">Không có ảnh</div>
+        <div className="grid h-[92px] place-items-center text-xs text-[#64748b]">
+        Không có ảnh
+      </div>
       )}
-      <p>
+      <p className="m-0 px-2 py-1.5 text-[11px] text-[#64748b]">
         {label}
-        <strong>{plate || "—"}</strong>
+        <strong className="block text-[13px] text-[#0f172a]">{plate || "—"}</strong>
       </p>
     </div>
   );
@@ -66,8 +72,8 @@ export function ExitMismatchPanel({
   const noteOk = note.trim().length >= 8;
 
   return (
-    <div className="staff-desk__mismatch">
-      <div className="staff-desk__alert staff-desk__alert--danger">
+    <div className="grid gap-2.5">
+      <div className="flex items-start gap-2 rounded-[7px] border border-[#f0b4b4] bg-[#fef2f2] px-3 py-2.5 text-xs leading-[1.45] text-[#9f1239]">
         <ShieldAlert size={18} />
         <span>
           <strong>{wrongCard ? "THẺ KHÔNG KHỚP XE HIỆN TẠI" : "SAI LỆCH ĐỊNH DANH"}</strong>
@@ -76,7 +82,7 @@ export function ExitMismatchPanel({
         </span>
       </div>
 
-      <div className="staff-desk__mismatch-photos">
+      <div className="grid grid-cols-2 gap-2">
         <PlateImage src={mismatch.entryImageUrl} label="Lúc vào" plate={mismatch.entryPlate} />
         <PlateImage
           src={mismatch.exitImageUrl}
@@ -86,33 +92,38 @@ export function ExitMismatchPanel({
         />
       </div>
 
-      <dl className="staff-desk__mismatch-meta">
+      <dl className="m-0 grid grid-cols-2 gap-x-2.5 gap-y-1.5 text-[13px] font-semibold">
         <div>
-          <dt>Xe đang ra</dt>
-          <dd>{mismatch.currentPlate || mismatch.exitPlate || "—"}</dd>
+          <dt className="text-[11px] font-medium text-[#64748b]">Xe đang ra</dt>
+          <dd className="m-0">{mismatch.currentPlate || mismatch.exitPlate || "—"}</dd>
         </div>
         {mismatch.cardBoundPlate ? (
           <div>
-            <dt>Thẻ đang dùng cho</dt>
-            <dd className="is-warn">{mismatch.cardBoundPlate}</dd>
+            <dt className="text-[11px] font-medium text-[#64748b]">Thẻ đang dùng cho</dt>
+            <dd className="m-0 text-[#be123c]">{mismatch.cardBoundPlate}</dd>
           </div>
         ) : null}
         <div>
-          <dt>UID lúc vào</dt>
-          <dd>{mismatch.expectedUid || "—"}</dd>
+          <dt className="text-[11px] font-medium text-[#64748b]">UID lúc vào</dt>
+          <dd className="m-0">{mismatch.expectedUid || "—"}</dd>
         </div>
         <div>
-          <dt>UID vừa quẹt</dt>
-          <dd className={mismatch.expectedUid && mismatch.scannedUid !== mismatch.expectedUid ? "is-warn" : ""}>
+          <dt className="text-[11px] font-medium text-[#64748b]">UID vừa quẹt</dt>
+          <dd className={
+              mismatch.expectedUid && mismatch.scannedUid !== mismatch.expectedUid
+                ? "m-0 text-[#be123c]"
+                : "m-0"
+            }>
             {mismatch.scannedUid || "—"}
           </dd>
         </div>
       </dl>
 
       {!wrongCard && (can(mismatch, "correct_exit_plate") || can(mismatch, "correct_session_plate")) ? (
-        <label className="staff-desk__mismatch-field">
+        <label className="grid gap-1 text-xs text-[#334155]">
           {correctSession ? "Hiệu chỉnh biển phiên" : "Hiệu chỉnh biển RA"}
           <input
+            className="min-h-10 w-full rounded-[8px] border border-[#cbd5e1] bg-white px-3 py-2 font-mono text-sm font-bold uppercase tracking-[0.04em] text-[#0f172a] focus:border-[#60a5fa] focus:outline-2 focus:outline-[#93c5fd]"
             value={manualPlate}
             onChange={(e) => setManualPlate(e.target.value.toUpperCase())}
             placeholder="VD: 51A-123.45"
@@ -121,22 +132,23 @@ export function ExitMismatchPanel({
       ) : null}
 
       {!wrongCard ? (
-        <label className="staff-desk__mismatch-field">
+        <label className="grid gap-1 text-xs text-[#334155]">
           Lý do xử lý *
           <textarea
             rows={2}
+            className="w-full rounded-[8px] border border-[#cbd5e1] bg-white px-3 py-2 text-sm text-[#0f172a] focus:border-[#60a5fa] focus:outline-2 focus:outline-[#93c5fd]"
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="Bắt buộc khi xác nhận hoặc hiệu chỉnh"
           />
         </label>
       ) : (
-        <p className="staff-desk__hint">Yêu cầu khách đưa đúng thẻ lúc vào. Không xác nhận thẻ xe khác.</p>
+        <p className="text-xs leading-[1.45] text-[#667085]">Yêu cầu khách đưa đúng thẻ lúc vào. Không xác nhận thẻ xe khác.</p>
       )}
 
-      {error ? <p className="staff-desk__hint staff-desk__hint--warn">{error}</p> : null}
+      {error ? <p className="text-xs leading-[1.45] font-semibold text-[#a16207]">{error}</p> : null}
 
-      <div className="staff-desk__mismatch-actions">
+      <div className="flex flex-wrap gap-2">
         <button className="btn btn-ghost" disabled={pending} onClick={onReject} type="button">
           {pending ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={14} />}
           Từ chối
