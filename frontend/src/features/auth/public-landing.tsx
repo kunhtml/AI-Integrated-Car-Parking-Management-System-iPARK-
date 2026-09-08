@@ -536,15 +536,15 @@ export function AuthPanel() {
               placeholder="••••••"
             />
           </label>
-          <button className="landing-auth-btn-primary" type="submit">
+          <button className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-none bg-gradient-to-r from-blue-600 to-indigo-600 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-500/25 transition-all hover:from-blue-500 hover:to-indigo-500" type="submit">
             <LogIn size={16} />
             Đăng nhập
           </button>
-          <div className="landing-auth-divider">
+          <div className="my-5 flex items-center gap-3 text-xs text-slate-400 before:h-px before:flex-1 before:bg-white/10 after:h-px after:flex-1 after:bg-white/10">
             <span>hoặc</span>
           </div>
           <button
-            className="landing-auth-btn-google"
+            className="flex w-full cursor-pointer items-center justify-center gap-2.5 rounded-xl border border-white/15 bg-white/5 py-3 text-sm font-semibold text-white transition-all hover:bg-white/10"
             onClick={() => {
               window.location.href = `${apiBaseUrl}/auth/google`;
             }}
@@ -620,7 +620,7 @@ export function AuthPanel() {
               minLength={8}
             />
           </label>
-          <button className="landing-auth-btn-primary" type="submit">
+          <button className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-none bg-gradient-to-r from-blue-600 to-indigo-600 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-500/25 transition-all hover:from-blue-500 hover:to-indigo-500" type="submit">
             <Plus size={16} />
             Tạo tài khoản
           </button>
@@ -662,7 +662,7 @@ export function AuthPanel() {
               autoFocus
             />
           </label>
-          <button className="landing-auth-btn-primary" type="submit">
+          <button className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-none bg-gradient-to-r from-blue-600 to-indigo-600 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-500/25 transition-all hover:from-blue-500 hover:to-indigo-500" type="submit">
             <Mail size={16} />
             Xác nhận &amp; tạo tài khoản
           </button>
@@ -707,7 +707,7 @@ export function AuthPanel() {
             Tài khoản <strong>{pendingEmail}</strong> chưa được xác minh email.
             Vui lòng hoàn tất bước xác minh để có thể đăng nhập.
           </p>
-          <button className="landing-auth-btn-primary" type="submit">
+          <button className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-none bg-gradient-to-r from-blue-600 to-indigo-600 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-500/25 transition-all hover:from-blue-500 hover:to-indigo-500" type="submit">
             <Mail size={16} />
             Đăng ký lại với email khác
           </button>
@@ -737,7 +737,7 @@ export function AuthPanel() {
               autoFocus
             />
           </label>
-          <button className="landing-auth-btn-primary" type="submit">
+          <button className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-none bg-gradient-to-r from-blue-600 to-indigo-600 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-500/25 transition-all hover:from-blue-500 hover:to-indigo-500" type="submit">
             <Mail size={16} />
             Gửi mã OTP
           </button>
@@ -789,7 +789,7 @@ export function AuthPanel() {
               minLength={8}
             />
           </label>
-          <button className="landing-auth-btn-primary" type="submit">
+          <button className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-none bg-gradient-to-r from-blue-600 to-indigo-600 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-500/25 transition-all hover:from-blue-500 hover:to-indigo-500" type="submit">
             <CheckCircle2 size={16} />
             Xác minh &amp; đặt lại
           </button>
@@ -857,7 +857,7 @@ export function AuthPanel() {
               autoFocus
             />
           </label>
-          <button className="landing-auth-btn-primary" type="submit">
+          <button className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-none bg-gradient-to-r from-blue-600 to-indigo-600 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-500/25 transition-all hover:from-blue-500 hover:to-indigo-500" type="submit">
             <CheckCircle2 size={16} />
             Xác nhận &amp; đăng nhập
           </button>
@@ -967,7 +967,7 @@ function SiteHeader({
           </div>
           <button
             onClick={onLoginClick}
-            className="landing-auth-btn-primary"
+            className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-none bg-gradient-to-r from-blue-600 to-indigo-600 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-500/25 transition-all hover:from-blue-500 hover:to-indigo-500"
             style={{ padding: "8px 16px", fontSize: "13px" }}
             type="button"
           >
@@ -2846,13 +2846,13 @@ export function PublicLanding() {
       </main>
       <LandingFooter />
       {showAuth && (
-        <div className="landing-auth-modal">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
           <div
-            className="landing-auth-modal-content"
+            className="relative flex max-h-[90vh] w-full max-w-[480px] flex-col overflow-y-auto rounded-[20px] border border-white/10 bg-[#0f172a] p-8 text-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <button
-              className="landing-auth-modal-close"
+              className="absolute top-4 right-4 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-white/10 text-white/70 hover:bg-white/20 hover:text-white"
               onClick={() => setShowAuth(false)}
               type="button"
             >

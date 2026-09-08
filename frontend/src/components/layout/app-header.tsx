@@ -16,9 +16,9 @@ export function AppHeader({
   onLogout,
 }: AppHeaderProps) {
   return (
-    <header className="app-header">
+    <header className="mb-6 flex items-center justify-between max-[640px]:gap-2.5">
       <button
-        className="icon-button mobile-only"
+        className="hidden h-9 w-9 cursor-pointer items-center justify-center rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--fg)] transition-colors hover:bg-[var(--bg-hover)] max-[980px]:inline-flex"
         onClick={onToggleNav}
         type="button"
         aria-label="Toggle navigation menu"
@@ -28,7 +28,7 @@ export function AppHeader({
       <div style={{ flex: 1 }} />
       <ThemeToggle />
       <button
-        className="logout-button"
+        className="inline-flex cursor-pointer items-center gap-2 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-3.5 py-2 text-xs font-semibold text-[var(--fg)] transition-colors hover:border-[var(--danger)] hover:bg-[var(--danger-soft)] hover:text-[var(--danger)] max-[640px]:min-w-[40px] max-[640px]:p-0 max-[640px]:text-[0px]"
         onClick={onLogout}
         type="button"
         aria-label="Đăng xuất khỏi hệ thống"

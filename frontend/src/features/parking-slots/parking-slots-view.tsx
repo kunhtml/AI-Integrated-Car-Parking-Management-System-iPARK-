@@ -86,7 +86,9 @@ function PoolMetric({
   tone?: "default" | "success" | "warning";
 }) {
   return (
-    <div className={`quota-slot-metric ${tone ?? "default"}`}>
+    <div className={`flex flex-col gap-1 rounded-xl p-3 text-left ${
+      tone === "success" ? "bg-emerald-50 text-emerald-800" : tone === "warning" ? "bg-amber-50 text-amber-800" : "bg-[#f8fafc] text-[#334155]"
+    }`}>
       <strong>{value}</strong>
       <span>{label}</span>
     </div>
@@ -337,7 +339,13 @@ function SlotTile({
         : { background: "#fff5de", color: "#b76e08" };
   return (
     <article
-      className={`quota-slot-tile ${quota} ${slot.status}`}
+      className={`flex flex-col rounded-2xl border p-3.5 transition-all hover:shadow-md ${
+      slot.status === "occupied"
+        ? "border-amber-200 bg-amber-50/40 text-amber-950"
+        : slot.status === "maintenance"
+        ? "border-rose-200 bg-rose-50/40 text-rose-950"
+        : "border-slate-200 bg-white text-slate-900"
+    }`}
       onClick={() => onOpenDetail(slot)}
       role="button"
       tabIndex={0}
@@ -349,11 +357,17 @@ function SlotTile({
       }}
       style={{ cursor: "pointer" }}
     >
-      <div className="quota-slot-tile-head">
+      <div className="flex items-center justify-between">
         <div>
-          <span className="quota-slot-code">{displayNumber}</span>
+          <span className="font-mono text-base font-bold text-[#0f172a]">{displayNumber}</span>
         </div>
-        <span className={`quota-status ${slot.status}`}>
+        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+      slot.status === "occupied"
+        ? "bg-amber-100 text-amber-700"
+        : slot.status === "maintenance"
+        ? "bg-rose-100 text-rose-700"
+        : "bg-emerald-100 text-emerald-700"
+    }`}>
           {slot.status === "occupied" ? (
             <Car size={13} />
           ) : slot.status === "empty" ? (
@@ -364,7 +378,7 @@ function SlotTile({
           {statusLabel[slot.status]}
         </span>
       </div>
-      <div className="quota-slot-tile-body">
+      <div className="flex flex-col gap-0.5 py-2 text-xs text-[#64748b]">
         {slot.status === "occupied" ? (
           <>
             <Car size={24} />
@@ -418,9 +432,9 @@ function SlotTile({
         )}
       </div>
       {isAdmin && (
-        <div className="quota-slot-tile-foot">
+        <div className="mt-auto flex items-center justify-between border-t border-[#f1f5f9] pt-2 text-[11px]">
           {canManage && (
-            <div className="quota-slot-actions">
+            <div className="flex items-center gap-1">
               <button
                 type="button"
                 title={slot.status === "maintenance" ? "Mở lại" : "Đặt bảo trì"}
@@ -598,10 +612,10 @@ export function ParkingSlotsView() {
   };
 
   return (
-    <section className="quota-slots-page">
-      <header className="quota-slots-hero">
-        <div className="quota-slots-hero-copy">
-          <div className="quota-slots-eyebrow">
+    <section className="grid gap-[22px] p-[4px_0_32px] text-[#172033]">
+      <header className="flex items-end justify-between gap-6 rounded-[22px] bg-[linear-gradient(125deg,#0f2744,#153b63_57%,#105b6a)] p-[28px_30px] text-white shadow-[0_18px_40px_rgba(15,39,68,0.18)] max-[980px]:flex-col max-[980px]:items-start">
+        <div className="flex flex-col [&>h1]:mt-2 [&>h1]:mb-1 [&>h1]:text-[clamp(25px,3vw,35px)] [&>h1]:font-bold [&>h1]:tracking-tight [&>p]:m-0 [&>p]:max-w-[680px] [&>p]:text-[#c8d9e7] [&>p]:leading-relaxed">
+          <div className="flex items-center gap-[7px] text-xs font-extrabold uppercase tracking-[0.09em] text-[#8ee7ef]">
             <ParkingSquare size={15} /> Vận hành bãi đỗ
           </div>
           <h1>Quản lý quota chỗ đỗ</h1>
@@ -611,10 +625,10 @@ export function ParkingSlotsView() {
           </p>
         </div>
         {isAdmin && (
-          <div className="quota-hero-actions">
+          <div className="flex items-center gap-2.5 max-[640px]:w-full max-[640px]:flex-col">
             <button
               type="button"
-              className="quota-capacity-button"
+              className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-[14px] border border-white/20 bg-white/10 px-5 py-3 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/20"
               onClick={() => {
                 void openCapacitySettings();
               }}
@@ -626,7 +640,7 @@ export function ParkingSlotsView() {
       </header>
 
       {showCapacitySettings && isAdmin && (
-        <form className="quota-capacity-form" onSubmit={saveCapacity}>
+        <form className="w-full max-w-[500px] rounded-2xl border border-[#e2e8f0] bg-white p-7 shadow-2xl" onSubmit={saveCapacity}>
           <div>
             <h2>Tổng sức chứa bãi xe</h2>
             <p>
@@ -649,20 +663,20 @@ export function ParkingSlotsView() {
             <Settings2 size={16} />{" "}
             {isSavingCapacity ? "Đang lưu..." : "Lưu sức chứa"}
           </button>
-          <p className="quota-capacity-hint">
+          <p className="text-xs text-[#64748b]">
             Đang hiển thị: <strong>{slotList.length}</strong> /{" "}
             <strong>{maxCapacity || "-"}</strong> slot. Tối thiểu:{" "}
             <strong>{minimumCapacity}</strong> slot đang có xe/được giữ chỗ.
           </p>
           {capacityError && (
-            <p className="quota-capacity-error" role="alert">
+            <p className="rounded-lg bg-red-50 p-3 text-xs text-red-600" role="alert">
               {capacityError}
             </p>
           )}
         </form>
       )}
 
-      <div className="quota-pool-overview">
+      <div className="grid grid-cols-2 gap-[18px] max-[980px]:grid-cols-1">
         {summary.map((pool) => {
           const Icon = pool.icon;
           const active = activePool === pool.key;
@@ -671,10 +685,14 @@ export function ParkingSlotsView() {
               key={pool.key}
               type="button"
               onClick={() => setActivePool(active ? "all" : pool.key)}
-              className={`quota-pool-card ${pool.key} ${active ? "selected" : ""}`}
+              className={`cursor-pointer rounded-[18px] border p-[21px] text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
+      active
+        ? "border-[#3b82f6] bg-[#f8fbff] shadow-md ring-2 ring-[#3b82f6]/20"
+        : "border-[#dbe5ef] bg-white hover:border-[#cbd5e1]"
+    }`}
             >
-              <div className="quota-pool-card-head">
-                <span className="quota-pool-icon">
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] bg-[#eff6ff] text-[#2563eb]">
                   <Icon size={20} />
                 </span>
                 <div>
@@ -682,7 +700,7 @@ export function ParkingSlotsView() {
                   <small>{pool.description}</small>
                 </div>
               </div>
-              <div className="quota-metrics">
+              <div className="grid grid-cols-4 gap-2.5 max-[640px]:grid-cols-2">
                 <PoolMetric label="tổng slot" value={pool.total} />
                 <PoolMetric
                   label="còn cấp được"
@@ -695,7 +713,7 @@ export function ParkingSlotsView() {
                   tone="warning"
                 />
               </div>
-              <div className="quota-capacity">
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
                 <span
                   style={{
                     width: `${pool.total ? Math.round((pool.available / pool.total) * 100) : 0}%`,
@@ -707,8 +725,8 @@ export function ParkingSlotsView() {
         })}
       </div>
 
-      <div className="quota-control-bar">
-        <div className="quota-pool-tabs">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-[18px] border border-[#dbe5ef] bg-white p-4 shadow-sm">
+        <div className="flex items-center rounded-xl bg-[#f1f5f9] p-1">
           <button
             type="button"
             onClick={() => setActivePool("all")}
@@ -727,8 +745,8 @@ export function ParkingSlotsView() {
             </button>
           ))}
         </div>
-        <div className="quota-filters">
-          <label className="quota-search">
+        <div className="flex items-center gap-2">
+          <label className="relative flex-1 max-w-[360px] [&>svg]:absolute [&>svg]:top-1/2 [&>svg]:left-3 [&>svg]:-translate-y-1/2 [&>svg]:text-[#94a3b8] [&>input]:w-full [&>input]:rounded-xl [&>input]:border [&>input]:border-[#cbd5e1] [&>input]:bg-white [&>input]:py-2 [&>input]:pr-3 [&>input]:pl-9 [&>input]:text-sm [&>input]:outline-none focus:[&>input]:border-[#3b82f6]">
             <Search size={16} />
             <input
               value={query}
@@ -752,7 +770,7 @@ export function ParkingSlotsView() {
         </div>
       </div>
 
-      <div className="quota-legend">
+      <div className="flex items-center gap-3 text-xs text-[#64748b]">
         <span>
           <i className="member" /> Slot thành viên
         </span>
@@ -766,10 +784,10 @@ export function ParkingSlotsView() {
           <Car size={14} /> Có xe đỗ
         </span>
       </div>
-      <section className="quota-slot-unified">
-        <header className="quota-slot-unified-head">
+      <section className="rounded-[20px] border border-[#dbe5ef] bg-white p-6 shadow-sm">
+        <header className="mb-5 flex items-center justify-between border-b border-[#e2e8f0] pb-4">
           <div>
-            <span className="quota-group-icon">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#eff6ff] text-[#2563eb]">
               <LayoutGrid size={18} />
             </span>
             <div>
@@ -782,7 +800,7 @@ export function ParkingSlotsView() {
           </div>
           <span>{filteredSlots.length} slot hiển thị</span>
         </header>
-        <div className="quota-slot-grid">
+        <div className="grid grid-cols-6 gap-3.5 max-[1400px]:grid-cols-4 max-[980px]:grid-cols-3 max-[640px]:grid-cols-2">
           {filteredSlots.map((slot) => (
             <SlotTile
               key={slot.id}
@@ -795,7 +813,7 @@ export function ParkingSlotsView() {
             />
           ))}
           {filteredSlots.length === 0 && (
-            <div className="quota-empty">
+            <div className="col-span-full flex flex-col items-center justify-center gap-3 py-16 text-center text-[#94a3b8]">
               <LayoutGrid size={30} />
               <span>Chưa có slot phù hợp với bộ lọc.</span>
             </div>

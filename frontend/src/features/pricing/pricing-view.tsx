@@ -55,7 +55,7 @@ function Modal({ isOpen, onClose, title, children }: ModalProps) {
 
   return (
     <div className="pricing-modal-overlay">
-      <div className="pricing-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={(e) => e.stopPropagation()}>
         <div className="pricing-modal-header">
           <h3>{title}</h3>
           <button
@@ -88,10 +88,10 @@ function PricingCard({
   onEdit,
 }: PricingCardProps) {
   return (
-    <div className="pricing-card">
-      <div className="pricing-card-header">
-        <div className="pricing-card-icon">{icon}</div>
-        <div className="pricing-card-title">
+    <div className="flex flex-col rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] shadow-sm transition-all hover:border-[var(--primary)] hover:shadow-md">
+      <div className="flex items-center gap-3 border-b border-[var(--border)] p-5">
+        <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-[var(--primary-soft)] text-[var(--primary)]">{icon}</div>
+        <div className="flex flex-col [&>h2]:m-0 [&>h2]:text-base [&>h2]:font-bold [&>h2]:text-[var(--fg)] [&>span]:text-xs [&>span]:text-[var(--fg-muted)]">
           <h3>{title}</h3>
           <p>{description}</p>
         </div>
@@ -100,7 +100,7 @@ function PricingCard({
           <span>Chỉnh sửa</span>
         </button>
       </div>
-      <div className="pricing-card-body">{children}</div>
+      <div className="flex flex-1 flex-col gap-4 p-5">{children}</div>
     </div>
   );
 }
@@ -246,14 +246,14 @@ export function PricingView() {
   }
 
   return (
-    <section className="pricing-page">
+    <section className="mx-auto max-w-[1400px] p-[28px_32px] max-[768px]:p-4">
       {/* Page Header */}
-      <div className="pricing-header">
-        <div className="header-left">
-          <div className="header-icon">
+      <div className="mb-6 flex items-center justify-between gap-4 max-[768px]:flex-col max-[768px]:items-start">
+        <div className="flex items-center gap-3.5">
+          <div className="flex h-12 w-12 items-center justify-center rounded-[var(--radius)] bg-[var(--primary-soft)] text-[var(--primary)]">
             <ReceiptText size={24} />
           </div>
-          <div className="header-text">
+          <div className="flex flex-col gap-0.5 [&>h1]:m-0 [&>h1]:text-xl [&>h1]:font-bold [&>h1]:text-[var(--fg)] [&>p]:m-0 [&>p]:text-xs [&>p]:text-[var(--fg-muted)]">
             <h1>Cấu hình hệ thống</h1>
             <p>Quản lý bảng giá và thông báo</p>
           </div>
@@ -286,7 +286,7 @@ export function PricingView() {
       {/* Pricing Tab */}
       {activeTab === "pricing" && (
         <div className="pricing-content">
-          <div className="pricing-grid">
+          <div className="grid grid-cols-3 gap-6 max-[1100px]:grid-cols-2 max-[768px]:grid-cols-1">
             {/* Day Rate Card */}
             <PricingCard
               title="Giá ban ngày"

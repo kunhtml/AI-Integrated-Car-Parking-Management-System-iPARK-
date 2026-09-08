@@ -553,8 +553,8 @@ export function DevicesView() {
         ) : null}
 
         {formOpen ? (
-          <form className="device-create-form" onSubmit={createDevice}>
-            <div className="device-form-heading">
+          <form className="flex flex-col gap-5 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] p-6 shadow-sm" onSubmit={createDevice}>
+            <div className="border-b border-[var(--border)] pb-3 [&>h2]:m-0 [&>h2]:text-lg [&>h2]:font-bold [&>h2]:text-[var(--fg)]">
               <div>
                 <p className="muted-text">Đăng ký camera mới</p>
                 <strong>
@@ -575,7 +575,7 @@ export function DevicesView() {
                 <X size={16} />
               </button>
             </div>
-            <div className="device-form-grid">
+            <div className="grid grid-cols-2 gap-4 max-[768px]:grid-cols-1">
               <label>
                 Tên thiết bị
                 <input
@@ -640,7 +640,7 @@ export function DevicesView() {
                 />
               </label>
             </div>
-            <div className="device-form-actions">
+            <div className="flex justify-end gap-3 border-t border-[var(--border)] pt-4">
               <button
                 type="button"
                 className="ghost-button"
@@ -686,9 +686,9 @@ export function DevicesView() {
                 device.lane || (device.gate === "entry" ? "in" : "out");
               const bridgeStreamUrl = `${bridgeBaseUrl}/video_feed/${direction}`;
               return (
-                <article key={device.id} className="device-card">
-                  <div className="device-card-heading">
-                    <div className="device-card-title">
+                <article key={device.id} className="flex flex-col gap-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] p-5 shadow-sm transition-all hover:border-[var(--primary)]">
+                  <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+                    <div className="flex items-center gap-2.5 [&>h3]:m-0 [&>h3]:text-base [&>h3]:font-bold [&>h3]:text-[var(--fg)]">
                       <Camera size={17} />
                       <div>
                         <strong>{device.name}</strong>
@@ -706,7 +706,7 @@ export function DevicesView() {
                       alt={`Luồng ${gateLabel(device.gate)}`}
                     />
                   </div>
-                  <div className="device-card-meta">
+                  <div className="grid grid-cols-2 gap-2 text-xs text-[var(--fg-muted)] [&>div]:flex [&>div]:justify-between">
                     <span>
                       Luồng đang dùng: <strong>{bridgeStreamUrl}</strong>
                     </span>
@@ -715,7 +715,7 @@ export function DevicesView() {
                       <strong>{gateLabel(device.gate)}</strong>
                     </span>
                   </div>
-                  <div className="device-card-actions">
+                  <div className="mt-auto flex items-center justify-end gap-2 border-t border-[var(--border)] pt-3">
                     <button
                       type="button"
                       className="small-button primary"

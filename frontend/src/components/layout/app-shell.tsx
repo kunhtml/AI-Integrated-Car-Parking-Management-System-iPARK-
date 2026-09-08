@@ -30,13 +30,13 @@ export function AppShell({
   children,
 }: AppShellProps) {
   return (
-    <main className="app-shell">
+    <main className="min-h-screen">
       <Sidebar
         currentUser={currentUser}
         mobileNavOpen={mobileNavOpen}
         onNavigate={() => setMobileNavOpen(false)}
       />
-      <section className="workspace">
+      <section className="min-w-0 p-[28px_32px] max-[980px]:p-[20px_16px] max-[640px]:p-4 min-[981px]:ml-[260px]">
         <AppHeader
           currentUser={currentUser}
           onLogout={onLogout}

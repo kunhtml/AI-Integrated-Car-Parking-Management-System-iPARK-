@@ -404,7 +404,7 @@ export function SubscriptionsView() {
         onVehicleCreated={() => loadVehicles()}
       />
 
-      <div className="subscriptions-page">
+      <div className="mx-auto max-w-[1400px] p-[28px_32px] max-[768px]:p-4">
         {/* Feedback banner */}
         {feedback && (
           <div className={`feedback-banner ${feedback.type}`}>
@@ -419,7 +419,7 @@ export function SubscriptionsView() {
 
         {/* Customer: all subscription cards */}
         {isCustomer && (
-          <section className="customer-subs-section">
+          <section className="mb-8 flex flex-col gap-6">
             <h2 className="section-title">
               <CreditCard size={18} />
               Gói của bạn
@@ -434,7 +434,7 @@ export function SubscriptionsView() {
               />
             ) : (
               <>
-                <div className="subs-cards-grid">
+                <div className="grid grid-cols-3 gap-6 max-[1100px]:grid-cols-2 max-[768px]:grid-cols-1">
                   {myActiveSubs.map((sub) => (
                     <SubscriptionCard
                       key={sub.id}
@@ -451,26 +451,26 @@ export function SubscriptionsView() {
 
                 {/* Plans horizontal */}
                 {visiblePlans.length > 0 && (
-                  <div className="plans-horizontal">
+                  <div className="flex flex-col gap-4">
                     <h3>Mua thêm gói cho xe khác</h3>
-                    <div className="plans-row">
+                    <div className="grid grid-cols-3 gap-6 max-[1100px]:grid-cols-2 max-[768px]:grid-cols-1">
                       {visiblePlans.map((plan, idx) => (
                         <div
                           key={plan.id}
                           className={`plan-horizontal-card ${idx === 0 ? "featured" : ""}`}
                         >
-                          <div className="plan-badge">
+                          <div className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider">
                             {idx === 0 ? "Phổ biến" : plan.duration}
                           </div>
                           <h4>{plan.name}</h4>
-                          <p className="plan-price">
+                          <p className="text-2xl font-extrabold text-[var(--primary)]">
                             {currency.format(plan.price)}
                           </p>
-                          <span className="plan-days">
+                          <span className="text-xs text-[var(--fg-muted)]">
                             {plan.durationDays} ngày
                           </span>
                           <button
-                            className="plan-buy-btn"
+                            className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-[var(--radius)] border-none bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-[var(--primary-hover)]"
                             onClick={() => handlePurchase(plan.id)}
                             disabled={purchasing}
                           >
@@ -484,11 +484,11 @@ export function SubscriptionsView() {
                   </div>
                 )}
                 {subscriptionHistory.length > 0 && (
-                  <div className="subscription-history">
+                  <div className="flex flex-col gap-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] p-6">
                     <h3>Lịch sử gói đã mua</h3>
-                    <div className="subscription-history-list">
+                    <div className="flex flex-col divide-y divide-[var(--border)]">
                       {subscriptionHistory.map((sub) => (
-                        <div className="subscription-history-row" key={sub.id}>
+                        <div className="flex items-center justify-between py-3 text-sm" key={sub.id}>
                           <div>
                             <strong>{sub.planName}</strong>
                             <span>
