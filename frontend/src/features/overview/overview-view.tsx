@@ -969,8 +969,7 @@ function AdminDashboard() {
             <BarChart3 size={22} />
           </div>
           <div>
-            {/* Tiêu đề phụ (view Admin): đã hạ xuống h2 để trang chỉ còn duy nhất một h1 (tránh trùng lặp landmark, xem PageHeader). */}
-            <h2 className="staff-title">Chào Admin đã quay trở lại.</h2>
+            <h1 className="staff-title">Chào Admin đã quay trở lại.</h1>
             <p className="staff-subtitle">
               {new Date().toLocaleDateString("vi-VN", {
                 weekday: "long",
