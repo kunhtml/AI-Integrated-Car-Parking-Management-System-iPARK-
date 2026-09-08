@@ -85,9 +85,9 @@ export function AdminSubscriptions({
   }
 
   return (
-    <section className="admin-subs-page">
+    <section className="mx-auto max-w-[1400px] p-[28px_32px] max-[768px]:p-4">
       {/* Header */}
-      <div className="admin-subs-header">
+      <div className="mb-6 flex items-center justify-between gap-4 max-[768px]:flex-col max-[768px]:items-start">
         <div className="header-left">
           <div className="header-icon">
             <Package size={24} />
