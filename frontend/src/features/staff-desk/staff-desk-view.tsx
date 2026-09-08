@@ -2436,7 +2436,7 @@ function ManualPlateCard({
           )}
         </div>
       ) : (
-        <div className={`grid gap-[7px] border-t border-[#e5e9f0] p-3 text-xs ${phase === "parsing" ? "opacity-70" : ""}`}>
+        <div className="grid gap-[7px] border-t border-[#e5e9f0] p-3 text-xs">
           {phase === "creating" && (
             <p>
               <Loader2 size={16} className="animate-spin" /> Đang tạo phiên đỗ
@@ -2776,7 +2776,7 @@ function IngestCard(props: {
           {/* Trạng thái tạo phiên / mở barie */}
           {props.phase !== "idle" && !showManual && (
             <div
-              className={`grid gap-[7px] border-t border-[#e5e9f0] p-3 text-xs ${props.phase === "parsing" ? "opacity-70" : ""}`}
+              className="grid gap-[7px] border-t border-[#e5e9f0] p-3 text-xs"
             >
               {props.phase === "creating" && (
                 <p>
@@ -2825,7 +2825,7 @@ function IngestCard(props: {
           props.phase !== "creating" &&
           props.phase !== "opening" ? (
             <div
-              className={`grid gap-[7px] border-t border-[#e5e9f0] p-3 text-xs ${props.phase === "parsing" ? "opacity-70" : ""}`}
+              className="grid gap-[7px] border-t border-[#e5e9f0] p-3 text-xs"
             >
               {props.phase === "done" && (
                 <p className="text-emerald-600">
