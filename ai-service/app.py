@@ -10,7 +10,6 @@ Cấu hình (đặt trong file .env hoặc biến môi trường):
 - BRIDGE_SERVICE_TOKEN: token dùng để xác thực với backend
 """
 
-import hmac
 import os
 import sys
 from dotenv import load_dotenv
@@ -122,21 +121,10 @@ except Exception:
 
 # ================== CONFIG ==================
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:4000")
-
-# Token dùng chung một nguồn duy nhất: config.py (SERVICE_TOKEN).
-# Trước đây default bị trùng lặp ở đây với giá trị KHÁC config.py →
-# app.py và backend_client/client.py có thể xác thực với 2 token khác nhau.
-# require_strong_token() trong config.py đã fail-fast nếu đang chạy ngoài dev
-# mà token vẫn là default.
-from config import (  # noqa: E402
-    APP_HOST,
-    FRONTEND_ORIGIN,
-    SERVICE_TOKEN,
-    require_strong_token,
+BRIDGE_SERVICE_TOKEN = os.getenv(
+    "BRIDGE_SERVICE_TOKEN",
+    "ipark-bridge-token-2026-change-me-in-production",
 )
-
-# Tên cũ dùng khắp app.py — giữ alias để không phải sửa từng chỗ.
-BRIDGE_SERVICE_TOKEN = SERVICE_TOKEN
 SERIAL_PORT_IN = os.getenv("SERIAL_PORT_IN", os.getenv("ESP32_IN_PORT", "COM3"))
 SERIAL_PORT_OUT = os.getenv("SERIAL_PORT_OUT", os.getenv("ESP32_OUT_PORT", "COM5"))
 CAMERA_INDEX_IN = int(os.getenv("CAMERA_INDEX_IN", "0"))
@@ -2245,25 +2233,6 @@ def capture_snapshot_for_event(direction: str, base_url: str = "") -> str:
 
 
 # ==== FLASK ====
-# Xác thực service-to-service: mọi route /gate/* và /api/rfid/* đều yêu cầu
-# header X-Service-Token khớp SERVICE_TOKEN (so sánh constant-time).
-# Các route dành cho trình duyệt (/api/cameras, /video_feed/*, /logs, /static/*)
-# không nằm trong phạm vi này.
-_PROTECTED_ROUTE_PREFIXES = ("/gate/", "/api/rfid/")
-
-
-@app.before_request
-def _require_service_token():
-    if not request.path.startswith(_PROTECTED_ROUTE_PREFIXES):
-        return None  # route công khai (health, camera embed, logs, static)
-    provided = request.headers.get("X-Service-Token", "")
-    # hmac.compare_digest: so sánh thời gian hằng số, chống timing attack.
-    ok = hmac.compare_digest(provided.encode("utf-8"), SERVICE_TOKEN.encode("utf-8"))
-    if not ok:
-        return jsonify({"success": False, "message": "Invalid or missing X-Service-Token"}), 401
-    return None
-
-
 # Dùng static folder tuyệt đối theo vị trí app.py, không phụ thuộc cwd khi
 # start bằng start-ai.bat hoặc từ một thư mục khác.
 app = Flask(__name__, static_folder=STATIC_DIR, static_url_path="/static")
@@ -2282,25 +2251,23 @@ def _cache_host_url():
 
 # Cho phép frontend (localhost:3000) embed ảnh camera trực tiếp
 # và gọi các endpoint RFID scan realtime + barrier control.
-# Chỉ cho phép frontend origin (FRONTEND_ORIGIN, mặc định localhost:3000)
-# thay vì "*" — tránh cho mọi trang web gọi trực tiếp vào bridge.
 try:
     from flask_cors import CORS  # type: ignore
     CORS(
         app,
         resources={
-            r"/static/*": {"origins": [FRONTEND_ORIGIN]},
-            r"/logs": {"origins": [FRONTEND_ORIGIN]},
-            r"/api/cameras*": {"origins": [FRONTEND_ORIGIN]},
-            r"/api/rfid/*": {"origins": [FRONTEND_ORIGIN]},
-            r"/gate/*": {"origins": [FRONTEND_ORIGIN]},
+            r"/static/*": {"origins": "*"},
+            r"/logs": {"origins": "*"},
+            r"/api/cameras*": {"origins": "*"},
+            r"/api/rfid/*": {"origins": "*"},
+            r"/gate/*": {"origins": "*"},
         },
     )
 except ImportError:
     # Fallback thủ công nếu flask_cors chưa cài
     @app.after_request
     def _add_cors(response):
-        response.headers["Access-Control-Allow-Origin"] = FRONTEND_ORIGIN
+        response.headers["Access-Control-Allow-Origin"] = "*"
         return response
 
 
@@ -2795,4 +2762,4 @@ if __name__ == "__main__":
         f"snapshot_valid_only={SNAPSHOT_ON_VALID_PLATE_ONLY}"
     )
 
-    app.run(debug=False, host=APP_HOST, port=FLASK_PORT)
+    app.run(debug=False, host="0.0.0.0", port=FLASK_PORT)

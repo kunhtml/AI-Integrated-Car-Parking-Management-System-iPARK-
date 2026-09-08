@@ -1,0 +1,1095 @@
+{
+  "config": {
+    "input": "static\\snapshots",
+    "repeat": 3,
+    "warmup": 1,
+    "lang": "en",
+    "use_angle_cls": false,
+    "note": "Latency chỉ đo lệnh OCR, chưa gồm thời gian đọc file và load model."
+  },
+  "summary": {
+    "model_load_ms": 676.393,
+    "warmup_runs": 1,
+    "images_ok": 55,
+    "images_failed": 0,
+    "total_ocr_runs": 165,
+    "total_ocr_ms": 21328.112,
+    "average_ocr_ms": 129.261,
+    "median_ocr_ms": 102.167,
+    "p95_ocr_ms": 230.27,
+    "ocr_fps": 7.736
+  },
+  "images": [
+    {
+      "image": "static\\snapshots\\33.png",
+      "width": 798,
+      "height": 587,
+      "runs": 3,
+      "texts": [
+        "29A-349.10"
+      ],
+      "latencies_ms": [
+        113.515,
+        111.908,
+        117.971
+      ],
+      "average_ms": 114.465,
+      "median_ms": 113.515,
+      "min_ms": 111.908,
+      "max_ms": 117.971,
+      "ocr_fps": 8.736
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_220415_578_nopl_crop.jpg",
+      "width": 178,
+      "height": 78,
+      "runs": 3,
+      "texts": [
+        "30K099.99"
+      ],
+      "latencies_ms": [
+        184.717,
+        62.63,
+        62.16
+      ],
+      "average_ms": 103.169,
+      "median_ms": 62.63,
+      "min_ms": 62.16,
+      "max_ms": 184.717,
+      "ocr_fps": 9.693
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_220415_578_nopl_full.jpg",
+      "width": 640,
+      "height": 480,
+      "runs": 3,
+      "texts": [
+        "YOLO0.62",
+        "30K-099.99"
+      ],
+      "latencies_ms": [
+        457.496,
+        128.928,
+        134.091
+      ],
+      "average_ms": 240.172,
+      "median_ms": 134.091,
+      "min_ms": 128.928,
+      "max_ms": 457.496,
+      "ocr_fps": 4.164
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_220423_705_nopl_crop.jpg",
+      "width": 258,
+      "height": 97,
+      "runs": 3,
+      "texts": [
+        "30K-899.99"
+      ],
+      "latencies_ms": [
+        187.909,
+        67.518,
+        67.239
+      ],
+      "average_ms": 107.555,
+      "median_ms": 67.518,
+      "min_ms": 67.239,
+      "max_ms": 187.909,
+      "ocr_fps": 9.298
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_220423_705_nopl_full.jpg",
+      "width": 640,
+      "height": 480,
+      "runs": 3,
+      "texts": [
+        "YOLO0.5",
+        "30K-899.99"
+      ],
+      "latencies_ms": [
+        280.505,
+        183.264,
+        172.134
+      ],
+      "average_ms": 211.968,
+      "median_ms": 183.264,
+      "min_ms": 172.134,
+      "max_ms": 280.505,
+      "ocr_fps": 4.718
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_220654_787_nopl_crop.jpg",
+      "width": 231,
+      "height": 87,
+      "runs": 3,
+      "texts": [
+        "3",
+        "K-899.99"
+      ],
+      "latencies_ms": [
+        219.535,
+        87.635,
+        110.047
+      ],
+      "average_ms": 139.072,
+      "median_ms": 110.047,
+      "min_ms": 87.635,
+      "max_ms": 219.535,
+      "ocr_fps": 7.191
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_220654_787_nopl_full.jpg",
+      "width": 640,
+      "height": 480,
+      "runs": 3,
+      "texts": [
+        "YOLO 0.32TOLO0.5",
+        "30",
+        "K-899.99"
+      ],
+      "latencies_ms": [
+        205.346,
+        178.303,
+        172.374
+      ],
+      "average_ms": 185.341,
+      "median_ms": 178.303,
+      "min_ms": 172.374,
+      "max_ms": 205.346,
+      "ocr_fps": 5.395
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_220658_881_nopl_crop.jpg",
+      "width": 244,
+      "height": 88,
+      "runs": 3,
+      "texts": [
+        "30K-899.99"
+      ],
+      "latencies_ms": [
+        68.337,
+        75.845,
+        73.324
+      ],
+      "average_ms": 72.502,
+      "median_ms": 73.324,
+      "min_ms": 68.337,
+      "max_ms": 75.845,
+      "ocr_fps": 13.793
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_220658_881_nopl_full.jpg",
+      "width": 640,
+      "height": 480,
+      "runs": 3,
+      "texts": [
+        "YOLO0.54",
+        "30K-899.99"
+      ],
+      "latencies_ms": [
+        126.634,
+        115.361,
+        134.081
+      ],
+      "average_ms": 125.359,
+      "median_ms": 126.634,
+      "min_ms": 115.361,
+      "max_ms": 134.081,
+      "ocr_fps": 7.977
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_220755_818_nopl_crop.jpg",
+      "width": 245,
+      "height": 89,
+      "runs": 3,
+      "texts": [
+        "30K-899.99"
+      ],
+      "latencies_ms": [
+        67.994,
+        67.104,
+        70.332
+      ],
+      "average_ms": 68.477,
+      "median_ms": 67.994,
+      "min_ms": 67.104,
+      "max_ms": 70.332,
+      "ocr_fps": 14.604
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_220755_818_nopl_full.jpg",
+      "width": 640,
+      "height": 480,
+      "runs": 3,
+      "texts": [
+        "30K-899.99"
+      ],
+      "latencies_ms": [
+        99.672,
+        98.3,
+        102.167
+      ],
+      "average_ms": 100.046,
+      "median_ms": 99.672,
+      "min_ms": 98.3,
+      "max_ms": 102.167,
+      "ocr_fps": 9.995
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_220759_768_nopl_crop.jpg",
+      "width": 240,
+      "height": 87,
+      "runs": 3,
+      "texts": [
+        "30K-899.99"
+      ],
+      "latencies_ms": [
+        63.168,
+        74.415,
+        74.17
+      ],
+      "average_ms": 70.584,
+      "median_ms": 74.17,
+      "min_ms": 63.168,
+      "max_ms": 74.415,
+      "ocr_fps": 14.167
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_220759_768_nopl_full.jpg",
+      "width": 640,
+      "height": 480,
+      "runs": 3,
+      "texts": [
+        "30K-899.99"
+      ],
+      "latencies_ms": [
+        360.14,
+        231.787,
+        218.625
+      ],
+      "average_ms": 270.184,
+      "median_ms": 231.787,
+      "min_ms": 218.625,
+      "max_ms": 360.14,
+      "ocr_fps": 3.701
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_221746_074_nopl_crop.jpg",
+      "width": 231,
+      "height": 89,
+      "runs": 3,
+      "texts": [
+        "30K-899.99"
+      ],
+      "latencies_ms": [
+        65.523,
+        70.052,
+        61.96
+      ],
+      "average_ms": 65.845,
+      "median_ms": 65.523,
+      "min_ms": 61.96,
+      "max_ms": 70.052,
+      "ocr_fps": 15.187
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_221746_074_nopl_full.jpg",
+      "width": 640,
+      "height": 480,
+      "runs": 3,
+      "texts": [
+        "30K-899.99"
+      ],
+      "latencies_ms": [
+        130.328,
+        131.458,
+        132.893
+      ],
+      "average_ms": 131.56,
+      "median_ms": 131.458,
+      "min_ms": 130.328,
+      "max_ms": 132.893,
+      "ocr_fps": 7.601
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_221750_136_nopl_crop.jpg",
+      "width": 224,
+      "height": 91,
+      "runs": 3,
+      "texts": [
+        "30K-899.99"
+      ],
+      "latencies_ms": [
+        66.364,
+        68.327,
+        69.531
+      ],
+      "average_ms": 68.074,
+      "median_ms": 68.327,
+      "min_ms": 66.364,
+      "max_ms": 69.531,
+      "ocr_fps": 14.69
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_221750_136_nopl_full.jpg",
+      "width": 640,
+      "height": 480,
+      "runs": 3,
+      "texts": [
+        "-",
+        "-",
+        "OL0=05",
+        "30K-899.99"
+      ],
+      "latencies_ms": [
+        175.618,
+        174.824,
+        176.666
+      ],
+      "average_ms": 175.703,
+      "median_ms": 175.618,
+      "min_ms": 174.824,
+      "max_ms": 176.666,
+      "ocr_fps": 5.691
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_221758_342_30K89999_5345EE56.jpg",
+      "width": 224,
+      "height": 91,
+      "runs": 3,
+      "texts": [
+        "30K-899.99"
+      ],
+      "latencies_ms": [
+        66.532,
+        72.856,
+        65.338
+      ],
+      "average_ms": 68.242,
+      "median_ms": 66.532,
+      "min_ms": 65.338,
+      "max_ms": 72.856,
+      "ocr_fps": 14.654
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_221826_686_nopl_crop.jpg",
+      "width": 261,
+      "height": 134,
+      "runs": 3,
+      "texts": [
+        "GOA OODAO0"
+      ],
+      "latencies_ms": [
+        215.14,
+        80.865,
+        79.11
+      ],
+      "average_ms": 125.038,
+      "median_ms": 80.865,
+      "min_ms": 79.11,
+      "max_ms": 215.14,
+      "ocr_fps": 7.998
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_221826_686_nopl_full.jpg",
+      "width": 640,
+      "height": 480,
+      "runs": 3,
+      "texts": [
+        "YOL",
+        "YOLO0.60",
+        "GOA-000.00"
+      ],
+      "latencies_ms": [
+        189.276,
+        178.887,
+        174.445
+      ],
+      "average_ms": 180.869,
+      "median_ms": 178.887,
+      "min_ms": 174.445,
+      "max_ms": 189.276,
+      "ocr_fps": 5.529
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_221830_791_nopl_crop.jpg",
+      "width": 268,
+      "height": 97,
+      "runs": 3,
+      "texts": [
+        "60A-999.99"
+      ],
+      "latencies_ms": [
+        62.556,
+        69.14,
+        74.74
+      ],
+      "average_ms": 68.812,
+      "median_ms": 69.14,
+      "min_ms": 62.556,
+      "max_ms": 74.74,
+      "ocr_fps": 14.532
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_221830_791_nopl_full.jpg",
+      "width": 640,
+      "height": 480,
+      "runs": 3,
+      "texts": [
+        "60A-999.99"
+      ],
+      "latencies_ms": [
+        96.069,
+        100.851,
+        100.034
+      ],
+      "average_ms": 98.984,
+      "median_ms": 100.034,
+      "min_ms": 96.069,
+      "max_ms": 100.851,
+      "ocr_fps": 10.103
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_221836_833_60A99999_D0D3DE5F.jpg",
+      "width": 268,
+      "height": 97,
+      "runs": 3,
+      "texts": [
+        "60A-999.99"
+      ],
+      "latencies_ms": [
+        62.19,
+        63.766,
+        63.801
+      ],
+      "average_ms": 63.252,
+      "median_ms": 63.766,
+      "min_ms": 62.19,
+      "max_ms": 63.801,
+      "ocr_fps": 15.81
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_222634_780_nopl_crop.jpg",
+      "width": 279,
+      "height": 105,
+      "runs": 3,
+      "texts": [
+        "60A-999.99"
+      ],
+      "latencies_ms": [
+        183.525,
+        78.448,
+        78.383
+      ],
+      "average_ms": 113.452,
+      "median_ms": 78.448,
+      "min_ms": 78.383,
+      "max_ms": 183.525,
+      "ocr_fps": 8.814
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_222634_780_nopl_full.jpg",
+      "width": 640,
+      "height": 480,
+      "runs": 3,
+      "texts": [
+        "YOLO",
+        "60A-999.99"
+      ],
+      "latencies_ms": [
+        481.443,
+        306.146,
+        309.781
+      ],
+      "average_ms": 365.79,
+      "median_ms": 309.781,
+      "min_ms": 306.146,
+      "max_ms": 481.443,
+      "ocr_fps": 2.734
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_222638_867_nopl_crop.jpg",
+      "width": 257,
+      "height": 96,
+      "runs": 3,
+      "texts": [
+        "60A-999.99"
+      ],
+      "latencies_ms": [
+        153.97,
+        79.333,
+        72.053
+      ],
+      "average_ms": 101.785,
+      "median_ms": 79.333,
+      "min_ms": 72.053,
+      "max_ms": 153.97,
+      "ocr_fps": 9.825
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_222638_867_nopl_full.jpg",
+      "width": 640,
+      "height": 480,
+      "runs": 3,
+      "texts": [
+        "D",
+        "60A-999.99"
+      ],
+      "latencies_ms": [
+        224.2,
+        185.019,
+        191.393
+      ],
+      "average_ms": 200.204,
+      "median_ms": 191.393,
+      "min_ms": 185.019,
+      "max_ms": 224.2,
+      "ocr_fps": 4.995
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_222715_422_nopl_crop.jpg",
+      "width": 261,
+      "height": 97,
+      "runs": 3,
+      "texts": [
+        "60A-999.99"
+      ],
+      "latencies_ms": [
+        75.731,
+        73.353,
+        74.511
+      ],
+      "average_ms": 74.532,
+      "median_ms": 74.511,
+      "min_ms": 73.353,
+      "max_ms": 75.731,
+      "ocr_fps": 13.417
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_222715_422_nopl_full.jpg",
+      "width": 640,
+      "height": 480,
+      "runs": 3,
+      "texts": [
+        "60A-999.99"
+      ],
+      "latencies_ms": [
+        179.308,
+        183.402,
+        187.27
+      ],
+      "average_ms": 183.327,
+      "median_ms": 183.402,
+      "min_ms": 179.308,
+      "max_ms": 187.27,
+      "ocr_fps": 5.455
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_222719_592_nopl_crop.jpg",
+      "width": 265,
+      "height": 97,
+      "runs": 3,
+      "texts": [
+        "60A-999.99"
+      ],
+      "latencies_ms": [
+        73.653,
+        63.428,
+        65.66
+      ],
+      "average_ms": 67.58,
+      "median_ms": 65.66,
+      "min_ms": 63.428,
+      "max_ms": 73.653,
+      "ocr_fps": 14.797
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_222719_592_nopl_full.jpg",
+      "width": 640,
+      "height": 480,
+      "runs": 3,
+      "texts": [
+        "60A-999.99"
+      ],
+      "latencies_ms": [
+        100.259,
+        92.718,
+        104.939
+      ],
+      "average_ms": 99.305,
+      "median_ms": 100.259,
+      "min_ms": 92.718,
+      "max_ms": 104.939,
+      "ocr_fps": 10.07
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_222723_495_60A99999_D0D3DE5F.jpg",
+      "width": 265,
+      "height": 97,
+      "runs": 3,
+      "texts": [
+        "60A-999.99"
+      ],
+      "latencies_ms": [
+        73.542,
+        73.221,
+        74.412
+      ],
+      "average_ms": 73.725,
+      "median_ms": 73.542,
+      "min_ms": 73.221,
+      "max_ms": 74.412,
+      "ocr_fps": 13.564
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_223402_608_nopl_crop.jpg",
+      "width": 254,
+      "height": 95,
+      "runs": 3,
+      "texts": [
+        "60A-999.99"
+      ],
+      "latencies_ms": [
+        72.696,
+        75.311,
+        67.607
+      ],
+      "average_ms": 71.871,
+      "median_ms": 72.696,
+      "min_ms": 67.607,
+      "max_ms": 75.311,
+      "ocr_fps": 13.914
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_223402_608_nopl_full.jpg",
+      "width": 640,
+      "height": 480,
+      "runs": 3,
+      "texts": [
+        "D",
+        "60A-999.99"
+      ],
+      "latencies_ms": [
+        178.343,
+        183.367,
+        178.604
+      ],
+      "average_ms": 180.105,
+      "median_ms": 178.604,
+      "min_ms": 178.343,
+      "max_ms": 183.367,
+      "ocr_fps": 5.552
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_223406_693_nopl_crop.jpg",
+      "width": 255,
+      "height": 97,
+      "runs": 3,
+      "texts": [
+        "60A-999.99"
+      ],
+      "latencies_ms": [
+        71.839,
+        75.882,
+        75.688
+      ],
+      "average_ms": 74.47,
+      "median_ms": 75.688,
+      "min_ms": 71.839,
+      "max_ms": 75.882,
+      "ocr_fps": 13.428
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_223406_693_nopl_full.jpg",
+      "width": 640,
+      "height": 480,
+      "runs": 3,
+      "texts": [
+        "D",
+        "60A-999.99"
+      ],
+      "latencies_ms": [
+        178.286,
+        178.053,
+        175.597
+      ],
+      "average_ms": 177.312,
+      "median_ms": 178.053,
+      "min_ms": 175.597,
+      "max_ms": 178.286,
+      "ocr_fps": 5.64
+    },
+    {
+      "image": "static\\snapshots\\in_20260814_223413_897_60A99999_D0D3DE5F.jpg",
+      "width": 255,
+      "height": 97,
+      "runs": 3,
+      "texts": [
+        "60A-999.99"
+      ],
+      "latencies_ms": [
+        81.652,
+        75.356,
+        80.336
+      ],
+      "average_ms": 79.115,
+      "median_ms": 80.336,
+      "min_ms": 75.356,
+      "max_ms": 81.652,
+      "ocr_fps": 12.64
+    },
+    {
+      "image": "static\\snapshots\\out_20260814_221911_792_nopl_crop.jpg",
+      "width": 281,
+      "height": 111,
+      "runs": 3,
+      "texts": [
+        "60A",
+        "999",
+        "90"
+      ],
+      "latencies_ms": [
+        143.773,
+        142.878,
+        145.631
+      ],
+      "average_ms": 144.094,
+      "median_ms": 143.773,
+      "min_ms": 142.878,
+      "max_ms": 145.631,
+      "ocr_fps": 6.94
+    },
+    {
+      "image": "static\\snapshots\\out_20260814_221911_792_nopl_full.jpg",
+      "width": 640,
+      "height": 480,
+      "runs": 3,
+      "texts": [
+        "YOLO0.50",
+        "OOA",
+        "99990"
+      ],
+      "latencies_ms": [
+        276.479,
+        219.165,
+        212.17
+      ],
+      "average_ms": 235.938,
+      "median_ms": 219.165,
+      "min_ms": 212.17,
+      "max_ms": 276.479,
+      "ocr_fps": 4.238
+    },
+    {
+      "image": "static\\snapshots\\out_20260814_222525_924_nopl_crop.jpg",
+      "width": 253,
+      "height": 99,
+      "runs": 3,
+      "texts": [
+        "60A-999 99"
+      ],
+      "latencies_ms": [
+        71.998,
+        73.431,
+        74.591
+      ],
+      "average_ms": 73.34,
+      "median_ms": 73.431,
+      "min_ms": 71.998,
+      "max_ms": 74.591,
+      "ocr_fps": 13.635
+    },
+    {
+      "image": "static\\snapshots\\out_20260814_222525_924_nopl_full.jpg",
+      "width": 640,
+      "height": 480,
+      "runs": 3,
+      "texts": [
+        "010-0.58",
+        "60A-999.99",
+        "0"
+      ],
+      "latencies_ms": [
+        220.497,
+        217.484,
+        196.777
+      ],
+      "average_ms": 211.586,
+      "median_ms": 217.484,
+      "min_ms": 196.777,
+      "max_ms": 220.497,
+      "ocr_fps": 4.726
+    },
+    {
+      "image": "static\\snapshots\\out_20260814_222529_987_nopl_crop.jpg",
+      "width": 263,
+      "height": 102,
+      "runs": 3,
+      "texts": [
+        "60A-999 99"
+      ],
+      "latencies_ms": [
+        154.614,
+        106.23,
+        95.441
+      ],
+      "average_ms": 118.761,
+      "median_ms": 106.23,
+      "min_ms": 95.441,
+      "max_ms": 154.614,
+      "ocr_fps": 8.42
+    },
+    {
+      "image": "static\\snapshots\\out_20260814_222529_987_nopl_full.jpg",
+      "width": 640,
+      "height": 480,
+      "runs": 3,
+      "texts": [
+        "YOLO-0.48",
+        "60A-99999"
+      ],
+      "latencies_ms": [
+        133.109,
+        137.14,
+        118.251
+      ],
+      "average_ms": 129.5,
+      "median_ms": 133.109,
+      "min_ms": 118.251,
+      "max_ms": 137.14,
+      "ocr_fps": 7.722
+    },
+    {
+      "image": "static\\snapshots\\out_20260814_222744_146_nopl_crop.jpg",
+      "width": 240,
+      "height": 94,
+      "runs": 3,
+      "texts": [
+        "60A-999 99"
+      ],
+      "latencies_ms": [
+        65.363,
+        69.218,
+        71.118
+      ],
+      "average_ms": 68.566,
+      "median_ms": 69.218,
+      "min_ms": 65.363,
+      "max_ms": 71.118,
+      "ocr_fps": 14.585
+    },
+    {
+      "image": "static\\snapshots\\out_20260814_222744_146_nopl_full.jpg",
+      "width": 640,
+      "height": 480,
+      "runs": 3,
+      "texts": [
+        "YOLO-0.54",
+        "60A-999 99"
+      ],
+      "latencies_ms": [
+        238.04,
+        179.471,
+        184.126
+      ],
+      "average_ms": 200.546,
+      "median_ms": 184.126,
+      "min_ms": 179.471,
+      "max_ms": 238.04,
+      "ocr_fps": 4.986
+    },
+    {
+      "image": "static\\snapshots\\out_20260814_222748_195_nopl_crop.jpg",
+      "width": 242,
+      "height": 94,
+      "runs": 3,
+      "texts": [
+        "60A 999.99"
+      ],
+      "latencies_ms": [
+        60.492,
+        69.575,
+        74.777
+      ],
+      "average_ms": 68.281,
+      "median_ms": 69.575,
+      "min_ms": 60.492,
+      "max_ms": 74.777,
+      "ocr_fps": 14.645
+    },
+    {
+      "image": "static\\snapshots\\out_20260814_222748_195_nopl_full.jpg",
+      "width": 640,
+      "height": 480,
+      "runs": 3,
+      "texts": [
+        "YOL0-0.55",
+        "60A 999.99"
+      ],
+      "latencies_ms": [
+        184.109,
+        177.979,
+        176.289
+      ],
+      "average_ms": 179.459,
+      "median_ms": 177.979,
+      "min_ms": 176.289,
+      "max_ms": 184.109,
+      "ocr_fps": 5.572
+    },
+    {
+      "image": "static\\snapshots\\out_20260814_223447_720_nopl_crop.jpg",
+      "width": 251,
+      "height": 96,
+      "runs": 3,
+      "texts": [
+        "60A-999.99"
+      ],
+      "latencies_ms": [
+        68.09,
+        67.969,
+        64.605
+      ],
+      "average_ms": 66.888,
+      "median_ms": 67.969,
+      "min_ms": 64.605,
+      "max_ms": 68.09,
+      "ocr_fps": 14.95
+    },
+    {
+      "image": "static\\snapshots\\out_20260814_223447_720_nopl_full.jpg",
+      "width": 640,
+      "height": 480,
+      "runs": 3,
+      "texts": [
+        "60A-999.99"
+      ],
+      "latencies_ms": [
+        218.042,
+        170.464,
+        160.19
+      ],
+      "average_ms": 182.899,
+      "median_ms": 170.464,
+      "min_ms": 160.19,
+      "max_ms": 218.042,
+      "ocr_fps": 5.468
+    },
+    {
+      "image": "static\\snapshots\\out_20260814_223451_796_nopl_crop.jpg",
+      "width": 258,
+      "height": 98,
+      "runs": 3,
+      "texts": [
+        "60A-999.99"
+      ],
+      "latencies_ms": [
+        75.321,
+        81.88,
+        75.299
+      ],
+      "average_ms": 77.5,
+      "median_ms": 75.321,
+      "min_ms": 75.299,
+      "max_ms": 81.88,
+      "ocr_fps": 12.903
+    },
+    {
+      "image": "static\\snapshots\\out_20260814_223451_796_nopl_full.jpg",
+      "width": 640,
+      "height": 480,
+      "runs": 3,
+      "texts": [
+        "B",
+        "60A-999.99"
+      ],
+      "latencies_ms": [
+        177.002,
+        183.414,
+        173.615
+      ],
+      "average_ms": 178.011,
+      "median_ms": 177.002,
+      "min_ms": 173.615,
+      "max_ms": 183.414,
+      "ocr_fps": 5.618
+    },
+    {
+      "image": "static\\snapshots\\out_20260814_223544_692_nopl_crop.jpg",
+      "width": 262,
+      "height": 102,
+      "runs": 3,
+      "texts": [
+        "60A-999.99"
+      ],
+      "latencies_ms": [
+        76.245,
+        74.403,
+        75.141
+      ],
+      "average_ms": 75.263,
+      "median_ms": 75.141,
+      "min_ms": 74.403,
+      "max_ms": 76.245,
+      "ocr_fps": 13.287
+    },
+    {
+      "image": "static\\snapshots\\out_20260814_223544_692_nopl_full.jpg",
+      "width": 640,
+      "height": 480,
+      "runs": 3,
+      "texts": [
+        "60A-999.99"
+      ],
+      "latencies_ms": [
+        125.9,
+        125.651,
+        145.188
+      ],
+      "average_ms": 132.247,
+      "median_ms": 125.9,
+      "min_ms": 125.651,
+      "max_ms": 145.188,
+      "ocr_fps": 7.562
+    },
+    {
+      "image": "static\\snapshots\\out_20260814_223548_816_nopl_crop.jpg",
+      "width": 272,
+      "height": 97,
+      "runs": 3,
+      "texts": [
+        "60A-999.99"
+      ],
+      "latencies_ms": [
+        76.339,
+        81.61,
+        76.427
+      ],
+      "average_ms": 78.125,
+      "median_ms": 76.427,
+      "min_ms": 76.339,
+      "max_ms": 81.61,
+      "ocr_fps": 12.8
+    },
+    {
+      "image": "static\\snapshots\\out_20260814_223548_816_nopl_full.jpg",
+      "width": 640,
+      "height": 480,
+      "runs": 3,
+      "texts": [
+        "60A-999.99"
+      ],
+      "latencies_ms": [
+        173.725,
+        168.551,
+        169.286
+      ],
+      "average_ms": 170.521,
+      "median_ms": 169.286,
+      "min_ms": 168.551,
+      "max_ms": 173.725,
+      "ocr_fps": 5.864
+    }
+  ],
+  "failures": []
+}
