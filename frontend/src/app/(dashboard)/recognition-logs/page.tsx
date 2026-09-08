@@ -1,6 +1,4 @@
 import type { Metadata } from "next";
-
-import { RoleGuard } from "@/components/layout/role-guard";
 import { RecognitionLogsView } from "@/features/recognition-logs/recognition-logs-view";
 
 export const metadata: Metadata = {
@@ -9,9 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function RecognitionLogsPage() {
-  return (
-    <RoleGuard allowedRoles={["admin", "manager"]}>
-      <RecognitionLogsView />
-    </RoleGuard>
-  );
+  return <RecognitionLogsView />;
 }

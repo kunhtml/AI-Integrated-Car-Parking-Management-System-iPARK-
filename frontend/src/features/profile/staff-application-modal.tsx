@@ -366,7 +366,7 @@ export function StaffApplicationModal({
             <div
               style={{
                 fontSize: "0.72rem",
-                color: state.reason.length > 1000 ? "var(--danger)" : "var(--muted)",
+                color: state.reason.length > 1000 ? "#ef4444" : "var(--muted)",
                 marginTop: 2,
                 textAlign: "right",
               }}
@@ -453,7 +453,7 @@ export function StaffApplicationModal({
                 borderRadius: 8,
                 background: "rgba(239,68,68,0.08)",
                 border: "1px solid rgba(239,68,68,0.2)",
-                color: "var(--danger)",
+                color: "#ef4444",
                 fontSize: "0.82rem",
               }}
             >
@@ -549,7 +549,7 @@ function Field({
             alignItems: "center",
             gap: 4,
             fontSize: "0.74rem",
-            color: "var(--danger)",
+            color: "#ef4444",
             fontWeight: 500,
             marginTop: 2,
           }}

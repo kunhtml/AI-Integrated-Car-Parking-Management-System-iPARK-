@@ -97,50 +97,39 @@ export function Sidebar({ currentUser, mobileNavOpen, onNavigate }: SidebarProps
   const viewAsLabel = viewAs === "staff" ? "Khu vực Người dùng" : "Khu vực Nhân viên";
 
   return (
-    <aside
-      ref={sidebarRef}
-      className={`fixed top-0 bottom-0 z-10 flex w-[260px] flex-col overflow-y-auto bg-[#1e293b] p-[24px_16px] text-[var(--sidebar-fg)] shadow-[4px_0_20px_rgba(0,0,0,0.2)] transition-[left] duration-200 ease-in-out max-[980px]:z-20 ${
-        mobileNavOpen ? "left-0" : "max-[980px]:-left-[280px] left-0"
-      }`}
-    >
-      <div className="mb-7 flex items-center gap-3 rounded-[var(--radius)] border border-[rgba(59,130,246,0.25)] bg-gradient-to-br from-[rgba(59,130,246,0.2)] to-[rgba(59,130,246,0.1)] p-[14px_12px] text-lg font-bold text-white">
-        <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-gradient-to-br from-[#3b82f6] to-[#2563eb] text-white shadow-[0_4px_12px_rgba(59,130,246,0.35)]">
+    <aside ref={sidebarRef} className={`sidebar ${mobileNavOpen ? "open" : ""}`}>
+      <div className="brand app-brand">
+        <div className="brand-icon">
           <ParkingCircle size={26} />
         </div>
         <span>{parkingConfig.brandName}</span>
       </div>
-        <nav aria-label="Main navigation" className="flex flex-1 flex-col gap-1">
+        <nav aria-label="Main navigation">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.path;
           return (
             <Link
-              className={`relative flex w-full items-center gap-3 overflow-hidden rounded-[var(--radius)] p-[12px_14px] text-sm font-medium transition-all duration-200 ${
-                isActive
-                  ? "bg-[var(--sidebar-active)] font-semibold text-[var(--sidebar-active-fg)] shadow-[0_2px_8px_rgba(59,130,246,0.3)] [&>svg]:text-white"
-                  : "bg-transparent text-[var(--sidebar-fg)] hover:bg-[var(--sidebar-hover)] hover:text-white"
-              }`}
+              className={`nav-item ${isActive ? "active" : ""}`}
               href={item.path}
               key={item.id}
               onClick={onNavigate}
             >
               <Icon size={18} />
               <span>{item.label}</span>
-              {isActive && (
-                <div className="absolute top-1/2 left-0 h-5 w-[3px] -translate-y-1/2 rounded-r-[4px] bg-[#93c5fd]" />
-              )}
+              {isActive && <div className="active-indicator" />}
             </Link>
           );
         })}
       </nav>
       {currentUser.role === "staff" && (
-        <div className="mt-auto p-[0px_12px_8px]">
+        <div className="sidebar-mode-toggle">
           <button
-            className="flex h-8 w-full cursor-pointer items-center justify-center gap-2 rounded-[var(--radius)] border-none bg-gradient-to-br from-[rgb(123,104,238)] to-[rgb(147,112,219)] px-4 font-mono text-[11px] font-semibold tracking-[0.5px] text-white uppercase shadow-[rgba(123,104,238,0.45)_0px_4px_12px,rgba(255,255,255,0.15)_0px_1px_0px_inset] transition-all duration-200 hover:-translate-y-px hover:shadow-[rgba(123,104,238,0.55)_0px_6px_16px,rgba(255,255,255,0.2)_0px_1px_0px_inset] active:translate-y-0 active:shadow-[rgba(123,104,238,0.35)_0px_2px_8px,rgba(255,255,255,0.1)_0px_1px_0px_inset]"
+            className="mode-switch-btn"
             onClick={toggleViewAs}
             type="button"
           >
-            <span className="flex items-center justify-center">
+            <span className="mode-switch-icon">
               <ArrowRightLeft size={14} />
             </span>
             <span>{viewAsLabel}</span>

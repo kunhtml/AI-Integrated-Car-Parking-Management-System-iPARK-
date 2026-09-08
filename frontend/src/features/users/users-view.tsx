@@ -20,8 +20,6 @@ import {
   Filter,
 } from "lucide-react";
 
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-
 import { useParkingApp } from "@/context/parking-app-context";
 import { PasswordInput } from "@/features/auth/password-input";
 import type { UserUpdatePayload } from "@/hooks/actions/use-user-actions";
@@ -247,7 +245,6 @@ export function UsersView() {
   const [showCreate, setShowCreate] = useState(false);
   const [viewing, setViewing] = useState<DemoUser | null>(null);
   const [editing, setEditing] = useState<DemoUser | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<DemoUser | null>(null);
   const [form, setForm] = useState<EditState>({});
 
   const isAdmin = currentUser?.role === "admin";
@@ -324,8 +321,14 @@ export function UsersView() {
     setShowCreate(false);
   }
 
-  function handleDelete(user: DemoUser) {
-    setConfirmDelete(user);
+  async function handleDelete(user: DemoUser) {
+    if (
+      !window.confirm(
+        `Xóa tài khoản "${user.name}"? Hành động này không thể hoàn tác.`,
+      )
+    )
+      return;
+    await deleteUser(String(user.id));
   }
 
   return (
@@ -725,22 +728,6 @@ export function UsersView() {
           </form>
         )}
       </Modal>
-
-      <ConfirmDialog
-        message={
-          confirmDelete
-            ? `Xóa tài khoản "${confirmDelete.name}"? Hành động này không thể hoàn tác.`
-            : ""
-        }
-        onCancel={() => setConfirmDelete(null)}
-        onConfirm={() => {
-          if (confirmDelete) void deleteUser(String(confirmDelete.id));
-          setConfirmDelete(null);
-        }}
-        open={confirmDelete !== null}
-        title="Xóa tài khoản?"
-        tone="danger"
-      />
     </section>
   );
 }

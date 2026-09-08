@@ -18,8 +18,6 @@ import {
   X,
 } from "lucide-react";
 
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-
 import { useParkingApp } from "@/context/parking-app-context";
 import type { TransactionItem } from "@/types";
 import { apiFetch } from "@/lib/client-api";
@@ -87,11 +85,11 @@ function getInitials(name?: string): string {
 }
 
 const AVATAR_GRADIENTS = [
-  "linear-gradient(135deg,var(--primary),#7c3aed)",
-  "linear-gradient(135deg,#0ea5e9,var(--primary))",
+  "linear-gradient(135deg,#2563eb,#7c3aed)",
+  "linear-gradient(135deg,#0ea5e9,#2563eb)",
   "linear-gradient(135deg,#10b981,#059669)",
   "linear-gradient(135deg,#f59e0b,#ea580c)",
-  "linear-gradient(135deg,var(--danger),#db2777)",
+  "linear-gradient(135deg,#ef4444,#db2777)",
 ];
 
 function avatarGradient(seed: string) {
@@ -188,7 +186,7 @@ function TransactionCard({ item, isCustomer, isAdmin, onView, onCancel, onConfir
         )}
         {item.status === "pending" && isAdmin && (
           <>
-            <button className="small-button" onClick={() => onCancel(item)} style={{ color: "var(--danger)" }} type="button">
+            <button className="small-button" onClick={() => onCancel(item)} style={{ color: "#ef4444" }} type="button">
               <X size={14} /> Hủy
             </button>
             {!isTopUp && (
@@ -232,7 +230,6 @@ export function WalletView() {
 
   // Modal chi tiết giao dịch
   const [detailTransaction, setDetailTransaction] = useState<TransactionItem | null>(null);
-  const [confirmCancel, setConfirmCancel] = useState<TransactionItem | null>(null);
 
   // Reset phân trang khi bộ lọc thay đổi
   useEffect(() => {
@@ -298,6 +295,7 @@ export function WalletView() {
   }, [currentUser, setSessions]);
 
   async function handleCancelTransaction(item: TransactionItem) {
+    if (!window.confirm("Hủy giao dịch này? Giao dịch sẽ bị xóa hoàn toàn.")) return;
     try {
       await apiFetch(`/transactions/${item.id}/cancel`, { method: "POST" });
       const r = await apiFetch("/transactions");
@@ -409,7 +407,7 @@ export function WalletView() {
               padding: "10px 14px",
               borderRadius: "8px",
               background: sessionCheckResult.status === "fully_paid" ? "rgba(34,197,94,0.1)" : "rgba(251,191,36,0.1)",
-              color: sessionCheckResult.status === "fully_paid" ? "var(--success)" : "#fbbf24",
+              color: sessionCheckResult.status === "fully_paid" ? "#22c55e" : "#fbbf24",
               fontSize: "0.9rem",
             }}>
               {sessionCheckResult.status === "fully_paid"
@@ -536,7 +534,7 @@ export function WalletView() {
                   isCustomer={isCustomer}
                   item={item}
                   key={item.id}
-                  onCancel={(item) => setConfirmCancel(item)}
+                  onCancel={handleCancelTransaction}
                   onConfirm={confirmTransaction}
                   onView={setDetailTransaction}
                 />
@@ -705,18 +703,6 @@ export function WalletView() {
           </div>
         </div>
       )}
-
-      <ConfirmDialog
-        message="Giao dịch sẽ bị xóa hoàn toàn."
-        onCancel={() => setConfirmCancel(null)}
-        onConfirm={() => {
-          if (confirmCancel) void handleCancelTransaction(confirmCancel);
-          setConfirmCancel(null);
-        }}
-        open={confirmCancel !== null}
-        title="Hủy giao dịch này?"
-        tone="danger"
-      />
     </section>
   );
 }

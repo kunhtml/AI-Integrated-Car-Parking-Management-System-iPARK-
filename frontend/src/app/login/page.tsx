@@ -1,127 +1,43 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { KeyRound, LogIn, ParkingCircle } from "lucide-react";
-import { useParkingApp } from "@/context/parking-app-context";
+import { LogIn, ParkingCircle } from "lucide-react";
+import { apiFetch } from "@/lib/api";
 import { parkingConfig } from "@/lib/parking-config";
 import { PasswordInput } from "@/features/auth/password-input";
 
-/**
- * Trang đăng nhập độc lập.
- *
- * SEC: mọi request đăng nhập đi qua use-auth-actions handleLogin — handler
- * chung đã xử lý đúng 202 (2FA đang chờ) và 403 (email chưa xác minh) thay
- * vì coi mọi 2xx là đăng nhập thành công.
- */
 export default function LoginPage() {
-  const { handleLogin, handleVerifyLoginTwoFactor } = useParkingApp();
   const [message, setMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [pendingTwoFactorId, setPendingTwoFactorId] = useState<string | null>(
-    null,
-  );
 
-  async function onLoginSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage(null);
     setSubmitting(true);
+
+    const form = new FormData(event.currentTarget);
     try {
-      // Context khai báo handleLogin: Promise<unknown> — thu hẹp về union
-      // kết quả thực của use-auth-actions (ok | two-factor | email-verification | null).
-      const result = (await handleLogin(event)) as
-        | { kind: "ok"; user: unknown }
-        | { kind: "two-factor"; pendingTwoFactorId: string; email?: string }
-        | { kind: "email-verification"; email?: string }
-        | null;
-      if (result?.kind === "two-factor") {
-        setPendingTwoFactorId(result.pendingTwoFactorId);
-        setMessage("Vui lòng nhập mã 2FA đã được gửi tới email của bạn.");
-      } else if (result?.kind === "email-verification") {
-        // Email chưa xác minh: chuyển sang luồng xác minh trên trang chủ.
-        window.location.href = "/";
-      } else if (result?.kind === "ok") {
-        window.location.href = "/overview";
+      const response = await apiFetch("/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: String(form.get("email") || ""),
+          password: String(form.get("password") || ""),
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setMessage(data.message || "Không đăng nhập được.");
+        return;
       }
+
+      window.location.href = "/overview";
+    } catch {
+      setMessage("Không kết nối được API đăng nhập.");
     } finally {
       setSubmitting(false);
     }
-  }
-
-  async function onTwoFactorSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setMessage(null);
-    setSubmitting(true);
-    try {
-      const user = await handleVerifyLoginTwoFactor(event);
-      if (user) {
-        window.location.href = "/overview";
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  if (pendingTwoFactorId) {
-    return (
-      <main
-        id="main-content"
-        className="flex min-h-screen items-center justify-center bg-slate-50 px-6 py-12"
-      >
-        <form
-          className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-sm"
-          onSubmit={onTwoFactorSubmit}
-        >
-          <div className="mb-6 flex items-center gap-3 border-b border-slate-100 pb-4">
-            <div className="rounded-lg bg-blue-600 p-2 text-white">
-              <KeyRound size={22} />
-            </div>
-            <div>
-              <p className="text-sm text-slate-500">{parkingConfig.brandName}</p>
-              <h1 className="text-2xl font-bold text-slate-900">
-                Xác minh hai yếu tố
-              </h1>
-            </div>
-          </div>
-
-          <input
-            name="pendingTwoFactorId"
-            type="hidden"
-            value={pendingTwoFactorId}
-          />
-
-          <div className="space-y-4">
-            <label className="block text-sm font-medium text-slate-700">
-              Mã xác minh (OTP)
-              <input
-                className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                inputMode="numeric"
-                name="code"
-                pattern="[0-9]{6}"
-                required
-                autoComplete="one-time-code"
-                maxLength={6}
-              />
-            </label>
-
-            {message && (
-              <p className="rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-700">
-                {message}
-              </p>
-            )}
-
-            <button
-              className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
-              disabled={submitting}
-              type="submit"
-            >
-              <LogIn size={16} />
-              {submitting ? "Đang xác minh..." : "Xác minh"}
-            </button>
-
-          </div>
-        </form>
-      </main>
-    );
   }
 
   return (
@@ -131,7 +47,7 @@ export default function LoginPage() {
     >
       <form
         className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-sm"
-        onSubmit={onLoginSubmit}
+        onSubmit={handleLogin}
       >
         <div className="mb-6 flex items-center gap-3 border-b border-slate-100 pb-4">
           <div className="rounded-lg bg-blue-600 p-2 text-white">
@@ -154,7 +70,6 @@ export default function LoginPage() {
               autoComplete="email"
             />
           </label>
-
           <label className="block text-sm font-medium text-slate-700">
             Mật khẩu
             <PasswordInput

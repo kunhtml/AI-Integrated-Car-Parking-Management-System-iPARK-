@@ -1,4 +1,4 @@
-import { initialPricingConfig } from "@/lib/pricing-defaults";
+import { initialPricingConfig } from "@/lib/mock-data";
 import { todayInputValue } from "@/lib/constants";
 import type {
   AuthMode,

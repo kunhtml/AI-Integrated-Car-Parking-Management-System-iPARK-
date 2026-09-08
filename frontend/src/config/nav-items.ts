@@ -12,6 +12,7 @@ import {
   ParkingSquare,
   Radio,
   ScanLine,
+  ClipboardList,
   Settings,
   ShieldAlert,
   UserRound,
@@ -152,6 +153,13 @@ export const navItems: NavItem[] = [
     roles: ["admin", "manager"],
   },
   {
+    id: "audit-logs",
+    path: "/audit-logs",
+    label: "Nhật ký barie",
+    icon: ClipboardList,
+    roles: ["admin"],
+  },
+  {
     id: "staff-applications",
     path: "/staff-applications",
     label: "Đơn ứng tuyển",
@@ -165,6 +173,13 @@ export const navItems: NavItem[] = [
     icon: UserRound,
     roles: ["admin", "manager", "staff", "customer"],
   },
+];
+
+export const adminOnlyPaths = [
+  "/pricing",
+  "/reports",
+  "/staff-applications",
+  "/devices",
 ];
 
 export function getNavItemsForRole(role: Role, viewAs?: ViewAsMode) {

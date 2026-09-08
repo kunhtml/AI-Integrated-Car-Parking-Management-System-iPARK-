@@ -260,14 +260,14 @@ export function RfidReportsView() {
                   <div
                     style={{
                       width: `${(status.available / status.total) * 100}%`,
-                      backgroundColor: "var(--success)",
+                      backgroundColor: "#22c55e",
                     }}
                     title={`Sẵn sàng: ${status.available}`}
                   />
                   <div
                     style={{
                       width: `${(status.inUse / status.total) * 100}%`,
-                      backgroundColor: "var(--primary)",
+                      backgroundColor: "#3b82f6",
                     }}
                     title={`Đang sử dụng: ${status.inUse}`}
                   />
@@ -281,16 +281,16 @@ export function RfidReportsView() {
                   <div
                     style={{
                       width: `${(status.blocked / status.total) * 100}%`,
-                      backgroundColor: "var(--danger)",
+                      backgroundColor: "#ef4444",
                     }}
                     title={`Khóa: ${status.blocked}`}
                   />
                 </div>
                 <div style={{ display: "flex", gap: 16, marginTop: 6, fontSize: 11 }}>
-                  <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, backgroundColor: "var(--success)", marginRight: 4 }} />Sẵn sàng</span>
-                  <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, backgroundColor: "var(--primary)", marginRight: 4 }} />Đang dùng</span>
+                  <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, backgroundColor: "#22c55e", marginRight: 4 }} />Sẵn sàng</span>
+                  <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, backgroundColor: "#3b82f6", marginRight: 4 }} />Đang dùng</span>
                   <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, backgroundColor: "#eab308", marginRight: 4 }} />Mất</span>
-                  <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, backgroundColor: "var(--danger)", marginRight: 4 }} />Khóa</span>
+                  <span><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, backgroundColor: "#ef4444", marginRight: 4 }} />Khóa</span>
                 </div>
               </div>
             )}
@@ -390,7 +390,7 @@ export function RfidReportsView() {
                             style={{
                               width: row.totalScans === 0 ? "0%" : `${(row.successScans / row.totalScans) * 100}%`,
                               height: "100%",
-                              backgroundColor: row.successScans === row.totalScans ? "var(--success)" : "var(--primary)",
+                              backgroundColor: row.successScans === row.totalScans ? "#22c55e" : "#3b82f6",
                               borderRadius: 4,
                             }}
                           />
