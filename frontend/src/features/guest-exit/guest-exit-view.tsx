@@ -299,10 +299,10 @@ export function GuestExitView() {
     : 0;
 
   return (
-    <div className="guest-exit-container">
-      <div className="guest-exit-card">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-[var(--bg)] p-6 max-[640px]:p-3">
+      <div className="w-full max-w-[540px] rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-elevated)] p-9 shadow-xl max-[640px]:p-5">
         {/* ── Header ── */}
-        <div className="guest-exit-header">
+        <div className="mb-7 text-center [&>h1]:mb-2 [&>h1]:text-2xl [&>h1]:font-bold [&>h1]:text-[var(--fg)] [&>p]:text-sm [&>p]:text-[var(--fg-muted)]">
           <DoorOpen size={32} />
           <h1>Ra bãi xe</h1>
           <p>Quét mã QR hoặc nhập biển số để thanh toán và ra bãi</p>
@@ -310,14 +310,14 @@ export function GuestExitView() {
 
         {/* ── Step: Scan ── */}
         {step === "scan" && (
-          <div className="guest-exit-scan">
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white">
             {/* QR Scanner */}
             {showScanner && (
-              <div className="guest-exit-scanner">
-                <video ref={videoRef} className="guest-exit-video" />
+              <div className="relative mb-6 overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-black">
+                <video ref={videoRef} className="w-full aspect-video object-cover" />
                 <canvas ref={canvasRef} style={{ display: "none" }} />
                 <button
-                  className="guest-exit-close-scanner"
+                  className="absolute top-3 right-3 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
                   onClick={() => setShowScanner(false)}
                 >
                   <X size={20} />
@@ -328,7 +328,7 @@ export function GuestExitView() {
             {/* Camera Button */}
             {!showScanner && (
               <button
-                className="guest-exit-camera-btn"
+                className="inline-flex cursor-pointer items-center justify-center rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] px-3 text-[var(--fg-muted)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
                 onClick={() => setShowScanner(true)}
               >
                 <Camera size={24} />
@@ -337,14 +337,14 @@ export function GuestExitView() {
             )}
 
             {/* Divider */}
-            <div className="guest-exit-divider">
+            <div className="my-5 flex items-center gap-3 text-xs text-[var(--fg-muted)] before:h-px before:flex-1 before:bg-[var(--border)] after:h-px after:flex-1 after:bg-[var(--border)]">
               <span>hoặc</span>
             </div>
 
             {/* Manual Input */}
-            <form className="guest-exit-form" onSubmit={handleSearch}>
+            <form className="flex flex-col gap-4" onSubmit={handleSearch}>
               <label htmlFor="plate">Biển số xe</label>
-              <div className="guest-exit-input-row">
+              <div className="flex gap-2.5 max-[640px]:flex-col [&>input]:flex-1 [&>input]:rounded-[var(--radius)] [&>input]:border [&>input]:border-[var(--border)] [&>input]:bg-[var(--bg)] [&>input]:px-3.5 [&>input]:py-2.5 [&>input]:font-mono [&>input]:text-base [&>input]:font-bold [&>input]:tracking-wider [&>input]:uppercase [&>input]:text-[var(--fg)] [&>input]:outline-none focus:[&>input]:border-[var(--primary)]">
                 <input
                   id="plate"
                   value={plate}
@@ -361,40 +361,40 @@ export function GuestExitView() {
                   Tìm kiếm
                 </button>
               </div>
-              {error && <p className="guest-exit-error">{error}</p>}
+              {error && <p className="rounded-[var(--radius)] border border-[rgba(239,68,68,0.3)] bg-[var(--danger-soft)] p-3.5 text-sm text-[var(--danger)]">{error}</p>}
             </form>
           </div>
         )}
 
         {/* ── Step: Session Info ── */}
         {step === "session" && sessionInfo && (
-          <div className="guest-exit-session">
+          <div className="mb-6 flex flex-col gap-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] p-5">
             {/* Vehicle Info */}
-            <div className="guest-exit-vehicle-info">
+            <div className="mb-4 flex flex-col gap-1 text-sm text-[var(--fg-muted)]">
               <Car size={20} />
-              <span className="guest-exit-plate">{sessionInfo.plate}</span>
+              <span className="flex items-center justify-between border-b border-[var(--border)] pb-3 [&>strong]:font-mono [&>strong]:text-xl [&>strong]:font-black [&>strong]:tracking-wider [&>strong]:text-[var(--fg)]">{sessionInfo.plate}</span>
               {sessionInfo.ownerName && (
-                <span className="guest-exit-owner">
+                <span className="flex items-center gap-1.5 text-xs text-[var(--primary)]">
                   {sessionInfo.ownerName}
                 </span>
               )}
             </div>
 
             {/* Parking Details */}
-            <div className="guest-exit-details">
-              <div className="guest-exit-detail-item">
+            <div className="grid grid-cols-2 gap-3 max-[640px]:grid-cols-1">
+              <div className="flex flex-col gap-0.5 [&>span]:text-xs [&>span]:text-[var(--fg-muted)] [&>strong]:text-sm [&>strong]:font-semibold [&>strong]:text-[var(--fg)]">
                 <Clock size={16} />
                 <span>Thời gian gửi</span>
                 <strong>{formatDuration(durationMs)}</strong>
               </div>
               {sessionInfo.slot && (
-                <div className="guest-exit-detail-item">
+                <div className="flex flex-col gap-0.5 [&>span]:text-xs [&>span]:text-[var(--fg-muted)] [&>strong]:text-sm [&>strong]:font-semibold [&>strong]:text-[var(--fg)]">
                   <MapPin size={16} />
                   <span>Vị trí</span>
                   <strong>{sessionInfo.slot}</strong>
                 </div>
               )}
-              <div className="guest-exit-detail-item">
+              <div className="flex flex-col gap-0.5 [&>span]:text-xs [&>span]:text-[var(--fg-muted)] [&>strong]:text-sm [&>strong]:font-semibold [&>strong]:text-[var(--fg)]">
                 <Clock size={16} />
                 <span>Vào lúc</span>
                 <strong>
@@ -407,24 +407,24 @@ export function GuestExitView() {
             </div>
 
             {/* Fee */}
-            <div className="guest-exit-fee">
-              <div className="guest-exit-fee-label">Phí gửi xe</div>
-              <div className="guest-exit-fee-amount">
+            <div className="flex items-center justify-between rounded-[var(--radius)] border border-[rgba(59,130,246,0.2)] bg-[var(--primary-soft)] p-3.5">
+              <div className="text-sm font-medium text-[var(--primary-hover)]">Phí gửi xe</div>
+              <div className="text-xl font-extrabold text-[var(--primary-hover)]">
                 {formatVND(amountToPay)}
               </div>
               {sessionInfo.isPrepaid && (
-                <div className="guest-exit-prepaid">Đã thanh toán trước</div>
+                <div className="rounded-[var(--radius)] border border-[rgba(16,185,129,0.3)] bg-[var(--success-soft)] p-3 text-xs text-[var(--success)]">Đã thanh toán trước</div>
               )}
             </div>
 
             {/* Actions */}
-            <div className="guest-exit-actions">
-              <button className="guest-exit-btn-secondary" onClick={reset}>
+            <div className="flex gap-3 max-[640px]:flex-col">
+              <button className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] px-5 py-3 text-sm font-semibold text-[var(--fg)] transition-all hover:bg-[var(--bg-hover)] disabled:opacity-50" onClick={reset}>
                 Quay lại
               </button>
               {!sessionInfo.isPrepaid && amountToPay > 0 && (
                 <button
-                  className="guest-exit-btn-primary"
+                  className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-[var(--radius)] border-none bg-[var(--primary)] px-5 py-3 text-sm font-semibold text-white shadow-md transition-all hover:bg-[var(--primary-hover)] disabled:opacity-50"
                   onClick={handleProceedToPayment}
                   disabled={loading}
                 >
@@ -438,7 +438,7 @@ export function GuestExitView() {
               )}
               {sessionInfo.isPrepaid && (
                 <button
-                  className="guest-exit-btn-primary"
+                  className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-[var(--radius)] border-none bg-[var(--primary)] px-5 py-3 text-sm font-semibold text-white shadow-md transition-all hover:bg-[var(--primary-hover)] disabled:opacity-50"
                   onClick={handlePaymentSuccess}
                   disabled={loading}
                 >
@@ -456,12 +456,12 @@ export function GuestExitView() {
 
         {/* ── Step: PayOS Waiting ── */}
         {step === "payos_waiting" && payosData && (
-          <div className="guest-exit-payos">
+          <div className="my-5 flex flex-col items-center gap-3 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] p-5">
             <QrCode size={24} />
             <h3>Quét mã QR để thanh toán</h3>
             <p>Sử dụng app ngân hàng hoặc ví điện tử để quét mã</p>
 
-            <div className="guest-exit-qr">
+            <div className="rounded-lg bg-white p-3 shadow-sm">
               <QRCodeSVG value={payosData.qrCode} size={200} />
             </div>
 
@@ -470,19 +470,19 @@ export function GuestExitView() {
                 href={payosData.checkoutUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="guest-exit-checkout-link"
+                className="text-xs text-[var(--primary)] hover:underline"
               >
                 Mở trang thanh toán
               </a>
             )}
 
-            <div className="guest-exit-waiting">
+            <div className="flex items-center gap-2 text-xs text-[var(--fg-muted)]">
               <Loader2 size={16} className="animate-spin" />
               <span>Đang chờ thanh toán...</span>
             </div>
 
             <button
-              className="guest-exit-btn-secondary"
+              className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] px-5 py-3 text-sm font-semibold text-[var(--fg)] transition-all hover:bg-[var(--bg-hover)] disabled:opacity-50"
               onClick={() => {
                 setPayosData(null);
                 setStep("session");
@@ -495,7 +495,7 @@ export function GuestExitView() {
 
         {/* ── Step: Gate Opening ── */}
         {step === "gate_opened" && (
-          <div className="guest-exit-gate">
+          <div className="flex flex-col items-center gap-3 py-6 text-center text-[var(--success)]">
             <Loader2 size={48} className="animate-spin" />
             <h3>Đang mở barie...</h3>
             <p>Vui lòng chờ trong giây lát</p>
@@ -504,25 +504,25 @@ export function GuestExitView() {
 
         {/* ── Step: Success ── */}
         {step === "success" && (
-          <div className="guest-exit-success">
+          <div className="flex flex-col items-center gap-3 py-6 text-center text-[var(--success)]">
             <CheckCircle2 size={64} />
             <h3>Thanh toán thành công!</h3>
             <p>Barie đã mở. Bạn có thể ra bãi xe.</p>
 
             {sessionInfo && (
-              <div className="guest-exit-receipt">
-                <div className="guest-exit-receipt-item">
+              <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] p-4 text-sm">
+                <div className="flex justify-between py-1.5 border-b border-[var(--border)] last:border-none">
                   <span>Biển số</span>
                   <strong>{sessionInfo.plate}</strong>
                 </div>
-                <div className="guest-exit-receipt-item">
+                <div className="flex justify-between py-1.5 border-b border-[var(--border)] last:border-none">
                   <span>Phí thanh toán</span>
                   <strong>{formatVND(amountToPay)}</strong>
                 </div>
               </div>
             )}
 
-            <button className="guest-exit-btn-primary" onClick={reset}>
+            <button className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-[var(--radius)] border-none bg-[var(--primary)] px-5 py-3 text-sm font-semibold text-white shadow-md transition-all hover:bg-[var(--primary-hover)] disabled:opacity-50" onClick={reset}>
               Hoàn tất
             </button>
           </div>
@@ -530,10 +530,10 @@ export function GuestExitView() {
 
         {/* ── Error State ── */}
         {step === "error" && (
-          <div className="guest-exit-error-state">
+          <div className="flex flex-col items-center gap-3 py-8 text-center text-[var(--danger)]">
             <X size={48} />
             <h3>{error || "Đã xảy ra lỗi"}</h3>
-            <button className="guest-exit-btn-primary" onClick={reset}>
+            <button className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-[var(--radius)] border-none bg-[var(--primary)] px-5 py-3 text-sm font-semibold text-white shadow-md transition-all hover:bg-[var(--primary-hover)] disabled:opacity-50" onClick={reset}>
               Thử lại
             </button>
           </div>
