@@ -2174,67 +2174,13 @@ tr:hover td {
   color: var(--desk-ink);
 }
 
-.staff-desk__header {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 20px;
-  width: min(1600px, 100%);
-  margin-inline: auto;
-  margin-bottom: 22px;
-}
 
-.staff-desk__header h1 {
-  margin: 0;
-  color: var(--desk-ink);
-  font-size: clamp(22px, 2.2vw, 30px);
-  line-height: 1.1;
-  letter-spacing: 0;
-}
 
-.staff-desk__subtitle {
-  max-width: 620px;
-  margin: 6px 0 0;
-  color: var(--desk-muted);
-  font-size: 13px;
-  line-height: 1.5;
-}
 
-.staff-desk__status {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border: 1px solid var(--desk-line);
-  border-radius: 8px;
-  background: var(--desk-surface);
-  color: var(--desk-muted);
-  font-size: 12px;
-  white-space: nowrap;
-}
 
 /* Two-gate layout */
-.staff-desk__gates {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  width: min(1600px, 100%);
-  margin-inline: auto;
-}
 
-.staff-desk__gate {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  min-width: 0;
-}
 
-.staff-desk__gate--entry .staff-desk__camera-title svg {
-  color: var(--desk-green);
-}
-.staff-desk__gate--exit .staff-desk__camera-title svg {
-  color: var(--desk-orange);
-}
 
 .staff-desk__chip--in {
   background: #e9f8f2;
@@ -2242,77 +2188,15 @@ tr:hover td {
 }
 
 /* Camera card */
-.staff-desk__camera {
-  border: 1px solid var(--desk-line);
-  border-radius: 12px;
-  background: var(--desk-surface);
-  box-shadow: 0 2px 8px rgba(23, 32, 51, 0.04);
-  overflow: hidden;
-}
 
-.staff-desk__camera-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 54px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--desk-line);
-}
 
-.staff-desk__camera-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 700;
-}
 
-.staff-desk__stream {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  background: #0b1220;
-  overflow: hidden;
-}
 
-.staff-desk__stream-img {
-  display: block;
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
-  background: #0b1220;
-}
 
 /* Panel card */
-.staff-desk__panel {
-  flex: 1;
-  min-width: 0;
-  border: 1px solid var(--desk-line);
-  border-radius: 12px;
-  background: var(--desk-surface);
-  box-shadow: 0 2px 8px rgba(23, 32, 51, 0.04);
-  padding: 20px;
-}
 
 /* Shared helpers */
-.staff-desk__hint {
-  color: var(--desk-muted);
-  font-size: 12px;
-  line-height: 1.45;
-}
-.staff-desk__hint--warn {
-  color: #a16207;
-}
-.staff-desk__hint--danger {
-  color: var(--desk-red);
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
+
 
 .staff-desk__rfid-conflict {
   display: grid;
@@ -2377,43 +2261,9 @@ tr:hover td {
 }
 
 /* Waiting state */
-.staff-desk__waiting {
-  min-height: 280px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  text-align: center;
-  gap: 4px;
-}
 
-.staff-desk__waiting-icon {
-  display: grid;
-  place-items: center;
-  width: 72px;
-  height: 72px;
-  margin-bottom: 14px;
-  border: 1px solid #cfe0ff;
-  border-radius: 50%;
-  background: #eff5ff;
-  color: var(--desk-blue);
-}
 
-.staff-desk__waiting h2 {
-  margin: 0;
-  color: var(--desk-ink);
-  font-size: 18px;
-  letter-spacing: 0;
-}
 
-.staff-desk__waiting p {
-  max-width: 320px;
-  margin: 8px 0 0;
-  color: var(--desk-muted);
-  font-size: 13px;
-  line-height: 1.55;
-}
 
 /* Ingest / exit card content */
 .staff-desk__ingest {
@@ -2708,31 +2558,11 @@ tr:hover td {
 
 /* Responsive */
 @media (max-width: 1100px) {
-  .staff-desk__gates {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (max-width: 600px) {
   .staff-desk {
     padding: 16px 12px 28px;
-  }
-  .staff-desk__header {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 10px;
-  }
-  .staff-desk__status {
-    width: 100%;
-    justify-content: center;
-  }
-  .staff-desk__camera-bar {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .staff-desk__panel {
-    padding: 14px;
   }
   .staff-desk__meta {
     grid-template-columns: 1fr;
@@ -11031,26 +10861,7 @@ textarea.form-input {
   }
 }
 
-.staff-desk__manual-vehicle-details {
-  width: min(100%, 360px);
-  margin: 0.75rem auto;
-  padding: 0.75rem 0.9rem;
-  border: 1px solid #bfdbfe;
-  border-radius: 0.65rem;
-  background: #eff6ff;
-  color: #1e3a5f;
-  text-align: left;
-}
 
-.staff-desk__manual-vehicle-details strong,
-.staff-desk__manual-vehicle-details span {
-  display: block;
-}
-
-.staff-desk__manual-vehicle-details span {
-  margin-top: 0.25rem;
-  font-size: 0.875rem;
-}
 
 .staff-desk__cash-form {
   display: grid;
@@ -11083,45 +10894,9 @@ textarea.form-input {
   flex-wrap: wrap;
 }
 
-.staff-desk__entry-success {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin: 0 0 18px;
-  padding: 11px 14px;
-  border: 1px solid #86efac;
-  border-radius: var(--radius);
-  background: #f0fdf4;
-  color: #166534;
-  font-weight: 600;
-}
 
-.staff-desk__entry-success button {
-  min-height: auto;
-  margin-left: auto;
-  padding: 2px;
-  color: inherit;
-  background: transparent;
-}
 
-.staff-desk__entry-rfid-confirmed {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin: 8px 0 0;
-  color: #166534;
-  font-size: 13px;
-}
 
-.staff-desk__entry-rfid-unverified {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin: 8px 0 0;
-  color: #92400e;
-  font-size: 13px;
-  font-weight: 600;
-}
 
 .staff-desk-access-state {
   min-height: 55vh;
@@ -17500,46 +17275,6 @@ textarea.form-input {
 /* ============================================================
    STAFF DESK — EXIT CONSOLE (wireframe cổng ra)
    ============================================================ */
-.staff-desk__gate--exit {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.staff-desk__gate--exit .staff-desk__camera {
-  flex: 0 0 auto;
-}
-
-.staff-desk__gate--exit .staff-desk__stream {
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  min-height: 0;
-  max-height: none;
-  background: #0b1220;
-}
-
-.staff-desk__gate--entry .staff-desk__stream {
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  background: #0b1220;
-}
-
-.staff-desk__camera {
-  width: 100%;
-}
-
-.staff-desk__stream::after {
-  content: none;
-}
-
-.staff-desk__gate--exit .staff-desk__panel {
-  flex: 1 1 auto;
-  padding: 0;
-  overflow: hidden;
-  background: #e8edf3;
-  border-color: #c9d4e3;
-}
-
 .staff-desk__exit-console {
   display: flex;
   flex-direction: column;
@@ -17891,31 +17626,8 @@ textarea.form-input {
 }
 
 /* Waiting state for exit also uses console frame */
-.staff-desk__gate--exit .staff-desk__waiting {
-  background: #e8edf3;
-  min-height: 320px;
-  border-radius: 0;
-  padding: 24px 18px 28px;
-}
 
-.staff-desk__gate--exit .staff-desk__waiting-icon {
-  width: 72px;
-  height: 72px;
-  border-radius: 999px;
-  background: #ffffff;
-  border: 1px solid #dbe3ee;
-  color: #64748b;
-}
 
-/* Make two-gate layout keep exit console readable */
-@media (min-width: 1100px) {
-  .staff-desk__gates {
-    align-items: stretch;
-  }
-  .staff-desk__gate--exit {
-    min-width: 0;
-  }
-}
 
 .staff-desk__exit-pay-choice {
   width: 100%;
@@ -17957,14 +17669,6 @@ textarea.form-input {
 .staff-desk__exit-pay-btn:hover {
   border-color: #94a3b8 !important;
   background: #f8fafc !important;
-}
-
-.staff-desk__waiting--exit {
-  background: #e8edf3;
-  min-height: 320px;
-  justify-content: center;
-  gap: 12px;
-  padding: 28px 20px;
 }
 
 .staff-desk__exit-idle-actions {
@@ -18017,114 +17721,22 @@ textarea.form-input {
   border-color: #60a5fa;
 }
 
-.staff-desk__exit-manual-actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
 
 /* Waiting state for entry mirrors exit idle manual entry */
-.staff-desk__gate--entry {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
 
-.staff-desk__gate--entry .staff-desk__panel {
-  flex: 1 1 auto;
-  padding: 0;
-  overflow: hidden;
-  background: #e8edf3;
-  border-color: #c9d4e3;
-}
 
-.staff-desk__gate--entry .staff-desk__waiting {
-  background: #e8edf3;
-  min-height: 320px;
-  border-radius: 0;
-  padding: 24px 18px 28px;
-}
 
-.staff-desk__gate--entry .staff-desk__waiting-icon {
-  width: 72px;
-  height: 72px;
-  border-radius: 999px;
-  background: #ffffff;
-  border: 1px solid #dbe3ee;
-  color: #64748b;
-}
 
-.staff-desk__waiting--entry {
-  gap: 8px;
-}
 
-/* Entry manual plate confirm screen (wireframe) */
-.staff-desk__waiting--manual-confirm {
-  justify-content: center;
-  gap: 20px;
-  padding: 40px 24px;
-  min-height: 320px;
-  background: #e8edf3;
-}
 
-.staff-desk__manual-confirm-title {
-  margin: 0;
-  max-width: 360px;
-  text-align: center;
-  font-size: 1rem;
-  font-weight: 500;
-  line-height: 1.55;
-  color: #334155;
-}
 
-.staff-desk__manual-confirm-form {
-  width: min(320px, 100%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-}
 
-.staff-desk__manual-confirm-input {
-  width: 100%;
-  min-height: 52px;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  padding: 12px 16px;
-  text-align: center;
-  font-size: 1.25rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  color: #0f172a;
-  background: #ffffff;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-}
 
-.staff-desk__manual-confirm-input::placeholder {
-  color: #94a3b8;
-  letter-spacing: 0.12em;
-  font-weight: 600;
-}
 
-.staff-desk__manual-confirm-input:focus {
-  outline: 2px solid #93c5fd;
-  border-color: #60a5fa;
-}
 
-.staff-desk__manual-confirm-submit {
-  min-width: 140px;
-  min-height: 44px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
 
-.staff-desk__manual-confirm-cancel {
-  min-height: 36px;
-  color: #64748b;
-  font-size: 0.9rem;
-}
+
+
 
 .subscription-history {
   margin-top: 28px;
@@ -18175,14 +17787,6 @@ textarea.form-input {
   }
 }
 
-.staff-desk__manual-rfid-entry textarea {
-  width: min(100%, 430px);
-  min-height: 78px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 10px;
-  resize: vertical;
-}
 
 /* ============================================================
    PARKING SLOT — FRAME SIZE ENHANCEMENT

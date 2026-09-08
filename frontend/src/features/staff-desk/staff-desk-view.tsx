@@ -1489,47 +1489,49 @@ export function StaffDeskView() {
   }, [streamStatus]);
 
   return (
-    <div className="staff-desk">
-      <header className="staff-desk__header">
+    <div className="staff-desk min-h-[calc(100vh-72px)] bg-[#f3f6fa] px-[clamp(18px,3vw,42px)] pt-7 pb-11 text-[#172033]">
+      <header className="mx-auto mb-[22px] flex w-full max-w-[1600px] items-end justify-between gap-5">
         <div>
-          <h1>Bàn nhân viên</h1>
-          <p className="staff-desk__subtitle">
+          <h1 className="m-0 text-[clamp(22px,2.2vw,30px)] leading-[1.1] text-[#172033]">Bàn nhân viên</h1>
+          <p className="mt-1.5 mb-0 max-w-[620px] text-[13px] leading-[1.5] text-[#667085]">
             Xem camera cổng vào · nhận biển số tự động · quét thẻ để tạo phiên &
             mở barie
           </p>
         </div>
-        <div className="staff-desk__status">
+        <div className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border border-[#e5e9f0] bg-white px-3 py-2 text-xs text-[#667085]">
           {streamIcon}
           <span>SSE: {statusLabel(streamStatus)}</span>
         </div>
       </header>
 
       {entrySuccessNotice ? (
-        <div className="staff-desk__entry-success" role="status">
+        <div className="mb-[18px] flex items-center gap-[9px] rounded-[var(--radius,8px)] border border-[#86efac] bg-[#f0fdf4] px-3.5 py-[11px] font-semibold text-[#166534]" role="status">
           <CheckCircle2 size={18} />
           <span>{entrySuccessNotice}</span>
           <button
             type="button"
             aria-label="Đóng thông báo"
             onClick={() => setEntrySuccessNotice(null)}
+            className="ml-auto min-h-0 bg-transparent p-0.5 text-inherit"
           >
             <XCircle size={16} />
           </button>
         </div>
       ) : null}
 
-      <div className="staff-desk__gates">
-        <section className="staff-desk__gate staff-desk__gate--entry">
+      <div className="mx-auto grid w-full max-w-[1600px] grid-cols-2 gap-5 max-[1100px]:grid-cols-1">
+        <section className="flex min-w-0 flex-col gap-3.5">
           <GateCamera
             title="Cổng vào"
+            iconClass="text-[#079669]"
             streamUrl={`${bridgeBaseUrl}/video_feed/${laneRoles.entryLane}`}
             direction="in"
           />
-          <div className="staff-desk__panel">
+          <div className="min-w-0 flex-1 overflow-hidden rounded-xl border border-[#c9d4e3] bg-[#e8edf3] shadow-[0_2px_8px_rgba(23,32,51,0.04)]">
             {phase === "done" && createdSession && !activeIngest ? (
-              <div className="staff-desk__waiting staff-desk__waiting--entry">
+              <div className="flex min-h-[320px] flex-col items-center justify-center gap-2 rounded-none bg-[#e8edf3] px-[18px] pt-6 pb-7 text-center">
                 <div
-                  className="staff-desk__waiting-icon"
+                  className="mb-3.5 grid h-[72px] w-[72px] place-items-center rounded-full border bg-white"
                   style={{
                     color: "#15803d",
                     borderColor: "#bbf7d0",
@@ -1538,13 +1540,13 @@ export function StaffDeskView() {
                 >
                   <CheckCircle2 size={40} />
                 </div>
-                <h2>Đã cho xe vào</h2>
-                <p>
+                <h2 className="m-0 text-lg tracking-normal text-[#172033]">Đã cho xe vào</h2>
+                <p className="mx-0 mt-2 mb-0 max-w-[320px] text-[13px] leading-[1.55] text-[#667085]">
                   Biển <strong>{createdSession.plate || "—"}</strong>
                   {createdSession.slot ? ` · Ô ${createdSession.slot}` : ""}
                 </p>
                 {createdSession.entryRfidUnverified ? (
-                  <p className="staff-desk__entry-rfid-unverified">
+                  <p className="mt-2 mb-0 inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#92400e]">
                     <CircleAlert size={14} />{" "}
                     {createdSession.entryExpectedRfidUid ? (
                       <>
@@ -1556,12 +1558,12 @@ export function StaffDeskView() {
                     )}
                   </p>
                 ) : scanUid ? (
-                  <p className="staff-desk__entry-rfid-confirmed">
+                  <p className="mt-2 mb-0 inline-flex items-center gap-1.5 text-[13px] text-[#166534]">
                     <Nfc size={14} /> RFID đã gắn: <strong>{scanUid}</strong>
                   </p>
                 ) : null}
                 {barrierMsg ? (
-                  <p className="staff-desk__hint">{barrierMsg}</p>
+                  <p className="text-xs leading-[1.45] text-[#667085]">{barrierMsg}</p>
                 ) : null}
                 <button
                   type="button"
@@ -1589,12 +1591,12 @@ export function StaffDeskView() {
             ) : showEntryRfidExceptionForm &&
               pendingManualEntryRfid &&
               !activeIngest ? (
-              <div className="staff-desk__waiting staff-desk__waiting--entry staff-desk__manual-rfid-entry">
-                <div className="staff-desk__waiting-icon">
+              <div className="flex min-h-[320px] flex-col items-center justify-center gap-2 bg-[#e8edf3] px-[18px] pt-6 pb-7 text-center">
+                <div className="mb-3.5 grid h-[72px] w-[72px] place-items-center rounded-full border border-[#dbe3ee] bg-white text-[#64748b]">
                   <Nfc size={36} />
                 </div>
-                <h2>Xử lý RFID thủ công</h2>
-                <p>
+                <h2 className="m-0 text-lg tracking-normal text-[#172033]">Xử lý RFID thủ công</h2>
+                <p className="mx-0 mt-2 mb-0 max-w-[320px] text-[13px] leading-[1.55] text-[#667085]">
                   Biển số <strong>{manualPlate}</strong> đã được xác nhận. Nhập
                   lý do trước khi cho xe vào.
                 </p>
@@ -1607,11 +1609,11 @@ export function StaffDeskView() {
                   placeholder="VD: Đầu đọc RFID không nhận thẻ; đã kiểm tra xe và biển số bằng mắt"
                 />
                 {phase === "error" && createMsg ? (
-                  <p className="staff-desk__hint staff-desk__hint--danger">
+                  <p className="flex items-center gap-[5px] text-xs leading-[1.45] text-[#dc4a4a]">
                     {createMsg}
                   </p>
                 ) : null}
-                <div className="staff-desk__exit-manual-actions">
+                <div className="flex flex-wrap gap-2.5">
                   <button
                     type="button"
                     className="btn btn-primary"
@@ -1757,13 +1759,14 @@ export function StaffDeskView() {
           </div>
         </section>
 
-        <section className="staff-desk__gate staff-desk__gate--exit">
+        <section className="flex min-w-0 flex-col gap-3.5">
           <GateCamera
             title="Cổng ra"
+            iconClass="text-[#c4650a]"
             streamUrl={`${bridgeBaseUrl}/video_feed/${laneRoles.exitLane}`}
             direction="out"
           />
-          <div className="staff-desk__panel">
+          <div className="min-w-0 flex-1 rounded-xl border border-[#e5e9f0] bg-white p-5 shadow-[0_2px_8px_rgba(23,32,51,0.04)]">
             {!activeExit ? (
               <WaitingCard
                 direction="out"
@@ -1827,26 +1830,34 @@ function GateCamera({
   title,
   streamUrl,
   direction,
+  iconClass,
 }: {
   title: string;
   streamUrl: string;
   direction: "in" | "out";
+  iconClass?: string;
 }) {
   return (
-    <div className="staff-desk__camera">
-      <div className="staff-desk__camera-bar">
-        <div className="staff-desk__camera-title">
-          <Camera size={16} />
+    <div className="overflow-hidden rounded-xl border border-[#e5e9f0] bg-white shadow-[0_2px_8px_rgba(23,32,51,0.04)]">
+      <div className="flex min-h-[54px] items-center justify-between gap-3 border-b border-[#e5e9f0] px-4 py-2.5">
+        <div className="flex items-center gap-2 text-sm font-bold">
+          <Camera size={16} className={iconClass} />
           <span>{title}</span>
-          <span className={`staff-desk__chip staff-desk__chip--${direction}`}>
+          <span
+            className={`inline-flex items-center gap-1 rounded-[5px] px-[7px] py-[3px] text-[10px] font-extrabold uppercase tracking-[0.06em] ${
+              direction === "in"
+                ? "bg-[#e9f8f2] text-[#079669]"
+                : "bg-[#eef2f7] text-[#667085]"
+            }`}
+          >
             live
           </span>
         </div>
-        <span className="staff-desk__hint">MJPEG</span>
+        <span className="text-xs leading-[1.45] text-[#667085]">MJPEG</span>
       </div>
-      <div className="staff-desk__stream">
+      <div className="relative aspect-video w-full overflow-hidden bg-[#0b1220]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={streamUrl} alt={title} className="staff-desk__stream-img" />
+        <img src={streamUrl} alt={title} className="absolute inset-0 block h-full w-full bg-[#0b1220] object-cover object-center" />
       </div>
     </div>
   );
@@ -1924,12 +1935,12 @@ function WaitingCard({
   // Entry manual form: simple confirm plate screen (wireframe)
   if (isEntry && showManualForm) {
     return (
-      <div className="staff-desk__waiting staff-desk__waiting--entry staff-desk__waiting--manual-confirm">
-        <p className="staff-desk__manual-confirm-title">
+      <div className="flex min-h-[320px] flex-col items-center justify-center gap-5 bg-[#e8edf3] px-6 py-10 text-center">
+        <p className="m-0 max-w-[360px] text-base font-medium leading-[1.55] text-[#334155]">
           Vui lòng nhập chính xác biển số xe hiện tại ở cổng chờ
         </p>
         <form
-          className="staff-desk__manual-confirm-form"
+          className="flex w-[min(320px,100%)] flex-col items-center gap-4"
           onSubmit={(e) => {
             e.preventDefault();
             onSubmitManual?.();
@@ -1937,7 +1948,7 @@ function WaitingCard({
         >
           <input
             id={plateInputId}
-            className="staff-desk__manual-confirm-input"
+            className="w-full min-h-[52px] rounded-lg border border-[#cbd5e1] bg-white px-4 py-3 text-center font-mono text-xl font-bold uppercase tracking-[0.12em] text-[#0f172a] shadow-[0_1px_2px_rgba(15,23,42,0.04)] placeholder:font-semibold placeholder:tracking-[0.12em] placeholder:text-[#94a3b8] focus:outline-2 focus:outline-[#93c5fd] focus:border-[#60a5fa]"
             value={manualPlateValue || ""}
             onChange={(e) => onManualPlateChange?.(e.target.value)}
             placeholder="30A34567"
@@ -1946,13 +1957,13 @@ function WaitingCard({
             spellCheck={false}
           />
           {manualError ? (
-            <p className="staff-desk__hint staff-desk__hint--danger">
+            <p className="flex items-center gap-[5px] text-xs leading-[1.45] text-[#dc4a4a]">
               {manualError}
             </p>
           ) : null}
           <button
             type="submit"
-            className="btn btn-primary staff-desk__manual-confirm-submit"
+            className="btn btn-primary w-full"
             disabled={Boolean(manualLoading)}
           >
             {manualLoading ? (
@@ -1965,7 +1976,7 @@ function WaitingCard({
           </button>
           <button
             type="button"
-            className="btn btn-ghost staff-desk__manual-confirm-cancel"
+            className="btn btn-ghost w-full"
             onClick={onToggleManual}
             disabled={Boolean(manualLoading)}
           >
@@ -1978,26 +1989,25 @@ function WaitingCard({
 
   return (
     <div
-      className={
-        "staff-desk__waiting" +
-        (isEntry ? " staff-desk__waiting--entry" : " staff-desk__waiting--exit")
-      }
+      className="flex min-h-[320px] flex-col items-center justify-center gap-2 bg-[#e8edf3] px-[18px] pt-6 pb-7 text-center"
     >
-      <div className="staff-desk__waiting-icon">
+      <div className="mb-3.5 grid h-[72px] w-[72px] place-items-center rounded-full border border-[#dbe3ee] bg-white text-[#64748b]">
         {isEntry ? (
           <ScanLine size={40} className="animate-pulse" />
         ) : (
           <ArrowUpFromLine size={40} className="animate-pulse" />
         )}
       </div>
-      <h2>{isEntry ? "Đang chờ xe vào" : "Đang chờ xe ra"}</h2>
-      <p>
+      <h2 className="m-0 text-lg tracking-normal text-[#172033]">
+        {isEntry ? "Đang chờ xe vào" : "Đang chờ xe ra"}
+      </h2>
+      <p className="mx-0 mt-2 mb-0 max-w-[320px] text-[13px] leading-[1.55] text-[#667085]">
         Nếu camera không thể nhận diện biển số hãy dùng nút nhập thủ công biển
         số xe
       </p>
 
       {isEntry && manualEntryPlate && !showManualForm ? (
-        <div className="staff-desk__manual-vehicle-details">
+        <div className="mx-auto my-3 w-full max-w-[360px] rounded-[10px] border border-[#bfdbfe] bg-[#eff6ff] px-3.5 py-3 text-left text-[#1e3a5f]">
           <strong>Thông tin biển số {manualEntryPlate}</strong>
           {manualEntryVehicle?.ownerName ? (
             <span>Chủ xe: {manualEntryVehicle.ownerName}</span>
@@ -2056,11 +2066,11 @@ function WaitingCard({
               autoComplete="off"
             />
             {manualError ? (
-              <p className="staff-desk__hint staff-desk__hint--danger">
+              <p className="flex items-center gap-[5px] text-xs leading-[1.45] text-[#dc4a4a]">
                 {manualError}
               </p>
             ) : null}
-            <div className="staff-desk__exit-manual-actions">
+            <div className="flex flex-wrap gap-2.5">
               <button
                 type="submit"
                 className="btn btn-primary"
@@ -2120,12 +2130,12 @@ function WaitingCard({
                 <ManualUidInput onSubmit={onManualUid} />
               ) : null}
               {scanPhase === "timeout" && (
-                <p className="staff-desk__hint staff-desk__hint--warn">
+                <p className="text-xs leading-[1.45] text-[#a16207]">
                   Hết thời gian chờ quét thẻ.
                 </p>
               )}
               {scanPhase === "error" && scanError && (
-                <p className="staff-desk__hint staff-desk__hint--danger">
+                <p className="flex items-center gap-[5px] text-xs leading-[1.45] text-[#dc4a4a]">
                   <CircleAlert size={14} /> {scanError}
                 </p>
               )}
@@ -2176,7 +2186,7 @@ function ManualUidInput({ onSubmit }: { onSubmit: (uid: string) => void }) {
         autoFocus
         autoComplete="off"
       />
-      <div className="staff-desk__exit-manual-actions">
+      <div className="flex flex-wrap gap-2.5">
         <button
           type="submit"
           className="btn btn-primary"
@@ -2387,7 +2397,7 @@ function ManualPlateCard({
               readOnly={plateConfirmed}
             />
             {manualPlateError && (
-              <p className="staff-desk__hint staff-desk__hint--danger">
+              <p className="flex items-center gap-[5px] text-xs leading-[1.45] text-[#dc4a4a]">
                 <CircleAlert size={14} /> {manualPlateError}
               </p>
             )}
@@ -2420,7 +2430,7 @@ function ManualPlateCard({
             </button>
           )}
           {(phase as string) === "error" && createMsg && (
-            <p className="staff-desk__hint staff-desk__hint--danger">
+            <p className="flex items-center gap-[5px] text-xs leading-[1.45] text-[#dc4a4a]">
               <CircleAlert size={14} /> {createMsg}
             </p>
           )}
@@ -2446,8 +2456,8 @@ function ManualPlateCard({
               {createdSession?.plate ? ` · ${createdSession.plate}` : ""}
             </p>
           )}
-          {createMsg && <p className="staff-desk__hint">{createMsg}</p>}
-          {barrierMsg && <p className="staff-desk__hint">{barrierMsg}</p>}
+          {createMsg && <p className="text-xs leading-[1.45] text-[#667085]">{createMsg}</p>}
+          {barrierMsg && <p className="text-xs leading-[1.45] text-[#667085]">{barrierMsg}</p>}
         </div>
       )}
     </div>
@@ -2612,7 +2622,7 @@ function IngestCard(props: {
                   : "Sửa biển số AI nhận sai"}
               </p>
               <input
-                className="staff-desk__manual-confirm-input"
+                className="w-full min-h-[52px] rounded-lg border border-[#cbd5e1] bg-white px-4 py-3 text-center font-mono text-xl font-bold uppercase tracking-[0.12em] text-[#0f172a] shadow-[0_1px_2px_rgba(15,23,42,0.04)] placeholder:font-semibold placeholder:tracking-[0.12em] placeholder:text-[#94a3b8] focus:outline-2 focus:outline-[#93c5fd] focus:border-[#60a5fa]"
                 value={props.manualPlate || ""}
                 onChange={(e) =>
                   props.onManualPlateChange?.(e.target.value.toUpperCase())
@@ -2626,20 +2636,20 @@ function IngestCard(props: {
                 }
               />
               {props.manualPlateError ? (
-                <p className="staff-desk__hint staff-desk__hint--danger">
+                <p className="flex items-center gap-[5px] text-xs leading-[1.45] text-[#dc4a4a]">
                   <CircleAlert size={14} /> {props.manualPlateError}
                 </p>
               ) : null}
               {props.scanPhase === "success" && props.scanUid ? (
-                <p className="staff-desk__hint">
+                <p className="text-xs leading-[1.45] text-[#667085]">
                   RFID: <code>{props.scanUid}</code>
                 </p>
               ) : (
-                <p className="staff-desk__hint staff-desk__hint--warn">
+                <p className="text-xs leading-[1.45] text-[#a16207]">
                   Có thể xác nhận không cần RFID (ghi nhận chưa quẹt thẻ).
                 </p>
               )}
-              <div className="staff-desk__exit-manual-actions">
+              <div className="flex flex-wrap gap-2.5">
                 <button
                   type="submit"
                   className="btn btn-primary"
@@ -2709,7 +2719,7 @@ function IngestCard(props: {
                       : "Quét thẻ nhân viên"}
                   </button>
                   {props.scanPhase === "timeout" && (
-                    <p className="staff-desk__hint staff-desk__hint--warn">
+                    <p className="text-xs leading-[1.45] text-[#a16207]">
                       Hết thời gian chờ quét thẻ.
                     </p>
                   )}
@@ -2743,7 +2753,7 @@ function IngestCard(props: {
                         </p>
                       </div>
                     ) : (
-                      <p className="staff-desk__hint staff-desk__hint--danger">
+                      <p className="flex items-center gap-[5px] text-xs leading-[1.45] text-[#dc4a4a]">
                         <CircleAlert size={14} /> {props.scanError}
                       </p>
                     ))}
@@ -2798,10 +2808,10 @@ function IngestCard(props: {
                 </p>
               )}
               {props.createMsg && props.phase !== "error" && (
-                <p className="staff-desk__hint">{props.createMsg}</p>
+                <p className="text-xs leading-[1.45] text-[#667085]">{props.createMsg}</p>
               )}
               {props.barrierMsg && (
-                <p className="staff-desk__hint">{props.barrierMsg}</p>
+                <p className="text-xs leading-[1.45] text-[#667085]">{props.barrierMsg}</p>
               )}
               {props.phase === "error" && (
                 <button className="btn btn-ghost" onClick={props.onStartScan}>
@@ -2832,7 +2842,7 @@ function IngestCard(props: {
                 </p>
               )}
               {props.barrierMsg && (
-                <p className="staff-desk__hint">{props.barrierMsg}</p>
+                <p className="text-xs leading-[1.45] text-[#667085]">{props.barrierMsg}</p>
               )}
               {props.phase === "error" && (
                 <button className="btn btn-ghost" onClick={props.onStartScan}>
@@ -3557,7 +3567,7 @@ function ExitCard({
                       </button>
                     ) : null}
                   </div>
-                  <p className="staff-desk__hint">Đang chờ thanh toán PayOS…</p>
+                  <p className="text-xs leading-[1.45] text-[#667085]">Đang chờ thanh toán PayOS…</p>
                 </div>
               )
             ) : scanPhase === "starting" || scanPhase === "waiting" ? (
