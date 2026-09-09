@@ -3,6 +3,7 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import {
+  Eye,
   AlertTriangle,
   BadgeDollarSign,
   Ban,
@@ -1081,6 +1082,14 @@ export function RfidSalesPanel() {
                   {dateTime(card.updatedAt || card.soldAt || card.createdAt)}
                 </span>,
                 <div key="actions" className="rfid-sales-actions">
+                  <button
+                    type="button"
+                    className="small-button"
+                    onClick={() => void loadDetails(card.id)}
+                    title="Xem chi tiết & lịch sử thẻ"
+                  >
+                    <Eye size={13} /> Lịch sử
+                  </button>
                   {card.status === "available" && (
                     <button
                       type="button"
