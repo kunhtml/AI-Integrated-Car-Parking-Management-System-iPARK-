@@ -361,14 +361,43 @@ export async function payCashForSession(request: Request, response: Response) {
     plate: session.plate,
   });
 
-  session.paidAmount = (session.paidAmount || 0) + amount;
-  session.paymentMethod = "cash";
-  session.cashNote = body.note || session.cashNote;
-  session.collectedBy = collectorId;
-  session.transactionId = transaction._id;
-  session.paymentStatus =
-    session.paidAmount >= session.fee ? "fully_paid" : "partial_paid";
-  await session.save();
+  // Nguyên tử: $inc paidAmount rồi $set các field còn lại từ doc mới.
+  const updated = await ParkingSession.findByIdAndUpdate(
+    session._id,
+    {
+      $inc: { paidAmount: amount },
+      $set: {
+        paymentMethod: "cash",
+        cashNote: body.note || session.cashNote,
+        collectedBy: collectorId,
+        transactionId: transaction._id,
+      },
+    },
+    { new: true },
+  );
+  if (!updated) {
+    response.status(404).json({ message: "Không tìm thấy phiên đỗ xe." });
+    return;
+  }
+
+  const paymentStatus =
+    (updated.paidAmount || 0) >= (updated.fee || 0) ? "fully_paid" : "partial_paid";
+  const finalSession = await ParkingSession.findByIdAndUpdate(
+    session._id,
+    { $set: { paymentStatus } },
+    { new: true },
+  );
+  if (!finalSession) {
+    response.status(404).json({ message: "Không tìm thấy phiên đỗ xe." });
+    return;
+  }
+
+  session.paidAmount = finalSession.paidAmount;
+  session.paymentMethod = finalSession.paymentMethod;
+  session.cashNote = finalSession.cashNote;
+  session.collectedBy = finalSession.collectedBy;
+  session.transactionId = finalSession.transactionId;
+  session.paymentStatus = finalSession.paymentStatus;
 
   await createAuditLog({
     action: "cash_payment",
@@ -389,7 +418,7 @@ export async function payCashForSession(request: Request, response: Response) {
     transaction: serializeTransaction(transaction, session),
     sessionPaymentStatus: session.paymentStatus,
     paidAmount: session.paidAmount,
-    amountDue: session.fee - session.paidAmount,
+    amountDue: (session.fee || 0) - (session.paidAmount || 0),
     message: "Đã ghi nhận thanh toán tiền mặt.",
   });
 }

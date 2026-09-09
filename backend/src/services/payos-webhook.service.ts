@@ -23,19 +23,45 @@ async function applyPaidTransactionToSession(
   transaction: TransactionDocument,
   session: HydratedSession,
 ) {
-  session.paidAmount = (session.paidAmount || 0) + transaction.amount;
-  session.paymentStatus = session.paidAmount >= (session.fee || 0) ? "fully_paid" : "partial_paid";
+  // Nguyên tử: $inc paidAmount để webhook + reconcile không ghi đè lẫn nhau.
+  const updated = await ParkingSession.findByIdAndUpdate(
+    session._id,
+    { $inc: { paidAmount: transaction.amount } },
+    { new: true },
+  );
+  if (!updated) {
+    throw new Error(`ParkingSession ${session._id} not found during paidAmount $inc`);
+  }
 
+  const paymentStatus =
+    (updated.paidAmount || 0) >= (updated.fee || 0) ? "fully_paid" : "partial_paid";
+
+  const setFields: Record<string, unknown> = { paymentStatus };
   // Chỉ nhả slot + chốt giờ ra khi xe đã ra bãi (phiên đã hoàn thành từ trước).
-  if (session.status === "Đã hoàn thành") {
-    if (!session.checkOutAt) session.checkOutAt = new Date();
-    const { freeSlot } = await import("../services/parkingSlot.service.js");
-    if (session.slotId) {
-      await freeSlot(session.slotId);
+  if (updated.status === "Đã hoàn thành") {
+    if (!updated.checkOutAt) {
+      setFields.checkOutAt = new Date();
     }
   }
 
-  await session.save();
+  const finalDoc = await ParkingSession.findByIdAndUpdate(
+    session._id,
+    { $set: setFields },
+    { new: true },
+  );
+  if (!finalDoc) {
+    throw new Error(`ParkingSession ${session._id} not found during paymentStatus $set`);
+  }
+
+  // Đồng bộ object in-memory để caller (reconcile loop) thấy paidAmount mới.
+  session.paidAmount = finalDoc.paidAmount;
+  session.paymentStatus = finalDoc.paymentStatus;
+  if (finalDoc.checkOutAt) session.checkOutAt = finalDoc.checkOutAt;
+
+  if (finalDoc.status === "Đã hoàn thành" && finalDoc.slotId) {
+    const { freeSlot } = await import("../services/parkingSlot.service.js");
+    await freeSlot(finalDoc.slotId);
+  }
 
   // Đánh dấu các vé phạt đang chờ của phiên này đã nộp (đã gộp vào phí khi checkout)
   const { Penalty } = await import("../models/Penalty.js");
