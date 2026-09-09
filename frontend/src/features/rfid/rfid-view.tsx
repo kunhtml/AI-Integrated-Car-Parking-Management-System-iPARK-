@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Clock,
+  Eye,
   AlertTriangle,
   CheckCircle2,
   CheckSquare,
@@ -1086,10 +1088,24 @@ export function RfidCardsView() {
               ) : (
                 <span key="select" />
               ),
-              <span key="uid" className="uid-pill">
+              <button
+                key="uid"
+                type="button"
+                className="uid-pill"
+                onClick={() => void openCardHistory(card)}
+                style={{
+                  cursor: "pointer",
+                  border: "1px solid #3b82f6",
+                  color: "#2563eb",
+                  fontWeight: 600,
+                  textDecoration: "underline",
+                  background: "rgba(59, 130, 246, 0.08)",
+                }}
+                title="Bấm để xem lịch sử thẻ"
+              >
                 <Radio size={11} />
                 {card.uid}
-              </span>,
+              </button>,
               <span key="owner" className="cell-muted-strong">
                 {card.ownerName || "—"}
               </span>,
@@ -1111,6 +1127,14 @@ export function RfidCardsView() {
                 {formatDate(card.updatedAt)}
               </span>,
               <div key="actions" className="rfid-actions">
+                <button
+                  className="small-button"
+                  onClick={() => void openCardHistory(card)}
+                  title="Xem lịch sử thẻ"
+                  type="button"
+                >
+                  <Eye size={13} /> Lịch sử
+                </button>
                 {isAdmin && (
                   <button
                     className="small-button"
@@ -1992,6 +2016,201 @@ export function RfidCardsView() {
           <RfidIssueManagerPanel onCardIssued={() => void loadCards()} />
         </div>
       )}
+          {/* ───── RFID Card History Modal ───── */}
+      {historyCard && (
+        <div
+          className="modal-overlay"
+          onClick={() => {
+            setHistoryCard(null);
+            setHistoryAuditLogs([]);
+            setHistoryScanLogs([]);
+          }}
+        >
+          <div
+            className="modal-card"
+            style={{ maxWidth: 840, width: "95%", maxHeight: "90vh", display: "flex", flexDirection: "column", padding: "20px 24px" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border, #e2e8f0)", paddingBottom: 12 }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700 }}>Lịch sử thẻ RFID</h3>
+                <span className="muted-cell" style={{ fontSize: 13 }}>
+                  UID: <strong className="mono">{historyCard.uid}</strong> · Chủ thẻ: <strong>{historyCard.ownerName || "Guest"}</strong> {historyCard.plate ? `(${historyCard.plate})` : ""}
+                </span>
+              </div>
+              <button
+                className="ghost-button"
+                onClick={() => {
+                  setHistoryCard(null);
+                  setHistoryAuditLogs([]);
+                  setHistoryScanLogs([]);
+                }}
+                type="button"
+                style={{ padding: 6, cursor: "pointer", background: "none", border: "none" }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ display: "flex", gap: 8, margin: "16px 0 12px 0" }}>
+              <button
+                type="button"
+                className={historyTab === "audit" ? "small-button primary" : "small-button"}
+                onClick={() => setHistoryTab("audit")}
+                style={{ fontSize: 13, padding: "6px 14px", borderRadius: 6 }}
+              >
+                Lịch sử thay đổi thẻ ({historyAuditLogs.length})
+              </button>
+              <button
+                type="button"
+                className={historyTab === "scans" ? "small-button primary" : "small-button"}
+                onClick={() => setHistoryTab("scans")}
+                style={{ fontSize: 13, padding: "6px 14px", borderRadius: 6 }}
+              >
+                Lịch sử quét qua cổng ({historyScanLogs.length})
+              </button>
+            </div>
+
+            <div style={{ overflowY: "auto", flex: 1, maxHeight: "55vh" }}>
+              {historyLoading ? (
+                <p className="muted-text" style={{ padding: "30px 0", textAlign: "center" }}>
+                  <Loader2 className="spin" size={22} style={{ verticalAlign: "middle", marginRight: 8 }} /> Đang tải lịch sử…
+                </p>
+              ) : historyTab === "audit" ? (
+                historyAuditLogs.length > 0 ? (
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Thời gian</th>
+                          <th>Hành động</th>
+                          <th>Người thực hiện</th>
+                          <th>Chi tiết thay đổi</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {historyAuditLogs.map((item) => (
+                          <tr key={item.id}>
+                            <td style={{ whiteSpace: "nowrap", fontSize: 13 }}>
+                              {new Date(item.createdAt).toLocaleString("vi-VN")}
+                            </td>
+                            <td>
+                              <span className="badge" style={{ background: "rgba(59, 130, 246, 0.1)", color: "#2563eb", fontWeight: 600 }}>
+                                {item.actionLabel || item.action}
+                              </span>
+                            </td>
+                            <td style={{ fontSize: 13 }}>
+                              {item.performedBy ? (
+                                <div>
+                                  <strong>{item.performedBy.name}</strong>
+                                  {item.performedBy.email && (
+                                    <div style={{ fontSize: 11, color: "var(--muted, #64748b)" }}>
+                                      {item.performedBy.email}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="muted-cell">Hệ thống</span>
+                              )}
+                            </td>
+                            <td style={{ fontSize: 13 }}>
+                              {item.changes?.new ? (
+                                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                                  {Object.entries(item.changes.new).map(([k, v]) => {
+                                    const labels: Record<string, string> = {
+                                      status: "Trạng thái",
+                                      ownerName: "Chủ thẻ",
+                                      plate: "Biển số",
+                                      cardType: "Loại thẻ",
+                                      userType: "Loại khách",
+                                      notes: "Ghi chú",
+                                    };
+                                    return (
+                                      <div key={k}>
+                                        <span style={{ color: "var(--muted, #64748b)" }}>{labels[k] || k}:</span>{" "}
+                                        <strong>{v === null || v === undefined || v === "" ? "—" : String(v)}</strong>
+                                        {item.changes?.old?.[k] !== undefined && item.changes?.old?.[k] !== v && (
+                                          <span style={{ fontSize: 11, color: "var(--muted, #64748b)", marginLeft: 6 }}>
+                                            (cũ: {String(item.changes.old[k] ?? "—")})
+                                          </span>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <span className="muted-cell">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="muted-text" style={{ padding: "30px 0", textAlign: "center" }}>
+                    Chưa có nhật ký thay đổi nào cho thẻ này.
+                  </p>
+                )
+              ) : historyScanLogs.length > 0 ? (
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Thời gian</th>
+                        <th>Hành động</th>
+                        <th>Trạng thái</th>
+                        <th>Biển số</th>
+                        <th>Lý do</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historyScanLogs.map((log) => (
+                        <tr key={log.id}>
+                          <td style={{ whiteSpace: "nowrap", fontSize: 13 }}>
+                            {new Date(log.createdAt).toLocaleString("vi-VN")}
+                          </td>
+                          <td style={{ fontSize: 13, fontWeight: 500 }}>{log.action}</td>
+                          <td>
+                            <span className={log.status === "success" ? "badge success" : "badge warning"}>
+                              {log.status}
+                            </span>
+                          </td>
+                          <td className="mono" style={{ fontSize: 13 }}>
+                            {log.plateDetected || "—"}
+                          </td>
+                          <td style={{ fontSize: 13 }}>
+                            {log.failureReason || "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="muted-text" style={{ padding: "30px 0", textAlign: "center" }}>
+                  Chưa có lịch sử quét cho thẻ này.
+                </p>
+              )}
+            </div>
+
+            <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--border, #e2e8f0)", display: "flex", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                className="small-button"
+                onClick={() => {
+                  setHistoryCard(null);
+                  setHistoryAuditLogs([]);
+                  setHistoryScanLogs([]);
+                }}
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </section>
   );
 }
