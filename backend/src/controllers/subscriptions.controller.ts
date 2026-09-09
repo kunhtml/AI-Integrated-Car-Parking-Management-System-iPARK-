@@ -171,11 +171,37 @@ export async function verifyMemberCodeHandler(
   response.json(result);
 }
 
+
+async function assertSubscriptionOwnership(
+  request: Request,
+  response: Response,
+  subscriptionId: string,
+): Promise<boolean> {
+  const sub = await Subscription.findById(subscriptionId).select("userId");
+  if (!sub) {
+    response.status(404).json({ message: "Không tìm thấy gói đăng ký." });
+    return false;
+  }
+  if (
+    request.user?.role !== "admin" &&
+    sub.userId.toString() !== request.user!.id
+  ) {
+    response
+      .status(403)
+      .json({ message: "Bạn không có quyền truy cập vé này." });
+    return false;
+  }
+  return true;
+}
+
 export async function subscriptionPaymentStatusHandler(
   request: Request,
   response: Response,
 ) {
-  const sub = await reconcileSubscriptionPayment(String(request.params.id));
+  const id = String(request.params.id);
+  if (!(await assertSubscriptionOwnership(request, response, id))) return;
+
+  const sub = await reconcileSubscriptionPayment(id);
   if (!sub) {
     response.status(404).json({ message: "Không tìm thấy gói." });
     return;
@@ -190,11 +216,14 @@ export async function subscriptionPaymentStatusHandler(
 }
 
 export async function renewHandler(request: Request, response: Response) {
+  const id = String(request.params.id);
+  if (!(await assertSubscriptionOwnership(request, response, id))) return;
+
   const baseUrl =
     process.env.API_URL || process.env.BASE_URL || "http://localhost:4000";
   const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
   const { subscription, payos } = await renewSubscription(
-    String(request.params.id),
+    id,
     { baseUrl, frontendUrl },
   );
   const populated = await populateSub(subscription);
@@ -213,7 +242,10 @@ export async function renewHandler(request: Request, response: Response) {
 }
 
 export async function cancelHandler(request: Request, response: Response) {
-  const sub = await cancelSubscription(String(request.params.id));
+  const id = String(request.params.id);
+  if (!(await assertSubscriptionOwnership(request, response, id))) return;
+
+  const sub = await cancelSubscription(id);
 
   if (!sub) {
     response.json({
