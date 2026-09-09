@@ -56,6 +56,8 @@ const HISTORY_FIELD_LABELS: Record<string, string> = {
   deviceId: "Thiết bị",
   assignedBy: "Người gán",
   reason: "Lý do",
+  checkedInAt: "Thời gian điểm danh",
+  completedAt: "Thời gian hoàn thành",
 };
 
 const HISTORY_STATUS_LABELS: Record<string, string> = {
@@ -103,6 +105,21 @@ function formatHistoryValue(key: string, value: unknown): string {
         day: "2-digit",
         month: "2-digit",
         year: "numeric",
+      });
+    }
+  }
+
+  if (key === "checkedInAt" || key === "completedAt") {
+    const raw = typeof value === "string" || value instanceof Date ? value : String(value);
+    const d = new Date(raw);
+    if (!Number.isNaN(d.getTime())) {
+      return d.toLocaleString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
       });
     }
   }
@@ -1428,7 +1445,7 @@ export function ShiftScheduleView() {
                   }}
                 >
                   <h3 style={{ margin: 0, fontSize: 16 }}>
-                    Lịch sử thay đổi ca
+                    Lịch sử ca
                   </h3>
                   <button
                     className="small-button"

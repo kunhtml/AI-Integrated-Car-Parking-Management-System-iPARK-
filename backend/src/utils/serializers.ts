@@ -412,6 +412,16 @@ export function serializeShiftSchedule(
     note: schedule.note,
     location: schedule.location,
     deviceId: schedule.deviceId?.toString(),
+    checkedInAt: schedule.checkedInAt
+      ? schedule.checkedInAt instanceof Date
+        ? schedule.checkedInAt.toISOString()
+        : new Date(schedule.checkedInAt as unknown as string).toISOString()
+      : null,
+    completedAt: schedule.completedAt
+      ? schedule.completedAt instanceof Date
+        ? schedule.completedAt.toISOString()
+        : new Date(schedule.completedAt as unknown as string).toISOString()
+      : null,
     createdAt:
       schedule.createdAt instanceof Date
         ? schedule.createdAt.toISOString()

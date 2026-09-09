@@ -12,6 +12,8 @@ export type ShiftScheduleDocument = {
   note?: string;
   location?: string;
   deviceId?: mongoose.Types.ObjectId;
+  checkedInAt?: Date;
+  completedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -36,6 +38,8 @@ const shiftScheduleSchema = new Schema<ShiftScheduleDocument>(
     note: { type: String },
     location: { type: String },
     deviceId: { type: Schema.Types.ObjectId, ref: "Device" },
+    checkedInAt: { type: Date },
+    completedAt: { type: Date },
   },
   { timestamps: true },
 );

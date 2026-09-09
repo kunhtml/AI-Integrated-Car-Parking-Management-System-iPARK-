@@ -37,6 +37,13 @@ function staffDisplay(staff: unknown): { staffId: string | null; staffName: stri
   };
 }
 
+function toIso(value?: Date | string | null): string | null {
+  if (!value) return null;
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "string") return value;
+  return null;
+}
+
 function scheduleAuditSnapshot(schedule: {
   staffId?: unknown;
   date?: Date | string;
@@ -47,26 +54,23 @@ function scheduleAuditSnapshot(schedule: {
   note?: string | null;
   location?: string | null;
   deviceId?: unknown;
+  checkedInAt?: Date | string | null;
+  completedAt?: Date | string | null;
 }) {
   const staff = staffDisplay(schedule.staffId);
-  const dateRaw = schedule.date;
-  let date: string | null = null;
-  if (dateRaw instanceof Date) {
-    date = dateRaw.toISOString();
-  } else if (typeof dateRaw === "string") {
-    date = dateRaw;
-  }
   return {
     staffId: staff.staffId,
     staffName: staff.staffName,
     staffEmail: staff.staffEmail,
-    date,
+    date: toIso(schedule.date ?? null),
     shiftType: schedule.shiftType ?? null,
     startTime: schedule.startTime ?? null,
     endTime: schedule.endTime ?? null,
     status: schedule.status ?? null,
     note: schedule.note ?? null,
     location: schedule.location ?? null,
+    checkedInAt: toIso(schedule.checkedInAt ?? null),
+    completedAt: toIso(schedule.completedAt ?? null),
   };
 }
 
@@ -758,10 +762,25 @@ export async function checkInShift(request: Request, response: Response) {
       return;
     }
 
+    const checkedInAt = new Date();
     schedule.status = "checked_in";
+    schedule.checkedInAt = checkedInAt;
     await schedule.save();
     await schedule.populate("staffId", "name email phone avatarUrl");
     await schedule.populate("assignedBy", "name email");
+
+    await createAuditLog({
+      action: "shift_schedule_checked_in",
+      entityType: "ShiftSchedule",
+      entityId: schedule._id,
+      performedBy: request.user!.id,
+      changes: {
+        new: {
+          ...scheduleAuditSnapshot(schedule),
+          checkedInAt: checkedInAt.toISOString(),
+        },
+      },
+    });
 
     response.json({ schedule: serializeShiftSchedule(schedule) });
   } catch (error) {
@@ -795,10 +814,25 @@ export async function completeShift(request: Request, response: Response) {
       return;
     }
 
+    const completedAt = new Date();
     schedule.status = "completed";
+    schedule.completedAt = completedAt;
     await schedule.save();
     await schedule.populate("staffId", "name email phone avatarUrl");
     await schedule.populate("assignedBy", "name email");
+
+    await createAuditLog({
+      action: "shift_schedule_completed",
+      entityType: "ShiftSchedule",
+      entityId: schedule._id,
+      performedBy: request.user!.id,
+      changes: {
+        new: {
+          ...scheduleAuditSnapshot(schedule),
+          completedAt: completedAt.toISOString(),
+        },
+      },
+    });
 
     response.json({ schedule: serializeShiftSchedule(schedule) });
   } catch (error) {
