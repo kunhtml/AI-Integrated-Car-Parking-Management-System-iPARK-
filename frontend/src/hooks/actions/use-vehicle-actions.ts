@@ -123,8 +123,9 @@ export function createVehicleActions({
     });
     const result = await response.json();
     if (!response.ok) {
-      setActionLog(result.message || "Không thêm được xe.");
-      return;
+      const msg = result.message || "Không thêm được xe.";
+      setActionLog(msg);
+      return { ok: false, message: msg };
     }
     setRegisteredVehicles((items) => {
       if (items.some((v) => v.id === result.vehicle.id)) return items;
@@ -135,6 +136,7 @@ export function createVehicleActions({
       setVehicleRequests((items) => [result.request as VehicleRequest, ...items]);
     }
     setActionLog(`Đã thêm xe ${data.plate}.`);
+    return { ok: true, vehicle: result.vehicle };
   }
 
   async function editVehicle(id: string, data: {
@@ -158,13 +160,15 @@ export function createVehicleActions({
     });
     const result = await response.json();
     if (!response.ok) {
-      setActionLog(result.message || "Không cập nhật được xe.");
-      return;
+      const msg = result.message || "Không cập nhật được xe.";
+      setActionLog(msg);
+      return { ok: false, message: msg };
     }
     setRegisteredVehicles((items) =>
       items.map((v) => (v.id === id ? (result.vehicle as RegisteredVehicle) : v)),
     );
     setActionLog("Đã cập nhật thông tin xe.");
+    return { ok: true, vehicle: result.vehicle };
   }
 
   async function removeVehicle(id: string) {

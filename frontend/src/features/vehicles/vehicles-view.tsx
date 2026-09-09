@@ -778,7 +778,7 @@ function VehicleEditModal({
   onClose: () => void;
   onSave: (
     data: Parameters<ReturnType<typeof useParkingApp>["editVehicle"]>[1],
-  ) => Promise<void>;
+  ) => Promise<{ ok: boolean; message?: string } | void>;
   /** Họ tên tài khoản hiện tại để tự điền khi thêm xe mới. */
   prefillOwnerName?: string;
 }) {
@@ -923,17 +923,28 @@ function VehicleEditModal({
       ...(isNew ? {} : { status: form.status }),
       imageUrl: imageUrl ?? undefined,
     };
-    await onSave(
+    const res = await onSave(
       data as Parameters<ReturnType<typeof useParkingApp>["editVehicle"]>[1],
     );
     setSaving(false);
+    if (res && !res.ok) {
+      if (res.message && (res.message.includes("Biển số") || res.message.toLowerCase().includes("plate"))) {
+        setErrors({ plate: res.message });
+      } else {
+        setErrors({ general: res.message || "Thao tác thất bại." });
+      }
+    }
   }
 
   const fields: { key: keyof typeof form; label: string; span?: boolean }[] = [
     { key: "plate", label: "Biển số" },
     { key: "ownerName", label: "Họ tên chủ xe" },
     { key: "brand", label: "Nhãn hiệu" },
+    { key: "model", label: "Dòng xe (Model)" },
     { key: "color", label: "Màu sơn" },
+    { key: "year", label: "Năm sản xuất" },
+    { key: "ownerPhone", label: "Số điện thoại" },
+    { key: "ownerAddress", label: "Địa chỉ", span: true },
   ];
 
   return (
@@ -1209,6 +1220,21 @@ function VehicleEditModal({
             </div>
           )}
 
+          {errors.general && (
+            <div
+              style={{
+                marginBottom: 14,
+                padding: "8px 12px",
+                borderRadius: 8,
+                background: "rgba(239, 68, 68, 0.1)",
+                border: "1px solid #fca5a5",
+                color: "#dc2626",
+                fontSize: "0.85rem",
+              }}
+            >
+              {errors.general}
+            </div>
+          )}
           <div
             style={{
               display: "grid",
@@ -2972,13 +2998,17 @@ export function VehiclesView() {
             setShowAddForm(false);
           }}
           onSave={async (data) => {
+            let res: any;
             if (showAddForm) {
-              await addVehicle(data as Parameters<typeof addVehicle>[0]);
+              res = await addVehicle(data as Parameters<typeof addVehicle>[0]);
             } else if (editingVehicle?.id) {
-              await editVehicle(
+              res = await editVehicle(
                 editingVehicle.id,
                 data as Parameters<typeof editVehicle>[1],
               );
+            }
+            if (res && !res.ok) {
+              return res;
             }
             setEditingVehicle(null);
             setShowAddForm(false);
@@ -3882,6 +3912,18 @@ export function VehiclesView() {
                     style={{ padding: "3px 7px" }}
                   >
                     <Eye size={13} />
+                  </button>
+                  <button
+                    className="small-button"
+                    onClick={() => {
+                      setEditingVehicle(vehicle);
+                      setShowAddForm(false);
+                    }}
+                    title="Chỉnh sửa"
+                    type="button"
+                    style={{ padding: "3px 7px" }}
+                  >
+                    <Edit size={13} />
                   </button>
                   {isAdmin && (
                     <button
