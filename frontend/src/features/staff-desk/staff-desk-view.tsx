@@ -866,6 +866,13 @@ export function StaffDeskView() {
     setManualPlate("");
     setManualPlateError("");
     setShowIngestManualEntry(false);
+    setManualEntryPlate("");
+    setManualEntryError("");
+    setManualEntryVehicle(null);
+    setShowManualEntryForm(false);
+    setPendingManualEntryRfid(false);
+    setShowEntryRfidExceptionForm(false);
+    setEntryRfidExceptionReason("");
     activeIngestIdRef.current = null;
     autoScanFiredRef.current = false;
   }, []);
