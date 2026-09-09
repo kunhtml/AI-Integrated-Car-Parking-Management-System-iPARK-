@@ -10,6 +10,66 @@ import {
   serializeShiftSchedule,
 } from "../utils/serializers.js";
 
+
+/** Snapshot gọn cho audit — không lưu Document populate / ObjectId dump. */
+function staffRefId(staff: unknown): string | null {
+  if (!staff) return null;
+  if (typeof staff === "string") return staff;
+  const obj = staff as { _id?: { toString(): string }; toString?: () => string };
+  if (obj._id?.toString) return obj._id.toString();
+  if (typeof obj.toString === "function") {
+    const s = obj.toString();
+    if (s && s !== "[object Object]") return s;
+  }
+  return null;
+}
+
+function staffDisplay(staff: unknown): { staffId: string | null; staffName: string | null; staffEmail: string | null } {
+  if (!staff) return { staffId: null, staffName: null, staffEmail: null };
+  if (typeof staff === "string") {
+    return { staffId: staff, staffName: null, staffEmail: null };
+  }
+  const obj = staff as { name?: string; email?: string };
+  return {
+    staffId: staffRefId(staff),
+    staffName: typeof obj.name === "string" ? obj.name : null,
+    staffEmail: typeof obj.email === "string" ? obj.email : null,
+  };
+}
+
+function scheduleAuditSnapshot(schedule: {
+  staffId?: unknown;
+  date?: Date | string;
+  shiftType?: string;
+  startTime?: string;
+  endTime?: string;
+  status?: string;
+  note?: string | null;
+  location?: string | null;
+  deviceId?: unknown;
+}) {
+  const staff = staffDisplay(schedule.staffId);
+  const dateRaw = schedule.date;
+  let date: string | null = null;
+  if (dateRaw instanceof Date) {
+    date = dateRaw.toISOString();
+  } else if (typeof dateRaw === "string") {
+    date = dateRaw;
+  }
+  return {
+    staffId: staff.staffId,
+    staffName: staff.staffName,
+    staffEmail: staff.staffEmail,
+    date,
+    shiftType: schedule.shiftType ?? null,
+    startTime: schedule.startTime ?? null,
+    endTime: schedule.endTime ?? null,
+    status: schedule.status ?? null,
+    note: schedule.note ?? null,
+    location: schedule.location ?? null,
+  };
+}
+
 function canManageSchedules(user?: { role?: string | null }) {
   return user?.role === "admin" || user?.role === "manager";
 }
@@ -366,15 +426,7 @@ export async function createShiftSchedule(
       entityId: schedule._id,
       performedBy: request.user!.id,
       changes: {
-        new: {
-          staffId: schedule.staffId?.toString?.(),
-          date: schedule.date,
-          shiftType: schedule.shiftType,
-          startTime: schedule.startTime,
-          endTime: schedule.endTime,
-          location: schedule.location,
-          note: schedule.note,
-        },
+        new: scheduleAuditSnapshot(schedule),
       },
     });
 
@@ -447,22 +499,14 @@ export async function bulkCreateShiftSchedules(
     ]);
 
     await Promise.all(
-      createdSchedules.map((schedule) =>
+      populatedSchedules.map((schedule) =>
         createAuditLog({
           action: "shift_schedule_assigned",
           entityType: "ShiftSchedule",
           entityId: schedule._id,
           performedBy: request.user!.id,
           changes: {
-            new: {
-              staffId: schedule.staffId?.toString?.(),
-              date: schedule.date,
-              shiftType: schedule.shiftType,
-              startTime: schedule.startTime,
-              endTime: schedule.endTime,
-              location: schedule.location,
-              note: schedule.note,
-            },
+            new: scheduleAuditSnapshot(schedule),
           },
         }),
       ),
@@ -498,7 +542,10 @@ export async function updateShiftSchedule(
     }
 
     const body = updateScheduleSchema.parse(request.body);
-    const schedule = await ShiftSchedule.findById(request.params.id);
+    const schedule = await ShiftSchedule.findById(request.params.id).populate(
+      "staffId",
+      "name email",
+    );
 
     if (!schedule) {
       response.status(404).json({ message: "Không tìm thấy lịch ca" });
@@ -532,17 +579,7 @@ export async function updateShiftSchedule(
       return;
     }
 
-    const previousValues = {
-      staffId: schedule.staffId?.toString?.(),
-      date: schedule.date,
-      shiftType: schedule.shiftType,
-      startTime: schedule.startTime,
-      endTime: schedule.endTime,
-      status: schedule.status,
-      note: schedule.note,
-      location: schedule.location,
-      deviceId: schedule.deviceId?.toString?.(),
-    };
+    const previousValues = scheduleAuditSnapshot(schedule);
 
     // Update fields
     if (body.staffId) schedule.staffId = body.staffId as any;
@@ -569,17 +606,7 @@ export async function updateShiftSchedule(
       performedBy: request.user!.id,
       changes: {
         old: previousValues,
-        new: {
-          staffId: schedule.staffId?.toString?.(),
-          date: schedule.date,
-          shiftType: schedule.shiftType,
-          startTime: schedule.startTime,
-          endTime: schedule.endTime,
-          status: schedule.status,
-          note: schedule.note,
-          location: schedule.location,
-          deviceId: schedule.deviceId?.toString?.(),
-        },
+        new: scheduleAuditSnapshot(schedule),
       },
     });
 
@@ -609,7 +636,10 @@ export async function deleteShiftSchedule(
       return;
     }
 
-    const schedule = await ShiftSchedule.findById(request.params.id);
+    const schedule = await ShiftSchedule.findById(request.params.id).populate(
+      "staffId",
+      "name email",
+    );
 
     if (!schedule) {
       response.status(404).json({ message: "Không tìm thấy lịch ca" });
@@ -622,16 +652,7 @@ export async function deleteShiftSchedule(
       entityId: schedule._id,
       performedBy: request.user!.id,
       changes: {
-        old: {
-          staffId: schedule.staffId?.toString?.(),
-          date: schedule.date,
-          shiftType: schedule.shiftType,
-          startTime: schedule.startTime,
-          endTime: schedule.endTime,
-          status: schedule.status,
-          note: schedule.note,
-          location: schedule.location,
-        },
+        old: scheduleAuditSnapshot(schedule),
       },
     });
 

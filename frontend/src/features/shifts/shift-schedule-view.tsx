@@ -41,6 +41,97 @@ const SHIFT_LABELS: Record<string, string> = {
   night: "Ca Đêm",
 };
 
+
+const HISTORY_FIELD_LABELS: Record<string, string> = {
+  staffId: "Nhân viên",
+  staffName: "Nhân viên",
+  staffEmail: "Email nhân viên",
+  date: "Ngày",
+  shiftType: "Ca",
+  startTime: "Giờ bắt đầu",
+  endTime: "Giờ kết thúc",
+  location: "Vị trí",
+  note: "Ghi chú",
+  status: "Trạng thái",
+  deviceId: "Thiết bị",
+  assignedBy: "Người gán",
+  reason: "Lý do",
+};
+
+const HISTORY_STATUS_LABELS: Record<string, string> = {
+  scheduled: "Đã lên lịch",
+  checked_in: "Đã điểm danh",
+  completed: "Hoàn thành",
+  cancelled: "Đã hủy",
+  missed: "Vắng mặt",
+};
+
+/** Format 1 giá trị trong nhật ký ca — tránh dump ObjectId / ISO thô. */
+function formatHistoryValue(key: string, value: unknown): string {
+  if (value === null || value === undefined || value === "") return "—";
+
+  // staffId có thể là id string, object populate, hoặc chuỗi dump kiểu util.inspect
+  if (key === "staffId" || key === "assignedBy") {
+    if (typeof value === "object" && value !== null) {
+      const obj = value as Record<string, unknown>;
+      const name = typeof obj.name === "string" ? obj.name : null;
+      const email = typeof obj.email === "string" ? obj.email : null;
+      if (name && email) return `${name} (${email})`;
+      if (name) return name;
+      if (email) return email;
+      const id = obj._id;
+      if (id && typeof id === "object" && id !== null && "toString" in id) {
+        return String((id as { toString(): string }).toString());
+      }
+      if (typeof id === "string") return id;
+    }
+    if (typeof value === "string") {
+      const nameMatch = value.match(/name:\s*['"]([^'"]+)['"]/);
+      const emailMatch = value.match(/email:\s*['"]([^'"]+)['"]/);
+      if (nameMatch && emailMatch) return `${nameMatch[1]} (${emailMatch[1]})`;
+      if (nameMatch) return nameMatch[1];
+      if (emailMatch) return emailMatch[1];
+    }
+    return String(value);
+  }
+
+  if (key === "date") {
+    const raw = typeof value === "string" || value instanceof Date ? value : String(value);
+    const d = new Date(raw);
+    if (!Number.isNaN(d.getTime())) {
+      return d.toLocaleDateString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
+    }
+  }
+
+  if (key === "shiftType") {
+    const k = String(value);
+    return SHIFT_LABELS[k] || k;
+  }
+
+  if (key === "status") {
+    const k = String(value);
+    return HISTORY_STATUS_LABELS[k] || k;
+  }
+
+  if (typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    if (typeof obj.name === "string") {
+      return obj.email ? `${obj.name} (${obj.email})` : obj.name;
+    }
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+
+  return String(value);
+}
+
 const DAYS_OF_WEEK = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
 
 function getWeekDates(date: Date): Date[] {
@@ -1377,24 +1468,44 @@ export function ShiftScheduleView() {
                       ) => {
                         if (!changes || Object.keys(changes).length === 0)
                           return null;
+                        // Bỏ field nhiễu / trùng khi đã có staffName
+                        const skipKeys = new Set([
+                          "avatarUrl",
+                          "_id",
+                          "__v",
+                          "deviceId",
+                        ]);
+                        const entries = Object.entries(changes).filter(
+                          ([key, value]) => {
+                            if (skipKeys.has(key)) return false;
+                            if (
+                              key === "staffId" &&
+                              typeof changes.staffName === "string" &&
+                              changes.staffName
+                            ) {
+                              return false;
+                            }
+                            if (value === null || value === undefined || value === "")
+                              return false;
+                            return true;
+                          },
+                        );
+                        if (entries.length === 0) return null;
                         return (
                           <ul
                             style={{
                               margin: "8px 0 0 0",
                               paddingLeft: 18,
                               color: "var(--muted)",
+                              lineHeight: 1.55,
                             }}
                           >
-                            {Object.entries(changes).map(([key, value]) => (
+                            {entries.map(([key, value]) => (
                               <li key={key}>
                                 <strong style={{ color: "var(--text)" }}>
-                                  {key}:
+                                  {HISTORY_FIELD_LABELS[key] || key}:
                                 </strong>{" "}
-                                {value === null ||
-                                value === undefined ||
-                                value === ""
-                                  ? "—"
-                                  : String(value)}
+                                {formatHistoryValue(key, value)}
                               </li>
                             ))}
                           </ul>
