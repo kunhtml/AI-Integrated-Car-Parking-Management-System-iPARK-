@@ -1,3 +1,4 @@
+import { RfidCard } from "../models/RfidCard.js";
 import { Request, Response } from "express";
 import mongoose from "mongoose";
 import { z } from "zod";
@@ -23,10 +24,33 @@ export async function listVehicles(_request: Request, response: Response) {
       model: "User" as const,
       select: USER_POPULATE_SELECT,
     });
+
+  const vehicleIds = vehicles.map((v) => v._id);
+  const plates = vehicles.map((v) => v.plate).filter(Boolean);
+
+  // Tìm các thẻ RFID đang liên kết theo vehicleId hoặc plate
+  const rfidCards = await RfidCard.find({
+    $or: [
+      { vehicleId: { $in: vehicleIds } },
+      { plate: { $in: plates } },
+    ],
+  }).lean();
+
+  const rfidMap = new Map<string, any>();
+  for (const card of rfidCards) {
+    if (card.vehicleId) {
+      rfidMap.set(card.vehicleId.toString(), card);
+    }
+    if (card.plate) {
+      rfidMap.set(card.plate.toUpperCase(), card);
+    }
+  }
+
   response.json({
-    vehicles: vehicles.map((v) =>
-      serializeVehicle(v, v.userId as unknown as PopulatedUser),
-    ),
+    vehicles: vehicles.map((v) => {
+      const card = rfidMap.get(v._id.toString()) || rfidMap.get(v.plate.toUpperCase()) || null;
+      return serializeVehicle(v, v.userId as unknown as PopulatedUser, card);
+    }),
   });
 }
 

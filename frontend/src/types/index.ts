@@ -191,6 +191,13 @@ export type RegisteredVehicle = {
     phone?: string | null;
   } | null;
   imageUrl?: string | null;
+  rfidCard?: {
+    id: string;
+    uid: string;
+    cardId?: string;
+    status: string;
+    cardType?: string;
+  } | null;
   createdAt: string;
   updatedAt: string;
 };

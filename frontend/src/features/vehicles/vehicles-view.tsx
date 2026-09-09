@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  Radio,
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
@@ -3766,6 +3767,7 @@ export function VehiclesView() {
                   />
                 </button>,
                 "Thông tin",
+                "Thẻ RFID",
                 <button
                   key="col-status"
                   onClick={() => toggleSort("status")}
@@ -3837,6 +3839,32 @@ export function VehiclesView() {
                     .filter(Boolean)
                     .join(" • ") || "—"}
                 </span>,
+                vehicle.rfidCard?.uid ? (
+                  <span
+                    key="rfid"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      padding: "3px 8px",
+                      borderRadius: 6,
+                      fontSize: "0.78rem",
+                      fontWeight: 600,
+                      fontFamily: "monospace",
+                      background: "rgba(59, 130, 246, 0.1)",
+                      color: "#2563eb",
+                      border: "1px solid rgba(59, 130, 246, 0.25)",
+                    }}
+                    title={`Mã thẻ: ${vehicle.rfidCard.uid} · Trạng thái: ${vehicle.rfidCard.status}`}
+                  >
+                    <Radio size={12} />
+                    {vehicle.rfidCard.uid}
+                  </span>
+                ) : (
+                  <span key="rfid" className="muted-cell" style={{ fontSize: "0.8rem" }}>
+                    —
+                  </span>
+                ),
                 <span className={statusBadgeClass(vehicle.status)} key="status">
                   {statusIcon(vehicle.status)}
                   {statusLabel(vehicle.status)}

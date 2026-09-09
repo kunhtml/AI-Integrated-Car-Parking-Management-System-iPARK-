@@ -164,6 +164,14 @@ export function serializeVehicle(
     email?: string;
     phone?: string | null;
   } | null,
+  rfidCard?: {
+    _id?: any;
+    id?: string;
+    uid?: string;
+    cardId?: string;
+    status?: string;
+    cardType?: string;
+  } | null,
 ) {
   return {
     id: vehicle._id.toString(),
@@ -189,6 +197,15 @@ export function serializeVehicle(
           name: populatedUser.name,
           email: populatedUser.email,
           phone: populatedUser.phone ?? null,
+        }
+      : null,
+    rfidCard: rfidCard
+      ? {
+          id: rfidCard._id ? rfidCard._id.toString() : (rfidCard.id || ""),
+          uid: rfidCard.uid || "",
+          cardId: rfidCard.cardId || rfidCard.uid || "",
+          status: rfidCard.status || "active",
+          cardType: rfidCard.cardType || "member",
         }
       : null,
     createdAt: vehicle.createdAt.toISOString(),
