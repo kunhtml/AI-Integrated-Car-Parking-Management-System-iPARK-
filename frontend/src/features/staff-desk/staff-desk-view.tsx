@@ -225,6 +225,8 @@ export function StaffDeskView() {
   // Timestamp barie vừa mở: giữ màn hình thành công 5s (cho xe đi qua)
   // trước khi cho phép SSE xóa UI.
   const exitGateOpenedAtRef = useRef<number>(0);
+  // Timer tự đóng thẻ cổng ra sau khi mở barie — phải clear khi unmount / clearExitUi.
+  const exitDismissTimerRef = useRef<number | null>(null);
   // UID đã auto-create phiên cho luồng nhập tay biển số; chống gọi 2 lần.
   const manualAutoCreateRef = useRef("");
   // Thông tin thẻ tra được theo UID (luồng quét thẻ trước, nhập/đối chiếu biển sau).
@@ -801,10 +803,24 @@ export function StaffDeskView() {
     autoExitScanFiredRef.current = false;
     exitGateOpenedAtRef.current = 0;
     exitVerifiedUidRef.current = "";
+    if (exitDismissTimerRef.current !== null) {
+      window.clearTimeout(exitDismissTimerRef.current);
+      exitDismissTimerRef.current = null;
+    }
     if (exitScanIntervalRef.current !== null) {
       window.clearInterval(exitScanIntervalRef.current);
       exitScanIntervalRef.current = null;
     }
+  }, []);
+
+  // Dọn timer tự đóng thẻ cổng ra khi unmount (tránh gọi clearExitUi sau khi component đã hủy).
+  useEffect(() => {
+    return () => {
+      if (exitDismissTimerRef.current !== null) {
+        window.clearTimeout(exitDismissTimerRef.current);
+        exitDismissTimerRef.current = null;
+      }
+    };
   }, []);
 
   // Đồng bộ các bàn nhân viên: xóa thẻ xe ra ngay khi một bàn khác hoàn tất
@@ -966,11 +982,18 @@ export function StaffDeskView() {
       setExitScanPhase("error");
       return;
     }
+    // Chống double-submit: barie đã mở thì không gọi lại / không tạo timer mới.
+    if (activeExit.barrierOpened) return;
+
     // Đánh dấu "đang mở barie" TRƯỚC khi gọi API. SSE (phiên không còn
     // pending) thường về TRƯỚC response của open-gate; nếu không đánh dấu
     // trước, hiệu ứng SSE sẽ xóa UI ngay, làm mất banner "Mở barie thành
     // công" và không kịp chờ 5s.
     exitGateOpenedAtRef.current = Date.now();
+    if (exitDismissTimerRef.current !== null) {
+      window.clearTimeout(exitDismissTimerRef.current);
+      exitDismissTimerRef.current = null;
+    }
     try {
       const res = await apiFetch("/exit/open-gate", {
         method: "POST",
@@ -985,7 +1008,8 @@ export function StaffDeskView() {
           current ? { ...current, barrierOpened: true } : current,
         );
         // Auto-dismiss ExitCard sau 5 giây (banner thành công giữ cho xe đi qua)
-        window.setTimeout(() => {
+        exitDismissTimerRef.current = window.setTimeout(() => {
+          exitDismissTimerRef.current = null;
           exitGateOpenedAtRef.current = 0;
           clearExitUi();
         }, 5000);
@@ -1002,7 +1026,7 @@ export function StaffDeskView() {
       setExitScanPhase("error");
       setExitScanError("Lỗi kết nối bridge. Kiểm tra phần cứng rồi thử lại.");
     }
-  }, [activeExit?.sessionId, clearExitUi]);
+  }, [activeExit?.sessionId, activeExit?.barrierOpened, activeExit?.action, clearExitUi]);
 
   // ====== Exit RFID scan & verify ======
   const startExitScan = useCallback(async () => {
