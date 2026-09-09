@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Bell, Check, CheckCheck, Clock, Search, X } from "lucide-react";
 
 import { useParkingApp } from "@/context/parking-app-context";
+import type { NotificationItem } from "@/types";
 
 function parseNotificationDate(value?: string) {
   if (!value) return null;
@@ -50,6 +51,8 @@ export function NotificationsView() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [selectedNotification, setSelectedNotification] =
+    useState<NotificationItem | null>(null);
 
   const unreadCount = notificationList.filter((item) => !item.read).length;
   const readCount = notificationList.length - unreadCount;
@@ -90,9 +93,20 @@ export function NotificationsView() {
     await Promise.all(unread.map((item) => markNotificationRead(item.id)));
   }
 
+  async function handleOpenNotification(item: NotificationItem) {
+    setSelectedNotification(item);
+    if (!item.read) {
+      await markNotificationRead(item.id);
+    }
+  }
+
+  function handleCloseModal() {
+    setSelectedNotification(null);
+  }
+
   const statusTabs: { key: StatusFilter; label: string; count: number }[] = [
     { key: "all", label: "Tất cả", count: notificationList.length },
-    { key: "unread", label: "Mới", count: unreadCount },
+    { key: "unread", label: "Chưa đọc", count: unreadCount },
     { key: "read", label: "Đã đọc", count: readCount },
   ];
 
@@ -195,6 +209,8 @@ export function NotificationsView() {
             <div
               className={`notif-card ${item.read ? "read" : "unread"}`}
               key={item.id}
+              onClick={() => handleOpenNotification(item)}
+              style={{ cursor: "pointer" }}
             >
               <div className="notif-card-icon">
                 <Bell size={16} />
@@ -210,9 +226,12 @@ export function NotificationsView() {
                   {formatRelativeTime(item.createdAt)}
                 </span>
               </div>
-              <div className="notif-card-actions">
+              <div
+                className="notif-card-actions"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <span className={`badge ${item.read ? "" : "warning"}`}>
-                  {item.read ? "Đã đọc" : "Mới"}
+                  {item.read ? "Đã đọc" : "Chưa đọc"}
                 </span>
                 {!item.read && (
                   <button
@@ -239,6 +258,86 @@ export function NotificationsView() {
           )}
         </div>
       </div>
+
+      {/* Modal chi tiết thông báo (CUS_13: mở thông báo và trở về danh sách) */}
+      {selectedNotification && (
+        <div
+          className="sub-modal-overlay"
+          onClick={handleCloseModal}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="sub-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 520 }}
+          >
+            <div className="sub-modal-header">
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div className="notif-card-icon" style={{ width: 34, height: 34 }}>
+                  <Bell size={18} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
+                    {selectedNotification.title}
+                  </h3>
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      fontSize: 12,
+                      color: "var(--fg-muted)",
+                      marginTop: 2,
+                    }}
+                  >
+                    <Clock size={11} />
+                    {formatRelativeTime(selectedNotification.createdAt)}
+                  </span>
+                </div>
+              </div>
+              <button
+                className="sub-modal-close"
+                onClick={handleCloseModal}
+                type="button"
+                aria-label="Đóng"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="sub-modal-content" style={{ padding: 24 }}>
+              <p
+                style={{
+                  fontSize: 14,
+                  lineHeight: 1.6,
+                  color: "var(--fg)",
+                  margin: 0,
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {selectedNotification.content}
+              </p>
+              <div
+                style={{
+                  marginTop: 24,
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: 10,
+                }}
+              >
+                <button
+                  className="notif-clear-btn"
+                  onClick={handleCloseModal}
+                  type="button"
+                  style={{ padding: "8px 18px", fontSize: 13 }}
+                >
+                  Quay lại danh sách
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

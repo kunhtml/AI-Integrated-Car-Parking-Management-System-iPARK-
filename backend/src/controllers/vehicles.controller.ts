@@ -68,10 +68,18 @@ export async function getVehicle(request: Request, response: Response) {
     response.status(404).json({ message: "Không tìm thấy phương tiện." });
     return;
   }
+  const rfidCard = await RfidCard.findOne({
+    $or: [
+      { vehicleId: vehicle._id },
+      { plate: vehicle.plate },
+    ],
+  }).lean();
+
   response.json({
     vehicle: serializeVehicle(
       vehicle,
       vehicle.userId as unknown as PopulatedUser,
+      rfidCard,
     ),
   });
 }
@@ -194,6 +202,17 @@ export async function updateVehicle(request: Request, response: Response) {
     return;
   }
 
+  // Khách hàng chỉ được sửa thông tin xe của chính mình
+  if (
+    request.user?.role === "customer" &&
+    existing.userId?.toString() !== request.user.id
+  ) {
+    response
+      .status(403)
+      .json({ message: "Bạn không có quyền sửa phương tiện này." });
+    return;
+  }
+
   if (body.plate) {
     const normPlate = body.plate
       .trim()
@@ -218,15 +237,20 @@ export async function updateVehicle(request: Request, response: Response) {
   if (body.year !== undefined) existing.year = body.year;
   if (body.engineNo !== undefined) existing.engineNo = body.engineNo;
   if (body.chassisNo !== undefined) existing.chassisNo = body.chassisNo;
-  if (body.status !== undefined) existing.status = body.status;
-  if (body.rejectionReason !== undefined)
-    existing.rejectionReason = body.rejectionReason;
+  if (request.user?.role !== "customer") {
+    if (body.status !== undefined) existing.status = body.status;
+    if (body.rejectionReason !== undefined)
+      existing.rejectionReason = body.rejectionReason;
+  }
   if (body.imageUrl !== undefined) existing.imageUrl = body.imageUrl;
 
   await existing.save();
 
 
-  if (body.status === "Đã đăng ký" || body.status === "Blacklist") {
+  if (
+    request.user?.role !== "customer" &&
+    (body.status === "Đã đăng ký" || body.status === "Blacklist")
+  ) {
     await VehicleRequest.updateMany(
       { vehicleId: existing._id, status: "pending" },
       {
@@ -250,10 +274,18 @@ $set: {
     select: USER_POPULATE_SELECT,
   });
 
+  const rfidCard = await RfidCard.findOne({
+    $or: [
+      { vehicleId: existing._id },
+      { plate: existing.plate },
+    ],
+  }).lean();
+
   response.json({
     vehicle: serializeVehicle(
       populated ?? existing,
       populated?.userId as unknown as PopulatedUser,
+      rfidCard,
     ),
   });
 }

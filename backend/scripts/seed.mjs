@@ -54,6 +54,12 @@ const seedUsers = [
     password: process.env.STAFF_3_PASSWORD || "123456",
     role: "staff",
   },
+  {
+    name: process.env.CUSTOMER_1_NAME || "Nguyễn Văn Khách",
+    email: process.env.CUSTOMER_1_EMAIL || "customer1@ipark.vn",
+    password: process.env.CUSTOMER_1_PASSWORD || "123456",
+    role: "customer",
+  },
 ];
 
 let usersUpserted = 0;
@@ -254,6 +260,43 @@ await Notification.updateOne(
   { upsert: true },
 );
 console.log("[Seed] Notification seeded.");
+
+// Seed notifications for customer1 (1 read, 2 unread for CUS_12 and CUS_13)
+const customer1User = await User.findOne({ email: "customer1@ipark.vn" });
+if (customer1User) {
+  const customerNotifs = [
+    {
+      title: "Chào mừng quý khách đến với iPARK",
+      content: "Tài khoản của bạn đã được kích hoạt thành công. Hãy trải nghiệm dịch vụ đỗ xe thông minh!",
+      targetRole: "customer",
+      userId: customer1User._id,
+      readBy: [customer1User._id],
+    },
+    {
+      title: "Đặt chỗ đỗ xe thành công",
+      content: "Bạn đã đặt chỗ A-01 thành công từ 08:00 đến 12:00 hôm nay.",
+      targetRole: "customer",
+      userId: customer1User._id,
+      readBy: [],
+    },
+    {
+      title: "Ưu đãi thành viên mới",
+      content: "Giảm 20% cho lần nạp tiền ví đầu tiên trong tháng này. Nạp ngay để nhận ưu đãi!",
+      targetRole: "customer",
+      userId: customer1User._id,
+      readBy: [],
+    },
+  ];
+
+  for (const item of customerNotifs) {
+    await Notification.updateOne(
+      { title: item.title, userId: item.userId },
+      { $set: item },
+      { upsert: true }
+    );
+  }
+  console.log("[Seed] Customer1 sample notifications seeded (1 read, 2 unread).");
+}
 
 // ─── 8. Zones ───────────────────────────────────────────────────────────────
 const seedZones = [
