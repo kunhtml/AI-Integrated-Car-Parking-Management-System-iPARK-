@@ -242,9 +242,16 @@ export function verifyWebhookSignature(
   checksumKey: string,
 ): boolean {
   try {
-    const { signature, ...data } = webhookBody;
+    const { signature } = webhookBody;
     if (!signature || typeof signature !== "string") return false;
-    const expectedSignature = createSignatureFromObject(data, checksumKey);
+
+    // PayOS ký trên các trường của inner object `data`, không ký trên object ngoài (code, desc, success)
+    // Nếu webhookBody có chứa trường `data` (object) thì lấy dữ liệu từ `data` để tạo chuỗi ký
+    const dataToSign = webhookBody.data && typeof webhookBody.data === "object"
+      ? (webhookBody.data as unknown as Record<string, any>)
+      : (webhookBody as unknown as Record<string, any>);
+
+    const expectedSignature = createSignatureFromObject(dataToSign, checksumKey);
     const a = Buffer.from(signature, "utf8");
     const b = Buffer.from(expectedSignature, "utf8");
     if (a.length !== b.length) {
