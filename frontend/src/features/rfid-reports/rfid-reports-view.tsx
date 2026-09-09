@@ -56,7 +56,7 @@ export function RfidReportsView() {
   async function loadStatus() {
     setStatusLoading(true);
     try {
-      const res = await apiFetch("/rfid-reports/status");
+      const res = await apiFetch("/rfid/reports/status");
       if (res.ok) {
         const data = await res.json();
         setStatus(data);

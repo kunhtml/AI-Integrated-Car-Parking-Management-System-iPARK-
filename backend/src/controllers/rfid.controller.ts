@@ -734,3 +734,39 @@ export async function listMyRfidCards(request: Request, response: Response) {
     .limit(50);
   response.json({ cards: cards.map(serializeCard) });
 }
+
+export async function getRfidReportsStatus(_request: Request, response: Response) {
+  const [available, inUse, lost, blocked, total] = await Promise.all([
+    RfidCard.countDocuments({ status: "available" }),
+    RfidCard.countDocuments({ status: "in-use" }),
+    RfidCard.countDocuments({ status: "lost" }),
+    RfidCard.countDocuments({ status: "blocked" }),
+    RfidCard.countDocuments(),
+  ]);
+  response.json({ available, inUse, lost, blocked, total });
+}
+
+export async function getRfidReportsUsage(request: Request, response: Response) {
+  const { from, to } = request.query;
+  const query: Record<string, unknown> = {};
+  if (from || to) {
+    query.createdAt = {};
+    if (from) (query.createdAt as Record<string, unknown>).$gte = new Date(String(from));
+    if (to) (query.createdAt as Record<string, unknown>).$lte = new Date(String(to));
+  }
+  // Group scan logs by date
+  const RfidScanLog = (await import("../models/RfidScanLog.js")).RfidScanLog;
+  const logs = await RfidScanLog.find(query).sort({ createdAt: 1 });
+  // Aggregate by day
+  const byDay: Record<string, { day: string; total: number; success: number; failed: number; blocked: number }> = {};
+  for (const log of logs) {
+    const day = log.createdAt.toISOString().slice(0, 10);
+    if (!byDay[day]) byDay[day] = { day, total: 0, success: 0, failed: 0, blocked: 0 };
+    byDay[day].total++;
+    const s = log.status as string;
+    if (s === "success") byDay[day].success++;
+    else if (s === "failed" || s === "mismatch") byDay[day].failed++;
+    else if (s === "blocked") byDay[day].blocked++;
+  }
+  response.json({ rows: Object.values(byDay) });
+}

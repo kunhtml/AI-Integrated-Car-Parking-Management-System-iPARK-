@@ -138,6 +138,15 @@ rfidRoutes.get(
   requireRole("admin", "staff"),
   asyncHandler(listUnassignedResidents),
 );
+rfidRoutes.get(
+  "/reports/status",
+  requireRole("admin", "staff"),
+);
+rfidRoutes.get(
+  "/reports/usage",
+  requireRole("admin", "staff"),
+);
+
 // Staff desk lookup after a plate is entered manually.
 rfidRoutes.get(
   "/by-plate/:plate",
