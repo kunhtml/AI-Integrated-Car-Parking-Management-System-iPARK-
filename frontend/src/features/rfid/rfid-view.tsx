@@ -159,6 +159,35 @@ export function RfidCardsView() {
   } | null>(null);
   const [bulkConfirmText, setBulkConfirmText] = useState("");
 
+  // RFID Card history modal state
+  const [historyCard, setHistoryCard] = useState<RfidCardItem | null>(null);
+  const [historyAuditLogs, setHistoryAuditLogs] = useState<any[]>([]);
+  const [historyScanLogs, setHistoryScanLogs] = useState<any[]>([]);
+  const [historyTab, setHistoryTab] = useState<"audit" | "scans">("audit");
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  async function openCardHistory(card: RfidCardItem) {
+    setHistoryCard(card);
+    setHistoryLoading(true);
+    try {
+      const res = await apiFetch(`/rfid-cards/${card.id}/history`);
+      if (res.ok) {
+        const data = await res.json();
+        setHistoryAuditLogs(data.auditHistory || []);
+        setHistoryScanLogs(data.scanHistory || data.scans || data.logs || data.history || []);
+        if (data.auditHistory && data.auditHistory.length > 0) {
+          setHistoryTab("audit");
+        } else {
+          setHistoryTab("scans");
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
   // Các selection hiện tại ở form Thêm/Sửa — lưu subscriptionId khi chọn cư dân.
   // Lưu riêng vì form dùng FormData / state — cần trigger re-render khi đổi.
   const [selectedResidentId, setSelectedResidentId] = useState("");

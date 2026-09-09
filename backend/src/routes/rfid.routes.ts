@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   createRfidCard,
   deleteRfidCard,
+  getRfidCardHistoryHandler,
   exportAllCards,
   getRfidCard,
   listMyRfidCards,
@@ -95,6 +96,11 @@ rfidRoutes.get(
   "/transactions",
   requireRole("admin", "staff"),
   asyncHandler(transactions),
+);
+rfidRoutes.get(
+  "/:id/history",
+  requireRole("admin", "staff"),
+  asyncHandler(getRfidCardHistoryHandler),
 );
 rfidRoutes.get(
   "/:id/details",

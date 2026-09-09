@@ -222,12 +222,20 @@ export async function lookupRfidCardByUid(
 export async function createRfidCard(request: Request, response: Response) {
   const body = z
     .object({
-      uid: z.string().trim().min(1),
+      uid: z.string().trim().min(1).optional(),
+      cardId: z.string().trim().min(1).optional(),
       ownerName: z.string().trim().optional(),
       plate: z.string().trim().optional(),
       userType: z.enum(["resident", "guest"]).optional(),
       notes: z.string().trim().optional(),
     })
+    .refine((d) => Boolean(d.uid || d.cardId), {
+      message: "Phải cung cấp uid hoặc cardId.",
+    })
+    .transform((d) => ({
+      ...d,
+      uid: d.uid || d.cardId!,
+    }))
     .parse(request.body);
 
   const uid = normalizeUid(body.uid);
@@ -297,6 +305,7 @@ export async function createRfidCard(request: Request, response: Response) {
 
   const card = await RfidCard.create({
     uid,
+    cardId: body.cardId || uid,
     ownerName: isMember
       ? body.ownerName?.trim() || plate || "Thành viên"
       : "Guest",
