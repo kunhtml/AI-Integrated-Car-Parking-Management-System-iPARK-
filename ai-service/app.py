@@ -1080,6 +1080,40 @@ last_snapshot_out = ""
 last_boxes_in: list = []
 last_boxes_out: list = []
 
+# ================== STAFF-DESK WATCH STATE (AI INFERENCE CONTROL) ==================
+# Frontend staff-desk ping POST /api/staff-desk/watch mỗi 10s để duy trì inference.
+# Khi rời trang, hook unmount gọi navigator.sendBeacon POST /api/staff-desk/unwatch.
+# Nếu không có heartbeat trong 30s, tự động ngưng OCR để tiết kiệm tài nguyên CPU/RAM.
+_staff_desk_active = False
+_staff_desk_lock = threading.Lock()
+_staff_desk_last_heartbeat = 0.0
+_STAFF_DESK_WATCH_TIMEOUT_SEC = 30.0
+
+
+def _is_staff_desk_active() -> bool:
+    global _staff_desk_active
+    with _staff_desk_lock:
+        if not _staff_desk_active:
+            return False
+        if time.time() - _staff_desk_last_heartbeat > _STAFF_DESK_WATCH_TIMEOUT_SEC:
+            _staff_desk_active = False
+            return False
+        return True
+
+
+def _mark_staff_desk_active():
+    global _staff_desk_active, _staff_desk_last_heartbeat
+    with _staff_desk_lock:
+        _staff_desk_active = True
+        _staff_desk_last_heartbeat = time.time()
+
+
+def _mark_staff_desk_inactive():
+    global _staff_desk_active
+    with _staff_desk_lock:
+        _staff_desk_active = False
+
+
 # Event-based wake-up cho MJPEG generator: mỗi camera có 1 threading.Event
 # được set khi camera_loop publish frame mới (last_frame đổi id). Generator
 # chờ event thay vì time.sleep cố định → tránh gửi đi gửi lại cùng JPEG
@@ -2078,7 +2112,8 @@ def camera_loop():
                 last_preview_write_out = now
 
         # ===== BƯỚC 3: OCR — single-worker scheduler hoặc legacy dual-thread =====
-        if OCR_ENABLED:
+        # Chỉ chạy inference khi staff-desk đang mở (active heartbeat) hoặc OCR_FORCE_ALWAYS=true
+        if OCR_ENABLED and (_is_staff_desk_active() or os.getenv("OCR_FORCE_ALWAYS", "false").strip().lower() in ("1", "true", "yes", "on")):
             if use_single and _ocr_scheduler is not None:
                 if ret_in and now - last_ocr_in >= OCR_INTERVAL_SEC:
                     last_ocr_in = now
@@ -2261,7 +2296,7 @@ try:
             r"/api/cameras*": {"origins": "*"},
             r"/api/rfid/*": {"origins": "*"},
             r"/gate/*": {"origins": "*"},
-        },
+            r"/api/staff-desk/*": {"origins": "*"},        },
     )
 except ImportError:
     # Fallback thủ công nếu flask_cors chưa cài
@@ -2326,6 +2361,40 @@ def api_cameras_health():
             "degraded_reason": _ai_degraded_reason if degraded else "",
             "memory_soft_limit_mb": AI_MEMORY_SOFT_LIMIT_MB,
         },
+    })
+
+
+# ==== STAFF-DESK WATCH ENDPOINTS ====
+@app.route("/api/staff-desk/watch", methods=["GET", "POST"])
+def api_staff_desk_watch():
+    """Frontend staff-desk ping mỗi 10s để bật/duy trì AI inference."""
+    _mark_staff_desk_active()
+    return jsonify({
+        "ok": True,
+        "active": True,
+        "message": "Staff desk watch active, AI inference enabled",
+    })
+
+
+@app.route("/api/staff-desk/unwatch", methods=["POST"])
+def api_staff_desk_unwatch():
+    """Frontend thông báo rời trang staff-desk để tắt AI inference."""
+    _mark_staff_desk_inactive()
+    return jsonify({
+        "ok": True,
+        "active": False,
+        "message": "Staff desk watch deactivated, AI inference paused",
+    })
+
+
+@app.route("/api/staff-desk/status", methods=["GET"])
+def api_staff_desk_status():
+    """Kiểm tra trạng thái watch hiện tại của staff-desk."""
+    active = _is_staff_desk_active()
+    return jsonify({
+        "ok": True,
+        "active": active,
+        "inferenceRunning": active and OCR_ENABLED,
     })
 
 
