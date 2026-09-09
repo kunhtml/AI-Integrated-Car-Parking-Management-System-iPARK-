@@ -405,6 +405,8 @@ export type ShiftScheduleItem = {
   note?: string;
   location?: string;
   deviceId?: string;
+  checkedInAt?: string | null;
+  completedAt?: string | null;
   createdAt: string;
   updatedAt?: string;
 };

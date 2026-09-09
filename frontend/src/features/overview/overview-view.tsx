@@ -171,6 +171,37 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: "Hủy",
 };
 
+/** Ngày ca (YYYY-MM-DD) — tránh so sánh với ISO đầy đủ. */
+function scheduleDayKey(date: string): string {
+  return date.slice(0, 10);
+}
+
+/** Hiển thị thời điểm trên thẻ ca: ưu tiên giờ click điểm danh. */
+function formatShiftCardWhen(schedule: ShiftScheduleItem): string {
+  if (schedule.checkedInAt) {
+    const d = new Date(schedule.checkedInAt);
+    if (!Number.isNaN(d.getTime())) {
+      return d.toLocaleString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+    }
+  }
+  const d = new Date(schedule.date);
+  if (!Number.isNaN(d.getTime())) {
+    return d.toLocaleDateString("vi-VN", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  }
+  return scheduleDayKey(schedule.date);
+}
+
 interface ShiftCalendarProps {
   schedules: ShiftScheduleItem[];
   currentUserId: string | undefined;
@@ -328,8 +359,8 @@ function MyShiftsList({ schedules, currentUserId, onCheckIn }: MyShiftsListProps
   }, [mySchedules]);
 
   const today = todayStr();
-  const upcoming = mySchedules.filter((s) => s.date >= today && s.status === "scheduled").slice(0, 3);
-  const past = mySchedules.filter((s) => s.date < today || s.status !== "scheduled").slice(0, 5);
+  const upcoming = mySchedules.filter((s) => scheduleDayKey(s.date) >= today && s.status === "scheduled").slice(0, 3);
+  const past = mySchedules.filter((s) => scheduleDayKey(s.date) < today || s.status !== "scheduled").slice(0, 5);
 
   async function handleCheckIn(scheduleId: string) {
     setCheckingInId(scheduleId);
@@ -390,13 +421,13 @@ function MyShiftsList({ schedules, currentUserId, onCheckIn }: MyShiftsListProps
               </div>
               <div className="staff-shift-card-body">
                 <strong>{SHIFT_LABELS[s.shiftType]}</strong>
-                <span>{s.date} · {s.startTime} – {s.endTime}</span>
+                <span>{formatShiftCardWhen(s)} · {s.startTime} – {s.endTime}</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span className="staff-shift-status-badge" style={{ background: STATUS_COLORS[s.status]?.bg, color: STATUS_COLORS[s.status]?.color }}>
                   {STATUS_LABELS[s.status]}
                 </span>
-                {s.date.slice(0, 10) === today && (
+                {scheduleDayKey(s.date) === today && (
                   <button
                     type="button"
                     className="small-button primary"
@@ -428,7 +459,7 @@ function MyShiftsList({ schedules, currentUserId, onCheckIn }: MyShiftsListProps
               </div>
               <div className="staff-shift-card-body">
                 <strong>{SHIFT_LABELS[s.shiftType]}</strong>
-                <span>{s.date} · {s.startTime} – {s.endTime}</span>
+                <span>{formatShiftCardWhen(s)} · {s.startTime} – {s.endTime}</span>
               </div>
               <span className="staff-shift-status-badge" style={{ background: STATUS_COLORS[s.status]?.bg, color: STATUS_COLORS[s.status]?.color }}>
                 {STATUS_LABELS[s.status]}
