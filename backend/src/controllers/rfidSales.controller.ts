@@ -52,5 +52,6 @@ export async function cardDetails(request: Request, response: Response) {
     owner: result.card.userId && typeof result.card.userId === "object" ? result.card.userId : null,
     vehicle: result.card.vehicleId && typeof result.card.vehicleId === "object" ? result.card.vehicleId : null,
     history: result.history.map(serializeTransaction),
+    auditHistory: (result as any).auditHistory || [],
   });
 }

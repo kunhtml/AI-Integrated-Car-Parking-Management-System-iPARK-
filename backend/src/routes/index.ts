@@ -107,6 +107,7 @@ apiRoutes.use("/ai", aiRoutes);
 apiRoutes.use("/penalties", penaltiesRoutes);
 apiRoutes.use("/exit", exitRoutes);
 apiRoutes.use("/rfid", rfidRoutes);
+apiRoutes.use("/rfid-cards", rfidRoutes);
 apiRoutes.use("/camera-logs", cameraBridgeAdminRoutes);
 apiRoutes.use("/gate-command-logs", gateCommandLogRoutes);
 apiRoutes.use("/uploads", uploadsRoutes);

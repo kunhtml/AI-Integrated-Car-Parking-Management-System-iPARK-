@@ -102,6 +102,8 @@ export function RfidCardsView() {
   // Card history
   const [historyCardId, setHistoryCardId] = useState<string | null>(null);
   const [historyLogs, setHistoryLogs] = useState<RfidScanLog[]>([]);
+  const [historyAuditLogs, setHistoryAuditLogs] = useState<any[]>([]);
+  const [historyTab, setHistoryTab] = useState<"audit" | "scans">("audit");
   const [historyLoading, setHistoryLoading] = useState(false);
 
   // ─── Load cards ───
@@ -254,7 +256,13 @@ export function RfidCardsView() {
       const res = await rfidApi.fetchRfidCardHistory(card.id);
       if (res.ok) {
         const data = await res.json();
-        setHistoryLogs(data.scans || data.logs || []);
+        setHistoryLogs(data.scanHistory || data.scans || data.logs || data.history || []);
+        setHistoryAuditLogs(data.auditHistory || []);
+        if (data.auditHistory && data.auditHistory.length > 0) {
+          setHistoryTab("audit");
+        } else {
+          setHistoryTab("scans");
+        }
       }
     } catch {
       /* silent */
@@ -613,16 +621,108 @@ export function RfidCardsView() {
               onClick={() => {
                 setHistoryCardId(null);
                 setHistoryLogs([]);
+                setHistoryAuditLogs([]);
               }}
               type="button"
             >
               <X size={14} /> Đóng
             </button>
           </div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            <button
+              type="button"
+              className={historyTab === "audit" ? "primary-button" : "ghost-button"}
+              onClick={() => setHistoryTab("audit")}
+              style={{ fontSize: 13, padding: "6px 14px" }}
+            >
+              Lịch sử thay đổi thẻ ({historyAuditLogs.length})
+            </button>
+            <button
+              type="button"
+              className={historyTab === "scans" ? "primary-button" : "ghost-button"}
+              onClick={() => setHistoryTab("scans")}
+              style={{ fontSize: 13, padding: "6px 14px" }}
+            >
+              Lịch sử quét qua cổng ({historyLogs.length})
+            </button>
+          </div>
+
           {historyLoading ? (
             <p className="muted-text">
               <Loader2 className="spin" size={16} /> Đang tải lịch sử…
             </p>
+          ) : historyTab === "audit" ? (
+            historyAuditLogs.length > 0 ? (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Thời gian</th>
+                      <th>Hành động</th>
+                      <th>Người thực hiện</th>
+                      <th>Chi tiết thay đổi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historyAuditLogs.map((item) => (
+                      <tr key={item.id}>
+                        <td>{fmt(item.createdAt)}</td>
+                        <td>
+                          <span className="badge" style={{ background: "rgba(59, 130, 246, 0.1)", color: "#3b82f6" }}>
+                            {item.actionLabel || item.action}
+                          </span>
+                        </td>
+                        <td>
+                          {item.performedBy ? (
+                            <span>
+                              <strong>{item.performedBy.name}</strong>
+                              {item.performedBy.email && (
+                                <span className="muted-cell" style={{ display: "block", fontSize: 11 }}>
+                                  {item.performedBy.email}
+                                </span>
+                              )}
+                            </span>
+                          ) : (
+                            <span className="muted-cell">Hệ thống</span>
+                          )}
+                        </td>
+                        <td style={{ fontSize: 13 }}>
+                          {item.changes?.new ? (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                              {Object.entries(item.changes.new).map(([k, v]) => {
+                                const labels: Record<string, string> = {
+                                  status: "Trạng thái",
+                                  ownerName: "Chủ thẻ",
+                                  plate: "Biển số",
+                                  cardType: "Loại thẻ",
+                                  userType: "Loại khách",
+                                  notes: "Ghi chú",
+                                };
+                                return (
+                                  <div key={k}>
+                                    <span style={{ color: "var(--muted)" }}>{labels[k] || k}:</span>{" "}
+                                    <strong>{v === null || v === undefined || v === "" ? "—" : String(v)}</strong>
+                                    {item.changes?.old?.[k] !== undefined && item.changes?.old?.[k] !== v && (
+                                      <span className="muted-cell" style={{ fontSize: 11, marginLeft: 4 }}>
+                                        (cũ: {String(item.changes.old[k] ?? "—")})
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <span className="muted-cell">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="muted-text">Chưa có nhật ký thay đổi nào cho thẻ này.</p>
+            )
           ) : historyLogs.length > 0 ? (
             <div className="table-wrap">
               <table>
@@ -667,7 +767,7 @@ export function RfidCardsView() {
               </table>
             </div>
           ) : (
-            <p className="muted-text">Chưa có lịch sử cho thẻ này.</p>
+            <p className="muted-text">Chưa có lịch sử quét cho thẻ này.</p>
           )}
         </div>
       )}

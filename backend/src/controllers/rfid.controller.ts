@@ -1,3 +1,5 @@
+import { createAuditLog } from "../services/auditLog.service.js";
+import { AuditLog } from "../models/AuditLog.js";
 import { Request, Response } from "express";
 import mongoose from "mongoose";
 import { z } from "zod";
@@ -315,6 +317,24 @@ export async function createRfidCard(request: Request, response: Response) {
     );
   }
 
+  if (request.user?.id) {
+    await createAuditLog({
+      action: "rfid_card_created",
+      entityType: "RfidCard",
+      entityId: card._id,
+      performedBy: request.user.id,
+      changes: {
+        new: {
+          uid: card.uid,
+          cardType: card.cardType,
+          status: card.status,
+          ownerName: card.ownerName,
+          plate: card.plate,
+        },
+      },
+    }).catch((err) => console.error("Error creating audit log for create card:", err));
+  }
+
   response.status(201).json({
     ok: true,
     card: serializeCard(card),
@@ -338,12 +358,54 @@ export async function updateRfidCard(request: Request, response: Response) {
     return;
   }
 
+  const changesBefore = {
+    ownerName: card.ownerName,
+    plate: card.plate,
+    userType: card.userType,
+    notes: card.notes,
+  };
   if (body.ownerName !== undefined) card.ownerName = body.ownerName;
   if (body.plate !== undefined) card.plate = normalizePlate(body.plate);
   if (body.userType !== undefined) card.userType = body.userType;
   if (body.notes !== undefined) card.notes = body.notes;
 
   await card.save();
+
+  if (request.user?.id) {
+    await createAuditLog({
+      action: "rfid_card_updated",
+      entityType: "RfidCard",
+      entityId: card._id,
+      performedBy: request.user.id,
+      changes: {
+        old: changesBefore,
+        new: {
+          ownerName: card.ownerName,
+          plate: card.plate,
+          userType: card.userType,
+          notes: card.notes,
+        },
+      },
+    }).catch((err) => console.error("Error creating audit log for rfid update:", err));
+  }
+
+  if (request.user?.id) {
+    await createAuditLog({
+      action: "rfid_card_restored",
+      entityType: "RfidCard",
+      entityId: card._id,
+      performedBy: request.user.id,
+      changes: {
+        new: {
+          status: "available",
+          cardType: "guest",
+          userType: "guest",
+          ownerName: "Guest",
+        },
+      },
+    }).catch((err) => console.error("Error creating audit log for restore:", err));
+  }
+
   response.json({ ok: true, card: serializeCard(card) });
 }
 
@@ -451,11 +513,24 @@ export async function setRfidCardStatus(request: Request, response: Response) {
     })
     .parse(request.body);
 
+  const prevCard = await RfidCard.findById(request.params.id);
   const card = await RfidCard.findByIdAndUpdate(
     request.params.id,
     { $set: { status: body.status } },
     { new: true },
   );
+  if (card && prevCard && request.user?.id) {
+    await createAuditLog({
+      action: "rfid_card_status_changed",
+      entityType: "RfidCard",
+      entityId: card._id,
+      performedBy: request.user.id,
+      changes: {
+        old: { status: prevCard.status },
+        new: { status: card.status },
+      },
+    }).catch((err) => console.error("Error creating audit log for status change:", err));
+  }
   if (!card) {
     response
       .status(404)
@@ -774,4 +849,92 @@ export async function getRfidReportsUsage(request: Request, response: Response) 
     else if (s === "blocked") byDay[day].blocked++;
   }
   response.json({ rows: Object.values(byDay) });
+}
+
+
+/**
+ * Lấy lịch sử thay đổi thẻ RFID (AuditLog) và lịch sử quét thẻ (RfidScanLog).
+ */
+export async function getRfidCardHistoryHandler(request: Request, response: Response) {
+  const { id } = request.params;
+  const isObjectId = mongoose.isValidObjectId(id);
+  
+  const card = await RfidCard.findOne(
+    isObjectId ? { $or: [{ _id: id }, { uid: id }, { cardId: id }] } : { $or: [{ uid: id }, { cardId: id }] }
+  );
+
+  if (!card) {
+    response.status(404).json({ ok: false, message: "Không tìm thấy thẻ RFID." });
+    return;
+  }
+
+  const cardObjectId = card._id;
+  const cardIdentifiers = [card.uid, card.cardId].filter(Boolean) as string[];
+
+  // 1. Audit logs liên quan đến thẻ này
+  const auditLogs = await AuditLog.find({
+    entityType: "RfidCard",
+    entityId: cardObjectId,
+  })
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .populate("performedBy", "name email");
+
+  // 2. Scan logs liên quan đến thẻ này
+  const RfidScanLog = (await import("../models/RfidScanLog.js")).RfidScanLog;
+  const scanLogs = await RfidScanLog.find({
+    cardId: { $in: cardIdentifiers },
+  })
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .populate("performedBy", "name email");
+
+  // Map lại format dễ hiển thị ở frontend
+  const auditHistory = auditLogs.map((log: any) => ({
+    id: log._id.toString(),
+    action: log.action,
+    actionLabel: mapRfidActionLabel(log.action),
+    performedBy: log.performedBy
+      ? {
+          id: log.performedBy._id?.toString(),
+          name: log.performedBy.name,
+          email: log.performedBy.email,
+        }
+      : null,
+    changes: log.changes || {},
+    createdAt: log.createdAt.toISOString(),
+  }));
+
+  const scanHistory = scanLogs.map((log: any) => ({
+    id: log._id.toString(),
+    action: log.action,
+    status: log.status,
+    failureReason: log.failureReason || null,
+    plateDetected: log.plateDetected || null,
+    performedBy: log.performedBy ? log.performedBy.name : null,
+    createdAt: log.createdAt.toISOString(),
+  }));
+
+  response.json({
+    ok: true,
+    card: serializeCard(card),
+    auditHistory,
+    scanHistory,
+    history: scanHistory, // backward compatibility với frontend rfid-cards-view
+  });
+}
+
+function mapRfidActionLabel(action: string): string {
+  const map: Record<string, string> = {
+    rfid_card_created: "Tạo thẻ mới",
+    rfid_card_updated: "Cập nhật thông tin thẻ",
+    rfid_card_status_changed: "Thay đổi trạng thái thẻ",
+    rfid_card_restored: "Khôi phục thẻ",
+    rfid_card_deleted: "Xóa thẻ",
+    rfid_card_sold: "Bán thẻ thành viên",
+    rfid_card_returned: "Trả thẻ / Thu hồi thẻ",
+    rfid_card_lost: "Báo mất thẻ",
+    rfid_card_damaged: "Báo hỏng thẻ",
+  };
+  return map[action] || action;
 }
