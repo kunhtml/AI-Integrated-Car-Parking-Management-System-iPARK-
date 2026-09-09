@@ -1156,14 +1156,6 @@ export function RfidCardsView() {
                 {formatDate(card.updatedAt)}
               </span>,
               <div key="actions" className="rfid-actions">
-                <button
-                  className="small-button"
-                  onClick={() => void openCardHistory(card)}
-                  title="Xem lịch sử thẻ"
-                  type="button"
-                >
-                  <Eye size={13} /> Lịch sử
-                </button>
                 {isAdmin && (
                   <button
                     className="small-button"
