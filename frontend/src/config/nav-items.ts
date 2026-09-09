@@ -97,19 +97,11 @@ export const navItems: NavItem[] = [
     roles: ["admin", "manager", "staff", "customer"],
   },
   {
-    id: "rfid-cards",
-    path: "/rfid-cards",
+    id: "rfid",
+    path: "/rfid",
     label: "Thẻ RFID",
     icon: Radio,
     roles: ["admin", "manager", "staff"],
-  },
-  {
-    id: "rfid",
-    path: "/rfid",
-    label: "Thẻ RFID (Cũ)",
-    icon: Radio,
-    roles: ["admin", "manager", "staff"],
-    hiddenFromSidebar: ["admin", "manager", "staff"],
   },
   {
     id: "devices",
