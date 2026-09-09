@@ -32,7 +32,7 @@ Servo cua_ra;
 
 // ==== Biến RFID ====
 int readsuccess;
-byte readcard[4];
+byte readcard[10];
 char str[32] = "";
 String StrUID;
 
@@ -67,8 +67,8 @@ struct TheXe {
   bool status;         // true = active, false = bị khóa
 };
 
-// ===== Danh sách thẻ tối đa 15 (để tiết kiệm RAM) =====
-const int MAX_THE = 15;
+// ===== Danh sách thẻ tối đa 100 =====
+const int MAX_THE = 100;
 TheXe dsThe[MAX_THE];
 int soThe = 0; // ban đầu rỗng, thẻ sẽ được add/update từ Python qua Serial
 
@@ -114,10 +114,19 @@ void LCD_TheBiKhoa() {
   lcd.print("Lien he quan ly");
 }
 
-// ===== Quản lý mảng thẻ (tối đa 15) =====
+String normalizeUid(String u) {
+  u.trim();
+  u.toUpperCase();
+  u.replace(":", "");
+  u.replace("-", "");
+  u.replace(" ", "");
+  return u;
+}
+
+// ===== Quản lý mảng thẻ =====
 int findIndexByUID(const String &uid) {
   for (int i = 0; i < soThe; i++) {
-    if (dsThe[i].uid == uid) return i;
+    if (normalizeUid(dsThe[i].uid) == normalizeUid(uid)) return i;
   }
   return -1;
 }
@@ -133,7 +142,7 @@ void removeAt(int idx) {
 bool parseActive(String s) {
   s.trim();
   s.toLowerCase();
-  return (s == "active" || s == "1" || s == "true" || s == "on");
+  return (s == "active" || s == "available" || s == "in-use" || s == "1" || s == "true" || s == "on");
 }
 
 bool parseResident(String s) {
@@ -159,7 +168,8 @@ String getToken(const String &s, int index, char delim = '|') {
   return s.substring(start, end);
 }
 
-void upsertCard(const String &uid, const String &hoten, const String &plate, bool laResident, bool active) {
+void upsertCard(String uid, const String &hoten, const String &plate, bool laResident, bool active) {
+  uid = normalizeUid(uid);
   int idx = findIndexByUID(uid);
   if (idx == -1) {
     if (soThe >= MAX_THE) {
@@ -252,11 +262,15 @@ int getid() {
     return 0;
   }
 
-  for (int i = 0; i < 4; i++) {
+  byte uidSize = mfrc522.uid.size;
+  if (uidSize > 10) uidSize = 10;
+  for (byte i = 0; i < uidSize; i++) {
     readcard[i] = mfrc522.uid.uidByte[i];
-    array_to_string(readcard, 4, str);
-    StrUID = str;
   }
+  array_to_string(readcard, uidSize, str);
+  StrUID = String(str);
+  StrUID.trim();
+  StrUID.toUpperCase();
   // PICC_GetType: 1 = MIFARE (hop le), 0/99 = khong biet
   Serial.print("[RFID-DIAG] Card type code: ");
   Serial.println(mfrc522.PICC_GetType(readcard[0]));

@@ -649,14 +649,16 @@ def sync_all_rfid_cards_to_esp32_with_stats():
             return (0, 0)
 
         for card in cards:
-            uid = (card.get("uid") or "").strip()
+            raw_uid = card.get("uid") or ""
+            uid = raw_uid.strip().upper().replace(":", "").replace("-", "").replace(" ", "")
             if not uid:
                 continue
             owner = card.get("ownerName", "")
             plate = _normalize_plate(card.get("plate", ""))
             user_type = card.get("userType", "guest")
             raw_status = str(card.get("status", "active")).lower()
-            status = "active" if raw_status in ("active", "in-use") else raw_status
+            # Guest cards with "available" status are valid for check-in; map to "active" for ESP32 firmware
+            status = "active" if raw_status in ("active", "in-use", "available") else "inactive"
             cmd = f"ADD|{uid}|{owner}|{plate}|{user_type}|{status}"
             if safe_write(arduino_in, serial_lock_in, cmd):
                 sent_in += 1
@@ -1578,6 +1580,11 @@ def read_from_arduino(ser, ser_out=None, direction="in"):
     line = ser.readline().decode(errors="ignore").strip()
     if not line:
         return
+
+    # Trigger background sync if ESP32 rebooted or reconnected
+    if line.startswith("ID:") or line.startswith("CLEARDATA"):
+        print(f"[ARDUINO][BOOT_DETECTED][{direction.upper()}] {line} -> trigger background sync_all_rfid_cards_to_esp32")
+        threading.Thread(target=sync_all_rfid_cards_to_esp32, daemon=True).start()
 
     if line.startswith("UID:"):
         print(f"[SCAN][{direction.upper()}][UID RAW]", line)

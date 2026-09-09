@@ -14,10 +14,17 @@ function normalizePlate(plate: string): string {
     .replace(/[\s-]+/g, "");
 }
 
+function normalizeUid(uid?: string | null): string {
+  return (uid || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[\s:-]+/g, "");
+}
+
 function serializeCard(card: RfidCardDocument) {
   return {
     id: card._id.toString(),
-    uid: card.uid,
+    uid: normalizeUid(card.uid),
     cardId: card.cardId,
     ownerName: card.ownerName,
     plate: card.plate,
@@ -199,7 +206,7 @@ export async function lookupRfidCardByUid(
   request: Request,
   response: Response,
 ) {
-  const uid = String(request.params.uid || "").trim();
+  const uid = normalizeUid(request.params.uid);
   if (!uid) {
     response
       .status(400)
@@ -221,7 +228,7 @@ export async function createRfidCard(request: Request, response: Response) {
     })
     .parse(request.body);
 
-  const uid = body.uid.trim();
+  const uid = normalizeUid(body.uid);
   const isMember = body.userType === "resident";
   const plate = normalizePlate(body.plate || "");
 
@@ -476,7 +483,7 @@ export async function registerScannedCard(
     })
     .parse(request.body);
 
-  const uid = body.uid.trim();
+  const uid = normalizeUid(body.uid);
   const ownerName = body.ownerName?.trim() || "Guest";
   const plate = normalizePlate(body.plate || "");
   const userType = body.userType || "guest";
@@ -519,7 +526,7 @@ export async function registerScannedCard(
   response: Response,
 ) {
   const cards = await RfidCard.find({
-    status: { $in: ["active", "in-use"] },
+    status: { $in: ["active", "in-use", "available"] },
   }).sort({
     createdAt: 1,
   });
@@ -534,9 +541,7 @@ export async function registerScannedCard(
  */
 // Staff desk lookup sau khi quét thẻ: trả toàn bộ thông tin thẻ + xe + gói.
 export async function lookupByUid(request: Request, response: Response) {
-  const uid = String(request.params.uid || "")
-    .trim()
-    .toUpperCase();
+  const uid = normalizeUid(request.params.uid);
   if (!uid) {
     response
       .status(400)

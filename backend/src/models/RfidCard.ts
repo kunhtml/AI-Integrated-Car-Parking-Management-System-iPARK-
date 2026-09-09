@@ -50,7 +50,7 @@ export type RfidCardDocument = {
 
 const rfidCardSchema = new Schema<RfidCardDocument>(
   {
-    uid: { type: String, required: true, unique: true, trim: true, index: true },
+    uid: { type: String, required: true, unique: true, trim: true, uppercase: true, index: true },
     cardId: { type: String, trim: true, uppercase: true, sparse: true, unique: true, index: true },
     createdBy: { type: Schema.Types.ObjectId, ref: "User" },
     userId: { type: Schema.Types.ObjectId, ref: "User", index: true },
