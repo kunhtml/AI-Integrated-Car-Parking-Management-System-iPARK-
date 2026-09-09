@@ -228,8 +228,8 @@ export function calculateParkingFee(
   config: Pick<PricingConfigDocument, "dayRate" | "nightRate"> &
     Partial<Pick<PricingConfigDocument, "dayStartHour" | "nightStartHour" | "freeMinutes" | "gracePeriod">>,
 ): FeeBreakdown {
-  const dayRate = config.dayRate ?? 5000;
-  const nightRate = config.nightRate ?? 10000;
+  const dayRate = config.dayRate ?? 10000;
+  const nightRate = config.nightRate ?? 15000;
   const dayStartHour = config.dayStartHour ?? 6;
   const nightStartHour = config.nightStartHour ?? 22;
 
@@ -237,11 +237,11 @@ export function calculateParkingFee(
     0,
     Math.ceil((checkOutAt.getTime() - checkInAt.getTime()) / 60000),
   );
-  const freeMinutes = config.gracePeriod ?? config.freeMinutes ?? 20;
+  const freeMinutes = config.gracePeriod ?? config.freeMinutes ?? 0;
 
   const dailyBreakdown: DailyBreakdownItem[] = [];
 
-  if (totalMinutes <= freeMinutes) {
+  if (freeMinutes > 0 && totalMinutes <= freeMinutes) {
     return {
       totalMinutes,
       freeMinutes,
@@ -255,55 +255,51 @@ export function calculateParkingFee(
     };
   }
 
-  // Bỏ freeMinutes khỏi đầu khoảng gửi (grace period miễn phí).
-  const billableStart = new Date(checkInAt.getTime() + freeMinutes * 60000);
+  // Chia theo ca ngày/đêm theo yêu cầu nghiệp vụ:
+  // - Xe vào ca sáng: áp luôn dayRate
+  // - Xe ở qua đêm hoặc vào ca tối: áp nightRate
+  const segments = splitIntoRateSegments(checkInAt, checkOutAt, dayStartHour, nightStartHour);
 
-  const segments = splitIntoRateSegments(billableStart, checkOutAt, dayStartHour, nightStartHour);
-  const DAY_WINDOW_MINUTES = 24 * 60;
-  const ratePerMinute = (rateType: DailyRateType) =>
-    (rateType === "day" ? dayRate : nightRate) / DAY_WINDOW_MINUTES;
-
-  let totalFee = 0;
-  // Gộp các segment liên tiếp cùng rateType trong cùng ngày Vietnam để breakdown dễ đọc.
-  for (const segment of segments) {
-    const perDay = ratePerMinute(segment.rateType) * segment.minutes;
-    totalFee += perDay;
-
-    const last = dailyBreakdown[dailyBreakdown.length - 1];
-    if (
-      last &&
-      last.rateType === segment.rateType &&
-      last.date === vietnamDateString(segment.from)
-    ) {
-      last.fee += perDay;
-      last.checkOutHour = getVietnamWallClock(segment.to).hour;
-    } else {
-      dailyBreakdown.push({
-        dayIndex: dailyBreakdown.length,
-        date: vietnamDateString(segment.from),
-        rateType: segment.rateType,
-        fee: perDay,
-        checkOutHour: getVietnamWallClock(segment.to).hour,
-      });
-    }
+  const shiftsUsed = new Map<string, DailyRateType>();
+  for (const seg of segments) {
+    const shiftKey = `${vietnamDateString(seg.from)}_${seg.rateType}`;
+    shiftsUsed.set(shiftKey, seg.rateType);
   }
 
-  // Làm tròn tổng về VND nguyên (không làm tròn từng phần để tránh cộng dồn sai lệch).
-  totalFee = Math.round(totalFee);
+  if (shiftsUsed.size === 0) {
+    const { hour } = getVietnamWallClock(checkInAt);
+    const initialRate: DailyRateType = hour >= dayStartHour && hour < nightStartHour ? "day" : "night";
+    const shiftKey = `${vietnamDateString(checkInAt)}_${initialRate}`;
+    shiftsUsed.set(shiftKey, initialRate);
+  }
+
+  let totalFee = 0;
+  for (const [shiftKey, rateType] of shiftsUsed.entries()) {
+    const [dateStr] = shiftKey.split("_");
+    const feeForShift = rateType === "day" ? dayRate : nightRate;
+    totalFee += feeForShift;
+
+    dailyBreakdown.push({
+      dayIndex: dailyBreakdown.length,
+      date: dateStr,
+      rateType,
+      fee: feeForShift,
+      checkOutHour: getVietnamWallClock(checkOutAt).hour,
+    });
+  }
 
   return {
     totalMinutes,
     freeMinutes,
-    billableMinutes: Math.max(0, totalMinutes - freeMinutes),
-    billableHours: 0,
-    hourlyRate: 0,
+    billableMinutes: totalMinutes,
+    billableHours: Math.ceil(totalMinutes / 60),
+    hourlyRate: dayRate,
     parkingFee: totalFee,
     overdueFine: 0,
     totalFee,
     dailyBreakdown,
   };
 }
-
 
 /**
  * Get pricing config for a specific zone.
