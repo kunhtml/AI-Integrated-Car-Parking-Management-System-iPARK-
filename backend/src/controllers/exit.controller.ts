@@ -58,18 +58,28 @@ export async function verifyExit(request: Request, response: Response) {
 
   const scannedUid = uid.trim().toUpperCase();
 
-  // Idempotent: cùng thẻ đã xác minh (staff quét lại / frontend gọi trùng)
-  // → trả lại kết quả success như lần đầu thay vì lỗi trạng thái cũ.
+  // Idempotent: cùng thẻ đã xác minh hoặc quẹt đúng thẻ lúc vào / đã duyệt thủ công
+  // → trả lại kết quả success thay vì báo lỗi thẻ undefined.
   if (session.exitState === "rfid_verified") {
-    if (session.exitRfidUid !== scannedUid) {
-      response.status(400).json({
-        verified: false,
-        reason: `Phiên đã được xác minh bằng thẻ ${session.exitRfidUid}.`,
-      });
+    const entryUid = (session.rfidCardId || "").toUpperCase();
+    const currentExitUid = (session.exitRfidUid || "").toUpperCase();
+
+    if (
+      currentExitUid === scannedUid ||
+      entryUid === scannedUid ||
+      session.exitRfidManualVerified
+    ) {
+      session.exitRfidUid = scannedUid;
+      await session.save();
+      const settled = await settleExitAfterVerify(session);
+      response.json(settled);
       return;
     }
-    const settled = await settleExitAfterVerify(session);
-    response.json(settled);
+
+    response.status(400).json({
+      verified: false,
+      reason: `Phiên đã được xác minh bằng thẻ ${session.exitRfidUid || "khác"}.`,
+    });
     return;
   }
 
@@ -760,6 +770,7 @@ export async function resolveExitMismatch(
   if (action === "manual_missing_entry_rfid") {
     session.verificationNote = note;
     session.exitRfidManualVerified = true;
+    session.exitRfidUid = session.exitRfidUid || session.rfidCardId || "MANUAL_VERIFIED";
     session.exitState = "rfid_verified";
     // Manual RFID exception is an authorized verification path; the gate
     // guard checks this timestamp before allowing a manual/payment exit.
