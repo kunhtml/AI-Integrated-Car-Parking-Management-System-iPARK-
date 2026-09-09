@@ -11,10 +11,22 @@ export async function listShifts(request: Request, response: Response) {
 
 export async function startShift(request: Request, response: Response) {
   const body = z.object({ name: z.string().min(2), note: z.string().optional() }).parse(request.body);
+  const staffId = request.user?.id;
+
+  // Tránh tạo trùng ca: kiểm tra xem nhân viên đã có ca đang làm hay chưa
+  const existingActive = await Shift.findOne({ staffId, status: "Đang làm" });
+  if (existingActive) {
+    response.status(409).json({
+      message: `Bạn đang có ca làm "${existingActive.name}" chưa kết thúc. Vui lòng kết thúc ca hiện tại trước.`,
+      shift: serializeShift(existingActive),
+    });
+    return;
+  }
+
   const shift = await Shift.create({
     name: body.name,
     note: body.note,
-    staffId: request.user?.id,
+    staffId,
   });
 
   response.status(201).json({ shift: serializeShift(shift) });
@@ -66,20 +78,31 @@ export async function submitShiftReport(request: Request, response: Response) {
   const shiftStart = shift.startAt;
   const shiftEnd = shift.endAt || new Date();
 
+  const staffObjId = shift.staffId;
+  const staffCriteria = {
+    $or: [
+      { createdBy: staffObjId },
+      { checkInStaff: staffObjId },
+      { checkOutStaff: staffObjId },
+      { collectedBy: staffObjId },
+    ],
+  };
+
   const [sessionCount, totalRevenue, incidentCount] = await Promise.all([
     ParkingSession.countDocuments({
-      createdBy: shift.staffId,
+      ...staffCriteria,
       checkInAt: { $gte: shiftStart, $lte: shiftEnd },
     }),
     ParkingSession.aggregate([
       {
         $match: {
-          createdBy: shift.staffId,
+          ...staffCriteria,
           checkOutAt: { $gte: shiftStart, $lte: shiftEnd },
           status: "Đã hoàn thành",
+          paymentStatus: "paid",
         },
       },
-      { $group: { _id: null, total: { $sum: "$fee" } } },
+      { $group: { _id: null, total: { $sum: { $ifNull: ["$paidAmount", "$fee"] } } } },
     ]).then((r) => r[0]?.total || 0),
     Incident.countDocuments({
       createdBy: shift.staffId,
