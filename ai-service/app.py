@@ -672,18 +672,74 @@ def sync_all_rfid_cards_to_esp32_with_stats():
     return (sent_in, sent_out)
 
 
+def detect_and_connect_serials():
+    global arduino_in, arduino_out
+    from serial.tools import list_ports
+    
+    ports = [p.device for p in list_ports.comports()]
+    print(f"[SERIAL][DETECT] Available ports: {ports}")
+    
+    found = {}
+    conns = {}
+    for port in ports:
+        try:
+            conn = serial.Serial(port, 9600, timeout=1.5, dsrdtr=False, rtscts=False)
+            time.sleep(0.3)
+            conn.reset_input_buffer()
+            conn.write(b"GET_ID\n")
+            conn.flush()
+            deadline = time.time() + 1.5
+            response = ""
+            while time.time() < deadline:
+                if conn.in_waiting:
+                    line = conn.readline().decode("utf-8", errors="ignore").strip()
+                    if line.startswith("ID:"):
+                        response = line
+                        break
+            if response.startswith("ID:"):
+                dev_id = response[3:].strip().upper()
+                if dev_id in ("IN", "OUT") and dev_id.lower() not in found:
+                    found[dev_id.lower()] = port
+                    conns[dev_id.lower()] = conn
+                    print(f"[SERIAL][DETECT] {port} -> {dev_id}")
+                else:
+                    conn.close()
+            else:
+                conn.close()
+        except Exception as e:
+            pass
+
+    ser_in = conns.get("in")
+    ser_out = conns.get("out")
+
+    # Fallback to configured env if not detected
+    if not ser_in and SERIAL_PORT_IN and SERIAL_PORT_IN not in found.values():
+        ser_in = safe_serial(SERIAL_PORT_IN)
+    if not ser_out and SERIAL_PORT_OUT and SERIAL_PORT_OUT not in found.values():
+        ser_out = safe_serial(SERIAL_PORT_OUT)
+
+    # SINGLE-DEVICE FALLBACK: If only 1 board is plugged in, share it for both in and out!
+    if ser_in and not ser_out:
+        print(f"[SERIAL][FALLBACK] Only IN port available ({ser_in.port}). Sharing for OUT operations.")
+        ser_out = ser_in
+    elif ser_out and not ser_in:
+        print(f"[SERIAL][FALLBACK] Only OUT port available ({ser_out.port}). Sharing for IN operations.")
+        ser_in = ser_out
+
+    return ser_in, ser_out
+
+
 def safe_serial(port):
     try:
         ser = serial.Serial(port, 9600, timeout=1)
         print(f"[OK] Connected to {port}")
         return ser
-    except serial.SerialException as e:
+    except Exception as e:
         print(f"[ERROR] {port} busy or unavailable: {e}")
         return None
 
 
-arduino_in = safe_serial(SERIAL_PORT_IN)
-arduino_out = safe_serial(SERIAL_PORT_OUT)
+arduino_in, arduino_out = detect_and_connect_serials()
 
 
 # ==== CẤU HÌNH CAMERA ====
@@ -1758,30 +1814,35 @@ def read_from_arduino(ser, ser_out=None, direction="in"):
 
 # ==== BARRIER ====
 def open_gate(gate='in'):
+    # Smart fallback: prioritize targeted gate, fallback to any available gate
+    target_lock = serial_lock_in if gate == 'in' else serial_lock_out
     ser = arduino_in if gate == 'in' else arduino_out
-    if gate == 'in':
-        ok = safe_write(ser, serial_lock_in, 'OPEN_GATE')
-    else:
-        ok = safe_write(ser, serial_lock_out, 'OPEN_GATE')
+    if ser is None:
+        ser = arduino_out if gate == 'in' else arduino_in
+        target_lock = serial_lock_out if gate == 'in' else serial_lock_in
+    
+    ok = safe_write(ser, target_lock, 'OPEN_GATE') if ser else False
     if ok:
         backend.gate_control(gate, "open")
-        print(f"[MANUAL] Sent OPEN_GATE to Arduino {gate.upper()}")
+        print(f"[MANUAL] Sent OPEN_GATE to Arduino {gate.upper()} (port={getattr(ser, 'port', 'unknown')})")
     else:
-        print(f"[MANUAL][ERROR] Cannot send OPEN_GATE to Arduino {gate.upper()}")
+        print(f"[MANUAL][ERROR] Cannot send OPEN_GATE to Arduino {gate.upper()} - no online port")
     return ok
 
 
 def close_gate(gate='in'):
+    target_lock = serial_lock_in if gate == 'in' else serial_lock_out
     ser = arduino_in if gate == 'in' else arduino_out
-    if gate == 'in':
-        ok = safe_write(ser, serial_lock_in, 'CLOSE_GATE')
-    else:
-        ok = safe_write(ser, serial_lock_out, 'CLOSE_GATE')
+    if ser is None:
+        ser = arduino_out if gate == 'in' else arduino_in
+        target_lock = serial_lock_out if gate == 'in' else serial_lock_in
+
+    ok = safe_write(ser, target_lock, 'CLOSE_GATE') if ser else False
     if ok:
         backend.gate_control(gate, "close")
-        print(f"[MANUAL] Sent CLOSE_GATE to Arduino {gate.upper()}")
+        print(f"[MANUAL] Sent CLOSE_GATE to Arduino {gate.upper()} (port={getattr(ser, 'port', 'unknown')})")
     else:
-        print(f"[MANUAL][ERROR] Cannot send CLOSE_GATE to Arduino {gate.upper()}")
+        print(f"[MANUAL][ERROR] Cannot send CLOSE_GATE to Arduino {gate.upper()} - no online port")
     return ok
 
 

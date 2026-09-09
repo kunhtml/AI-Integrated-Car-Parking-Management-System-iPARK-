@@ -564,9 +564,17 @@ void setup() {
   digitalWrite(PIN_BUZZER, LOW);
 
   // SPI + RFID (chỉ định rõ chân cho chắc)
+  pinMode(RST_PIN, OUTPUT);
+  digitalWrite(RST_PIN, LOW);
+  delay(50);
+  digitalWrite(RST_PIN, HIGH);
+  delay(50);
+
   SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI, SS_PIN);
   mfrc522.PCD_Init();
-  delay(250);
+  delay(100);
+  mfrc522.PCD_SetAntennaGain(mfrc522.RxGain_max);
+  delay(150);
 
   // Chẩn đoán khởi động: RC522 v2.0 hop le phai co PCD_ID = 0x92.
   // Neu 0x00/0xFF hoac getPCDIDName hien "UNKNOWN" -> day SPI long,
