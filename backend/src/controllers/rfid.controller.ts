@@ -947,3 +947,85 @@ function mapRfidActionLabel(action: string): string {
   };
   return map[action] || action;
 }
+
+
+/**
+ * Xóa thẻ hoặc reset dữ liệu thẻ hàng loạt (bulk-clear).
+ */
+export async function bulkClearRfidCards(request: Request, response: Response) {
+  const body = z
+    .object({
+      mode: z.enum(["reset", "delete"]),
+      ids: z.array(z.string()).optional(),
+      confirm: z.string(),
+    })
+    .parse(request.body);
+
+  if (body.confirm !== "RESET_ALL_RFID_DATA") {
+    response.status(400).json({ ok: false, message: "Chuỗi xác nhận không chính xác." });
+    return;
+  }
+
+  const query: any = {};
+  if (body.ids && body.ids.length > 0) {
+    query._id = { $in: body.ids.filter((id) => mongoose.isValidObjectId(id)) };
+  }
+
+  if (body.mode === "delete") {
+    // Xóa thẻ: ngắt liên kết xe và phiên, sau đó xóa thẻ khỏi DB
+    const cards = await RfidCard.find(query);
+    const cardIds = cards.map((c) => c._id);
+    const uids = cards.map((c) => c.uid).filter(Boolean);
+
+    await Promise.all([
+      Vehicle.updateMany({ rfidCardId: { $in: cardIds } }, { $unset: { rfidCardId: 1 } }),
+      Subscription.updateMany({ rfidCardId: { $in: cardIds } }, { $unset: { rfidCardId: 1 } }),
+      RfidCard.deleteMany({ _id: { $in: cardIds } }),
+    ]);
+
+    response.json({
+      ok: true,
+      message: `Đã xóa thành công ${cardIds.length} thẻ RFID.`,
+      count: cardIds.length,
+    });
+    return;
+  }
+
+  if (body.mode === "reset") {
+    // Reset về guest available
+    const cards = await RfidCard.find(query);
+    const cardIds = cards.map((c) => c._id);
+
+    await Promise.all([
+      Vehicle.updateMany({ rfidCardId: { $in: cardIds } }, { $unset: { rfidCardId: 1 } }),
+      Subscription.updateMany({ rfidCardId: { $in: cardIds } }, { $unset: { rfidCardId: 1 } }),
+      RfidCard.updateMany(
+        { _id: { $in: cardIds } },
+        {
+          $set: {
+            status: "available",
+            cardType: "guest",
+            userType: "guest",
+            ownerName: "Guest",
+          },
+          $unset: {
+            plate: 1,
+            userId: 1,
+            vehicleId: 1,
+            notes: 1,
+            blockedReason: 1,
+          },
+        }
+      ),
+    ]);
+
+    response.json({
+      ok: true,
+      message: `Đã reset thành công ${cardIds.length} thẻ RFID về trạng thái khách có sẵn.`,
+      count: cardIds.length,
+    });
+    return;
+  }
+
+  response.status(400).json({ ok: false, message: "Chế độ không hợp lệ." });
+}

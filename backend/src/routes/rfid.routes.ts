@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   createRfidCard,
   deleteRfidCard,
+  bulkClearRfidCards,
   getRfidCardHistoryHandler,
   exportAllCards,
   getRfidCard,
@@ -178,6 +179,7 @@ rfidRoutes.get(
   asyncHandler(getRfidCard),
 );
 rfidRoutes.patch("/:id", requireRole("admin"), asyncHandler(updateRfidCard));
+rfidRoutes.post("/bulk-clear", requireRole("admin"), asyncHandler(bulkClearRfidCards));
 rfidRoutes.delete("/:id", requireRole("admin"), asyncHandler(deleteRfidCard));
 rfidRoutes.post(
   "/:id/restore",
