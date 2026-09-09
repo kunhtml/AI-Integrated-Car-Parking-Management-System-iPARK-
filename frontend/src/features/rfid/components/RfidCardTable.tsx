@@ -49,7 +49,38 @@ export function RfidCardTable({
           {cards.map((card) => (
             <tr key={card.id}>
               <td>
-                <strong>{card.cardId}</strong>
+                <button
+                  type="button"
+                  onClick={() => onViewHistory(card)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    margin: 0,
+                    cursor: "pointer",
+                    textAlign: "left",
+                    color: "var(--primary, #3b82f6)",
+                    textDecoration: "underline",
+                    fontWeight: 600,
+                    fontSize: "inherit",
+                  }}
+                  title="Bấm để xem lịch sử thẻ"
+                >
+                  {card.cardId}
+                </button>
+                {card.uid && card.uid !== card.cardId && (
+                  <div
+                    onClick={() => onViewHistory(card)}
+                    style={{
+                      fontSize: 11,
+                      color: "var(--muted)",
+                      cursor: "pointer",
+                    }}
+                    title="Bấm để xem lịch sử thẻ"
+                  >
+                    UID: {card.uid}
+                  </div>
+                )}
               </td>
               <td>
                 <RfidCardStatusBadge status={card.status} />

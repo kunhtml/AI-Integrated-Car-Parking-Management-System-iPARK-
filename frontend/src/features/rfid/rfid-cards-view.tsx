@@ -485,8 +485,32 @@ export function RfidCardsView() {
                 {assignments.map((item) => (
                   <tr key={item.id}>
                     <td>
-                      <strong>{item.cardId}</strong>
-                      <div className="muted-cell">UID: {item.uid}</div>
+                      <button
+                        type="button"
+                        onClick={() => openHistory({ id: item.id, cardId: item.cardId, uid: item.uid } as any)}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          padding: 0,
+                          margin: 0,
+                          cursor: "pointer",
+                          textAlign: "left",
+                          color: "var(--primary, #3b82f6)",
+                          textDecoration: "underline",
+                          fontWeight: 600,
+                          fontSize: "inherit",
+                        }}
+                        title="Bấm để xem lịch sử thẻ"
+                      >
+                        {item.cardId}
+                      </button>
+                      <div
+                        onClick={() => openHistory({ id: item.id, cardId: item.cardId, uid: item.uid } as any)}
+                        style={{ fontSize: 11, color: "var(--muted)", cursor: "pointer" }}
+                        title="Bấm để xem lịch sử thẻ"
+                      >
+                        UID: {item.uid}
+                      </div>
                     </td>
                     <td>
                       <span

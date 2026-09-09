@@ -1053,8 +1053,16 @@ export function RfidSalesPanel() {
                 "Thao tác",
               ]}
               rows={filteredInventory.map((card) => [
-                <div key="card" className="rfid-card-identity">
-                  <strong>{card.cardId || card.uid}</strong>
+                <div
+                  key="card"
+                  className="rfid-card-identity"
+                  onClick={() => void loadDetails(card.id)}
+                  style={{ cursor: "pointer" }}
+                  title="Bấm để xem chi tiết & lịch sử thẻ"
+                >
+                  <strong style={{ color: "var(--primary, #3b82f6)", textDecoration: "underline" }}>
+                    {card.cardId || card.uid}
+                  </strong>
                   <span>UID: {card.uid}</span>
                 </div>,
                 <div key="owner" className="rfid-card-owner">
