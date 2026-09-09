@@ -1630,12 +1630,25 @@ def read_from_arduino(ser, ser_out=None, direction="in"):
     global pending_vehicle_info
     direction = _normalize_scan_direction(direction)
 
-    if ser is None or ser.in_waiting <= 0:
+    if ser is None:
         return
 
-    line = ser.readline().decode(errors="ignore").strip()
-    if not line:
-        return
+    # Drain buffer and process all pending lines
+    max_lines = 20
+    lines_read = 0
+    while getattr(ser, "in_waiting", 0) > 0 and lines_read < max_lines:
+        lines_read += 1
+        try:
+            line = ser.readline().decode(errors="ignore").strip()
+        except Exception:
+            break
+        if not line:
+            continue
+        _process_arduino_line(line, ser, ser_out, direction)
+
+
+def _process_arduino_line(line, ser, ser_out, direction):
+    global pending_vehicle_info
 
     # Trigger background sync if ESP32 rebooted or reconnected
     if line.startswith("ID:") or line.startswith("CLEARDATA"):
@@ -2236,7 +2249,8 @@ def camera_loop():
 
         # Đọc serial (RFID / DATA từ ESP32)
         read_from_arduino(arduino_in, ser_out=arduino_out, direction="in")
-        read_from_arduino(arduino_out, direction="out")
+        if arduino_out is not None and arduino_out != arduino_in:
+            read_from_arduino(arduino_out, direction="out")
 
         # Nếu cả 2 camera fail thì backoff để không đốt CPU.
         if not ret_in and not ret_out:
