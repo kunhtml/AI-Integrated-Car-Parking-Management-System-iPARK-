@@ -877,11 +877,11 @@ export function StaffDeskView() {
     autoScanFiredRef.current = false;
   }, []);
 
-  // Giữ kết quả thành công đủ lâu để staff nhìn thấy, rồi trả cổng vào về
+  // Giữ kết quả thành công 5 giây để staff nhìn thấy, rồi trả cổng vào về
   // trạng thái chờ cho xe kế tiếp. Không áp dụng khi tạo phiên còn lỗi/dở dang.
   useEffect(() => {
     if (phase !== "done" || !createdSession) return;
-    const timer = window.setTimeout(dismissActive, 3000);
+    const timer = window.setTimeout(dismissActive, 5000);
     return () => window.clearTimeout(timer);
   }, [createdSession, dismissActive, phase]);
 
