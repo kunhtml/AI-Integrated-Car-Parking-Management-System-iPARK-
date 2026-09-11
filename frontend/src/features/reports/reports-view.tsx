@@ -439,9 +439,7 @@ function RepTopCustomers({ data }: { data: any[] }) {
                 >
                   {isMember ? "Thành viên" : "Vãng lai"}
                 </span>
-                {c.name && c.name !== "Khách vãng lai" && c.name !== "Thành viên" && (
-                  <span style={{ fontSize: 12, color: "var(--muted, #64748b)" }}>({c.name})</span>
-                )}
+
               </div>
               <span className="rep-customer-sessions" style={{ marginTop: 2, display: "block" }}>
                 Đã gửi <strong>{c.sessionCount}</strong> phiên
