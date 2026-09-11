@@ -308,81 +308,7 @@ function RepOccupancyChart({ data, capacity, totalSessions, overallPercentage }:
         </div>
       </div>
 
-      <div className="rep-chart-area">
-        <div className="rep-bar-chart">
-          {data.map((p, i) => {
-            const avgPct = Math.min(
-              100,
-              Math.round((p.avgOccupancy / chartCapacity) * 100),
-            );
-            // Đảm bảo cột có hiển thị tối thiểu để dễ quan sát khi xe ít
-            const displayHeight = p.avgOccupancy > 0 ? Math.max(avgPct, 6) : 0;
-            const color =
-              avgPct >= 85 ? "#ef4444" : avgPct >= 60 ? "#f59e0b" : "#10b981";
-            return (
-              <div className="rep-bar-col" key={i}>
-                <div className="rep-bar-wrap">
-                  <div
-                    className="rep-bar-fill"
-                    style={{
-                      height: `${displayHeight}%`,
-                      background: color,
-                    }}
-                    title={`${String(p.hour).padStart(2, "0")}h: TB ${p.avgOccupancy} xe (${avgPct}% sức chứa)`}
-                  />
-                </div>
-                <span className="rep-bar-val" style={{ fontWeight: 600, color: p.avgOccupancy > 0 ? color : undefined, fontSize: 11 }}>
-                  {p.avgOccupancy}
-                </span>
-                <span className="rep-bar-label" style={{ fontSize: 11 }}>
-                  {String(p.hour).padStart(2, "0")}:00
-                </span>
-              </div>
-            );
-          })}
-        </div>
-        <div className="rep-occ-legend">
-          <span>
-            <span
-              style={{
-                display: "inline-block",
-                width: 10,
-                height: 10,
-                borderRadius: 2,
-                background: "#10b981",
-                marginRight: 4,
-              }}
-            />
-            Dưới 60%
-          </span>
-          <span>
-            <span
-              style={{
-                display: "inline-block",
-                width: 10,
-                height: 10,
-                borderRadius: 2,
-                background: "#f59e0b",
-                marginRight: 4,
-              }}
-            />
-            60–85%
-          </span>
-          <span>
-            <span
-              style={{
-                display: "inline-block",
-                width: 10,
-                height: 10,
-                borderRadius: 2,
-                background: "#ef4444",
-                marginRight: 4,
-              }}
-            />
-            Trên 85%
-          </span>
-        </div>
-      </div>
+
     </div>
   );
 }
@@ -470,6 +396,13 @@ interface RepPeakHoursProps {
 }
 
 function RepPeakHours({ data }: RepPeakHoursProps) {
+  const [selectedCell, setSelectedCell] = useState<{
+    dayLabel: string;
+    dayIndex: number;
+    hour: number;
+    count: number;
+  } | null>(null);
+
   if (!data.length) {
     return <p className="rep-empty">Chưa có dữ liệu giờ cao điểm.</p>;
   }
@@ -493,6 +426,16 @@ function RepPeakHours({ data }: RepPeakHoursProps) {
     }
   }
 
+  const dayFullNames = [
+    "Chủ Nhật",
+    "Thứ Hai",
+    "Thứ Ba",
+    "Thứ Tư",
+    "Thứ Năm",
+    "Thứ Sáu",
+    "Thứ Bảy",
+  ];
+
   return (
     <div>
       <div className="rep-heatmap-wrap">
@@ -512,50 +455,122 @@ function RepPeakHours({ data }: RepPeakHoursProps) {
                 <div
                   key={hour}
                   className="rep-heatmap-cell"
-                  style={{ background: getIntensity(count) }}
-                  title={`${DAY_LABELS[dayIndex]} ${hour}h: ${count} xe`}
+                  style={{
+                    background: getIntensity(count),
+                    cursor: "pointer",
+                    outline:
+                      selectedCell?.dayIndex === dayIndex && selectedCell?.hour === hour
+                        ? "2px solid #2563eb"
+                        : "none",
+                  }}
+                  onClick={() =>
+                    setSelectedCell({
+                      dayLabel: dayFullNames[dayIndex],
+                      dayIndex,
+                      hour,
+                      count,
+                    })
+                  }
+                  title={`Bấm xem chi tiết: ${dayFullNames[dayIndex]} ${String(hour).padStart(2, "0")}:00 — ${count} lượt xe`}
                 />
               ))}
             </div>
           ))}
         </div>
       </div>
+
       <div className="rep-heatmap-legend">
         <span>Ít</span>
-        <div
-          style={{
-            background: "rgba(59,130,246,0.2)",
-            width: 16,
-            height: 10,
-            borderRadius: 2,
-          }}
-        />
-        <div
-          style={{
-            background: "rgba(59,130,246,0.45)",
-            width: 16,
-            height: 10,
-            borderRadius: 2,
-          }}
-        />
-        <div
-          style={{
-            background: "rgba(245,158,11,0.75)",
-            width: 16,
-            height: 10,
-            borderRadius: 2,
-          }}
-        />
-        <div
-          style={{
-            background: "rgba(239,68,68,0.85)",
-            width: 16,
-            height: 10,
-            borderRadius: 2,
-          }}
-        />
+        <div style={{ background: "rgba(59,130,246,0.2)", width: 16, height: 10, borderRadius: 2 }} />
+        <div style={{ background: "rgba(59,130,246,0.45)", width: 16, height: 10, borderRadius: 2 }} />
+        <div style={{ background: "rgba(245,158,11,0.75)", width: 16, height: 10, borderRadius: 2 }} />
+        <div style={{ background: "rgba(239,68,68,0.85)", width: 16, height: 10, borderRadius: 2 }} />
         <span>Nhiều</span>
+        <span style={{ fontSize: 11, color: "var(--muted, #64748b)", marginLeft: 12 }}>
+          (Click vào ô bất kỳ để mở modal chi tiết)
+        </span>
       </div>
+
+      {/* Modal chi tiết giờ cao điểm khi click vào từng ô heatmap */}
+      {selectedCell && (
+        <div
+          className="modal-overlay"
+          onClick={() => setSelectedCell(null)}
+        >
+          <div
+            className="modal-card"
+            style={{ maxWidth: 480, width: "90%", padding: "22px 24px", borderRadius: 16 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border, #e2e8f0)", paddingBottom: 12 }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700 }}>
+                  Chi tiết lưu lượng giờ cao điểm
+                </h3>
+                <span style={{ fontSize: 13, color: "var(--muted, #64748b)" }}>
+                  {selectedCell.dayLabel} · Khung giờ {String(selectedCell.hour).padStart(2, "0")}:00 – {String(selectedCell.hour + 1).padStart(2, "0")}:00
+                </span>
+              </div>
+              <button
+                className="ghost-button"
+                onClick={() => setSelectedCell(null)}
+                type="button"
+                style={{ cursor: "pointer", padding: 6 }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ padding: "18px 0" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+                <div style={{ background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.18)", borderRadius: 10, padding: "12px 14px" }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "#2563eb", textTransform: "uppercase" }}>Tổng lượt xe ghi nhận</div>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: "#2563eb", marginTop: 2 }}>{selectedCell.count} <span style={{ fontSize: 13, fontWeight: 500, color: "#64748b" }}>lượt</span></div>
+                </div>
+                <div style={{ background: "rgba(16,185,129,0.06)", border: "1px solid rgba(16,185,129,0.18)", borderRadius: 10, padding: "12px 14px" }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "#059669", textTransform: "uppercase" }}>Mức độ mật độ</div>
+                  <div style={{ fontSize: 18, fontWeight: 750, color: "#059669", marginTop: 4 }}>
+                    {selectedCell.count === 0
+                      ? "Trống / Không có xe"
+                      : selectedCell.count >= max * 0.75
+                      ? "Rất đông (Cao điểm)"
+                      : selectedCell.count >= max * 0.5
+                      ? "Đông đúc"
+                      : "Bình thường"}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ background: "rgba(0,0,0,0.02)", border: "1px solid var(--border, #e2e8f0)", borderRadius: 10, padding: "12px 16px", fontSize: 13, lineHeight: 1.6 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                  <span style={{ color: "var(--muted, #64748b)" }}>Thứ trong tuần:</span>
+                  <strong>{selectedCell.dayLabel}</strong>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                  <span style={{ color: "var(--muted, #64748b)" }}>Khoảng thời gian:</span>
+                  <strong>{String(selectedCell.hour).padStart(2, "0")}:00 – {String(selectedCell.hour + 1).padStart(2, "0")}:00</strong>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "var(--muted, #64748b)" }}>Đánh giá áp lực cổng:</span>
+                  <span style={{ fontWeight: 600, color: selectedCell.count >= max * 0.75 ? "#ef4444" : "#10b981" }}>
+                    {selectedCell.count >= max * 0.75 ? "Cần tăng cường nhân viên trực" : "Lưu thông thông suốt"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", borderTop: "1px solid var(--border, #e2e8f0)", paddingTop: 12 }}>
+              <button
+                type="button"
+                className="small-button"
+                onClick={() => setSelectedCell(null)}
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

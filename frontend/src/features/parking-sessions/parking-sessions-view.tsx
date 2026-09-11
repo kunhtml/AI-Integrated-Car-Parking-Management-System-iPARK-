@@ -493,8 +493,7 @@ export function ParkingSessionsView() {
                   exceptionEvidenceLabel(selected.exceptionEvidence) ||
                   selected.manualEntryReason ||
                   selected.manualExitReason ||
-                  ("Phiên gửi xe"
-                    : "Không phát hiện ngoại lệ cụ thể.")}
+                  "Không phát hiện ngoại lệ cụ thể."}
               </p>
             </div>
           </section>
