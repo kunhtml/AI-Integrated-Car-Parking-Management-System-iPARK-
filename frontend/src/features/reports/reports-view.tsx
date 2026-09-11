@@ -264,77 +264,102 @@ function RepOccupancyChart({ data, capacity }: RepOccupancyChartProps) {
     );
   }
   const chartCapacity = Math.max(capacity, 1);
+  const maxOcc = Math.max(...data.map((p) => p.avgOccupancy), 0);
+  const currentAvg = Math.round(data.reduce((acc, p) => acc + p.avgOccupancy, 0) / data.length);
+  const currentPct = Math.round((currentAvg / chartCapacity) * 100);
 
   return (
-    <div className="rep-chart-area">
-      <div className="rep-bar-chart">
-        {data.map((p, i) => {
-          const avgPct = Math.min(
-            100,
-            Math.round((p.avgOccupancy / chartCapacity) * 100),
-          );
-          const color =
-            avgPct >= 85 ? "#ef4444" : avgPct >= 60 ? "#f59e0b" : "#10b981";
-          return (
-            <div className="rep-bar-col" key={i}>
-              <div className="rep-bar-wrap">
-                <div
-                  className="rep-bar-fill"
-                  style={{
-                    height: `${avgPct}%`,
-                    background: color,
-                  }}
-                  title={`TB: ${p.avgOccupancy} xe`}
-                />
-              </div>
-              <span className="rep-bar-val">{p.avgOccupancy}</span>
-              <span className="rep-bar-label">
-                {String(p.hour).padStart(2, "0")}h
-              </span>
-            </div>
-          );
-        })}
+    <div>
+      {/* Thẻ thống kê tổng thể bãi xe */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, margin: "16px 20px 20px 20px" }}>
+        <div style={{ background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.18)", borderRadius: 12, padding: "12px 16px" }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "#2563eb", textTransform: "uppercase" }}>Tổng sức chứa bãi xe</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "#1e293b", marginTop: 4 }}>{chartCapacity} <span style={{ fontSize: 13, fontWeight: 500, color: "#64748b" }}>chỗ đỗ</span></div>
+        </div>
+        <div style={{ background: "rgba(16,185,129,0.06)", border: "1px solid rgba(16,185,129,0.18)", borderRadius: 12, padding: "12px 16px" }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "#059669", textTransform: "uppercase" }}>Số xe trung bình / giờ</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "#059669", marginTop: 4 }}>{currentAvg} <span style={{ fontSize: 13, fontWeight: 500, color: "#64748b" }}>xe ({currentPct}%)</span></div>
+        </div>
+        <div style={{ background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.18)", borderRadius: 12, padding: "12px 16px" }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "#d97706", textTransform: "uppercase" }}>Cao điểm nhất trong ngày</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "#d97706", marginTop: 4 }}>{maxOcc} <span style={{ fontSize: 13, fontWeight: 500, color: "#64748b" }}>xe</span></div>
+        </div>
       </div>
-      <div className="rep-occ-legend">
-        <span>
-          <span
-            style={{
-              display: "inline-block",
-              width: 10,
-              height: 10,
-              borderRadius: 2,
-              background: "#10b981",
-              marginRight: 4,
-            }}
-          />
-          Dưới 60%
-        </span>
-        <span>
-          <span
-            style={{
-              display: "inline-block",
-              width: 10,
-              height: 10,
-              borderRadius: 2,
-              background: "#f59e0b",
-              marginRight: 4,
-            }}
-          />
-          60–85%
-        </span>
-        <span>
-          <span
-            style={{
-              display: "inline-block",
-              width: 10,
-              height: 10,
-              borderRadius: 2,
-              background: "#ef4444",
-              marginRight: 4,
-            }}
-          />
-          Trên 85%
-        </span>
+
+      <div className="rep-chart-area">
+        <div className="rep-bar-chart">
+          {data.map((p, i) => {
+            const avgPct = Math.min(
+              100,
+              Math.round((p.avgOccupancy / chartCapacity) * 100),
+            );
+            // Đảm bảo cột có hiển thị tối thiểu để dễ quan sát khi xe ít
+            const displayHeight = p.avgOccupancy > 0 ? Math.max(avgPct, 6) : 0;
+            const color =
+              avgPct >= 85 ? "#ef4444" : avgPct >= 60 ? "#f59e0b" : "#10b981";
+            return (
+              <div className="rep-bar-col" key={i}>
+                <div className="rep-bar-wrap">
+                  <div
+                    className="rep-bar-fill"
+                    style={{
+                      height: `${displayHeight}%`,
+                      background: color,
+                    }}
+                    title={`${String(p.hour).padStart(2, "0")}h: TB ${p.avgOccupancy} xe (${avgPct}% sức chứa)`}
+                  />
+                </div>
+                <span className="rep-bar-val" style={{ fontWeight: 600, color: p.avgOccupancy > 0 ? color : undefined }}>
+                  {p.avgOccupancy}
+                </span>
+                <span className="rep-bar-label">
+                  {String(p.hour).padStart(2, "0")}h
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <div className="rep-occ-legend">
+          <span>
+            <span
+              style={{
+                display: "inline-block",
+                width: 10,
+                height: 10,
+                borderRadius: 2,
+                background: "#10b981",
+                marginRight: 4,
+              }}
+            />
+            Dưới 60%
+          </span>
+          <span>
+            <span
+              style={{
+                display: "inline-block",
+                width: 10,
+                height: 10,
+                borderRadius: 2,
+                background: "#f59e0b",
+                marginRight: 4,
+              }}
+            />
+            60–85%
+          </span>
+          <span>
+            <span
+              style={{
+                display: "inline-block",
+                width: 10,
+                height: 10,
+                borderRadius: 2,
+                background: "#ef4444",
+                marginRight: 4,
+              }}
+            />
+            Trên 85%
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -754,7 +779,6 @@ export function ReportsView() {
     { key: "occupancy", label: "Lấp đầy", icon: <ParkingCircle size={14} /> },
     { key: "customers", label: "Khách hàng", icon: <Users size={14} /> },
     { key: "peak", label: "Giờ cao điểm", icon: <Flame size={14} /> },
-    { key: "zones", label: "Theo zone", icon: <MapPin size={14} /> },
   ];
 
   return (
