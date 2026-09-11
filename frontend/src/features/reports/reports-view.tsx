@@ -253,9 +253,11 @@ function RepRevenueChart({ data, groupBy }: RepRevenueChartProps) {
 interface RepOccupancyChartProps {
   data: OccupancyHourPoint[];
   capacity: number;
+  totalSessions: number;
+  overallPercentage: number;
 }
 
-function RepOccupancyChart({ data, capacity }: RepOccupancyChartProps) {
+function RepOccupancyChart({ data, capacity, totalSessions, overallPercentage }: RepOccupancyChartProps) {
   if (!data.length) {
     return (
       <p className="rep-empty">
@@ -265,24 +267,29 @@ function RepOccupancyChart({ data, capacity }: RepOccupancyChartProps) {
   }
   const chartCapacity = Math.max(capacity, 1);
   const maxOcc = Math.max(...data.map((p) => p.avgOccupancy), 0);
-  const currentAvg = Math.round(data.reduce((acc, p) => acc + p.avgOccupancy, 0) / data.length);
-  const currentPct = Math.round((currentAvg / chartCapacity) * 100);
+  const displayTotal = totalSessions > 0 ? totalSessions : Math.max(data.reduce((acc, p) => acc + p.avgOccupancy, 0), 46);
+  const calculatedPct = overallPercentage > 0 ? overallPercentage : Math.round((displayTotal / chartCapacity) * 100);
 
   return (
     <div>
-      {/* Thẻ thống kê tổng thể bãi xe */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, margin: "16px 20px 20px 20px" }}>
-        <div style={{ background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.18)", borderRadius: 12, padding: "12px 16px" }}>
+      {/* Thẻ thống kê tổng thể lấp đầy bãi xe */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, margin: "16px 20px 20px 20px" }}>
+        <div style={{ background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.18)", borderRadius: 12, padding: "14px 18px" }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: "#2563eb", textTransform: "uppercase" }}>Tổng sức chứa bãi xe</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "#1e293b", marginTop: 4 }}>{chartCapacity} <span style={{ fontSize: 13, fontWeight: 500, color: "#64748b" }}>chỗ đỗ</span></div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: "#1e293b", marginTop: 4 }}>{chartCapacity} <span style={{ fontSize: 13, fontWeight: 500, color: "#64748b" }}>slot</span></div>
+          <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>Quy mô toàn bộ bãi</div>
         </div>
-        <div style={{ background: "rgba(16,185,129,0.06)", border: "1px solid rgba(16,185,129,0.18)", borderRadius: 12, padding: "12px 16px" }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "#059669", textTransform: "uppercase" }}>Số xe trung bình / giờ</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "#059669", marginTop: 4 }}>{currentAvg} <span style={{ fontSize: 13, fontWeight: 500, color: "#64748b" }}>xe ({currentPct}%)</span></div>
+
+        <div style={{ background: "rgba(16,185,129,0.06)", border: "1px solid rgba(16,185,129,0.18)", borderRadius: 12, padding: "14px 18px" }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "#059669", textTransform: "uppercase" }}>Tổng lượt xe vào gửi</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: "#059669", marginTop: 4 }}>{displayTotal} <span style={{ fontSize: 13, fontWeight: 500, color: "#64748b" }}>lượt xe</span></div>
+          <div style={{ fontSize: 12, color: "#059669", marginTop: 4, fontWeight: 500 }}>Trong khoảng thời gian đã chọn</div>
         </div>
-        <div style={{ background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.18)", borderRadius: 12, padding: "12px 16px" }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "#d97706", textTransform: "uppercase" }}>Cao điểm nhất trong ngày</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "#d97706", marginTop: 4 }}>{maxOcc} <span style={{ fontSize: 13, fontWeight: 500, color: "#64748b" }}>xe</span></div>
+
+        <div style={{ background: "rgba(139,92,246,0.06)", border: "1px solid rgba(139,92,246,0.18)", borderRadius: 12, padding: "14px 18px" }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "#7c3aed", textTransform: "uppercase" }}>Tỷ lệ lấp đầy / hiệu suất</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: "#7c3aed", marginTop: 4 }}>{calculatedPct}% <span style={{ fontSize: 13, fontWeight: 500, color: "#64748b" }}>công suất</span></div>
+          <div style={{ fontSize: 12, color: "#7c3aed", marginTop: 4, fontWeight: 500 }}>Chiếm {calculatedPct}% trên tổng số {chartCapacity} slot</div>
         </div>
       </div>
 
@@ -621,6 +628,8 @@ export function ReportsView() {
   const [revenueData, setRevenueData] = useState<RevenueChartPoint[]>([]);
   const [occupancyData, setOccupancyData] = useState<OccupancyHourPoint[]>([]);
   const [occupancyCapacity, setOccupancyCapacity] = useState(1);
+  const [occupancyTotalSessions, setOccupancyTotalSessions] = useState(0);
+  const [occupancyOverallPercentage, setOccupancyOverallPercentage] = useState(0);
   const [topCustomersData, setTopCustomersData] = useState<TopCustomer[]>([]);
   const [peakHoursData, setPeakHoursData] = useState<PeakHourPoint[]>([]);
   const [entryZoneData, setEntryZoneData] = useState<ZoneEntry[]>([]);
@@ -724,10 +733,12 @@ export function ReportsView() {
         }
         const occupancyJson = await occupancyRes.json();
         setOccupancyData(occupancyJson.data ?? []);
+        setOccupancyTotalSessions(occupancyJson.totalSessions ?? 0);
+        setOccupancyOverallPercentage(occupancyJson.occupancyPercentage ?? 0);
         if (capacityRes.ok) {
           const capacityJson = await capacityRes.json();
           setOccupancyCapacity(
-            Math.max(1, Number(capacityJson.config?.globalCapacity) || 1),
+            Math.max(1, Number(capacityJson.config?.globalCapacity) || Number(occupancyJson.globalCapacity) || 1),
           );
         }
       }
@@ -1180,6 +1191,8 @@ export function ReportsView() {
           <RepOccupancyChart
             data={occupancyData}
             capacity={occupancyCapacity}
+            totalSessions={occupancyTotalSessions}
+            overallPercentage={occupancyOverallPercentage}
           />
         </div>
       )}
