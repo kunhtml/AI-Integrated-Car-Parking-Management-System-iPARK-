@@ -63,8 +63,22 @@ function formatShortCurrency(value: number) {
 
 function formatDisplayDate(value: string) {
   if (!value) return "—";
-  const [year, month, day] = value.split("-");
-  return year && month && day ? `${day}/${month}/${year}` : value;
+  // Xử lý cả định dạng YYYY-MM-DD lẫn ISO string
+  if (value.includes("-")) {
+    const parts = value.split("T")[0].split("-");
+    if (parts.length === 3) {
+      const [year, month, day] = parts;
+      return `${day.padStart(2, "0")}/${month.padStart(2, "0")}/${year}`;
+    }
+  }
+  const d = new Date(value);
+  if (!isNaN(d.getTime())) {
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+  }
+  return value;
 }
 
 function toIsoDate(value: Date) {

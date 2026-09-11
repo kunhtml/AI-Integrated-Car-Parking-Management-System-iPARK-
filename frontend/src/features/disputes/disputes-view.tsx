@@ -55,7 +55,7 @@ function statusBadgeClass(status: string) {
 }
 
 function formatMoney(value: number) {
-  return `${value.toLocaleString("vi-VN")}đ`;
+  return `${value.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}đ`;
 }
 
 function formatDateTime(value: string) {
