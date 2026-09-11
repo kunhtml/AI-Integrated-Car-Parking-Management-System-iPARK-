@@ -610,8 +610,48 @@ export function ParkingSlotsView() {
             đúng khu vực, không lấy chéo quota.
           </p>
         </div>
-        {isAdmin && (
-          <div className="quota-hero-actions">
+        <div className="quota-hero-actions" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 16,
+              background: "rgba(8, 27, 56, 0.45)",
+              border: "1px solid rgba(169, 231, 237, 0.35)",
+              borderRadius: 14,
+              padding: "10px 18px",
+              backdropFilter: "blur(8px)",
+            }}
+          >
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#a5d8f3", fontWeight: 600 }}>
+                Tổng slot
+              </div>
+              <div style={{ fontSize: 22, fontWeight: 850, color: "#fff", lineHeight: 1.1 }}>
+                {slotList.length}
+              </div>
+            </div>
+            <div style={{ width: 1, height: 26, background: "rgba(255,255,255,0.2)" }} />
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#86efac", fontWeight: 600 }}>
+                Còn trống
+              </div>
+              <div style={{ fontSize: 22, fontWeight: 850, color: "#86efac", lineHeight: 1.1 }}>
+                {slotList.filter((s) => s.status === "empty").length}
+              </div>
+            </div>
+            <div style={{ width: 1, height: 26, background: "rgba(255,255,255,0.2)" }} />
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#fca5a5", fontWeight: 600 }}>
+                Đang đỗ
+              </div>
+              <div style={{ fontSize: 22, fontWeight: 850, color: "#fca5a5", lineHeight: 1.1 }}>
+                {slotList.filter((s) => s.status === "occupied" || s.status === "reserved").length}
+              </div>
+            </div>
+          </div>
+
+          {isAdmin && (
             <button
               type="button"
               className="quota-capacity-button"
@@ -621,8 +661,8 @@ export function ParkingSlotsView() {
             >
               <Settings2 size={17} /> Sức chứa
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </header>
 
       {showCapacitySettings && isAdmin && (
