@@ -377,38 +377,74 @@ interface RepTopCustomersProps {
   data: TopCustomer[];
 }
 
-function RepTopCustomers({ data }: RepTopCustomersProps) {
+function RepTopCustomers({ data }: { data: any[] }) {
   if (!data.length) {
-    return <p className="rep-empty">Chưa có dữ liệu khách hàng.</p>;
+    return <p className="rep-empty">Chưa có dữ liệu phương tiện gửi xe.</p>;
   }
   return (
     <div className="rep-customers">
-      {data.map((c, i) => (
-        <div key={c.userId} className="rep-customer-row">
-          <div className="rep-customer-rank" data-rank={i + 1}>
-            {i + 1}
+      {data.map((c, i) => {
+        const isMember = c.customerType === "member";
+        const plate = c.plate || c.userId;
+        return (
+          <div key={plate} className="rep-customer-row">
+            <div className="rep-customer-rank" data-rank={i + 1}>
+              {i + 1}
+            </div>
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 36,
+                height: 36,
+                borderRadius: 8,
+                background: isMember ? "rgba(59,130,246,0.12)" : "rgba(100,116,139,0.12)",
+                color: isMember ? "#2563eb" : "#475569",
+                fontWeight: 700,
+                fontSize: 14,
+              }}
+            >
+              <Car size={18} />
+            </div>
+            <div className="rep-customer-info">
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <strong style={{ fontSize: "1.05rem", fontFamily: "monospace", letterSpacing: "0.04em", color: "#0f172a" }}>
+                  {plate}
+                </strong>
+                <span
+                  style={{
+                    fontSize: 11,
+                    padding: "2px 8px",
+                    borderRadius: 4,
+                    fontWeight: 600,
+                    background: isMember ? "rgba(37,99,235,0.1)" : "rgba(100,116,139,0.1)",
+                    color: isMember ? "#2563eb" : "#475569",
+                  }}
+                >
+                  {isMember ? "Thành viên" : "Vãng lai"}
+                </span>
+                {c.name && c.name !== "Khách vãng lai" && c.name !== "Thành viên" && (
+                  <span style={{ fontSize: 12, color: "var(--muted, #64748b)" }}>({c.name})</span>
+                )}
+              </div>
+              <span className="rep-customer-sessions" style={{ marginTop: 2, display: "block" }}>
+                Đã gửi <strong>{c.sessionCount}</strong> phiên
+              </span>
+            </div>
+            <div className="rep-customer-spent">
+              <strong>{formatCurrency(c.totalSpent)}</strong>
+              <span className="rep-customer-avg">
+                TB{" "}
+                {c.sessionCount > 0
+                  ? formatCurrency(Math.round(c.totalSpent / c.sessionCount))
+                  : "—"}
+                /phiên
+              </span>
+            </div>
           </div>
-          <div className="rep-customer-avatar">
-            {c.name?.charAt(0).toUpperCase() ?? "?"}
-          </div>
-          <div className="rep-customer-info">
-            <span className="rep-customer-name">{c.name}</span>
-            <span className="rep-customer-sessions">
-              {c.sessionCount} phiên gửi
-            </span>
-          </div>
-          <div className="rep-customer-spent">
-            <strong>{formatCurrency(c.totalSpent)}</strong>
-            <span className="rep-customer-avg">
-              TB{" "}
-              {c.sessionCount > 0
-                ? formatCurrency(Math.round(c.totalSpent / c.sessionCount))
-                : "—"}
-              /phiên
-            </span>
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -788,7 +824,7 @@ export function ReportsView() {
     { key: "summary", label: "Tổng quan", icon: <BarChart3 size={14} /> },
     { key: "revenue", label: "Doanh thu", icon: <TrendingUp size={14} /> },
     { key: "occupancy", label: "Lấp đầy", icon: <ParkingCircle size={14} /> },
-    { key: "customers", label: "Khách hàng", icon: <Users size={14} /> },
+    { key: "customers", label: "Khách hàng / Xe", icon: <Users size={14} /> },
     { key: "peak", label: "Giờ cao điểm", icon: <Flame size={14} /> },
   ];
 
