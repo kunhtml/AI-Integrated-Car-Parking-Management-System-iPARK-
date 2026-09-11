@@ -506,7 +506,7 @@ function RepZoneReport({ entries, exits }: RepZoneReportProps) {
     <div className="rep-zone-grid">
       <div className="rep-zone-col">
         <h3 className="rep-zone-col-title">
-          <ArrowDown size={14} /> Xe vào theo zone
+          <ArrowDown size={14} /> Xe vào bãi
         </h3>
         {entries.map((e) => (
           <div key={e.zone} className="rep-zone-row">
@@ -523,7 +523,7 @@ function RepZoneReport({ entries, exits }: RepZoneReportProps) {
       </div>
       <div className="rep-zone-col">
         <h3 className="rep-zone-col-title">
-          <ArrowUp size={14} /> Xe ra theo zone
+          <ArrowUp size={14} /> Xe ra bãi
         </h3>
         {exits.map((e) => (
           <div key={e.zone} className="rep-zone-row">
@@ -540,7 +540,7 @@ function RepZoneReport({ entries, exits }: RepZoneReportProps) {
       </div>
       <div className="rep-zone-revenue">
         <h3 className="rep-zone-col-title">
-          <Wallet size={14} /> Doanh thu theo zone
+          <Wallet size={14} /> Doanh thu bãi xe
         </h3>
         {exits.map((e) => (
           <div key={e.zone} className="rep-zone-rev-row">

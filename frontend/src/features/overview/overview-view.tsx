@@ -631,35 +631,48 @@ function RevenueBarChart({ data, range }: { data: RevenueChartPoint[]; range: Ti
   );
 }
 
-// ─── Zone Bars (admin) ───────────────────────────────────────────────────────
-function ZoneBarChart({
-  zones,
+// ─── Total Parking Occupancy Bar (admin) ──────────────────────────────────────
+function TotalOccupancyBar({
+  occupied,
+  capacity,
+  slots,
 }: {
-  zones: Array<{ name: string; occupied: number; capacity: number }>;
+  occupied: number;
+  capacity: number;
+  slots: Array<{ status: string }>;
 }) {
-  if (!zones.length) return <p className="staff-empty">Không có dữ liệu zone.</p>;
-  const maxCap = Math.max(...zones.map((z) => z.capacity), 1);
+  const cap = capacity > 0 ? capacity : Math.max(slots.length, 1);
+  const empty = slots.filter((s) => s.status === "empty").length;
+  const inUse = occupied;
+  const pct = Math.min(100, Math.round((inUse / cap) * 100));
+  const color = pct >= 90 ? "#ef4444" : pct >= 70 ? "#f59e0b" : "#10b981";
 
   return (
-    <div className="staff-zone-bars">
-      {zones.map((z, i) => {
-        const pct = Math.round((z.occupied / z.capacity) * 100);
-        const color = pct >= 90 ? "#ef4444" : pct >= 70 ? "#f59e0b" : "#10b981";
-        return (
-          <div key={i} className="staff-zone-row">
-            <span className="staff-zone-name">{z.name}</span>
-            <div className="staff-zone-track">
-              <div className="staff-zone-fill" style={{ width: `${pct}%`, background: color }} />
-            </div>
-            <span className="staff-zone-pct" style={{ color }}>
-              {pct}%
-            </span>
-            <span className="staff-zone-cap">
-              {z.occupied}/{z.capacity}
-            </span>
-          </div>
-        );
-      })}
+    <div style={{ padding: "16px 20px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
+        <div>
+          <span style={{ fontSize: "1.75rem", fontWeight: 800, color }}>{pct}%</span>
+          <span style={{ marginLeft: 8, fontSize: "0.85rem", color: "var(--muted, #64748b)" }}>công suất sử dụng</span>
+        </div>
+        <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>
+          <span style={{ color }}>{inUse}</span> / <span style={{ color: "var(--text, #1e293b)" }}>{cap}</span> chỗ
+        </div>
+      </div>
+
+      <div style={{ width: "100%", height: 16, background: "rgba(0,0,0,0.06)", borderRadius: 8, overflow: "hidden", marginBottom: 16 }}>
+        <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 8, transition: "width 0.4s ease" }} />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, borderTop: "1px solid var(--border, #e2e8f0)", paddingTop: 14 }}>
+        <div style={{ background: "rgba(16, 185, 129, 0.08)", padding: "10px 14px", borderRadius: 10, border: "1px solid rgba(16, 185, 129, 0.2)" }}>
+          <div style={{ fontSize: 11, color: "#059669", fontWeight: 600, textTransform: "uppercase" }}>Chỗ còn trống</div>
+          <div style={{ fontSize: 18, fontWeight: 750, color: "#059669", marginTop: 2 }}>{empty > 0 ? empty : Math.max(0, cap - inUse)} chỗ</div>
+        </div>
+        <div style={{ background: "rgba(59, 130, 246, 0.08)", padding: "10px 14px", borderRadius: 10, border: "1px solid rgba(59, 130, 246, 0.2)" }}>
+          <div style={{ fontSize: 11, color: "#2563eb", fontWeight: 600, textTransform: "uppercase" }}>Xe đang đỗ</div>
+          <div style={{ fontSize: 18, fontWeight: 750, color: "#2563eb", marginTop: 2 }}>{inUse} xe</div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1064,12 +1077,12 @@ function AdminDashboard() {
                 <ParkingCircle size={16} />
               </div>
               <div>
-                <p className="staff-panel-kicker">Công suất</p>
-                <h2 className="staff-panel-title">Lấp đầy theo zone</h2>
+                <p className="staff-panel-kicker">Công suất bãi xe</p>
+                <h2 className="staff-panel-title">Tỷ lệ lấp đầy bãi xe</h2>
               </div>
             </div>
           </div>
-          <ZoneBarChart zones={zoneOccupancy} />
+          <TotalOccupancyBar occupied={activeCount} capacity={capacity} slots={slotList} />
         </div>
       </div>
 
