@@ -267,8 +267,9 @@ function RepOccupancyChart({ data, capacity, totalSessions, overallPercentage }:
   }
   const chartCapacity = Math.max(capacity, 1);
   const maxOcc = Math.max(...data.map((p) => p.avgOccupancy), 0);
-  const displayTotal = totalSessions > 0 ? totalSessions : Math.max(data.reduce((acc, p) => acc + p.avgOccupancy, 0), 46);
-  const calculatedPct = overallPercentage > 0 ? overallPercentage : Math.round((displayTotal / chartCapacity) * 100);
+  // Đếm đúng số lượt xe thực tế, không cộng dồn trùng lặp qua 24 giờ
+  const displayTotal = totalSessions >= 0 ? totalSessions : 0;
+  const calculatedPct = chartCapacity > 0 ? Math.round((displayTotal / chartCapacity) * 100) : 0;
 
   return (
     <div>
@@ -316,11 +317,11 @@ function RepOccupancyChart({ data, capacity, totalSessions, overallPercentage }:
                     title={`${String(p.hour).padStart(2, "0")}h: TB ${p.avgOccupancy} xe (${avgPct}% sức chứa)`}
                   />
                 </div>
-                <span className="rep-bar-val" style={{ fontWeight: 600, color: p.avgOccupancy > 0 ? color : undefined }}>
+                <span className="rep-bar-val" style={{ fontWeight: 600, color: p.avgOccupancy > 0 ? color : undefined, fontSize: 11 }}>
                   {p.avgOccupancy}
                 </span>
-                <span className="rep-bar-label">
-                  {String(p.hour).padStart(2, "0")}h
+                <span className="rep-bar-label" style={{ fontSize: 11 }}>
+                  {String(p.hour).padStart(2, "0")}:00
                 </span>
               </div>
             );
