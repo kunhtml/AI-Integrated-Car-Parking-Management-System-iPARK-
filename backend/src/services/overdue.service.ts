@@ -14,6 +14,8 @@ export function calculateOverdueFine(
   config: { gracePeriod?: number; overdueFineRate?: number },
   maxAllowedMinutes?: number,
 ): { isOverstayed: boolean; overdueMinutes: number; fineAmount: number } {
+  // Nghiệp vụ mới: Không giới hạn thời gian gửi và không phạt quá hạn
+  return { isOverstayed: false, overdueMinutes: 0, fineAmount: 0 };
   const totalMinutes = Math.ceil((now.getTime() - checkInAt.getTime()) / 60000);
   const grace = config.gracePeriod ?? 0;
   // Max allowed = configured max or 24 hours default
@@ -38,6 +40,8 @@ export function calculateOverdueFine(
  * Sends penalty notifications to owners.
  */
 export async function scanAndFlagOverdueSessions(): Promise<number> {
+  // Không quét hay đánh dấu quá hạn
+  return 0;
   const config = await getActivePricingConfig();
   const now = new Date();
   const maxMinutes = (config as any).maxMinutes || 1440; // 24h default

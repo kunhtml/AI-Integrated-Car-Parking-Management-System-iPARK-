@@ -105,15 +105,7 @@ export function initScheduler() {
     }
   });
 
-  // Every 30 minutes: scan for overdue parking sessions
-  new Cron("*/30 * * * *", { protect: true, unref: true }, async () => {
-    try {
-      const count = await scanAndFlagOverdueSessions();
-      if (count > 0) console.log(`[Scheduler] Flagged ${count} overdue sessions`);
-    } catch (err) {
-      console.error("[Scheduler] Overdue scan error:", err);
-    }
-  });
+  // Đã bỏ tính năng phạt quá hạn: khách gửi bao lâu tính tiền bấy nhiêu theo ca, không giới hạn quá hạn.
 
   console.log("[Scheduler] All jobs registered.");
 }

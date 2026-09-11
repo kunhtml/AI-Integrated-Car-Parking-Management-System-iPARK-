@@ -493,8 +493,7 @@ export function ParkingSessionsView() {
                   exceptionEvidenceLabel(selected.exceptionEvidence) ||
                   selected.manualEntryReason ||
                   selected.manualExitReason ||
-                  (selected.isOverstayed
-                    ? "Phiên quá hạn"
+                  ("Phiên gửi xe"
                     : "Không phát hiện ngoại lệ cụ thể.")}
               </p>
             </div>

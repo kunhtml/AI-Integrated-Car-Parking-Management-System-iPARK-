@@ -338,7 +338,7 @@ export function SessionsView() {
 
   // Get accent class for card left border based on status
   function cardAccent(status: string, isOverstayed?: boolean) {
-    if (isOverstayed) return "is-overstayed";
+    return "";
     if (status === "Đã hoàn thành") return "is-done";
     if (status === "Đã hủy") return "is-cancelled";
     return "is-active";
@@ -611,7 +611,7 @@ export function SessionsView() {
                       <td>
                         <div className="cell-pills">
                           <StatusBadge status={session.status} />
-                          {isOverstayed && (
+                          {false && (
                             <span
                               className="status-pill status-warn"
                               title={`Quá hạn ${(session as any).overdueMinutes || 0} phút`}

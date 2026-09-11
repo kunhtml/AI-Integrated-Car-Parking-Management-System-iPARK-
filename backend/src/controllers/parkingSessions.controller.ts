@@ -143,26 +143,7 @@ async function finalizeCheckout(
   session.fee = feeBreakdown.totalFee;
   session.feeBreakdown = feeBreakdown;
 
-  // PM-05: Add overdue fine if applicable
-  if (
-    session.isOverstayed &&
-    session.overdueMinutes &&
-    session.overdueMinutes > 0
-  ) {
-    const { calculateOverdueFine } =
-      await import("../services/overdue.service.js");
-    const overdueResult = calculateOverdueFine(
-      session.checkInAt,
-      session.checkOutAt!,
-      {
-        gracePeriod: (pricing as any).gracePeriod ?? 0,
-      },
-    );
-    if (overdueResult.fineAmount > 0) {
-      session.fee += overdueResult.fineAmount;
-      (session.feeBreakdown as any).overdueFine = overdueResult.fineAmount;
-    }
-  }
+  // Không áp dụng phạt quá hạn: phí giữ nguyên tính theo số ca ngày/đêm thực tế gửi trong bãi.
 
   // Customer/quota type is fixed at check-in; do not reclassify or discount at checkout.
 
