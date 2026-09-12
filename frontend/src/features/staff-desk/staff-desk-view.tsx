@@ -2165,10 +2165,9 @@ function WaitingCard({
             style={{ width: "100%", justifyContent: "center", background: "#16a34a", borderColor: "#15803d", fontWeight: 700 }}
             disabled={Boolean(manualLoading) || phase === "creating"}
             onClick={() => {
-              void createSessionManual(undefined, manualEntryPlate, {
-                fromIdleForm: true,
-                manualRfidReason: "Mất kết nối phần cứng; nhân viên đã đối chiếu biển số chính xác bằng mắt và cho xe vào thủ công",
-              });
+              if (manualEntryPlate) {
+                onConfirmManualPlate?.(manualEntryPlate);
+              }
             }}
           >
             {phase === "creating" ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
