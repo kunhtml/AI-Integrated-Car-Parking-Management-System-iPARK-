@@ -536,3 +536,60 @@ export async function resubmitVehicle(request: Request, response: Response) {
     },
   });
 }
+
+
+export async function getVehicleHistory(request: Request, response: Response) {
+  const vehicleId = request.params.id;
+  if (!mongoose.isValidObjectId(vehicleId)) {
+    response.status(400).json({ message: "ID phương tiện không hợp lệ." });
+    return;
+  }
+
+  const vehicle = await Vehicle.findById(vehicleId);
+  if (!vehicle) {
+    response.status(404).json({ message: "Không tìm thấy phương tiện." });
+    return;
+  }
+
+  // 1. Lấy lịch sử yêu cầu chỉnh sửa (VehicleRequest) của xe này
+  const requests = await VehicleRequest.find({ vehicleId: vehicle._id })
+    .sort({ createdAt: -1 })
+    .populate("userId", "name email")
+    .populate("resolvedBy", "name email")
+    .lean();
+
+  // 2. Lấy AuditLog nếu có
+  const { AuditLog } = await import("../models/AuditLog.js");
+  const auditLogs = await AuditLog.find({ entityType: "Vehicle", entityId: vehicle._id })
+    .sort({ createdAt: -1 })
+    .populate("performedBy", "name email")
+    .lean();
+
+  const history = [
+    ...requests.map((r: any) => ({
+      id: r._id.toString(),
+      type: "request",
+      action: r.type === "edit" ? "Yêu cầu chỉnh sửa xe" : "Yêu cầu xóa xe",
+      status: r.status,
+      statusLabel: r.status === "approved" ? "Đã duyệt" : r.status === "rejected" ? "Từ chối" : "Đang chờ duyệt",
+      performedBy: r.userId ? r.userId.name : "Khách hàng",
+      resolvedBy: r.resolvedBy ? r.resolvedBy.name : undefined,
+      adminNote: r.adminNote,
+      changes: r.requestedChanges || {},
+      createdAt: r.createdAt.toISOString(),
+      resolvedAt: r.resolvedAt ? r.resolvedAt.toISOString() : undefined,
+    })),
+    ...auditLogs.map((a: any) => ({
+      id: a._id.toString(),
+      type: "audit",
+      action: a.action,
+      status: "completed",
+      statusLabel: "Hoàn tất",
+      performedBy: a.performedBy ? a.performedBy.name : "Hệ thống",
+      changes: a.changes?.new || a.changes || {},
+      createdAt: a.createdAt.toISOString(),
+    })),
+  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  response.json({ history });
+}

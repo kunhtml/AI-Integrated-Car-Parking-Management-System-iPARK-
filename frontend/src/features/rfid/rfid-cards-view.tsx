@@ -634,14 +634,7 @@ export function RfidCardsView() {
 
       {/* ───── Card History Modal ───── */}
       {historyCardId && (
-        <div
-          className="modal-overlay"
-          onClick={() => {
-            setHistoryCardId(null);
-            setHistoryLogs([]);
-            setHistoryAuditLogs([]);
-          }}
-        >
+        <div className="modal-overlay">
           <div
             className="modal"
             style={{ maxWidth: 840, width: "95%", maxHeight: "90vh", display: "flex", flexDirection: "column" }}

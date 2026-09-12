@@ -2047,14 +2047,7 @@ export function RfidCardsView() {
       )}
           {/* ───── RFID Card History Modal ───── */}
       {historyCard && (
-        <div
-          className="modal-overlay"
-          onClick={() => {
-            setHistoryCard(null);
-            setHistoryAuditLogs([]);
-            setHistoryScanLogs([]);
-          }}
-        >
+        <div className="modal-overlay">
           <div
             className="modal-card"
             style={{ maxWidth: 840, width: "95%", maxHeight: "90vh", display: "flex", flexDirection: "column", padding: "20px 24px" }}

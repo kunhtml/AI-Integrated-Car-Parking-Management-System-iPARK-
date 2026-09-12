@@ -229,7 +229,7 @@ function EditFieldModal({
         justifyContent: "center",
         padding: 20,
       }}
-      onClick={() => !loading && onClose()}
+      
     >
       <div
         style={{
@@ -501,7 +501,7 @@ function ForgotPasswordModal({
         justifyContent: "center",
         padding: 20,
       }}
-      onClick={handleClose}
+      
     >
       <div
         style={{
@@ -556,7 +556,7 @@ function ForgotPasswordModal({
             </div>
           </div>
           <button
-            onClick={handleClose}
+            
             type="button"
             disabled={loading}
             style={{
@@ -640,7 +640,7 @@ function ForgotPasswordModal({
             <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
               <button
                 type="button"
-                onClick={handleClose}
+                
                 disabled={loading}
                 className="small-button"
                 style={{ flex: 1 }}
@@ -1008,7 +1008,7 @@ function ChangePasswordModal({
         justifyContent: "center",
         padding: 20,
       }}
-      onClick={() => !loading && onClose()}
+      
     >
       <div
         style={{
@@ -1711,7 +1711,7 @@ function TwoFactorModal({
         justifyContent: "center",
         padding: 20,
       }}
-      onClick={handleClose}
+      
     >
       <div
         style={{
@@ -1766,7 +1766,7 @@ function TwoFactorModal({
             </div>
           </div>
           <button
-            onClick={handleClose}
+            
             type="button"
             disabled={loading}
             style={{
@@ -1855,7 +1855,7 @@ function TwoFactorModal({
             <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
               <button
                 type="button"
-                onClick={handleClose}
+                
                 disabled={loading}
                 className="small-button"
                 style={{ flex: 1 }}
@@ -2011,7 +2011,7 @@ function TwoFactorModal({
               <div style={{ display: "flex", gap: 8 }}>
                 <button
                   type="button"
-                  onClick={handleClose}
+                  
                   disabled={loading}
                   className="small-button"
                 >

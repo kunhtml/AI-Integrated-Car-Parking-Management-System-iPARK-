@@ -145,7 +145,7 @@ export function CustomerRfidRegistrationView() {
           {myCards.length > 0 && <button className="small-button" type="button" onClick={() => setShowIssuePanel(true)}><AlertTriangle size={15} /> Báo mất/hỏng RFID</button>}
         </div>
       </section>
-      {showIssuePanel && <div style={{ position: "fixed", inset: 0, zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(15,23,42,0.55)" }} onClick={(event) => { if (event.target === event.currentTarget) setShowIssuePanel(false); }}>
+      {showIssuePanel && <div style={{ position: "fixed", inset: 0, zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(15,23,42,0.55)" }} >
         <div style={{ position: "relative", width: "min(720px, 100%)", maxHeight: "92vh", overflowY: "auto" }}>
           <button type="button" aria-label="Đóng" onClick={() => setShowIssuePanel(false)} style={{ position: "absolute", right: 12, top: 12, zIndex: 2, minHeight: 32, padding: 6, borderRadius: 8 }}><X size={18} /></button>
           <MemberRfidIssuePanel />

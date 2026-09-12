@@ -1783,7 +1783,7 @@ function AddScheduleModal({
         justifyContent: "center",
         zIndex: 1000,
       }}
-      onClick={onClose}
+      
     >
       <div
         style={{
@@ -1806,7 +1806,7 @@ function AddScheduleModal({
           }}
         >
           <h3>Gán ca làm việc</h3>
-          <button className="small-button" onClick={onClose} type="button">
+          <button className="small-button"  type="button">
             <XCircle size={18} />
           </button>
         </div>
@@ -1899,7 +1899,7 @@ function AddScheduleModal({
             >
               {isSubmitting ? "Đang lưu..." : "Gán ca"}
             </button>
-            <button className="small-button" onClick={onClose} type="button">
+            <button className="small-button"  type="button">
               Hủy
             </button>
           </div>
@@ -2018,7 +2018,7 @@ function BulkAssignModal({
         justifyContent: "center",
         zIndex: 1000,
       }}
-      onClick={onClose}
+      
     >
       <div
         style={{
@@ -2041,7 +2041,7 @@ function BulkAssignModal({
           }}
         >
           <h3>Gán ca hàng tuần</h3>
-          <button className="small-button" onClick={onClose} type="button">
+          <button className="small-button"  type="button">
             <XCircle size={18} />
           </button>
         </div>
@@ -2195,7 +2195,7 @@ function BulkAssignModal({
             >
               {isSubmitting ? "Đang lưu..." : `Gán ${selectedDays.length} ca`}
             </button>
-            <button className="small-button" onClick={onClose} type="button">
+            <button className="small-button"  type="button">
               Hủy
             </button>
           </div>
@@ -2335,7 +2335,7 @@ function ExportCSVModal({
         justifyContent: "center",
         zIndex: 1000,
       }}
-      onClick={onClose}
+      
     >
       <div
         style={{
@@ -2356,7 +2356,7 @@ function ExportCSVModal({
           }}
         >
           <h3>Xuất báo cáo lịch làm việc</h3>
-          <button className="small-button" onClick={onClose} type="button">
+          <button className="small-button"  type="button">
             <XCircle size={18} />
           </button>
         </div>
@@ -2417,7 +2417,7 @@ function ExportCSVModal({
             >
               {isExporting ? "Đang xuất..." : "Xuất CSV"}
             </button>
-            <button className="small-button" onClick={onClose} type="button">
+            <button className="small-button"  type="button">
               Hủy
             </button>
           </div>
@@ -2597,7 +2597,7 @@ function MonthAssignModal({
         justifyContent: "center",
         zIndex: 1000,
       }}
-      onClick={onClose}
+      
     >
       <div
         style={{
@@ -2620,7 +2620,7 @@ function MonthAssignModal({
           }}
         >
           <h3>Gán ca hàng tháng</h3>
-          <button className="small-button" onClick={onClose} type="button">
+          <button className="small-button"  type="button">
             <XCircle size={18} />
           </button>
         </div>
@@ -2880,7 +2880,7 @@ function MonthAssignModal({
             >
               {isSubmitting ? "Đang lưu..." : `Gán ${selectedDays.length} ca`}
             </button>
-            <button className="small-button" onClick={onClose} type="button">
+            <button className="small-button"  type="button">
               Hủy
             </button>
           </div>

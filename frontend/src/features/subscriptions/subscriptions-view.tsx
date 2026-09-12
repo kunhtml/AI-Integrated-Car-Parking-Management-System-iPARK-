@@ -421,7 +421,7 @@ export function SubscriptionsView() {
           <section className="customer-subs-section">
             <h2 className="section-title">
               <CreditCard size={18} />
-              Gói đăng ký
+              Gói đang đăng ký
             </h2>
 
             {myActiveSubs.length === 0 && subscriptionHistory.length === 0 ? (

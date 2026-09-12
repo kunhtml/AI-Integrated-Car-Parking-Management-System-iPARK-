@@ -404,7 +404,7 @@ export function ParkingSessionsView() {
         <div
           className="modal-overlay"
           role="presentation"
-          onClick={() => setSelected(null)}
+          
         >
           <section
             className="modal-card uc19-detail-modal"
@@ -427,7 +427,7 @@ export function ParkingSessionsView() {
               <button
                 type="button"
                 className="modal-close"
-                onClick={() => setSelected(null)}
+                
                 aria-label="Đóng"
               >
                 <X size={18} />

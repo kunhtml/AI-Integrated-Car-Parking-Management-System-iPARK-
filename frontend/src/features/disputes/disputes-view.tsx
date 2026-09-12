@@ -601,9 +601,7 @@ export function DisputesView() {
             justifyContent: "center",
             background: "rgba(255,255,255,0.85)",
           }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setDetail(null);
-          }}
+          
         >
           <div
             style={{

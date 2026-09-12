@@ -29,7 +29,7 @@ export function VehiclePickerModal({
   return (
     <div
       role="dialog"
-      onClick={onClose}
+      
       style={{
         position: "fixed",
         inset: 0,

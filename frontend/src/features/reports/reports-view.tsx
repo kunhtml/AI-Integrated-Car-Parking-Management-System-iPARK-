@@ -496,7 +496,7 @@ function RepPeakHours({ data }: RepPeakHoursProps) {
       {selectedCell && (
         <div
           className="modal-overlay"
-          onClick={() => setSelectedCell(null)}
+          
         >
           <div
             className="modal-card"
@@ -514,7 +514,7 @@ function RepPeakHours({ data }: RepPeakHoursProps) {
               </div>
               <button
                 className="ghost-button"
-                onClick={() => setSelectedCell(null)}
+                
                 type="button"
                 style={{ cursor: "pointer", padding: 6 }}
               >
@@ -564,7 +564,7 @@ function RepPeakHours({ data }: RepPeakHoursProps) {
               <button
                 type="button"
                 className="small-button"
-                onClick={() => setSelectedCell(null)}
+                
               >
                 Đóng
               </button>

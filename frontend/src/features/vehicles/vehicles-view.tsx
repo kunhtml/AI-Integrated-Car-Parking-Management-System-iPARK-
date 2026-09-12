@@ -201,9 +201,7 @@ export function VehicleDetailModal({
         backdropFilter: "blur(4px)",
         padding: 16,
       }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      
     >
       <div
         style={{
@@ -710,6 +708,132 @@ export function VehicleDetailModal({
           </div>
         )}
 
+        {/* Lịch sử thay đổi xe */}
+        <div style={{ marginTop: 22 }}>
+          <h3
+            style={{
+              fontSize: "0.85rem",
+              fontWeight: 700,
+              color: "var(--muted)",
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+              marginBottom: 10,
+            }}
+          >
+            Lịch sử thay đổi xe ({vehicleHistory.length})
+          </h3>
+          {historyLoading ? (
+            <p className="muted-cell" style={{ fontSize: "0.8rem" }}>
+              <Loader2
+                size={13}
+                className="spin"
+                style={{ verticalAlign: "middle", marginRight: 6 }}
+              />
+              Đang tải lịch sử thay đổi...
+            </p>
+          ) : vehicleHistory.length === 0 ? (
+            <div
+              className="info-box"
+              style={{
+                minWidth: 0,
+                padding: "14px 16px",
+                borderRadius: 12,
+                background: "rgba(148,163,184,0.08)",
+              }}
+            >
+              <p className="muted-cell" style={{ fontSize: "0.78rem", margin: 0 }}>
+                Chưa có lịch sử thay đổi nào cho phương tiện này.
+              </p>
+            </div>
+          ) : (
+            <div style={{ display: "grid", gap: 10 }}>
+              {vehicleHistory.map((item) => (
+                <div
+                  key={item.id}
+                  className="info-box"
+                  style={{
+                    padding: "12px 16px",
+                    borderRadius: 12,
+                    border: "1px solid var(--border, #e2e6ef)",
+                    fontSize: "0.82rem",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: 6,
+                    }}
+                  >
+                    <strong>{item.action}</strong>
+                    <span
+                      style={{
+                        fontSize: "0.72rem",
+                        padding: "2px 8px",
+                        borderRadius: 999,
+                        fontWeight: 600,
+                        background:
+                          item.status === "approved" || item.status === "completed"
+                            ? "rgba(34,197,94,0.12)"
+                            : item.status === "rejected"
+                              ? "rgba(239,68,68,0.12)"
+                              : "rgba(245,158,11,0.12)",
+                        color:
+                          item.status === "approved" || item.status === "completed"
+                            ? "#15803d"
+                            : item.status === "rejected"
+                              ? "#b91c1c"
+                              : "#b45309",
+                      }}
+                    >
+                      {item.statusLabel || item.status}
+                    </span>
+                  </div>
+                  <div style={{ color: "var(--muted)", fontSize: "0.75rem", marginBottom: 6 }}>
+                    Thời gian: {formatDate(item.createdAt)}
+                    {item.performedBy ? ` · Người gửi: ${item.performedBy}` : ""}
+                    {item.resolvedBy ? ` · Người duyệt: ${item.resolvedBy}` : ""}
+                  </div>
+                  {item.changes && Object.keys(item.changes).length > 0 && (
+                    <div
+                      style={{
+                        background: "rgba(0,0,0,0.02)",
+                        borderRadius: 8,
+                        padding: "6px 10px",
+                        marginTop: 4,
+                      }}
+                    >
+                      {Object.entries(item.changes).map(([k, v]) => {
+                        const labels: Record<string, string> = {
+                          plate: "Biển số",
+                          ownerName: "Chủ xe",
+                          ownerPhone: "SĐT",
+                          brand: "Hãng xe",
+                          color: "Màu sơn",
+                          model: "Dòng xe",
+                          status: "Trạng thái",
+                        };
+                        return (
+                          <div key={k} style={{ fontSize: "0.75rem", lineHeight: 1.5 }}>
+                            <span style={{ color: "var(--muted)" }}>{labels[k] || k}:</span>{" "}
+                            <strong>{String(v || "—")}</strong>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {item.adminNote && (
+                    <div style={{ marginTop: 4, fontSize: "0.75rem", color: "#b91c1c" }}>
+                      Ghi chú: {item.adminNote}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div
           style={{
             borderTop: "1px solid var(--border)",
@@ -997,9 +1121,7 @@ function VehicleEditModal({
         justifyContent: "center",
         background: "rgba(255,255,255,0.85)",
       }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      
     >
       <div
         style={{
@@ -1546,9 +1668,7 @@ function ResubmitVehicleModal({
         backdropFilter: "blur(4px)",
         padding: 16,
       }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      
     >
       <div
         style={{
@@ -2017,9 +2137,7 @@ function CustomerEditRequestModal({
         justifyContent: "center",
         background: "rgba(255,255,255,0.85)",
       }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      
     >
       <div
         style={{
@@ -2401,9 +2519,7 @@ function CustomerDeleteRequestModal({
         justifyContent: "center",
         background: "rgba(255,255,255,0.85)",
       }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      
     >
       <div
         style={{
@@ -3179,12 +3295,7 @@ export function VehiclesView() {
             justifyContent: "center",
             background: "rgba(255,255,255,0.85)",
           }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setDetailRequest(null);
-              setDetailRejectNote("");
-            }
-          }}
+          
         >
           <div
             style={{

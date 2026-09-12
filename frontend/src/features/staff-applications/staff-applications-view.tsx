@@ -602,7 +602,7 @@ function ApplicationReviewModal({
         padding: 20,
         overflowY: "auto",
       }}
-      onClick={() => !submitting && onClose()}
+      
     >
       <div
         style={{

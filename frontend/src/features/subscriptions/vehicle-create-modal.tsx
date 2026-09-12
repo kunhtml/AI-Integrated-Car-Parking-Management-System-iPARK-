@@ -82,7 +82,7 @@ export function VehicleCreateModal({ open, onClose, onCreated }: Props) {
   return (
     <div
       role="dialog"
-      onClick={onClose}
+      
       style={{
         position: "fixed",
         inset: 0,

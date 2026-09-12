@@ -263,7 +263,7 @@ export function NotificationsView() {
       {selectedNotification && (
         <div
           className="sub-modal-overlay"
-          onClick={handleCloseModal}
+          
           role="dialog"
           aria-modal="true"
         >
@@ -298,7 +298,7 @@ export function NotificationsView() {
               </div>
               <button
                 className="sub-modal-close"
-                onClick={handleCloseModal}
+                
                 type="button"
                 aria-label="Đóng"
               >
@@ -327,7 +327,7 @@ export function NotificationsView() {
               >
                 <button
                   className="notif-clear-btn"
-                  onClick={handleCloseModal}
+                  
                   type="button"
                   style={{ padding: "8px 18px", fontSize: 13 }}
                 >
