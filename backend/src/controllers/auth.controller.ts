@@ -954,11 +954,22 @@ const profileUpdateSchema = z
       .min(2, "Họ tên phải có ít nhất 2 ký tự")
       .max(100)
       .optional(),
-    // Email KHÔNG được đổi qua endpoint này nữa — dùng /request-change-email + /verify-change-email
+    email: z
+      .string()
+      .trim()
+      .email("Email không hợp lệ")
+      .optional(),
     phone: z
       .string()
       .trim()
       .regex(/^[0-9+\-\s()]{6,20}$/, "Số điện thoại không hợp lệ")
+      .optional()
+      .or(z.literal(""))
+      .transform((v) => (v ? v : undefined)),
+    address: z
+      .string()
+      .trim()
+      .max(200, "Địa chỉ tối đa 200 ký tự")
       .optional()
       .or(z.literal(""))
       .transform((v) => (v ? v : undefined)),
@@ -998,6 +1009,19 @@ export async function updateProfile(request: Request, response: Response) {
     return;
   }
 
+  // Email uniqueness check
+  if (body.email && body.email.toLowerCase() !== user.email.toLowerCase()) {
+    const emailExisted = await User.findOne({
+      email: body.email.toLowerCase(),
+      _id: { $ne: user._id },
+    });
+    if (emailExisted) {
+      response.status(409).json({ message: "Email này đã được sử dụng bởi tài khoản khác." });
+      return;
+    }
+    user.email = body.email.toLowerCase();
+  }
+
   // Phone uniqueness check
   if (body.phone && body.phone !== user.phone) {
     const existed = await User.findOne({
@@ -1012,6 +1036,7 @@ export async function updateProfile(request: Request, response: Response) {
   }
 
   if (typeof body.name === "string") user.name = body.name.trim();
+  if (body.address !== undefined) (user as any).address = body.address;
   if (typeof body.avatarUrl === "string" && body.avatarUrl)
     user.avatarUrl = body.avatarUrl;
 
