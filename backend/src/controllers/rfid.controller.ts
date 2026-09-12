@@ -208,7 +208,7 @@ export async function lookupRfidCardByUid(
   request: Request,
   response: Response,
 ) {
-  const uid = normalizeUid(request.params.uid);
+  const uid = normalizeUid(String(request.params.uid || ""));
   if (!uid) {
     response
       .status(400)
@@ -625,7 +625,7 @@ export async function registerScannedCard(
  */
 // Staff desk lookup sau khi quét thẻ: trả toàn bộ thông tin thẻ + xe + gói.
 export async function lookupByUid(request: Request, response: Response) {
-  const uid = normalizeUid(request.params.uid);
+  const uid = normalizeUid(String(request.params.uid || ""));
   if (!uid) {
     response
       .status(400)

@@ -379,14 +379,11 @@ export async function submitExistingApplication(
     if (payload) {
       Object.assign(updateSet, prepareApplicationPayload(payload));
     }
-    const updateOptions: any = { new: true };
-    if (session) updateOptions.session = session;
-
-    const updated = await StaffApplication.findOneAndUpdate(
+    const updated = (await StaffApplication.findOneAndUpdate(
       { _id: id, userId, status: oldStatus },
       { $set: updateSet },
-      updateOptions,
-    );
+      { new: true, ...(session ? { session } : {}) },
+    )) as StaffApplicationDocument | null;
     if (!updated) {
       throw Object.assign(
         new Error("Đơn vừa thay đổi bởi thao tác khác, vui lòng thử lại."),
@@ -456,6 +453,18 @@ export async function cancelApplication(userId: string) {
   } finally {
     await session.endSession();
   }
+}
+
+export async function getApplicationHistory(
+  applicationId: string,
+  options: { userId?: string; session?: mongoose.ClientSession } = {},
+) {
+  const filter: Record<string, unknown> = { applicationId };
+  if (options.userId) filter.userId = options.userId;
+  return StaffApplicationHistory.find(filter)
+    .sort({ sequence: 1 })
+    .session(options.session ?? null)
+    .lean();
 }
 
 export { STAFF_APPLICATION_SHIFTS, STAFF_APPLICATION_STATUSES };

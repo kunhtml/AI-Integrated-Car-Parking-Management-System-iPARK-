@@ -67,9 +67,10 @@ export async function scanAndFlagOverdueSessions(): Promise<number> {
       await session.save();
 
       // CU-24: Notify owner
-      if (session.ownerUserId) {
+      const ownerUserId = session.ownerUserId;
+      if (ownerUserId) {
         await notifyPenalty(
-          session.ownerUserId.toString(),
+          String(ownerUserId),
           session.plate,
           result.overdueMinutes,
           result.fineAmount,
