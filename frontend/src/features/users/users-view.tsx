@@ -389,12 +389,7 @@ export function UsersView() {
 
       {/* Stats */}
       <div className="users-stats-grid">
-        <button
-          type="button"
-          className={`user-stat-card${activeStat === "total" ? " is-active" : ""}`}
-          onClick={() => handleStatClick("total")}
-          title="Xem tất cả tài khoản"
-        >
+        <div className="user-stat-card">
           <div className="user-stat-icon total">
             <UsersRound size={20} />
           </div>
@@ -402,13 +397,8 @@ export function UsersView() {
             <span className="user-stat-value">{stats.total}</span>
             <span className="user-stat-label">Tổng tài khoản</span>
           </div>
-        </button>
-        <button
-          type="button"
-          className={`user-stat-card${activeStat === "active" ? " is-active" : ""}`}
-          onClick={() => handleStatClick("active")}
-          title="Lọc tài khoản đang hoạt động"
-        >
+        </div>
+        <div className="user-stat-card">
           <div className="user-stat-icon active">
             <Check size={20} />
           </div>
@@ -416,27 +406,8 @@ export function UsersView() {
             <span className="user-stat-value">{stats.active}</span>
             <span className="user-stat-label">Đang hoạt động</span>
           </div>
-        </button>
-        <button
-          type="button"
-          className={`user-stat-card${activeStat === "locked" ? " is-active" : ""}`}
-          onClick={() => handleStatClick("locked")}
-          title="Lọc tài khoản đã khóa"
-        >
-          <div className="user-stat-icon locked">
-            <Ban size={20} />
-          </div>
-          <div className="user-stat-content">
-            <span className="user-stat-value">{stats.locked}</span>
-            <span className="user-stat-label">Đã khóa</span>
-          </div>
-        </button>
-        <button
-          type="button"
-          className={`user-stat-card${activeStat === "staff" ? " is-active" : ""}`}
-          onClick={() => handleStatClick("staff")}
-          title="Lọc theo vai trò nhân viên"
-        >
+        </div>
+        <div className="user-stat-card">
           <div className="user-stat-icon staff">
             <Shield size={20} />
           </div>
@@ -444,13 +415,8 @@ export function UsersView() {
             <span className="user-stat-value">{stats.staff}</span>
             <span className="user-stat-label">Nhân viên</span>
           </div>
-        </button>
-        <button
-          type="button"
-          className={`user-stat-card${activeStat === "customer" ? " is-active" : ""}`}
-          onClick={() => handleStatClick("customer")}
-          title="Lọc theo vai trò khách hàng"
-        >
+        </div>
+        <div className="user-stat-card">
           <div className="user-stat-icon customer">
             <Building size={20} />
           </div>

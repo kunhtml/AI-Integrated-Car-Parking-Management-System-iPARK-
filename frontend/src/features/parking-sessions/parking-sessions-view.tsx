@@ -427,7 +427,7 @@ export function ParkingSessionsView() {
               <button
                 type="button"
                 className="modal-close"
-                
+                onClick={() => setSelected(null)}
                 aria-label="Đóng"
               >
                 <X size={18} />

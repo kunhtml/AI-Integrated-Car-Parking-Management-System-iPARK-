@@ -144,6 +144,7 @@ export function VehicleDetailModal({
   const [rfidError, setRfidError] = useState("");
   const [vehicleHistory, setVehicleHistory] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -820,13 +821,25 @@ export function VehicleDetailModal({
                   {item.changes?.imageUrl && (
                     <div style={{ marginTop: 8, marginBottom: 8, display: "flex", alignItems: "center", gap: 10 }}>
                       <div
+                        onClick={() => setPreviewImageUrl(item.changes.imageUrl)}
+                        title="Bấm để phóng to xem ảnh"
                         style={{
-                          width: 80,
-                          height: 54,
+                          width: 88,
+                          height: 58,
                           borderRadius: 8,
                           overflow: "hidden",
-                          border: "1px solid var(--border, #e2e6ef)",
+                          border: "2px solid rgba(59, 130, 246, 0.3)",
                           background: "var(--surface)",
+                          cursor: "pointer",
+                          transition: "transform 0.15s ease, box-shadow 0.15s ease",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = "scale(1.04)";
+                          e.currentTarget.style.boxShadow = "0 4px 12px rgba(59, 130, 246, 0.25)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = "scale(1)";
+                          e.currentTarget.style.boxShadow = "none";
                         }}
                       >
                         <img
@@ -835,7 +848,12 @@ export function VehicleDetailModal({
                           style={{ width: "100%", height: "100%", objectFit: "cover" }}
                         />
                       </div>
-                      <span style={{ fontSize: "0.75rem", color: "var(--muted)" }}>Ảnh phương tiện đính kèm</span>
+                      <span
+                        onClick={() => setPreviewImageUrl(item.changes.imageUrl)}
+                        style={{ fontSize: "0.75rem", color: "#2563eb", cursor: "pointer", textDecoration: "underline" }}
+                      >
+                        Bấm vào ảnh để phóng to
+                      </span>
                     </div>
                   )}
 
@@ -1025,6 +1043,64 @@ export function VehicleDetailModal({
           </button>
         </div>
       </div>
+
+      {/* Modal Lightbox phóng to ảnh đính kèm */}
+      {previewImageUrl && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 99999,
+            background: "rgba(0, 0, 0, 0.88)",
+            backdropFilter: "blur(8px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+          onClick={() => setPreviewImageUrl(null)}
+        >
+          <div
+            style={{ position: "relative", maxWidth: "92vw", maxHeight: "92vh" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setPreviewImageUrl(null)}
+              style={{
+                position: "absolute",
+                top: -16,
+                right: -16,
+                background: "#0f172a",
+                color: "#ffffff",
+                border: "2px solid #ffffff",
+                borderRadius: "50%",
+                width: 34,
+                height: 34,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
+              }}
+              title="Đóng ảnh"
+            >
+              <X size={20} />
+            </button>
+            <img
+              src={previewImageUrl}
+              alt="Ảnh phương tiện phóng to"
+              style={{
+                maxWidth: "92vw",
+                maxHeight: "88vh",
+                borderRadius: 14,
+                objectFit: "contain",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.6)",
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
