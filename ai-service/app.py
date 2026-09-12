@@ -1618,7 +1618,8 @@ def process_frame(frame, plate_counter, last_plate, last_seen_time, prefix, ser,
             except Exception as e:
                 print(f"[OCR][ERROR] serial write failed: {type(e).__name__}: {e}")
 
-    if time.time() - last_seen_time > timeout:
+    # Nếu không thấy biển số hoặc qua 2.5s không thấy, reset last_plate để lần detect tiếp theo luôn kích hoạt event mới
+    if time.time() - last_seen_time > 2.5:
         last_plate = ""
 
     detected = candidate if (candidate and pattern.match(candidate)) else ""
@@ -1877,9 +1878,13 @@ def _handle_ocr_side_effects(direction_key, last_plate, detected, detected_snap)
         else:
             last_snapshot_out = detected_snap
 
-    # detected != "" và khác last_plate → plate vừa được accept
-    if not (detected and detected != last_plate):
+    # Kích hoạt push log khi detect được biển số hợp lệ
+    if not detected:
         return
+    # Nếu trùng biển cũ nhưng đã cách hơn 4 giây (xe dừng lâu hoặc xe khác cùng biển), vẫn push để frontend không bị đơ
+    if detected == last_plate and (time.time() - getattr(_handle_ocr_side_effects, f"last_push_{direction_key}", 0)) < 4.0:
+        return
+    setattr(_handle_ocr_side_effects, f"last_push_{direction_key}", time.time())
 
     snap_path = detected_snap or ""
     conf_val = 0.0

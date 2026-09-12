@@ -119,8 +119,9 @@ export function StaffDeskView() {
   const processedIngestIdRef = useRef<string>("");
   useEffect(() => {
     if (!pendingIngest) return;
-    // Bỏ qua các frame lặp lại của cùng một event đã vào state.
-    if (pendingIngest.id && pendingIngest.id === processedIngestIdRef.current) {
+    // Bỏ qua các frame lặp lại liên tục khi xe đang hiển thị, NHƯNG nếu activeIngest đã bị dismiss về null (xe trước đã vào)
+    // thì lập tức nhận ngay xe tiếp theo bất kể ID nào!
+    if (activeIngest && pendingIngest.id && pendingIngest.id === processedIngestIdRef.current) {
       return;
     }
     processedIngestIdRef.current = pendingIngest.id || "";
@@ -2580,11 +2581,15 @@ function IngestCard(props: {
           icon={<Radio size={14} />}
           label="Loại xe"
           value={
-            displayUserType === "resident"
-              ? "Cư dân"
-              : displayUserType === "guest"
-                ? "Khách vãng lai"
-                : "Chưa rõ"
+            (typeof event.metadata?.vehicleBrand === "string" && event.metadata.vehicleBrand)
+              ? (typeof event.metadata?.vehicleModel === "string" && event.metadata.vehicleModel
+                  ? `${event.metadata.vehicleBrand} ${event.metadata.vehicleModel}`
+                  : event.metadata.vehicleBrand)
+              : (displayUserType === "resident"
+                  ? "Cư dân"
+                  : displayUserType === "guest"
+                    ? "Khách vãng lai"
+                    : "Chưa rõ")
           }
         />
         <MetaRow
@@ -3048,11 +3053,15 @@ function ExitCard({
       : "guest";
   const displayOwnerName = event.ownerName || "—";
   const vehicleTypeLabel =
-    customerType === "member"
-      ? event.metadata?.quotaType === "member"
-        ? "Thành viên"
-        : "Thành viên (chưa có gói)"
-      : "Khách vãng lai";
+    (typeof event.metadata?.vehicleBrand === "string" && event.metadata.vehicleBrand)
+      ? (typeof event.metadata?.vehicleModel === "string" && event.metadata.vehicleModel
+          ? `${event.metadata.vehicleBrand} ${event.metadata.vehicleModel}`
+          : event.metadata.vehicleBrand)
+      : (customerType === "member"
+          ? (event.metadata?.quotaType === "member"
+              ? "Thành viên"
+              : "Thành viên (chưa có gói)")
+          : "Khách vãng lai");
 
   const barrierStatus = event.barrierOpened
     ? "Đang mở"

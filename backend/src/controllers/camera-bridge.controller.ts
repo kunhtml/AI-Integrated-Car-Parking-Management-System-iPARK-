@@ -554,6 +554,9 @@ export async function pushCameraLog(request: Request, response: Response) {
     null;
   const eventMetadata = {
     ...(body.metadata ?? {}),
+    vehicleBrand: vehicle?.brand || null,
+    vehicleModel: vehicle?.model || null,
+    vehicleType: vehicle?.type || vehicle?.vehicleType || null,
     ...(activeMemberSubscription
       ? { isSubscriber: true, expectedRfidUid }
       : {}),
