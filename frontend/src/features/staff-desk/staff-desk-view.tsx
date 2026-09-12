@@ -1820,6 +1820,13 @@ export function StaffDeskView() {
                   setManualEntryError("");
                 }}
                 onSubmitManualEntry={() => void startManualEntryRfidFlow()}
+                onConfirmManualPlate={(plate) => {
+                  void createSessionManual(undefined, plate, {
+                    fromIdleForm: true,
+                    manualRfidReason: "Mất kết nối phần cứng; nhân viên đã đối chiếu biển số chính xác bằng mắt và cho xe vào thủ công",
+                  });
+                }}
+                phase={phase}
                 onOpenVerifiedMember={() =>
                   void createSessionManual(
                     manualEntryVehicle?.cardUid,
@@ -2008,6 +2015,8 @@ function WaitingCard({
   onManualEntryPlateChange,
   onSubmitManualEntry,
   onOpenVerifiedMember,
+  onConfirmManualPlate,
+  phase,
 }: {
   direction: "in" | "out";
   scanPhase?: "idle" | "starting" | "waiting" | "success" | "timeout" | "error";
@@ -2036,6 +2045,8 @@ function WaitingCard({
   onManualEntryPlateChange?: (value: string) => void;
   onSubmitManualEntry?: () => void;
   onOpenVerifiedMember?: () => void;
+  onConfirmManualPlate?: (plate: string) => void;
+  phase?: string;
 }) {
   const isEntry = direction === "in";
   const showManualForm = isEntry ? showManualEntryForm : showManualExitForm;
