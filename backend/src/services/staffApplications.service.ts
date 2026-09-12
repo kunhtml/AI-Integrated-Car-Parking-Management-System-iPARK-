@@ -468,16 +468,4 @@ export async function cancelApplication(userId: string) {
   }
 }
 
-export async function getApplicationHistory(
-  applicationId: string,
-  options: { userId?: string; session?: mongoose.ClientSession } = {},
-) {
-  const filter: Record<string, unknown> = { applicationId };
-  if (options.userId) filter.userId = options.userId;
-  return StaffApplicationHistory.find(filter)
-    .sort({ sequence: 1 })
-    .session(options.session ?? null)
-    .lean();
-}
-
 export { STAFF_APPLICATION_SHIFTS, STAFF_APPLICATION_STATUSES };

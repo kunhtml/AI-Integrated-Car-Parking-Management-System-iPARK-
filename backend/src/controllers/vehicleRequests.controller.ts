@@ -277,7 +277,10 @@ export async function resolveVehicleRequest(
     response.status(404).json({ message: "Không tìm thấy yêu cầu." });
     return;
   }
-  if (vr.status !== "pending") {
+  if (
+    vr.status !== "pending" &&
+    !(vr.status === "rejected" && body.action === "approved")
+  ) {
     response.status(409).json({ message: "Yêu cầu này đã được xử lý." });
     return;
   }
@@ -303,6 +306,7 @@ export async function resolveVehicleRequest(
       vehicleDoc
     ) {
       vehicleDoc.status = "Đã đăng ký";
+      vehicleDoc.rejectionReason = undefined;
       await vehicleDoc.save();
     } else if (vr.type === "edit" && vr.requestedChanges && vehicleDoc && sub) {
       const changes = vr.requestedChanges as Record<string, unknown>;
@@ -340,6 +344,8 @@ export async function resolveVehicleRequest(
         vehicleDoc.chassisNo = changes.chassisNo as string | undefined;
       if (changes.imageUrl !== undefined)
         vehicleDoc.imageUrl = changes.imageUrl as string | undefined;
+      vehicleDoc.status = "Đã đăng ký";
+      vehicleDoc.rejectionReason = undefined;
       await vehicleDoc.save();
     }
 
@@ -354,6 +360,14 @@ export async function resolveVehicleRequest(
           `[vehicleRequests] Vehicle ${vr.vehicleId.toString()} is not the primary of subscription ${sub._id}, skipping delete.`,
         );
       }
+    }
+  } else if (body.action === "rejected") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const vehicleDoc = (await Vehicle.findById(vr.vehicleId)) as any;
+    if (vehicleDoc) {
+      vehicleDoc.status = "Blacklist";
+      vehicleDoc.rejectionReason = body.adminNote || "Xe bị từ chối.";
+      await vehicleDoc.save();
     }
   }
 

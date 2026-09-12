@@ -2,6 +2,7 @@ import { RfidCard } from "../models/RfidCard.js";
 import { Request, Response } from "express";
 import mongoose from "mongoose";
 import { z } from "zod";
+import { ParkingSession } from "../models/ParkingSession.js";
 import { Vehicle } from "../models/Vehicle.js";
 import { VehicleRequest } from "../models/VehicleRequest.js";
 import { serializeVehicle } from "../utils/serializers.js";
@@ -108,7 +109,7 @@ export async function createVehicle(request: Request, response: Response) {
   const normPlate = body.plate
     .trim()
     .toUpperCase()
-    .replace(/[\s-]+/g, "");
+    .replace(/[\s.-]+/g, "");
   const existing = await Vehicle.findOne({ plate: normPlate });
   if (existing) {
     response
@@ -213,11 +214,12 @@ export async function updateVehicle(request: Request, response: Response) {
     return;
   }
 
+  let oldPlate: string | undefined;
   if (body.plate) {
     const normPlate = body.plate
       .trim()
       .toUpperCase()
-      .replace(/[\s-]+/g, "");
+      .replace(/[\s.-]+/g, "");
     const conflict = await Vehicle.findOne({ plate: normPlate });
     if (conflict && conflict._id.toString() !== vehicleId) {
       response
@@ -225,6 +227,7 @@ export async function updateVehicle(request: Request, response: Response) {
         .json({ message: "Biển số đã tồn tại trong hệ thống." });
       return;
     }
+    oldPlate = existing.plate;
     existing.plate = normPlate;
   }
   if (body.ownerName !== undefined) existing.ownerName = body.ownerName;
@@ -238,7 +241,12 @@ export async function updateVehicle(request: Request, response: Response) {
   if (body.engineNo !== undefined) existing.engineNo = body.engineNo;
   if (body.chassisNo !== undefined) existing.chassisNo = body.chassisNo;
   if (request.user?.role !== "customer") {
-    if (body.status !== undefined) existing.status = body.status;
+    if (body.status !== undefined) {
+      existing.status = body.status;
+      if (body.status === "Đã đăng ký" || body.status === "Cần duyệt") {
+        existing.rejectionReason = undefined;
+      }
+    }
     if (body.rejectionReason !== undefined)
       existing.rejectionReason = body.rejectionReason;
   }
@@ -246,26 +254,69 @@ export async function updateVehicle(request: Request, response: Response) {
 
   await existing.save();
 
+  if (oldPlate && oldPlate !== existing.plate) {
+    await RfidCard.updateMany(
+      { $or: [{ vehicleId: existing._id }, { plate: oldPlate }] },
+      { $set: { plate: existing.plate } },
+    );
+    await ParkingSession.updateMany(
+      {
+        status: "Đang gửi",
+        $or: [{ vehicleId: existing._id }, { plate: oldPlate }],
+      },
+      { $set: { plate: existing.plate } },
+    );
+  }
 
   if (
     request.user?.role !== "customer" &&
-    (body.status === "Đã đăng ký" || body.status === "Blacklist")
+    (body.status === "Đã đăng ký" ||
+      body.status === "Blacklist" ||
+      body.status === "Cần duyệt")
   ) {
-    await VehicleRequest.updateMany(
-      { vehicleId: existing._id, status: "pending" },
-      {
-$set: {
-          status: body.status === "Đã đăng ký" ? "approved" : "rejected",
-          resolvedBy: request.user?.id
-            ? new mongoose.Types.ObjectId(request.user.id)
-            : undefined,
-          resolvedAt: new Date(),
-          ...(body.status === "Blacklist"
-            ? { adminNote: body.rejectionReason || "Xe bị từ chối." }
-            : {}),
+    if (body.status === "Đã đăng ký") {
+      await VehicleRequest.updateMany(
+        { vehicleId: existing._id, status: { $in: ["pending", "rejected"] } },
+        {
+          $set: {
+            status: "approved",
+            resolvedBy: request.user?.id
+              ? new mongoose.Types.ObjectId(request.user.id)
+              : undefined,
+            resolvedAt: new Date(),
+            adminNote: "Admin đã duyệt xe.",
+          },
         },
-      },
-    );
+      );
+    } else if (body.status === "Blacklist") {
+      await VehicleRequest.updateMany(
+        { vehicleId: existing._id, status: "pending" },
+        {
+          $set: {
+            status: "rejected",
+            resolvedBy: request.user?.id
+              ? new mongoose.Types.ObjectId(request.user.id)
+              : undefined,
+            resolvedAt: new Date(),
+            ...(body.rejectionReason
+              ? { adminNote: body.rejectionReason }
+              : { adminNote: "Xe bị từ chối." }),
+          },
+        },
+      );
+    } else if (body.status === "Cần duyệt") {
+      await VehicleRequest.updateMany(
+        { vehicleId: existing._id, status: { $in: ["approved", "rejected"] } },
+        {
+          $set: {
+            status: "pending",
+            adminNote: undefined,
+            resolvedBy: undefined,
+            resolvedAt: undefined,
+          },
+        },
+      );
+    }
   }
 
   const populated = await Vehicle.findById(existing._id).populate({
