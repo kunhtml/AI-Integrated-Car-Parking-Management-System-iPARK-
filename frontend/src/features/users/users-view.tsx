@@ -424,7 +424,7 @@ export function UsersView() {
             <span className="user-stat-value">{stats.customer}</span>
             <span className="user-stat-label">Khách hàng</span>
           </div>
-        </button>
+        </div>
       </div>
 
       {/* Search & Filter */}
