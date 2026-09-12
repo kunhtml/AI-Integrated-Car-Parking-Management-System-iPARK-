@@ -4257,23 +4257,7 @@ export function VehiclesView() {
                   >
                     <Edit size={13} />
                   </button>
-                  {isAdmin && vehicle.status === "Cần duyệt" && (
-                    <button
-                      className="small-button"
-                      onClick={async () => {
-                        await approveVehicle(vehicle);
-                        await Promise.all([
-                          loadVehicles(),
-                          loadVehicleRequests({ includeResolved: true }),
-                        ]);
-                      }}
-                      title="Duyệt xe"
-                      type="button"
-                      style={{ padding: "3px 7px", color: "#16a34a" }}
-                    >
-                      <Check size={13} />
-                    </button>
-                  )}
+
                   {isAdmin && vehicle.status === "Blacklist" && (
                     <button
                       className="small-button"

@@ -110,12 +110,20 @@ interface ModalProps {
   children: React.ReactNode;
 }
 
-function Modal({ isOpen, onClose, title, children }: ModalProps) {
+interface ModalPropsExtended extends ModalProps {
+  maxWidth?: string | number;
+}
+
+function Modal({ isOpen, onClose, title, children, maxWidth }: ModalPropsExtended) {
   if (!isOpen) return null;
 
   return (
     <div className="pricing-modal-overlay">
-      <div className="pricing-modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="pricing-modal"
+        style={maxWidth ? { maxWidth, width: "95%" } : undefined}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="pricing-modal-header">
           <h3>{title}</h3>
           <button
@@ -663,6 +671,7 @@ export function PricingView() {
         isOpen={createTplModalOpen}
         onClose={() => setCreateTplModalOpen(false)}
         title="Tạo mẫu thông báo mới & Hướng dẫn Trigger"
+        maxWidth="1020px"
       >
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1.15fr", gap: 24, maxWidth: 940, width: "100%" }}>
           {/* Cột 1: Form tạo mẫu */}

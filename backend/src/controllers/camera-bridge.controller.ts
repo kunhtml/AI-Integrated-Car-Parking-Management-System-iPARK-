@@ -198,7 +198,7 @@ async function buildSessionForEntry(
   const { name: ownerName, email: ownerEmail } = isMemberRfid
     ? { name: "Member", email: "" }
     : source === "rfid"
-      ? { name: "Guest RFID", email: "" }
+      ? { name: "Khách vãng lai", email: "" }
       : await getOwnerInfoFromPlate(plate);
 
   if (plateCheck.warn) {

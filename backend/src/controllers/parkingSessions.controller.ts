@@ -567,7 +567,7 @@ export async function createParkingSession(
   const ownerInfo = await getOwnerInfoFromPlate(body.plate);
   const { name: ownerName, email: ownerEmail } = ownerInfo?.name
     ? ownerInfo
-    : { name: rfidCard ? "Guest RFID" : "Khách vãng lai", email: "" };
+    : { name: "Khách vãng lai", email: "" };
 
   if (plateCheck.warn) {
     await createNotification({

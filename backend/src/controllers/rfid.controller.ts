@@ -891,38 +891,65 @@ export async function getRfidCardHistoryHandler(request: Request, response: Resp
 
   // 2. Scan logs liên quan đến thẻ này
   const RfidScanLog = (await import("../models/RfidScanLog.js")).RfidScanLog;
-  const scanLogs = await RfidScanLog.find({
+  const allLogs = await RfidScanLog.find({
     cardId: { $in: cardIdentifiers },
   })
     .sort({ createdAt: -1 })
-    .limit(50)
+    .limit(100)
     .populate("performedBy", "name email");
 
-  // Map lại format dễ hiển thị ở frontend
-  const auditHistory = auditLogs.map((log: any) => ({
-    id: log._id.toString(),
-    action: log.action,
-    actionLabel: mapRfidActionLabel(log.action),
-    performedBy: log.performedBy
-      ? {
-          id: log.performedBy._id?.toString(),
-          name: log.performedBy.name,
-          email: log.performedBy.email,
-        }
-      : null,
-    changes: log.changes || {},
-    createdAt: log.createdAt.toISOString(),
-  }));
+  // Tách biệt rõ ràng:
+  // - Lịch sử quét qua cổng chỉ bao gồm các lượt xe qua cổng: entry, exit
+  const gateActionSet = new Set(["entry", "exit"]);
+  const gateScanLogs = allLogs.filter((l) => gateActionSet.has(l.action));
 
-  const scanHistory = scanLogs.map((log: any) => ({
+  // - Các hành động thao tác/thay đổi trạng thái thẻ (block, unblock, damaged, lost, sale, replace...)
+  //   phải được gộp vào Lịch sử thay đổi thẻ (Audit History)
+  const cardOpLogs = allLogs.filter((l) => !gateActionSet.has(l.action));
+
+  // Map lại format dễ hiển thị ở frontend
+  const combinedAudit = [
+    ...auditLogs.map((log: any) => ({
+      id: log._id.toString(),
+      action: log.action,
+      actionLabel: mapRfidActionLabel(log.action),
+      performedBy: log.performedBy
+        ? {
+            id: log.performedBy._id?.toString(),
+            name: log.performedBy.name,
+            email: log.performedBy.email,
+          }
+        : null,
+      changes: log.changes || {},
+      createdAt: log.createdAt.toISOString(),
+    })),
+    ...cardOpLogs.map((op: any) => ({
+      id: op._id.toString(),
+      action: op.action,
+      actionLabel: mapRfidActionLabel(op.action),
+      performedBy: op.performedBy
+        ? {
+            id: op.performedBy._id?.toString(),
+            name: op.performedBy.name,
+            email: op.performedBy.email,
+          }
+        : null,
+      changes: op.metadata ? { new: op.metadata } : {},
+      createdAt: op.createdAt.toISOString(),
+    })),
+  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  const scanHistory = gateScanLogs.map((log: any) => ({
     id: log._id.toString(),
-    action: log.action,
+    action: log.action === "entry" ? "Xe vào cổng" : log.action === "exit" ? "Xe ra cổng" : log.action,
     status: log.status,
     failureReason: log.failureReason || null,
     plateDetected: log.plateDetected || null,
     performedBy: log.performedBy ? log.performedBy.name : null,
     createdAt: log.createdAt.toISOString(),
   }));
+
+  const auditHistory = combinedAudit;
 
   response.json({
     ok: true,
@@ -944,6 +971,14 @@ function mapRfidActionLabel(action: string): string {
     rfid_card_returned: "Trả thẻ / Thu hồi thẻ",
     rfid_card_lost: "Báo mất thẻ",
     rfid_card_damaged: "Báo hỏng thẻ",
+    block: "Khóa thẻ",
+    unblock: "Mở khóa thẻ",
+    lost: "Báo mất thẻ",
+    damaged: "Báo hỏng thẻ",
+    sale: "Bán thẻ thành viên",
+    replace: "Cấp lại thẻ thay thế",
+    assign: "Gán thẻ cho phương tiện",
+    return: "Thu hồi / Trả thẻ",
   };
   return map[action] || action;
 }

@@ -582,7 +582,7 @@ export function SessionsView() {
                           </span>
                         </div>
                       </td>
-                      <td className="cell-owner">{session.owner || "—"}</td>
+                      <td className="cell-owner">{session.owner && session.owner !== "—" ? session.owner : "Khách vãng lai"}</td>
                       <td className="val-mono">{session.slot}</td>
                       <td className="val-mono">
                         {session.checkInDate} {session.checkIn}

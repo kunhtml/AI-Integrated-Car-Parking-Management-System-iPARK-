@@ -13,7 +13,7 @@ import { requireAuth, requireRole } from "../middlewares/auth.middleware.js";
 export const parkingSlotsRoutes = Router();
 
 // NOTE: /map must be declared before /:id to avoid being matched as an id
-parkingSlotsRoutes.get("/", requireAuth, requireRole("admin", "staff"), listParkingSlotsHandler);
+parkingSlotsRoutes.get("/", requireAuth, requireRole("admin", "staff", "customer"), listParkingSlotsHandler);
 parkingSlotsRoutes.get("/map", requireAuth, requireRole("admin", "staff"), getSlotMapHandler);
 parkingSlotsRoutes.post("/bulk", requireAuth, requireRole("admin"), bulkCreateSlotsHandler);
 parkingSlotsRoutes.post("/", requireAuth, requireRole("admin"), createParkingSlotHandler);

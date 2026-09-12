@@ -72,7 +72,9 @@ export function serializeParkingSession(session: ParkingSessionDocument) {
   return {
     id: session._id.toString(),
     plate: normPlate || session.plate,
-    owner: session.ownerName,
+    owner: session.ownerName && session.ownerName.trim() && session.ownerName !== "—" && session.ownerName !== "Guest RFID" && session.ownerName !== "Guest"
+      ? session.ownerName
+      : "Khách vãng lai",
     vehicleType: session.vehicleType,
     customerType: session.customerType ?? "guest",
     quotaType: session.quotaType ?? "walk_in",

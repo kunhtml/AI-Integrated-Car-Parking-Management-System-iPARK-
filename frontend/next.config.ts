@@ -12,7 +12,7 @@ const nextConfig: NextConfig = {
               "default-src 'self'",
               "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
               "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: blob: http://localhost:4000 http://localhost:5050",
+              "img-src 'self' data: blob: http://localhost:4000 http://localhost:5050 https://lh3.googleusercontent.com",
               "font-src 'self' data:",
               "connect-src 'self' http://localhost:4000 http://localhost:5050 ws://localhost:3000",
               "frame-ancestors 'none'",
