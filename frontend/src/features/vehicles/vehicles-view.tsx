@@ -142,6 +142,8 @@ export function VehicleDetailModal({
   const [rfidCards, setRfidCards] = useState<RfidCard[]>([]);
   const [rfidLoading, setRfidLoading] = useState(false);
   const [rfidError, setRfidError] = useState("");
+  const [vehicleHistory, setVehicleHistory] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -182,7 +184,26 @@ export function VehicleDetailModal({
         if (!cancelled) setRfidLoading(false);
       }
     }
+    async function loadHistory() {
+      if (!vehicle?.id) return;
+      setHistoryLoading(true);
+      try {
+        const res = await apiFetch(`/vehicles/${vehicle.id}/history`);
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled) setVehicleHistory(data.history || []);
+        } else {
+          if (!cancelled) setVehicleHistory([]);
+        }
+      } catch {
+        if (!cancelled) setVehicleHistory([]);
+      } finally {
+        if (!cancelled) setHistoryLoading(false);
+      }
+    }
+
     void loadRfid();
+    void loadHistory();
     return () => {
       cancelled = true;
     };
@@ -1444,8 +1465,20 @@ function VehicleEditModal({
                   <>
                     <input
                       value={form[key]}
+                      maxLength={key === "plate" ? 9 : undefined}
                       onChange={(e) => {
-                        setForm((f) => ({ ...f, [key]: e.target.value }));
+                        let val = e.target.value;
+                        if (key === "plate") {
+                          val = val.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 9);
+                          setForm((f) => ({ ...f, [key]: val }));
+                          if (val && (!/^\d{2}[A-Z]{1,2}\d{4,5}$/.test(val) || val.length < 7 || val.length > 9)) {
+                            setErrors((prev) => ({ ...prev, plate: "Biển số không hợp lệ (tối đa 8-9 ký tự, ví dụ: 30A77770, 29A12345)." }));
+                          } else {
+                            clearError("plate");
+                          }
+                          return;
+                        }
+                        setForm((f) => ({ ...f, [key]: val }));
                         clearError(key as string);
                       }}
                       required={key === "plate"}
@@ -2437,8 +2470,20 @@ function CustomerEditRequestModal({
                 </label>
                 <input
                   value={form[key]}
+                  maxLength={key === "plate" ? 9 : undefined}
                   onChange={(e) => {
-                    setForm((f) => ({ ...f, [key]: e.target.value }));
+                    let val = e.target.value;
+                    if (key === "plate") {
+                      val = val.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 9);
+                      setForm((f) => ({ ...f, [key]: val }));
+                      if (val && (!/^\d{2}[A-Z]{1,2}\d{4,5}$/.test(val) || val.length < 7 || val.length > 9)) {
+                        setErrors((prev) => ({ ...prev, plate: "Biển số không hợp lệ (tối đa 8-9 ký tự, ví dụ: 30A77770, 29A12345)." }));
+                      } else {
+                        clearError("plate");
+                      }
+                      return;
+                    }
+                    setForm((f) => ({ ...f, [key]: val }));
                     clearError(key as string);
                   }}
                   required={key === "plate"}
@@ -2449,6 +2494,7 @@ function CustomerEditRequestModal({
                     borderRadius: 8,
                     fontSize: "0.9rem",
                     boxSizing: "border-box",
+                    textTransform: key === "plate" ? "uppercase" : undefined,
                   }}
                   type={key === "year" ? "number" : "text"}
                 />
