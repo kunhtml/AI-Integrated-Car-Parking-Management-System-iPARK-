@@ -576,7 +576,7 @@ export function SessionsView() {
                       <td>
                         <div className="cell-plate">
                           <CarFront size={14} aria-hidden />
-                          <strong>{session.plate}</strong>
+                          <strong>{session.plate ? session.plate.toUpperCase().replace(/[^A-Z0-9]/g, "") : "—"}</strong>
                           <span className="cell-id">
                             #{session.id.slice(-8).toUpperCase()}
                           </span>

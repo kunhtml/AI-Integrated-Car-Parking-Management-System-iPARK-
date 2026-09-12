@@ -425,12 +425,33 @@ export function SubscriptionsView() {
             </h2>
 
             {myActiveSubs.length === 0 && subscriptionHistory.length === 0 ? (
-              <PlanGrid
-                plans={visiblePlans}
-                purchasing={purchasing}
-                activePlanId={activePlanId}
-                onPurchase={handlePurchase}
-              />
+              visiblePlans.length === 0 ? (
+                <div
+                  style={{
+                    padding: "48px 24px",
+                    textAlign: "center",
+                    background: "var(--surface)",
+                    borderRadius: 16,
+                    border: "1px dashed var(--border)",
+                    color: "var(--muted)",
+                  }}
+                >
+                  <Package size={40} style={{ marginBottom: 12, opacity: 0.5 }} />
+                  <h3 style={{ fontSize: "1.1rem", color: "var(--text)", margin: "0 0 6px" }}>
+                    Hiện không có sẵn gói đăng ký nào
+                  </h3>
+                  <p style={{ fontSize: "0.85rem", margin: 0 }}>
+                    Quản trị viên đang cập nhật danh mục gói cước. Vui lòng quay lại sau.
+                  </p>
+                </div>
+              ) : (
+                <PlanGrid
+                  plans={visiblePlans}
+                  purchasing={purchasing}
+                  activePlanId={activePlanId}
+                  onPurchase={handlePurchase}
+                />
+              )
             ) : (
               <>
                 <div className="subs-cards-grid">
@@ -449,9 +470,25 @@ export function SubscriptionsView() {
                 </div>
 
                 {/* Plans horizontal */}
-                {visiblePlans.length > 0 && (
-                  <div className="plans-horizontal">
-                    <h3>Mua thêm gói cho xe khác</h3>
+                <div className="plans-horizontal">
+                  <h3>Mua thêm gói cho xe khác</h3>
+                  {visiblePlans.length === 0 ? (
+                    <div
+                      style={{
+                        padding: "28px 20px",
+                        textAlign: "center",
+                        background: "var(--surface)",
+                        borderRadius: 14,
+                        border: "1px dashed var(--border)",
+                        color: "var(--muted)",
+                        marginTop: 10,
+                      }}
+                    >
+                      <p style={{ margin: 0, fontSize: "0.9rem", color: "var(--muted)" }}>
+                        Hiện không có sẵn gói đăng ký nào để mua thêm.
+                      </p>
+                    </div>
+                  ) : (
                     <div className="plans-row">
                       {visiblePlans.map((plan, idx) => (
                         <div
@@ -480,8 +517,8 @@ export function SubscriptionsView() {
                         </div>
                       ))}
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
                 {subscriptionHistory.length > 0 && (
                   <div className="subscription-history">
                     <h3>Lịch sử gói đã mua</h3>

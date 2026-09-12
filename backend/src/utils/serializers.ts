@@ -68,9 +68,10 @@ export function serializeUser(user: UserDocument) {
 }
 
 export function serializeParkingSession(session: ParkingSessionDocument) {
+  const normPlate = session.plate ? session.plate.toUpperCase().replace(/[^A-Z0-9]/g, "") : "";
   return {
     id: session._id.toString(),
-    plate: session.plate,
+    plate: normPlate || session.plate,
     owner: session.ownerName,
     vehicleType: session.vehicleType,
     customerType: session.customerType ?? "guest",

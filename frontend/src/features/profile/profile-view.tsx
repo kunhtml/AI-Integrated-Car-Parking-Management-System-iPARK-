@@ -2059,11 +2059,8 @@ function maskEmail(email: string): string {
 export function ProfileView() {
   const { currentUser, viewAs, setCurrentUser, logout } = useParkingApp();
 
-  // Dùng viewAs để xác định chế độ hiển thị
-  const isCustomer =
-    currentUser?.role === "staff"
-      ? viewAs === "customer"
-      : currentUser?.role === "customer";
+  // Chỉ tài khoản có vai trò là khách hàng thực sự mới được xem/nộp đơn ứng tuyển làm nhân viên
+  const isCustomer = currentUser?.role === "customer";
 
   const [editingField, setEditingField] = useState<string | null>(null);
   const [fieldMsg, setFieldMsg] = useState<{

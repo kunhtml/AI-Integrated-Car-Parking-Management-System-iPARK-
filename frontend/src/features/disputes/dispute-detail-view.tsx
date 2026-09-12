@@ -48,7 +48,7 @@ function formatDateTime(value: string | null | undefined) {
 }
 
 function formatMoney(value: number) {
-  return `${value.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}đ`;
+  return `${Number(value || 0).toLocaleString("vi-VN")}đ`;
 }
 
 const DISPUTE_STATUSES: DisputeStatus[] = [

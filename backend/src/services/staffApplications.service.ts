@@ -164,72 +164,102 @@ function prepareApplicationPayload(payload: ApplicationPayload) {
   return next;
 }
 
+let _isReplicaSetCached: boolean | null = null;
+
+async function isReplicaSet(): Promise<boolean> {
+  if (_isReplicaSetCached !== null) return _isReplicaSetCached;
+  try {
+    const adminDb = mongoose.connection.db?.admin();
+    if (!adminDb) return false;
+    const status = await adminDb.command({ replSetGetStatus: 1 });
+    _isReplicaSetCached = Boolean(status && status.ok);
+  } catch {
+    _isReplicaSetCached = false;
+  }
+  return _isReplicaSetCached;
+}
+
+async function runWithTransactionOrDirect<T>(
+  fn: (session?: mongoose.ClientSession) => Promise<T>,
+): Promise<T> {
+  const hasReplica = await isReplicaSet();
+  if (!hasReplica) {
+    return await fn(undefined);
+  }
+
+  let session: mongoose.ClientSession | undefined;
+  try {
+    session = await mongoose.startSession();
+    let result: T | undefined;
+    await session.withTransaction(async () => {
+      result = await fn(session);
+    });
+    return result as T;
+  } catch (err: any) {
+    if (
+      err &&
+      (err.message?.includes("replica set") ||
+        err.message?.includes("Transaction numbers are only allowed"))
+    ) {
+      _isReplicaSetCached = false;
+      return await fn(undefined);
+    }
+    throw err;
+  } finally {
+    if (session) {
+      await session.endSession().catch(() => undefined);
+    }
+  }
+}
+
+
 export async function createApplication(
   userId: string,
   payload: ApplicationPayload,
   mode: "draft" | "submit",
 ) {
   await assertActiveCustomer(userId);
-  // APP-02: create + history trong một transaction; partial unique index
-  // {userId, status:"pending"} là rào cản cuối chống race hai đơn pending.
-  const session = await mongoose.startSession();
-  try {
-    let application: StaffApplicationDocument | undefined;
-    await session.withTransaction(async () => {
-      const existingPending = await StaffApplication.findOne(
-        { userId, status: "pending" },
-        null,
-        { session },
-      );
-      if (existingPending) {
-        throw Object.assign(new Error("Bạn đã có đơn đang chờ duyệt."), {
-          status: 409,
-        });
-      }
 
-      const preparedPayload = prepareApplicationPayload(payload);
-      const [created] = await StaffApplication.create(
-        [
-          {
-            ...preparedPayload,
-            userId,
-            status: mode === "draft" ? "draft" : "pending",
-            submittedAt: mode === "submit" ? new Date() : undefined,
-            resubmitCount: 0,
-          },
-        ],
-        { session },
-      );
-      application = created;
-
-      const after = getApplicationPayload(created);
-      await appendHistory({
-        application: created,
-        action: mode === "draft" ? "DRAFT_CREATED" : "SUBMITTED",
-        newStatus: created.status,
-        performedBy: userId,
-        performedRole: "customer",
-        before: {},
-        after,
-        session,
-      });
-    });
-    if (!application) {
-      throw Object.assign(new Error("Không tạo được đơn đăng ký."), {
-        status: 500,
-      });
-    }
-    return application;
-  } catch (error) {
-    if ((error as { code?: number }).code === 11000) {
+  return await runWithTransactionOrDirect(async (session) => {
+    const existingPending = await StaffApplication.findOne(
+      { userId, status: "pending" },
+      null,
+      session ? { session } : {},
+    );
+    if (existingPending) {
       throw Object.assign(new Error("Bạn đã có đơn đang chờ duyệt."), {
         status: 409,
       });
     }
-    throw error;
-  } finally {
-    await session.endSession();
-  }
+
+    const preparedPayload = prepareApplicationPayload(payload);
+    const [created] = await StaffApplication.create(
+      [
+        {
+          ...preparedPayload,
+          userId,
+          status: mode === "draft" ? "draft" : "pending",
+          submittedAt: mode === "submit" ? new Date() : undefined,
+          resubmitCount: 0,
+        },
+      ],
+      session ? { session } : {},
+    );
+
+    const after = getApplicationPayload(created);
+    await appendHistory({
+      application: created,
+      action: mode === "draft" ? "DRAFT_CREATED" : "SUBMITTED",
+      newStatus: created.status,
+      performedBy: userId,
+      performedRole: "customer",
+      before: {},
+      after,
+      session,
+    });
+
+    return created;
+  });
 }
 
 export async function saveDraft(
@@ -303,106 +333,87 @@ export async function submitExistingApplication(
   payload?: ApplicationPayload,
 ) {
   await assertActiveCustomer(userId);
-  // APP-01: submit giữ nguyên ID; rejected → pending tăng resubmitCount và
-  // ghi action RESUBMITTED (kể cả khi trước đó có lưu nháp trung gian).
-  // APP-02: conditional update + transaction; partial unique index chặn
-  // submit song song tạo đơn pending thứ hai.
-  const session = await mongoose.startSession();
-  try {
-    let application: StaffApplicationDocument | undefined;
-    await session.withTransaction(async () => {
-      const current = await StaffApplication.findOne({
-        _id: id,
-        userId,
-      }).session(session);
-      if (!current) {
-        throw Object.assign(new Error("Không tìm thấy đơn đăng ký."), {
-          status: 404,
-        });
-      }
-      if (current.status !== "draft" && current.status !== "rejected") {
-        throw Object.assign(
-          new Error("Chỉ được gửi đơn nháp hoặc gửi lại đơn bị từ chối."),
-          { status: 409 },
-        );
-      }
 
-      const missing = [
-        "phone",
-        "idCardNumber",
-        "address",
-        "reason",
-        "preferredShift",
-      ].filter((field) => !current.get(field));
-      if (missing.length) {
-        throw Object.assign(
-          new Error("Vui lòng bổ sung đầy đủ thông tin bắt buộc."),
-          { status: 400 },
-        );
-      }
-
-      const oldStatus = current.status;
-      const before = getApplicationPayload(current);
-      const now = new Date();
-      const updateSet: Record<string, unknown> = {
-        status: "pending",
-        submittedAt: now,
-        ...(oldStatus === "rejected"
-          ? {
-              resubmitCount: (current.resubmitCount ?? 0) + 1,
-              resubmittedAt: now,
-            }
-          : {}),
-      };
-      if (payload) {
-        Object.assign(updateSet, prepareApplicationPayload(payload));
-      }
-      const updated = await StaffApplication.findOneAndUpdate(
-        { _id: id, userId, status: oldStatus },
-        { $set: updateSet },
-        { new: true, session },
-      );
-      if (!updated) {
-        throw Object.assign(new Error("Đơn vừa thay đổi, vui lòng thử lại."), {
-          status: 409,
-        });
-      }
-
-      await appendHistory({
-        application: updated,
-        action: oldStatus === "rejected" ? "RESUBMITTED" : "SUBMITTED",
-        oldStatus,
-        newStatus: "pending",
-        performedBy: userId,
-        performedRole: "customer",
-        before,
-        after: getApplicationPayload(updated),
-        changedFields: [],
-        session,
-      });
-      application = updated;
-    });
-    if (!application) {
-      throw Object.assign(new Error("Không gửi được đơn đăng ký."), {
-        status: 500,
+  return await runWithTransactionOrDirect(async (session) => {
+    const q = StaffApplication.findOne({ _id: id, userId });
+    const current = session ? await q.session(session) : await q;
+    if (!current) {
+      throw Object.assign(new Error("Không tìm thấy đơn đăng ký."), {
+        status: 404,
       });
     }
-    return application;
-  } finally {
-    await session.endSession();
-  }
-}
+    if (current.status !== "draft" && current.status !== "rejected") {
+      throw Object.assign(
+        new Error("Chỉ được gửi đơn nháp hoặc gửi lại đơn bị từ chối."),
+        { status: 409 },
+      );
+    }
 
-export async function getApplicationHistory(
-  applicationId: string,
-  options: { userId?: string; session?: mongoose.ClientSession } = {},
-) {
-  const filter: Record<string, unknown> = { applicationId };
-  if (options.userId) filter.userId = options.userId;
-  return StaffApplicationHistory.find(filter)
-    .sort({ sequence: 1 })
-    .session(options.session ?? null)
-    .lean();
+    const missing = [
+      "phone",
+      "idCardNumber",
+      "address",
+      "reason",
+      "preferredShift",
+    ].filter((field) => !current.get(field));
+    if (missing.length) {
+      throw Object.assign(
+        new Error("Vui lòng bổ sung đầy đủ thông tin bắt buộc."),
+        { status: 400 },
+      );
+    }
+
+    const oldStatus = current.status;
+    const before = getApplicationPayload(current);
+    const now = new Date();
+    const updateSet: Record<string, unknown> = {
+      status: "pending",
+      submittedAt: now,
+      ...(oldStatus === "rejected"
+        ? {
+            resubmitCount: (current.resubmitCount ?? 0) + 1,
+            resubmittedAt: now,
+          }
+        : {}),
+    };
+    if (payload) {
+      Object.assign(updateSet, prepareApplicationPayload(payload));
+    }
+    const updateOptions: any = { new: true };
+    if (session) updateOptions.session = session;
+
+    const updated = await StaffApplication.findOneAndUpdate(
+      { _id: id, userId, status: oldStatus },
+      { $set: updateSet },
+      updateOptions,
+    );
+    if (!updated) {
+      throw Object.assign(
+        new Error("Đơn vừa thay đổi bởi thao tác khác, vui lòng thử lại."),
+        { status: 409 },
+      );
+    }
+
+    const after = getApplicationPayload(updated);
+    const action =
+      oldStatus === "rejected" || (current.resubmitCount ?? 0) > 0
+        ? "RESUBMITTED"
+        : "SUBMITTED";
+
+    await appendHistory({
+      application: updated,
+      action,
+      oldStatus,
+      newStatus: "pending",
+      performedBy: userId,
+      performedRole: "customer",
+      before,
+      after,
+      session,
+    });
+
+    return updated;
+  });
 }
 
 export async function cancelApplication(userId: string) {
