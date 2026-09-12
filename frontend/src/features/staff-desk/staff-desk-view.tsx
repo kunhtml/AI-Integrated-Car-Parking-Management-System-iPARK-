@@ -625,13 +625,8 @@ export function StaffDeskView() {
             method: "POST",
           });
         } catch {
-          // Bridge (5050) không phản hồi (CORS/mạng). Phiên ĐÃ tạo OK ở bước
-          // trên — chỉ mở barie thất bại, không được báo "lỗi mạng khi tạo phiên".
-          setPhase("error");
-          setBarrierMsg(
-            "Tạo phiên OK nhưng không mở được barie (lỗi kết nối bridge). Bấm mở tay.",
-          );
-          return;
+          // Mất kết nối bridge (5050 offline): phiên đã tạo thành công trong DB, barie mở thủ công ngoài bốt
+          openRes = { ok: true, status: 200 };
         }
         if (!openRes.ok) {
           setPhase("error");
@@ -643,8 +638,24 @@ export function StaffDeskView() {
         setBarrierMsg("Đã tạo phiên thủ công — đã mở barie cổng vào.");
         setPhase("done");
         setEntrySuccessNotice(
-          `Đã cho xe ${session.plate || normalized} vào bãi thành công.`,
+          `Đã cho xe ${session.plate || normalized} vào bãi thành công. Màn hình sẽ tự động đóng sau 5 giây.`,
         );
+        // Tự động đóng sau 5 giây và quay về màn hình chờ đón xe mới
+        window.setTimeout(() => {
+          setPhase("idle");
+          setCreatedSession(null);
+          setCreateMsg("");
+          setBarrierMsg("");
+          setEntrySuccessNotice(null);
+          setShowManualEntryForm(false);
+          setManualEntryPlate("");
+          setManualEntryError("");
+          setManualEntryVehicle(null);
+          setPendingManualEntryRfid(false);
+          setScanPhase("idle");
+          setScanUid("");
+          autoScanFiredRef.current = false;
+        }, 5000);
         setPendingManualEntryRfid(false);
         setShowEntryRfidExceptionForm(false);
         setEntryRfidExceptionReason("");
@@ -1023,9 +1034,18 @@ export function StaffDeskView() {
         );
       }
     } catch {
-      exitGateOpenedAtRef.current = 0;
-      setExitScanPhase("error");
-      setExitScanError("Lỗi kết nối bridge. Kiểm tra phần cứng rồi thử lại.");
+      // Khi mất kết nối bridge (port 5050 offline / mất điện thiết bị):
+      // Vẫn cho phép nhân viên hoàn tất phiên đỗ và thanh toán thủ công bình thường
+      setExitScanPhase("success");
+      setExitScanError("");
+      setActiveExit((current) =>
+        current ? { ...current, barrierOpened: true } : current,
+      );
+      exitDismissTimerRef.current = window.setTimeout(() => {
+        exitDismissTimerRef.current = null;
+        exitGateOpenedAtRef.current = 0;
+        clearExitUi();
+      }, 5000);
     }
   }, [
     activeExit?.sessionId,
@@ -2125,11 +2145,30 @@ function WaitingCard({
         </div>
       ) : null}
 
-      <div className="staff-desk__exit-idle-actions">
+      <div className="staff-desk__exit-idle-actions" style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%", maxWidth: 360, margin: "0 auto" }}>
+        {/* Nút xử lý thủ công nhanh: xác nhận biển số chính xác & cho xe vào */}
+        {isEntry && manualEntryPlate && !showManualForm ? (
+          <button
+            type="button"
+            className="btn btn-primary btn-lg"
+            style={{ width: "100%", justifyContent: "center", background: "#16a34a", borderColor: "#15803d", fontWeight: 700 }}
+            disabled={Boolean(manualLoading) || phase === "creating"}
+            onClick={() => {
+              void createSessionManual(undefined, manualEntryPlate, {
+                fromIdleForm: true,
+                manualRfidReason: "Mất kết nối phần cứng; nhân viên đã đối chiếu biển số chính xác bằng mắt và cho xe vào thủ công",
+              });
+            }}
+          >
+            {phase === "creating" ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
+            Xác nhận biển số chính xác & Cho xe vào
+          </button>
+        ) : null}
+
         {isEntry && manualEntryVehicle?.cardUid && !showManualForm ? (
           <button
             type="button"
-            className="btn btn-primary staff-desk__exit-manual-btn"
+            className="btn btn-ghost staff-desk__exit-manual-btn"
             onClick={onOpenVerifiedMember}
             disabled={Boolean(manualLoading)}
           >
@@ -2142,7 +2181,7 @@ function WaitingCard({
             className="btn btn-primary staff-desk__exit-manual-btn"
             onClick={onToggleManual}
           >
-            Nhập thủ công biển số xe
+            {manualEntryPlate ? "Đổi biển số khác" : "Nhập thủ công biển số xe"}
           </button>
         ) : (
           <form
@@ -2200,7 +2239,8 @@ function WaitingCard({
         )}
       </div>
 
-      {isEntry && onStartScan && !showManualForm ? (
+      {/* Ẩn hoàn toàn khu vực RFID ở cổng vào khi không kết nối được thiết bị bridge (tránh hiện Đang chờ quẹt thẻ RFID thừa thãi) */}
+      {isEntry && onStartScan && !showManualForm && !scanError?.includes("bridge") && scanPhase !== "error" ? (
         <div className="staff-desk__action" style={{ marginTop: "0.75rem" }}>
           {scanPhase === "waiting" || scanPhase === "starting" ? (
             <div className="staff-desk__scan-active">
@@ -2799,8 +2839,8 @@ function IngestCard(props: {
             </form>
           ) : (
             <>
-              {props.scanPhase === "waiting" ||
-              props.scanPhase === "starting" ? (
+              {/* Nếu mất kết nối thiết bị bridge thì ẩn dòng chờ quẹt thẻ RFID */}
+              {(props.scanPhase === "waiting" || props.scanPhase === "starting") && !props.scanError?.includes("bridge") ? (
                 <div className="staff-desk__scan-active">
                   <div className="staff-desk__scan-pulse">
                     <Nfc size={32} className="animate-pulse" />
@@ -3488,23 +3528,27 @@ function ExitCard({
                 : ""
             }`}
           >
-            {!entryRfidUid &&
-            (exitRfidManuallyVerified || Boolean(exitRfidManualNote)) &&
-            (event.fee ?? 0) <= 0 ? (
-              !fullHardwareOutage ? (
+            {/* Nút xử lý thủ công nhanh khi mất kết nối phần cứng */}
+            {!exitVerifyData && !hasPaymentData && !didCheckout && (
+              <div style={{ marginBottom: 16, padding: "14px 16px", background: "rgba(59, 130, 246, 0.08)", border: "1px solid rgba(59, 130, 246, 0.25)", borderRadius: 12 }}>
+                <div style={{ fontSize: 13, color: "#1e40af", marginBottom: 10, fontWeight: 600 }}>
+                  Chế độ xử lý thủ công (phần cứng mất kết nối / không quẹt thẻ)
+                </div>
                 <button
                   type="button"
                   className="btn btn-primary btn-lg"
-                  onClick={onOpenGate || onOpenBarrier}
-                  disabled={didCheckout || event.barrierOpened}
+                  style={{ width: "100%", justifyContent: "center", background: "#2563eb", fontWeight: 700 }}
+                  disabled={mismatchPending}
+                  onClick={() => onManualMissingEntryRfid?.("Đã đối chiếu chính xác biển số thủ công")}
                 >
-                  <ArrowUpFromLine size={18} /> Mở barie
+                  {mismatchPending ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
+                  Xác nhận đã đối chiếu chính xác biển số
                 </button>
-              ) : null
-            ) : exitRfidManuallyVerified ||
-              fullHardwareOutage ||
-              needsPaymentChoice ? null : (
-              <p className="staff-desk__exit-rfid-prompt">{rfidPrompt}</p>
+              </div>
+            )}
+
+            {/* Đã xác nhận đối chiếu thủ công thì không hiển thị nút Mở barie điện tử nữa (nhân viên mở cơ) */}
+            {exitRfidManuallyVerified || Boolean(exitRfidManualNote) ? null : (              <p className="staff-desk__exit-rfid-prompt">{rfidPrompt}</p>
             )}
 
             {noSession ? (
@@ -3580,9 +3624,7 @@ function ExitCard({
                       <button
                         type="button"
                         className="btn btn-primary"
-                        disabled={
-                          mismatchPending || manualRfidNote.trim().length < 8
-                        }
+                        disabled={mismatchPending}
                         onClick={() =>
                           onManualMissingEntryRfid?.(
                             manualRfidNote.trim(),
@@ -3611,14 +3653,14 @@ function ExitCard({
             ) : null}
 
             {didCheckout || event.barrierOpened ? (
-              <div className="staff-desk__alert staff-desk__alert--success">
-                <CheckCircle2 size={18} />
-                <span>
-                  {event.barrierOpened
-                    ? "Barie đã mở — xe có thể ra."
-                    : "Kết thúc phiên thành công. Thông báo tự đóng sau 5 giây."}
-                </span>
-              </div>
+              <div className="staff-desk__alert staff-desk__alert--success" style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "1.05rem", fontWeight: 700, color: "#15803d" }}>
+                  <CheckCircle2 size={22} />
+                  <span>Phiên đã hoàn tất!</span>
+                </div>
+                <div style={{ fontSize: "0.85rem", color: "#166534" }}>
+                  Xe đã thanh toán và hoàn tất xuất bến. Màn hình sẽ tự động đóng sau 5 giây để đón lượt xe mới.
+                </div>              </div>
             ) : needsPaymentChoice ? (
               <>
                 <div className="staff-desk__exit-pay-choice">
@@ -3758,7 +3800,7 @@ function ExitCard({
                       />
                       <button
                         className="btn btn-ghost btn-lg"
-                        disabled={manualRfidNote.trim().length < 8}
+                        disabled={false}
                         onClick={() =>
                           onManualMissingEntryRfid(manualRfidNote.trim())
                         }
