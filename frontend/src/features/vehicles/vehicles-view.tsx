@@ -422,7 +422,7 @@ export function VehicleDetailModal({
             style={{
               display: "grid",
               gap: 14,
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
             }}
           >
             <div
@@ -445,6 +445,17 @@ export function VehicleDetailModal({
               </span>
               <div style={{ wordBreak: "break-word" }}>
                 <strong>{vehicle.user?.email || "—"}</strong>
+              </div>
+            </div>
+            <div
+              className="info-box"
+              style={{ minWidth: 0, padding: "14px 16px", borderRadius: 12 }}
+            >
+              <span className="muted-cell" style={{ fontSize: "0.72rem" }}>
+                Số điện thoại
+              </span>
+              <div style={{ wordBreak: "break-word" }}>
+                <strong>{vehicle.ownerPhone || vehicle.user?.phone || "—"}</strong>
               </div>
             </div>
           </div>
@@ -940,11 +951,8 @@ function VehicleEditModal({
     { key: "plate", label: "Biển số" },
     { key: "ownerName", label: "Họ tên chủ xe" },
     { key: "brand", label: "Nhãn hiệu" },
-    { key: "model", label: "Dòng xe (Model)" },
     { key: "color", label: "Màu sơn" },
-    { key: "year", label: "Năm sản xuất" },
     { key: "ownerPhone", label: "Số điện thoại" },
-    { key: "ownerAddress", label: "Địa chỉ", span: true },
   ];
 
   return (
@@ -1960,13 +1968,10 @@ function CustomerEditRequestModal({
     { key: "plate", label: "Biển số" },
     { key: "ownerName", label: "Họ tên chủ xe" },
     { key: "brand", label: "Nhãn hiệu" },
-    { key: "model", label: "Model" },
     { key: "color", label: "Màu sơn" },
-    { key: "year", label: "Năm SX" },
     { key: "engineNo", label: "Số máy" },
     { key: "chassisNo", label: "Số khung" },
     { key: "ownerPhone", label: "Số điện thoại" },
-    { key: "ownerAddress", label: "Địa chỉ", span: true },
   ];
 
   return (
@@ -3938,7 +3943,7 @@ export function VehiclesView() {
                   )}
                   {isCustomer &&
                     vehicle.id &&
-                    vehicleSubscriptionMap.has(vehicle.id) && (
+                    !vehicleSubscriptionMap.has(vehicle.id) && (
                       <button
                         className="small-button"
                         onClick={() => setCustomerDeleteTarget(vehicle)}
