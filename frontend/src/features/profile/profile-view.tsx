@@ -201,8 +201,8 @@ function EditFieldModal({
       setError("Email không hợp lệ.");
       return;
     }
-    if (field === "phone" && !/^[0-9+\-\s()]{6,20}$/.test(trimmed)) {
-      setError("Số điện thoại không hợp lệ.");
+    if (field === "phone" && !/^0\d{9,10}$/.test(trimmed)) {
+      setError("Số điện thoại phải bắt đầu bằng số 0 và có từ 10 đến 11 chữ số.");
       return;
     }
     setError("");

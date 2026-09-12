@@ -962,7 +962,7 @@ const profileUpdateSchema = z
     phone: z
       .string()
       .trim()
-      .regex(/^[0-9+\-\s()]{6,20}$/, "Số điện thoại không hợp lệ")
+      .regex(/^0\d{9,10}$/, "Số điện thoại phải bắt đầu bằng số 0 và có từ 10 đến 11 chữ số")
       .optional()
       .or(z.literal(""))
       .transform((v) => (v ? v : undefined)),
