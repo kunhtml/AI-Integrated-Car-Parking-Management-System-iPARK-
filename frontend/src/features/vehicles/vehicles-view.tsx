@@ -816,6 +816,29 @@ export function VehicleDetailModal({
                     {item.performedBy ? ` · Người gửi: ${item.performedBy}` : ""}
                     {item.resolvedBy ? ` · Người duyệt: ${item.resolvedBy}` : ""}
                   </div>
+                  {/* Hiển thị ảnh xe của đơn thay đổi (nếu có) */}
+                  {item.changes?.imageUrl && (
+                    <div style={{ marginTop: 8, marginBottom: 8, display: "flex", alignItems: "center", gap: 10 }}>
+                      <div
+                        style={{
+                          width: 80,
+                          height: 54,
+                          borderRadius: 8,
+                          overflow: "hidden",
+                          border: "1px solid var(--border, #e2e6ef)",
+                          background: "var(--surface)",
+                        }}
+                      >
+                        <img
+                          src={item.changes.imageUrl}
+                          alt="Ảnh xe yêu cầu"
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
+                      </div>
+                      <span style={{ fontSize: "0.75rem", color: "var(--muted)" }}>Ảnh phương tiện đính kèm</span>
+                    </div>
+                  )}
+
                   {item.changes && Object.keys(item.changes).length > 0 && (
                     <div
                       style={{
@@ -826,6 +849,7 @@ export function VehicleDetailModal({
                       }}
                     >
                       {Object.entries(item.changes).map(([k, v]) => {
+                        if (k === "imageUrl") return null;
                         const labels: Record<string, string> = {
                           plate: "Biển số",
                           ownerName: "Chủ xe",
@@ -842,6 +866,56 @@ export function VehicleDetailModal({
                           </div>
                         );
                       })}
+                    </div>
+                  )}
+
+                  {/* Nút duyệt / từ chối trực tiếp ở từng đơn đang chờ duyệt (dành cho Admin) */}
+                  {isAdmin && item.status === "pending" && item.type === "request" && (
+                    <div style={{ display: "flex", gap: 8, marginTop: 10, paddingTop: 8, borderTop: "1px dashed var(--border, #e2e6ef)" }}>
+                      <button
+                        type="button"
+                        className="small-button"
+                        disabled={processing}
+                        onClick={async () => {
+                          try {
+                            const res = await apiFetch("/vehicle-requests/resolve", {
+                              method: "POST",
+                              body: JSON.stringify({ id: item.id, action: "approved", adminNote: "Admin đã duyệt xe từ lịch sử." }),
+                            });
+                            if (res.ok) {
+                              onApprove();
+                              onClose();
+                            }
+                          } catch (e) {
+                            console.error("Duyệt đơn thất bại:", e);
+                          }
+                        }}
+                        style={{ color: "#15803d", borderColor: "#bbf7d0", padding: "4px 10px", fontSize: "0.78rem" }}
+                      >
+                        <Check size={12} /> Duyệt đơn này
+                      </button>
+                      <button
+                        type="button"
+                        className="small-button"
+                        disabled={processing}
+                        onClick={async () => {
+                          try {
+                            const res = await apiFetch("/vehicle-requests/resolve", {
+                              method: "POST",
+                              body: JSON.stringify({ id: item.id, action: "rejected", adminNote: "Admin từ chối đơn từ lịch sử." }),
+                            });
+                            if (res.ok) {
+                              onReject();
+                              onClose();
+                            }
+                          } catch (e) {
+                            console.error("Từ chối đơn thất bại:", e);
+                          }
+                        }}
+                        style={{ color: "#b91c1c", borderColor: "#fecaca", padding: "4px 10px", fontSize: "0.78rem" }}
+                      >
+                        <X size={12} /> Từ chối
+                      </button>
                     </div>
                   )}
                   {item.adminNote && (

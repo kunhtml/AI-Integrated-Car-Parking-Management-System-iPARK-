@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import {
+  HelpCircle,
+  Info,
   Bell,
   Pencil,
   ReceiptText,
@@ -29,6 +31,64 @@ type NotifTemplate = {
   title: string;
   content: string;
   isActive: boolean;
+};
+
+
+const TRIGGER_DESCRIPTIONS: Record<string, { label: string; desc: string; when: string; variables: string[] }> = {
+  entry: {
+    label: "Xe vào",
+    desc: "Kích hoạt gửi thông báo tự động ngay khi xe vào cổng và phiên gửi xe được tạo thành công.",
+    when: "Xe quét thẻ RFID hoặc AI nhận diện biển số tại cổng vào.",
+    variables: ["{{plate}}", "{{time}}", "{{slot}}", "{{name}}"],
+  },
+  exit: {
+    label: "Xe ra",
+    desc: "Kích hoạt thông báo khi xe ra cổng, hoàn tất thanh toán và rời khỏi bãi xe.",
+    when: "Xe thanh toán phí thành công và barie cổng ra mở.",
+    variables: ["{{plate}}", "{{time}}", "{{fee}}", "{{duration}}"],
+  },
+  subscription_expiring: {
+    label: "Gói sắp hết hạn",
+    desc: "Cảnh báo nhắc nhở khách hàng khi gói vé tháng sắp đến ngày hết hạn để kịp thời gia hạn.",
+    when: "Hệ thống quét định kỳ trước 3 ngày khi gói cước hết hạn.",
+    variables: ["{{name}}", "{{plate}}", "{{planName}}", "{{endDate}}"],
+  },
+  promotion: {
+    label: "Khuyến mại",
+    desc: "Gửi thông báo chiến dịch ưu đãi, giảm giá gói cước hoặc sự kiện tri ân khách hàng.",
+    when: "Admin chủ động phát động sự kiện khuyến mại đến người dùng.",
+    variables: ["{{name}}", "{{discount}}", "{{code}}", "{{expiryDate}}"],
+  },
+  overdue: {
+    label: "Quá hạn",
+    desc: "Thông báo cảnh báo gửi xe quá thời gian quy định cho phép trong bãi.",
+    when: "Xe gửi vượt quá ngưỡng thời gian tối đa cài đặt.",
+    variables: ["{{plate}}", "{{overdueMinutes}}", "{{fineAmount}}"],
+  },
+  low_balance: {
+    label: "Số dư thấp",
+    desc: "Cảnh báo người dùng khi số dư trong ví điện tử không đủ để thanh toán lượt gửi tiếp theo.",
+    when: "Số dư ví giảm xuống dưới hạn mức tối thiểu.",
+    variables: ["{{name}}", "{{balance}}", "{{minBalance}}"],
+  },
+  reservation_confirmed: {
+    label: "Đặt chỗ xác nhận",
+    desc: "Xác nhận khách hàng đã đặt chỗ đỗ xe thành công trên ứng dụng.",
+    when: "Yêu cầu đặt chỗ được hệ thống cấp slot giữ chỗ.",
+    variables: ["{{name}}", "{{plate}}", "{{slot}}", "{{validUntil}}"],
+  },
+  reservation_expired: {
+    label: "Đặt chỗ hết hạn",
+    desc: "Thông báo hủy giữ chỗ khi khách hàng không đến bãi đúng thời gian đã hẹn.",
+    when: "Hết thời gian giữ chỗ mà xe chưa vào cổng.",
+    variables: ["{{name}}", "{{plate}}", "{{slot}}"],
+  },
+  custom: {
+    label: "Tùy chỉnh",
+    desc: "Thông báo tùy biến cho các kịch bản riêng của ban quản trị bãi xe.",
+    when: "Kích hoạt thủ công hoặc qua tích hợp API bên ngoài.",
+    variables: ["{{content}}", "{{title}}"],
+  },
 };
 
 const TRIGGER_LABELS: Record<string, string> = {
@@ -598,55 +658,117 @@ export function PricingView() {
         </form>
       </Modal>
 
-      {/* Create Template Modal */}
+      {/* Create Template Modal with Side-by-Side Trigger Guide */}
       <Modal
         isOpen={createTplModalOpen}
         onClose={() => setCreateTplModalOpen(false)}
-        title="Tạo mẫu thông báo mới"
+        title="Tạo mẫu thông báo mới & Hướng dẫn Trigger"
       >
-        <form className="pricing-edit-form" onSubmit={handleCreateTemplate}>
-          <label className="form-label">
-            <span>Tên mẫu</span>
-            <input name="name" placeholder="VD: ThongBaoXeVao" required />
-          </label>
-          <label className="form-label">
-            <span>Loại trigger</span>
-            <select name="triggerType" required>
-              {Object.entries(TRIGGER_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="form-label">
-            <span>Tiêu đề</span>
-            <input name="title" placeholder="Tiêu đề thông báo..." required />
-          </label>
-          <label className="form-label full">
-            <span>Nội dung</span>
-            <textarea
-              name="content"
-              placeholder="Nội dung thông báo... (hỗ trợ biến: {{plate}}, {{fee}}, {{name}})"
-              required
-              rows={4}
-            />
-          </label>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1.15fr", gap: 24, maxWidth: 940, width: "100%" }}>
+          {/* Cột 1: Form tạo mẫu */}
+          <form className="pricing-edit-form" onSubmit={handleCreateTemplate}>
+            <label className="form-label full">
+              <span>Tên mẫu</span>
+              <input name="name" placeholder="VD: ThongBaoXeVao" required />
+            </label>
+            <label className="form-label full">
+              <span>Loại trigger</span>
+              <select name="triggerType" required>
+                {Object.entries(TRIGGER_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label} ({value})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="form-label full">
+              <span>Tiêu đề</span>
+              <input name="title" placeholder="Tiêu đề thông báo..." required />
+            </label>
+            <label className="form-label full">
+              <span>Nội dung</span>
+              <textarea
+                name="content"
+                placeholder="Nội dung thông báo... (hỗ trợ biến: {{plate}}, {{fee}}, {{name}})"
+                required
+                rows={5}
+              />
+            </label>
 
-          <div className="form-actions">
-            <button
-              className="cancel-btn"
-              type="button"
-              onClick={() => setCreateTplModalOpen(false)}
-            >
-              Hủy
-            </button>
-            <button className="save-btn" type="submit">
-              <Plus size={16} />
-              <span>Tạo mẫu</span>
-            </button>
+            <div className="form-actions" style={{ gridColumn: "span 2", marginTop: 12 }}>
+              <button
+                className="cancel-btn"
+                type="button"
+                onClick={() => setCreateTplModalOpen(false)}
+              >
+                Hủy
+              </button>
+              <button className="save-btn" type="submit">
+                <Plus size={16} />
+                <span>Tạo mẫu</span>
+              </button>
+            </div>
+          </form>
+
+          {/* Cột 2: Bảng giải thích chi tiết toàn bộ Trigger có thể dùng */}
+          <div
+            style={{
+              background: "rgba(0,0,0,0.02)",
+              borderRadius: 12,
+              padding: "16px 18px",
+              border: "1px solid var(--border, #e2e8f0)",
+              maxHeight: 460,
+              overflowY: "auto",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, borderBottom: "1px solid var(--border, #e2e8f0)", paddingBottom: 8 }}>
+              <Info size={18} style={{ color: "#2563eb" }} />
+              <div>
+                <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: "#1e293b" }}>
+                  Danh sách Trigger có sẵn
+                </h4>
+                <span style={{ fontSize: 12, color: "var(--muted, #64748b)" }}>
+                  Sự kiện kích hoạt và mục đích sử dụng
+                </span>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {Object.entries(TRIGGER_DESCRIPTIONS).map(([key, item]) => (
+                <div
+                  key={key}
+                  style={{
+                    background: "var(--surface, #fff)",
+                    padding: "10px 14px",
+                    borderRadius: 8,
+                    border: "1px solid var(--border, #e2e8f0)",
+                    fontSize: 13,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                    <strong style={{ color: "#0f172a" }}>{item.label}</strong>
+                    <code style={{ fontSize: 11, background: "rgba(59,130,246,0.1)", color: "#2563eb", padding: "1px 6px", borderRadius: 4 }}>
+                      {key}
+                    </code>
+                  </div>
+                  <p style={{ margin: "0 0 4px", color: "#334155", fontSize: 12 }}>
+                    {item.desc}
+                  </p>
+                  <div style={{ fontSize: 11, color: "var(--muted, #64748b)" }}>
+                    <strong>Khi nào chạy:</strong> {item.when}
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--muted, #64748b)", marginTop: 2 }}>
+                    <strong>Biến khả dụng:</strong>{" "}
+                    {item.variables.map((v) => (
+                      <span key={v} style={{ color: "#059669", marginRight: 4, fontWeight: 600 }}>{v}</span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-        </form>
+        </div>
       </Modal>
 
       {/* Edit Template Modal */}
