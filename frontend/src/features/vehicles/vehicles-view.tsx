@@ -981,8 +981,8 @@ function VehicleEditModal({
       .replace(/[\s.-]+/g, "");
     if (!plate) {
       errs.plate = "Vui lòng nhập biển số.";
-    } else if (!/^[A-Z0-9]{5,9}$/.test(plate)) {
-      errs.plate = "Biển số chỉ gồm chữ và số (5–9 ký tự).";
+    } else if (!/^\d{2}[A-Z]{1,2}\d{4,5}$/.test(plate) || plate.length < 7 || plate.length > 9) {
+      errs.plate = "Biển số không hợp lệ (tối đa 8-9 ký tự, ví dụ: 30A77770, 29A12345).";
     }
     if (form.ownerName.trim() && form.ownerName.trim().length < 2) {
       errs.ownerName = "Họ tên phải có ít nhất 2 ký tự.";
@@ -1592,8 +1592,8 @@ function ResubmitVehicleModal({
     const errs: Record<string, string> = {};
     const plate = form.plate.trim().toUpperCase().replace(/[\s.-]+/g, "");
     if (!plate) errs.plate = "Vui lòng nhập biển số.";
-    else if (!/^[A-Z0-9]{5,9}$/.test(plate))
-      errs.plate = "Biển số chỉ gồm chữ và số (5–9 ký tự).";
+    else if (!/^\d{2}[A-Z]{1,2}\d{4,5}$/.test(plate) || plate.length < 7 || plate.length > 9)
+      errs.plate = "Biển số không hợp lệ (tối đa 8-9 ký tự, ví dụ: 30A77770, 29A12345).";
     if (form.ownerName.trim() && form.ownerName.trim().length < 2)
       errs.ownerName = "Họ tên phải có ít nhất 2 ký tự.";
     const phone = form.ownerPhone.trim();
@@ -2055,8 +2055,8 @@ function CustomerEditRequestModal({
       .trim()
       .toUpperCase()
       .replace(/[\s.-]+/g, "");
-    if (plate && !/^[A-Z0-9]{5,9}$/.test(plate))
-      errs.plate = "Biển số chỉ gồm chữ và số (5–9 ký tự).";
+    if (plate && (!/^\d{2}[A-Z]{1,2}\d{4,5}$/.test(plate) || plate.length < 7 || plate.length > 9))
+      errs.plate = "Biển số không hợp lệ (tối đa 8-9 ký tự, ví dụ: 30A77770, 29A12345).";
     if (form.ownerName.trim() && form.ownerName.trim().length < 2)
       errs.ownerName = "Họ tên phải có ít nhất 2 ký tự.";
     const phone = form.ownerPhone.trim();

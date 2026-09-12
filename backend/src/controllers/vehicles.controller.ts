@@ -110,6 +110,12 @@ export async function createVehicle(request: Request, response: Response) {
     .trim()
     .toUpperCase()
     .replace(/[\s.-]+/g, "");
+
+  // Ràng buộc biển số xe chuẩn: tối đa 8 đến 9 ký tự (ví dụ: 30A77770, 51C67890)
+  if (!/^\d{2}[A-Z]{1,2}\d{4,5}$/.test(normPlate) || normPlate.length < 7 || normPlate.length > 9) {
+    response.status(400).json({ message: "Biển số không hợp lệ (tối đa 8 đến 9 ký tự, ví dụ: 30A77770, 29A12345)." });
+    return;
+  }
   const existing = await Vehicle.findOne({ plate: normPlate });
   if (existing) {
     response
@@ -215,11 +221,19 @@ export async function updateVehicle(request: Request, response: Response) {
   }
 
   let oldPlate: string | undefined;
+  let validatedNormPlate: string | undefined;
   if (body.plate) {
     const normPlate = body.plate
       .trim()
       .toUpperCase()
       .replace(/[\s.-]+/g, "");
+
+    // Ràng buộc biển số xe chuẩn: tối đa 8 đến 9 ký tự (ví dụ: 30A77770, 51C67890)
+    if (!/^\d{2}[A-Z]{1,2}\d{4,5}$/.test(normPlate) || normPlate.length < 7 || normPlate.length > 9) {
+      response.status(400).json({ message: "Biển số không hợp lệ (tối đa 8 đến 9 ký tự, ví dụ: 30A77770, 29A12345)." });
+      return;
+    }
+
     const conflict = await Vehicle.findOne({ plate: normPlate });
     if (conflict && conflict._id.toString() !== vehicleId) {
       response
@@ -227,6 +241,7 @@ export async function updateVehicle(request: Request, response: Response) {
         .json({ message: "Biển số đã tồn tại trong hệ thống." });
       return;
     }
+    validatedNormPlate = normPlate;
     if (request.user?.role !== "customer") {
       oldPlate = existing.plate;
       existing.plate = normPlate;
@@ -236,7 +251,7 @@ export async function updateVehicle(request: Request, response: Response) {
   // Nếu là KHÁCH HÀNG sửa xe -> Chuyển trạng thái xe thành 'Cần duyệt' và tạo VehicleRequest chờ Admin duyệt
   if (request.user?.role === "customer") {
     const requestedChanges: Record<string, any> = {};
-    if (body.plate) requestedChanges.plate = body.plate.trim().toUpperCase().replace(/[\s-]+/g, "");
+    if (validatedNormPlate) requestedChanges.plate = validatedNormPlate;
     if (body.ownerName !== undefined) requestedChanges.ownerName = body.ownerName;
     if (body.ownerPhone !== undefined) requestedChanges.ownerPhone = body.ownerPhone;
     if (body.ownerAddress !== undefined) requestedChanges.ownerAddress = body.ownerAddress;
@@ -296,7 +311,7 @@ export async function updateVehicle(request: Request, response: Response) {
   // Nếu là KHÁCH HÀNG sửa xe -> Chuyển trạng thái xe thành 'Cần duyệt' và tạo VehicleRequest chờ Admin duyệt
   if (request.user?.role === "customer") {
     const requestedChanges: Record<string, any> = {};
-    if (body.plate) requestedChanges.plate = body.plate.trim().toUpperCase().replace(/[\s-]+/g, "");
+    if (validatedNormPlate) requestedChanges.plate = validatedNormPlate;
     if (body.ownerName !== undefined) requestedChanges.ownerName = body.ownerName;
     if (body.ownerPhone !== undefined) requestedChanges.ownerPhone = body.ownerPhone;
     if (body.ownerAddress !== undefined) requestedChanges.ownerAddress = body.ownerAddress;
