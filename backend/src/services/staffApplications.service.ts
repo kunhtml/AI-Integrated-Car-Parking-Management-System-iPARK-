@@ -416,6 +416,19 @@ export async function submitExistingApplication(
   });
 }
 
+
+export async function getApplicationHistory(
+  applicationId: string,
+  options: { userId?: string; session?: mongoose.ClientSession } = {},
+) {
+  const filter: Record<string, unknown> = { applicationId };
+  if (options.userId) filter.userId = options.userId;
+  return StaffApplicationHistory.find(filter)
+    .sort({ sequence: 1 })
+    .session(options.session ?? null)
+    .lean();
+}
+
 export async function cancelApplication(userId: string) {
   // APP-02: cancel nguyên tử theo trạng thái pending; history cùng transaction.
   const session = await mongoose.startSession();
