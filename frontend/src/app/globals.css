@@ -966,7 +966,7 @@ tr:hover td {
   flex-direction: column;
   gap: 4px;
   flex: 1;
-}/* Legacy support */
+} /* Legacy support */
 .sidebar button,
 .sidebar a {
   background: transparent;
@@ -998,7 +998,7 @@ tr:hover td {
   font-weight: 600;
   box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
   border-left: 3px solid #93c5fd;
-}/* ─── Workspace ────────────────────────────────────────────────── */
+} /* ─── Workspace ────────────────────────────────────────────────── */
 .workspace {
   min-width: 0;
   padding: 28px 32px;
@@ -1140,7 +1140,8 @@ tr:hover td {
   font-weight: 800;
   gap: 10px;
   color: var(--fg);
-}.eyebrow {
+}
+.eyebrow {
   color: var(--primary);
   display: inline-flex;
   font-size: 12px;
@@ -1163,7 +1164,8 @@ tr:hover td {
   font-size: 16px;
   line-height: 1.7;
   margin-top: 16px;
-}.hero-actions {
+}
+.hero-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
@@ -1211,7 +1213,8 @@ tr:hover td {
   color: var(--fg);
   box-shadow: var(--shadow-sm);
   font-weight: 600;
-}.muted-text,
+}
+.muted-text,
 .muted-cell {
   color: var(--fg-muted);
   font-size: 13px;
@@ -1415,7 +1418,8 @@ tr:hover td {
 .module-item svg {
   color: var(--success);
   flex: 0 0 auto;
-}.icon-button {
+}
+.icon-button {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   color: var(--fg);
@@ -1426,6 +1430,27 @@ tr:hover td {
 .icon-button:hover {
   border-color: var(--primary);
   color: var(--primary);
+}
+
+/* Chỉ hiện trên mobile (sidebar dạng drawer) */
+.mobile-only {
+  display: none;
+}
+
+.sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 9;
+  border: none;
+  padding: 0;
+  min-width: 0;
+}
+
+@media (max-width: 980px) {
+  .mobile-only {
+    display: inline-flex;
+  }
 }
 /* ─── Responsive ───────────────────────────────────────────────── */
 @media (max-width: 980px) {
@@ -1459,7 +1484,8 @@ tr:hover td {
   .workspace {
     margin-left: 0;
     padding: 20px 16px;
-  }}
+  }
+}
 
 @media (max-width: 640px) {
   .hero {
@@ -1530,12 +1556,13 @@ tr:hover td {
   color: var(--fg-muted);
   margin-top: 8px;
   font-size: 15px;
-}/* Zone Cards */
+} /* Zone Cards */
 .zone-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 16px;
-}.zone-bar {
+}
+.zone-bar {
   background: #e2e8f0;
   border-radius: 4px;
   height: 6px;
@@ -1602,7 +1629,8 @@ tr:hover td {
   .contact-grid {
     grid-template-columns: 1fr;
   }
-}.auth-divider {
+}
+.auth-divider {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1988,7 +2016,8 @@ tr:hover td {
 
 .landing-stat:last-child {
   border-right: none;
-}.status-badge {
+}
+.status-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -2009,11 +2038,14 @@ tr:hover td {
     opacity: 1;
   }
 }
-@media (max-width: 1024px) {}.hero-actions {
+@media (max-width: 1024px) {
+}
+.hero-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
-}@keyframes pulseBg {
+}
+@keyframes pulseBg {
   0% {
     transform: scale(0.95);
     box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
@@ -2026,7 +2058,8 @@ tr:hover td {
     transform: scale(0.95);
     box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
   }
-}.landing-stat-value {
+}
+.landing-stat-value {
   font-size: 28px;
   font-weight: 800;
   font-family: var(--font-geist-mono), monospace;
@@ -2167,6 +2200,30 @@ tr:hover td {
   object-fit: cover;
   object-position: center;
   background: #0b1220;
+}
+
+.staff-desk__stream-offline {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: #f8fafc;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  background: rgba(11, 18, 32, 0.88);
+}
+
+/* Bridge mất kết nối: không được gợi ý thao tác quét RFID không thể thực hiện. */
+.staff-desk__exit-rfid-card--hardware-outage .staff-desk__exit-rfid-waiting {
+  display: none;
+}
+
+.staff-desk__exit-rfid-card--hardware-outage .staff-desk__exit-rfid-actions,
+.staff-desk__exit-rfid-card--hardware-outage .staff-desk__exit-rfid-buttons {
+  display: none;
 }
 
 /* Panel card */
@@ -2843,11 +2900,12 @@ tr:hover td {
   height: 6px;
   border-radius: 50%;
   background: var(--landing-accent);
-}.landing-fee-divider {
+}
+.landing-fee-divider {
   border: none;
   border-top: 1px solid var(--landing-border);
   margin: 8px 0;
-}/* QR Code Section */
+} /* QR Code Section */
 .landing-qr-section {
   background: rgba(129, 140, 248, 0.08);
   border: 1px solid var(--landing-border);
@@ -2940,7 +2998,7 @@ tr:hover td {
 /* ─── Pricing Section ──────────────────────────────────────────── */
 .landing-pricing {
   scroll-margin-top: 80px;
-}/* ─── Pricing Section (dynamic) ─────────────────────────────── */
+} /* ─── Pricing Section (dynamic) ─────────────────────────────── */
 .pkpricing-loading {
   display: flex;
   flex-direction: column;
@@ -3210,7 +3268,8 @@ tr:hover td {
   }
   .landing-session-result {
     grid-template-columns: 1fr;
-  }}
+  }
+}
 
 @media (max-width: 640px) {
   .landing-header-inner {
@@ -3261,7 +3320,7 @@ tr:hover td {
 /* ─── Landing Availability Section ─────────────────────────────── */
 .landing-availability {
   scroll-margin-top: 80px;
-}/* ─── Parking Availability (UC01) ──────────────────────────────── */
+} /* ─── Parking Availability (UC01) ──────────────────────────────── */
 .pkav {
   margin-top: 32px;
   display: flex;
@@ -3922,7 +3981,8 @@ tr:hover td {
 
 .landing-auth form .required {
   color: var(--landing-danger);
-}.landing-auth form .form-row {
+}
+.landing-auth form .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
@@ -5030,7 +5090,8 @@ tr:hover td {
 .header-actions {
   display: flex;
   gap: 10px;
-}@keyframes spin {
+}
+@keyframes spin {
   from {
     transform: rotate(0deg);
   }
@@ -5102,7 +5163,8 @@ tr:hover td {
 .stat-label {
   font-size: 13px;
   color: var(--fg-muted);
-}@keyframes slotPulse {
+}
+@keyframes slotPulse {
   0%,
   100% {
     transform: scale(1);
@@ -5110,7 +5172,8 @@ tr:hover td {
   50% {
     transform: scale(0.95);
   }
-}@keyframes carPark {
+}
+@keyframes carPark {
   from {
     opacity: 0;
     transform: translateX(20px);
@@ -5119,11 +5182,13 @@ tr:hover td {
     opacity: 1;
     transform: translateX(0);
   }
-}.vehicle-info {
+}
+.vehicle-info {
   display: flex;
   align-items: center;
   gap: 6px;
-}@keyframes pulse {
+}
+@keyframes pulse {
   0%,
   100% {
     opacity: 1;
@@ -5139,13 +5204,15 @@ tr:hover td {
   to {
     transform: rotate(360deg);
   }
-}.slot-actions {
+}
+.slot-actions {
   display: flex;
   gap: 6px;
   padding-top: 8px;
   border-top: 1px solid var(--border);
   margin-top: auto;
-}.empty-state {
+}
+.empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -5227,7 +5294,8 @@ tr:hover td {
   margin-left: auto;
   font-size: 13px;
   color: var(--fg-muted);
-}.form-row {
+}
+.form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
@@ -5289,14 +5357,17 @@ tr:hover td {
 }
 
 /* Responsive */
-@media (max-width: 1024px) {}
+@media (max-width: 1024px) {
+}
 
 @media (max-width: 768px) {
   .form-row {
     grid-template-columns: 1fr;
-  }}
+  }
+}
 
-@media (max-width: 480px) {}
+@media (max-width: 480px) {
+}
 
 /* ─── Pricing Page ─────────────────────────────────────────────── */
 .pricing-page {
@@ -5549,7 +5620,7 @@ tr:hover td {
   font-size: 16px;
   font-weight: 600;
   color: var(--fg);
-}/* Templates */
+} /* Templates */
 .templates-header {
   display: flex;
   justify-content: space-between;
@@ -5932,7 +6003,7 @@ tr:hover td {
   background: #059669;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-}/* Responsive */
+} /* Responsive */
 @media (max-width: 768px) {
   .pricing-page {
     padding: 16px;
@@ -5957,7 +6028,8 @@ tr:hover td {
 
   .templates-grid {
     grid-template-columns: 1fr;
-  }}
+  }
+}
 
 @media (max-width: 480px) {
   .pricing-info-grid {
@@ -6045,7 +6117,7 @@ tr:hover td {
 /* Stats */
 .users-stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -6058,6 +6130,30 @@ tr:hover td {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.user-stat-card:hover {
+  border-color: var(--primary);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.12);
+}
+
+.user-stat-card:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.user-stat-card.is-active {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  box-shadow: inset 0 0 0 1px var(--primary);
 }
 
 .user-stat-icon {
@@ -6078,6 +6174,10 @@ tr:hover td {
 .user-stat-icon.active {
   color: var(--success);
   background: var(--success-soft);
+}
+.user-stat-icon.locked {
+  color: var(--danger);
+  background: var(--danger-soft);
 }
 .user-stat-icon.staff {
   color: var(--warning);
@@ -6332,7 +6432,7 @@ tr:hover td {
   color: white;
   font-weight: 600;
   flex-shrink: 0;
-}/* Users Modal */
+} /* Users Modal */
 .users-modal-overlay {
   position: fixed;
   top: 0;
@@ -7840,7 +7940,8 @@ tr:hover td {
   background: var(--primary-soft);
   color: var(--primary);
   border: 1px solid #bfdbfe;
-}.rfid-card {
+}
+.rfid-card {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -7899,7 +8000,9 @@ tr:hover td {
 .rfid-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.32);
-}@media (max-width: 640px) {}
+}
+@media (max-width: 640px) {
+}
 /* Customer Subs Section */
 .customer-subs-section {
   background: var(--bg-elevated);
@@ -8275,7 +8378,8 @@ tr:hover td {
 }
 
 /* Responsive */
-@media (max-width: 1024px) {}
+@media (max-width: 1024px) {
+}
 
 @media (max-width: 768px) {
   .subscriptions-page {
@@ -8306,7 +8410,8 @@ tr:hover td {
   }
 }
 
-@media (max-width: 480px) {}
+@media (max-width: 480px) {
+}
 
 /* ==========================================================================
    RFID View
@@ -10601,7 +10706,7 @@ textarea.form-input {
 
 .device-card-heading {
   display: flex;
-  justifyContent: space-between;
+  justifycontent: space-between;
   align-items: center;
   gap: 12px;
 }
@@ -10726,9 +10831,12 @@ textarea.form-input {
   margin: 10px 0 0;
   color: #53657c;
   font-size: 13px;
-}.device-form-wide {
+}
+.device-form-wide {
   grid-column: 1 / -1;
-}@media (max-width: 640px) {  .devices-toolbar > * {
+}
+@media (max-width: 640px) {
+  .devices-toolbar > * {
     width: 100%;
   }
 }
@@ -10866,7 +10974,8 @@ textarea.form-input {
   color: #92400e;
   font-size: 13px;
   font-weight: 600;
-}.sessions-table tbody tr:hover {
+}
+.sessions-table tbody tr:hover {
   background: var(--bg);
 }
 
@@ -11721,7 +11830,7 @@ textarea.form-input {
     opacity: 1;
     transform: translateY(0);
   }
-}/* Spin animation */
+} /* Spin animation */
 .spin {
   animation: spin 1s linear infinite;
 }
@@ -11736,13 +11845,17 @@ textarea.form-input {
 }
 
 /* ─── Responsive ─────────────────────────────────────────────────── */
-@media (max-width: 1280px) {}
+@media (max-width: 1280px) {
+}
 
-@media (max-width: 1024px) {}
+@media (max-width: 1024px) {
+}
 
-@media (max-width: 768px) {}
+@media (max-width: 768px) {
+}
 
-@media (max-width: 480px) {}
+@media (max-width: 480px) {
+}
 
 /* ─── Reports Page ────────────────────────────────────────────────── */
 .rep-root {
@@ -12488,7 +12601,7 @@ textarea.form-input {
   font-size: 12px;
   font-weight: 800;
   color: #10b981;
-}/* Summary insight */
+} /* Summary insight */
 .rep-summary-insight {
   display: flex;
   align-items: center;
@@ -12938,7 +13051,7 @@ textarea.form-input {
 .staff-range-tab.active {
   background: #8b5cf6;
   color: #fff;
-}/* Zone bars */
+} /* Zone bars */
 .staff-zone-bars {
   padding: 14px 16px;
   display: flex;
@@ -13719,7 +13832,7 @@ textarea.form-input {
   outline: none;
   border-color: var(--primary);
   box-shadow: 0 0 0 3px var(--ring);
-}/* Table cell helpers */
+} /* Table cell helpers */
 .veh-thumb {
   width: 56px;
   height: 40px;
@@ -13756,7 +13869,7 @@ textarea.form-input {
 .veh-info-cell {
   font-size: 0.8rem;
   color: var(--muted);
-}/* Pagination for vehicles page */
+} /* Pagination for vehicles page */
 .veh-pagination {
   display: flex;
   justify-content: space-between;
@@ -14245,7 +14358,7 @@ textarea.form-input {
   .guest-exit-actions {
     flex-direction: column;
   }
-}/* Reference-style revenue bars */
+} /* Reference-style revenue bars */
 .staff-revenue-chart {
   margin: 0 16px 12px;
   padding: 22px 20px 26px;
@@ -15911,10 +16024,19 @@ textarea.form-input {
   border-radius: 14px;
   background: #fff;
   box-shadow: 0 8px 22px rgba(24, 78, 135, 0.12);
-}@media (max-width: 1050px) {}
-@media (max-width: 720px) {}@media (max-width: 900px) {}
-@media (max-width: 620px) {}@media (max-width: 760px) {}
-@media (max-width: 480px) {}
+}
+@media (max-width: 1050px) {
+}
+@media (max-width: 720px) {
+}
+@media (max-width: 900px) {
+}
+@media (max-width: 620px) {
+}
+@media (max-width: 760px) {
+}
+@media (max-width: 480px) {
+}
 
 /* RFID detail modal layout */
 .rfid-sales-modal:has(.rfid-detail-grid) {
@@ -16086,8 +16208,11 @@ textarea.form-input {
     flex-direction: column;
     gap: 3px;
   }
-}@media (max-width: 760px) {}
-@media (max-width: 620px) {}
+}
+@media (max-width: 760px) {
+}
+@media (max-width: 620px) {
+}
 
 /* ============================================================
    STAFF DESK — EXIT CONSOLE (wireframe cổng ra)
@@ -16793,8 +16918,9 @@ textarea.form-input {
   border-radius: var(--radius-sm);
   padding: 10px;
   resize: vertical;
-}@media (max-width: 620px) {}
-
+}
+@media (max-width: 620px) {
+}
 
 /* ─── Quota Parking Slots Styling ───────────────────────────── */
 .quota-slots-page {

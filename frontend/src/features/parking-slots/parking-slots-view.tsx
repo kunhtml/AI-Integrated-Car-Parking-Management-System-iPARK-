@@ -324,7 +324,7 @@ function SlotTile({
   const customerLabel = memberWithoutPackage
     ? "Khách Thành Viên (chưa mua gói tháng)"
     : slot.customerType === "member"
-      ? "Khách Thành Viên (Không Có Gói)"
+      ? "Khách Thành Viên (có gói tháng)"
       : slot.isRegisteredMember
         ? "Khách Thành Viên (chưa mua gói tháng)"
         : "Khách Vãng Lai";
@@ -610,7 +610,10 @@ export function ParkingSlotsView() {
             đúng khu vực, không lấy chéo quota.
           </p>
         </div>
-        <div className="quota-hero-actions" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div
+          className="quota-hero-actions"
+          style={{ display: "flex", alignItems: "center", gap: 12 }}
+        >
           <div
             style={{
               display: "flex",
@@ -624,29 +627,90 @@ export function ParkingSlotsView() {
             }}
           >
             <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#a5d8f3", fontWeight: 600 }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                  color: "#a5d8f3",
+                  fontWeight: 600,
+                }}
+              >
                 Tổng slot
               </div>
-              <div style={{ fontSize: 22, fontWeight: 850, color: "#fff", lineHeight: 1.1 }}>
+              <div
+                style={{
+                  fontSize: 22,
+                  fontWeight: 850,
+                  color: "#fff",
+                  lineHeight: 1.1,
+                }}
+              >
                 {slotList.length}
               </div>
             </div>
-            <div style={{ width: 1, height: 26, background: "rgba(255,255,255,0.2)" }} />
+            <div
+              style={{
+                width: 1,
+                height: 26,
+                background: "rgba(255,255,255,0.2)",
+              }}
+            />
             <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#86efac", fontWeight: 600 }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                  color: "#86efac",
+                  fontWeight: 600,
+                }}
+              >
                 Còn trống
               </div>
-              <div style={{ fontSize: 22, fontWeight: 850, color: "#86efac", lineHeight: 1.1 }}>
+              <div
+                style={{
+                  fontSize: 22,
+                  fontWeight: 850,
+                  color: "#86efac",
+                  lineHeight: 1.1,
+                }}
+              >
                 {slotList.filter((s) => s.status === "empty").length}
               </div>
             </div>
-            <div style={{ width: 1, height: 26, background: "rgba(255,255,255,0.2)" }} />
+            <div
+              style={{
+                width: 1,
+                height: 26,
+                background: "rgba(255,255,255,0.2)",
+              }}
+            />
             <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#fca5a5", fontWeight: 600 }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                  color: "#fca5a5",
+                  fontWeight: 600,
+                }}
+              >
                 Đang đỗ
               </div>
-              <div style={{ fontSize: 22, fontWeight: 850, color: "#fca5a5", lineHeight: 1.1 }}>
-                {slotList.filter((s) => s.status === "occupied" || s.status === "reserved").length}
+              <div
+                style={{
+                  fontSize: 22,
+                  fontWeight: 850,
+                  color: "#fca5a5",
+                  lineHeight: 1.1,
+                }}
+              >
+                {
+                  slotList.filter(
+                    (s) => s.status === "occupied" || s.status === "reserved",
+                  ).length
+                }
               </div>
             </div>
           </div>
@@ -844,11 +908,7 @@ export function ParkingSlotsView() {
       </section>
 
       {detailSlot && (
-        <div
-          className="modal-overlay"
-          role="presentation"
-          
-        >
+        <div className="modal-overlay" role="presentation">
           <section
             className="modal-card session-detail-modal"
             role="dialog"
@@ -908,7 +968,7 @@ export function ParkingSlotsView() {
                   detailSlot.quotaType !== "member"
                     ? "Khách Thành Viên (chưa mua gói tháng)"
                     : detailSlot.customerType === "member"
-                      ? "Khách Thành Viên (Không Có Gói)"
+                      ? "Khách Thành Viên (có gói tháng)"
                       : detailSlot.isRegisteredMember
                         ? "Khách Thành Viên (chưa mua gói tháng)"
                         : "Khách Vãng Lai"}

@@ -19,6 +19,7 @@ import {
   getApplicationPayload,
   saveDraft,
   submitExistingApplication,
+  runWithTransactionOrDirect,
   type ApplicationPayload,
 } from "../services/staffApplications.service.js";
 import { fingerprintField } from "../utils/crypto.util.js";
@@ -389,7 +390,11 @@ export async function reviewStaffApplication(
       const current = session ? await q.session(session) : await q;
       if (!current) {
         const existing = session
-          ? await StaffApplication.findOne({ _id: String(request.params.id) }, null, { session })
+          ? await StaffApplication.findOne(
+              { _id: String(request.params.id) },
+              null,
+              { session },
+            )
           : await StaffApplication.findOne({ _id: String(request.params.id) });
         throw Object.assign(
           new Error(
@@ -403,7 +408,7 @@ export async function reviewStaffApplication(
       const oldStatus = current.status;
       const now = new Date();
       const reviewerId = new mongoose.Types.ObjectId(request.user!.id);
-      const updateOptions: any = { new: true };
+      const updateOptions: mongoose.QueryOptions = { new: true };
       if (session) updateOptions.session = session;
 
       if (body.decision === "rejected") {
@@ -518,7 +523,7 @@ export async function reviewStaffApplication(
       ),
     });
   } finally {
-    await session.endSession();
+    // session đã được đóng bên trong runWithTransactionOrDirect
   }
 }
 

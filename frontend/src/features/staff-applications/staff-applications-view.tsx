@@ -81,6 +81,37 @@ const SHIFT_LABELS: Record<StaffApplication["preferredShift"], string> = {
   flexible: "Linh hoạt",
 };
 
+const HISTORY_ACTION_LABELS: Record<
+  StaffApplicationHistory["action"],
+  { label: string; color: string }
+> = {
+  DRAFT_CREATED: { label: "Tạo bản nháp", color: "#64748b" },
+  SUBMITTED: { label: "Gửi đơn", color: "#f59e0b" },
+  EDITED: { label: "Chỉnh sửa đơn", color: "#0ea5e9" },
+  RESUBMITTED: { label: "Gửi lại đơn", color: "#f59e0b" },
+  APPROVED: { label: "Duyệt đơn", color: "#22c55e" },
+  REJECTED: { label: "Từ chối", color: "#ef4444" },
+  CANCELLED: { label: "Hủy đơn", color: "#64748b" },
+  MIGRATED: { label: "Chuyển dữ liệu", color: "#64748b" },
+};
+
+const HISTORY_STATUS_LABELS: Record<StaffApplication["status"], string> = {
+  draft: "Bản nháp",
+  pending: "Đang chờ",
+  approved: "Đã duyệt",
+  rejected: "Đã từ chối",
+  cancelled: "Đã hủy",
+};
+
+const HISTORY_FIELD_LABELS: Record<string, string> = {
+  phone: "số điện thoại",
+  idCardNumber: "CCCD/CMND",
+  address: "địa chỉ",
+  experience: "kinh nghiệm",
+  reason: "lý do đăng ký",
+  preferredShift: "ca làm mong muốn",
+};
+
 function StatusBadge({ status }: { status: StaffApplication["status"] }) {
   const info = STATUS_STYLES[status];
   const Icon = info.icon;
@@ -344,6 +375,7 @@ export function StaffApplicationsView() {
 
       {selected && (
         <ApplicationReviewModal
+          key={selected.id}
           application={selected}
           onClose={() => setSelected(null)}
           onReviewed={(updated) => {
@@ -461,17 +493,24 @@ function ApplicationCard({
           color: "var(--text, #0f172a)",
         }}
       >
-        <InfoLine icon={<Phone size={12} />} text={application.phone} />
+        <InfoLine
+          icon={<Phone size={12} />}
+          label="Số điện thoại"
+          text={application.phone}
+        />
         <InfoLine
           icon={<IdCard size={12} />}
+          label="Số căn cước"
           text={maskIdCard(application.idCardNumber)}
         />
         <InfoLine
           icon={<Briefcase size={12} />}
+          label="Ca muốn làm"
           text={SHIFT_LABELS[application.preferredShift]}
         />
         <InfoLine
           icon={<Clock4 size={12} />}
+          label="Thời gian tạo đơn"
           text={formatDate(application.createdAt)}
         />
       </div>
@@ -493,7 +532,15 @@ function ApplicationCard({
   );
 }
 
-function InfoLine({ icon, text }: { icon: React.ReactNode; text: string }) {
+function InfoLine({
+  icon,
+  label,
+  text,
+}: {
+  icon: React.ReactNode;
+  label?: string;
+  text: string;
+}) {
   return (
     <span
       style={{
@@ -507,7 +554,12 @@ function InfoLine({ icon, text }: { icon: React.ReactNode; text: string }) {
       }}
     >
       {icon}
-      <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+      <span
+        style={{ overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}
+      >
+        {label ? (
+          <span style={{ color: "var(--muted)" }}>{label}: </span>
+        ) : null}
         {text}
       </span>
     </span>
@@ -530,7 +582,8 @@ function ApplicationReviewModal({
         ? "approved"
         : "rejected",
   );
-  const [note, setNote] = useState(application.reviewNote ?? "");
+  // Ô ghi chú luôn bắt đầu trống — note cũ chỉ xem ở trường "Ghi chú của quản trị viên"
+  const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [history, setHistory] = useState<StaffApplicationHistory[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -540,7 +593,11 @@ function ApplicationReviewModal({
     setHistoryLoading(true);
     fetchStaffApplicationHistory(application.id, true)
       .then(setHistory)
-      .catch((err) => showError(err instanceof Error ? err.message : "Không tải được lịch sử đơn."))
+      .catch((err) =>
+        showError(
+          err instanceof Error ? err.message : "Không tải được lịch sử đơn.",
+        ),
+      )
       .finally(() => setHistoryLoading(false));
   }, [application.id]);
 
@@ -602,7 +659,6 @@ function ApplicationReviewModal({
         padding: 20,
         overflowY: "auto",
       }}
-      
     >
       <div
         style={{
@@ -771,28 +827,60 @@ function ApplicationReviewModal({
             background: "var(--surface)",
           }}
         >
-          <div style={{ fontWeight: 700, fontSize: "0.85rem", marginBottom: 8 }}>
+          <div
+            style={{ fontWeight: 700, fontSize: "0.85rem", marginBottom: 8 }}
+          >
             Lịch sử xử lý đơn
           </div>
           {historyLoading ? (
-            <div style={{ color: "var(--muted)", fontSize: "0.82rem" }}>Đang tải lịch sử...</div>
+            <div style={{ color: "var(--muted)", fontSize: "0.82rem" }}>
+              Đang tải lịch sử...
+            </div>
           ) : history.length === 0 ? (
-            <div style={{ color: "var(--muted)", fontSize: "0.82rem" }}>Chưa có lịch sử.</div>
+            <div style={{ color: "var(--muted)", fontSize: "0.82rem" }}>
+              Chưa có lịch sử.
+            </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {history.map((entry) => (
-                <div key={entry.id} style={{ fontSize: "0.8rem", borderLeft: "2px solid var(--primary)", paddingLeft: 10 }}>
-                  <b>{entry.action}</b> · {entry.oldStatus ?? "—"} → {entry.newStatus}
-                  <div style={{ color: "var(--muted)", marginTop: 2 }}>
-                    {formatDate(entry.createdAt)}{entry.note ? ` · ${entry.note}` : ""}
-                  </div>
-                  {entry.changedFields.length > 0 && (
-                    <div style={{ color: "var(--muted)", marginTop: 2 }}>
-                      Thay đổi: {entry.changedFields.join(", ")}
+              {history.map((entry) =>
+                (() => {
+                  const info = HISTORY_ACTION_LABELS[entry.action] ?? {
+                    label: entry.action,
+                    color: "#64748b",
+                  };
+                  const from = entry.oldStatus
+                    ? HISTORY_STATUS_LABELS[entry.oldStatus]
+                    : null;
+                  const to = HISTORY_STATUS_LABELS[entry.newStatus];
+                  return (
+                    <div
+                      key={entry.id}
+                      style={{
+                        fontSize: "0.8rem",
+                        borderLeft: `2px solid ${info.color}`,
+                        paddingLeft: 10,
+                      }}
+                    >
+                      <b style={{ color: info.color }}>{info.label}</b>
+                      {from ? ` · ${from} → ${to}` : ` · ${to}`}
+                      <div style={{ color: "var(--muted)", marginTop: 2 }}>
+                        {formatDate(entry.createdAt)}
+                        {entry.note ? ` · Lý do: ${entry.note}` : ""}
+                      </div>
+                      {(entry.action === "EDITED" ||
+                        entry.action === "RESUBMITTED") &&
+                        entry.changedFields.length > 0 && (
+                          <div style={{ color: "var(--muted)", marginTop: 2 }}>
+                            Thay đổi:{" "}
+                            {entry.changedFields
+                              .map((f) => HISTORY_FIELD_LABELS[f] ?? f)
+                              .join(", ")}
+                          </div>
+                        )}
                     </div>
-                  )}
-                </div>
-              ))}
+                  );
+                })(),
+              )}
             </div>
           )}
         </div>

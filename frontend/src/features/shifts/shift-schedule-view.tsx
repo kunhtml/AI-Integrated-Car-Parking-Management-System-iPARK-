@@ -41,7 +41,6 @@ const SHIFT_LABELS: Record<string, string> = {
   night: "Ca Đêm",
 };
 
-
 const HISTORY_FIELD_LABELS: Record<string, string> = {
   staffId: "Nhân viên",
   staffName: "Nhân viên",
@@ -98,7 +97,10 @@ function formatHistoryValue(key: string, value: unknown): string {
   }
 
   if (key === "date") {
-    const raw = typeof value === "string" || value instanceof Date ? value : String(value);
+    const raw =
+      typeof value === "string" || value instanceof Date
+        ? value
+        : String(value);
     const d = new Date(raw);
     if (!Number.isNaN(d.getTime())) {
       return d.toLocaleDateString("vi-VN", {
@@ -110,7 +112,10 @@ function formatHistoryValue(key: string, value: unknown): string {
   }
 
   if (key === "checkedInAt" || key === "completedAt") {
-    const raw = typeof value === "string" || value instanceof Date ? value : String(value);
+    const raw =
+      typeof value === "string" || value instanceof Date
+        ? value
+        : String(value);
     const d = new Date(raw);
     if (!Number.isNaN(d.getTime())) {
       return d.toLocaleString("vi-VN", {
@@ -186,20 +191,25 @@ function isShiftAssignable(
   shiftType: string,
   shiftTypes: ShiftType[],
 ): boolean {
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
-  if (d < todayStart) return false; // Quá khứ: không gán được
   const st = shiftTypes.find((t) => t.key === shiftType);
-  if (!st) return true; // Chưa load được giờ ca -> giữ nguyên hành vi cũ
+  if (!st) {
+    // Chưa load được giờ ca -> giữ nguyên hành vi cũ: chặn ngày trong quá khứ
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    return d >= todayStart;
+  }
   const [startH, startM] = st.startTime.split(":").map(Number);
   const [endH, endM] = st.endTime.split(":").map(Number);
   const end = new Date(date);
   end.setHours(endH, endM, 0, 0);
   // Ca qua đêm (end <= start) -> kết thúc vào ngày hôm sau
   if (endH * 60 + endM <= startH * 60 + startM) end.setDate(end.getDate() + 1);
-  return new Date() < end; // Ca chưa kết thúc mới được gán
+  // Ca chưa kết thúc mới được gán. Ca xuyên đêm bắt đầu từ hôm qua vẫn còn
+  // "đang chạy" (vd 22:00 hôm qua -> 06:00 hôm nay) nên không chặn theo
+  // ngày bắt đầu, chỉ chặn khi đã quá giờ kết thúc thực tế.
+  return new Date() < end;
 }
 export function ShiftScheduleView() {
   const {
@@ -387,12 +397,9 @@ export function ShiftScheduleView() {
 
   function handleCellClick(date: Date, shiftType: string) {
     if (!canManageSchedules) return;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const d = new Date(date);
-    d.setHours(0, 0, 0, 0);
-    if (d < today) return; // Don't allow adding past shifts
-    if (!isShiftAssignable(date, shiftType, shiftTypes)) return; // Ca đã qua giờ kết thúc
+    // Chặn theo giờ kết thúc thực tế của ca (không chặn theo ngày bắt đầu),
+    // để ca xuyên đêm đang chạy (vd 22:00 hôm qua -> 06:00 hôm nay) vẫn gán được.
+    if (!isShiftAssignable(date, shiftType, shiftTypes)) return;
     setPreselectedDate(formatDate(date));
     setPreselectedShiftType(shiftType);
     setShowAddModal(true);
@@ -1444,9 +1451,7 @@ export function ShiftScheduleView() {
                     marginBottom: 12,
                   }}
                 >
-                  <h3 style={{ margin: 0, fontSize: 16 }}>
-                    Lịch sử ca
-                  </h3>
+                  <h3 style={{ margin: 0, fontSize: 16 }}>Lịch sử ca</h3>
                   <button
                     className="small-button"
                     onClick={() => {
@@ -1502,7 +1507,11 @@ export function ShiftScheduleView() {
                             ) {
                               return false;
                             }
-                            if (value === null || value === undefined || value === "")
+                            if (
+                              value === null ||
+                              value === undefined ||
+                              value === ""
+                            )
                               return false;
                             return true;
                           },
@@ -1728,7 +1737,15 @@ function AddScheduleModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [dateError, setDateError] = useState("");
 
-  const today = new Date().toISOString().split("T")[0];
+  const now = new Date();
+  const todayStr = formatDate(now);
+  // Ca xuyên đêm vẫn đang chạy (kết thúc vào sáng nay) -> được phép lùi 1 ngày.
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const overnightStillRunning = shiftTypes.some((t) =>
+    isShiftAssignable(yesterday, t.key, shiftTypes),
+  );
+  const minDate = overnightStillRunning ? formatDate(yesterday) : todayStr;
 
   useEffect(() => {
     const type = shiftTypes.find((t) => t.key === shiftType);
@@ -1738,14 +1755,25 @@ function AddScheduleModal({
     }
   }, [shiftType, shiftTypes]);
 
+  function validate(value: string, type: string): string {
+    if (value < minDate) return "Không được gán ca cho ngày đã qua";
+    const parsed = new Date(value + "T00:00:00");
+    if (!isShiftAssignable(parsed, type, shiftTypes))
+      return "Ca này đã kết thúc, không thể gán";
+    return "";
+  }
+
   function handleDateChange(value: string) {
     setDate(value);
-    if (value < today) {
-      setDateError("Không được gán ca cho ngày đã qua");
-    } else {
-      setDateError("");
-    }
+    setDateError(validate(value, shiftType));
   }
+
+  // Đổi ca -> kiểm tra lại hạn của ngày đang chọn (vd sang ca Sáng thì không
+  // được giữ ngày hôm qua nữa).
+  useEffect(() => {
+    setDateError(validate(date, shiftType));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shiftType, shiftTypes]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -1753,8 +1781,9 @@ function AddScheduleModal({
       alert("Vui lòng chọn nhân viên");
       return;
     }
-    if (date < today) {
-      setDateError("Không được gán ca cho ngày đã qua");
+    const error = validate(date, shiftType);
+    if (error) {
+      setDateError(error);
       return;
     }
     setIsSubmitting(true);
@@ -1783,7 +1812,7 @@ function AddScheduleModal({
         justifyContent: "center",
         zIndex: 1000,
       }}
-      
+      onClick={onClose}
     >
       <div
         style={{
@@ -1806,7 +1835,7 @@ function AddScheduleModal({
           }}
         >
           <h3>Gán ca làm việc</h3>
-          <button className="small-button"  type="button">
+          <button className="small-button" type="button" onClick={onClose}>
             <XCircle size={18} />
           </button>
         </div>
@@ -1833,7 +1862,7 @@ function AddScheduleModal({
             <input
               type="date"
               value={date}
-              min={today}
+              min={minDate}
               onChange={(e) => handleDateChange(e.target.value)}
               required
               style={{ borderColor: dateError ? "var(--danger)" : undefined }}
@@ -1899,7 +1928,7 @@ function AddScheduleModal({
             >
               {isSubmitting ? "Đang lưu..." : "Gán ca"}
             </button>
-            <button className="small-button"  type="button">
+            <button className="small-button" type="button" onClick={onClose}>
               Hủy
             </button>
           </div>
@@ -2018,7 +2047,6 @@ function BulkAssignModal({
         justifyContent: "center",
         zIndex: 1000,
       }}
-      
     >
       <div
         style={{
@@ -2041,7 +2069,7 @@ function BulkAssignModal({
           }}
         >
           <h3>Gán ca hàng tuần</h3>
-          <button className="small-button"  type="button">
+          <button className="small-button" type="button" onClick={onClose}>
             <XCircle size={18} />
           </button>
         </div>
@@ -2195,7 +2223,7 @@ function BulkAssignModal({
             >
               {isSubmitting ? "Đang lưu..." : `Gán ${selectedDays.length} ca`}
             </button>
-            <button className="small-button"  type="button">
+            <button className="small-button" type="button" onClick={onClose}>
               Hủy
             </button>
           </div>
@@ -2335,7 +2363,7 @@ function ExportCSVModal({
         justifyContent: "center",
         zIndex: 1000,
       }}
-      
+      onClick={onClose}
     >
       <div
         style={{
@@ -2356,7 +2384,7 @@ function ExportCSVModal({
           }}
         >
           <h3>Xuất báo cáo lịch làm việc</h3>
-          <button className="small-button"  type="button">
+          <button className="small-button" type="button" onClick={onClose}>
             <XCircle size={18} />
           </button>
         </div>
@@ -2417,7 +2445,7 @@ function ExportCSVModal({
             >
               {isExporting ? "Đang xuất..." : "Xuất CSV"}
             </button>
-            <button className="small-button"  type="button">
+            <button className="small-button" type="button" onClick={onClose}>
               Hủy
             </button>
           </div>
@@ -2597,7 +2625,7 @@ function MonthAssignModal({
         justifyContent: "center",
         zIndex: 1000,
       }}
-      
+      onClick={onClose}
     >
       <div
         style={{
@@ -2620,7 +2648,7 @@ function MonthAssignModal({
           }}
         >
           <h3>Gán ca hàng tháng</h3>
-          <button className="small-button"  type="button">
+          <button className="small-button" type="button" onClick={onClose}>
             <XCircle size={18} />
           </button>
         </div>
@@ -2880,7 +2908,7 @@ function MonthAssignModal({
             >
               {isSubmitting ? "Đang lưu..." : `Gán ${selectedDays.length} ca`}
             </button>
-            <button className="small-button"  type="button">
+            <button className="small-button" type="button" onClick={onClose}>
               Hủy
             </button>
           </div>

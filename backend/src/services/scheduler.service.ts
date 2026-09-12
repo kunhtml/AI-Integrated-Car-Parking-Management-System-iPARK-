@@ -2,13 +2,14 @@ import { Cron } from "croner";
 import {
   expirePendingSubscriptionPayments,
   expireSubscriptions,
-  renewSubscription,
 } from "./subscription.service.js";
-import { Subscription } from "../models/Subscription.js";
 import { expireOverdueReservations } from "./reservation.service.js";
 import { checkOfflineDevices } from "./deviceMaintenance.service.js";
 import { scanAndFlagOverdueSessions } from "./overdue.service.js";
-import { sendExpiryReminders, sendPrepaidReminders } from "./reminder.service.js";
+import {
+  sendExpiryReminders,
+  sendPrepaidReminders,
+} from "./reminder.service.js";
 import { reconcileStaleSlots } from "./parkingSlot.service.js";
 import { reconcilePendingRfidSales } from "./rfidSales.service.js";
 
@@ -22,25 +23,9 @@ import { reconcilePendingRfidSales } from "./rfidSales.service.js";
 export function initScheduler() {
   console.log("[Scheduler] Initializing background jobs...");
 
-  // Every 5 minutes: check for expired subscriptions and auto-renew
+  // Every 5 minutes: check for expired subscriptions and send reminders
   new Cron("*/5 * * * *", { protect: true, unref: true }, async () => {
     try {
-      // Auto-renew subscriptions with autoRenew=true that are expiring
-      const expiringAutoRenew = await Subscription.find({
-        status: "active",
-        autoRenew: true,
-        endDate: { $lt: new Date(Date.now() + 24 * 60 * 60 * 1000) }, // expiring within 24h
-      });
-
-      for (const sub of expiringAutoRenew) {
-        try {
-          await renewSubscription(sub._id.toString());
-          console.log(`[Scheduler] Auto-renewed subscription ${sub._id}`);
-        } catch (err) {
-          console.error(`[Scheduler] Failed to auto-renew ${sub._id}:`, err);
-        }
-      }
-
       // Expire subscriptions past endDate
       const expired = await expireSubscriptions();
       if (expired > 0) {
@@ -68,11 +53,15 @@ export function initScheduler() {
     try {
       const expiredPending = await expirePendingSubscriptionPayments();
       if (expiredPending > 0) {
-        console.log(`[Scheduler] Expired ${expiredPending} unpaid subscription order(s)`);
+        console.log(
+          `[Scheduler] Expired ${expiredPending} unpaid subscription order(s)`,
+        );
       }
       const result = await reconcilePendingRfidSales();
       if (result.updated > 0) {
-        console.log(`[Scheduler] Activated ${result.updated} paid RFID sales (checked=${result.checked})`);
+        console.log(
+          `[Scheduler] Activated ${result.updated} paid RFID sales (checked=${result.checked})`,
+        );
       }
     } catch (err) {
       console.error("[Scheduler] RFID payment reconciliation error:", err);

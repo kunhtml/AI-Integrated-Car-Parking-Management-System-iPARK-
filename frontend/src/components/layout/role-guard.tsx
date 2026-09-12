@@ -37,14 +37,14 @@ export function RoleGuard({ allowedRoles, children }: RoleGuardProps) {
 
     if (allowedRoles) {
       if (!allowedRoles.includes(effectiveRole)) {
-        targetPath = getDefaultPathForRole(currentUser.role);
+        targetPath = getDefaultPathForRole(effectiveRole);
       }
     } else if (
       adminOnlyPaths.includes(pathname) &&
       currentUser.role !== "admin" &&
       currentUser.role !== "manager"
     ) {
-      targetPath = getDefaultPathForRole(currentUser.role);
+      targetPath = getDefaultPathForRole(effectiveRole);
     } else {
       const allowedPaths = getNavItemsForRole(currentUser.role, viewAs).map(
         (item) => item.path,
@@ -54,7 +54,7 @@ export function RoleGuard({ allowedRoles, children }: RoleGuardProps) {
           (p) => pathname === p || pathname.startsWith(p + "/"),
         )
       ) {
-        targetPath = getDefaultPathForRole(currentUser.role);
+        targetPath = getDefaultPathForRole(effectiveRole);
       }
     }
 

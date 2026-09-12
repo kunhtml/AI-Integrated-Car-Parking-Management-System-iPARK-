@@ -4,6 +4,7 @@ import {
   openGate,
   getPendingExit,
   prepareManualExit,
+  completeOfflineExit,
   dismissPendingExit,
   resolveExitMismatch,
 } from "../controllers/exit.controller.js";
@@ -41,6 +42,12 @@ exitRoutes.post(
   requireAuth,
   requireRole("admin", "staff"),
   asyncHandler(openGate),
+);
+exitRoutes.post(
+  "/complete-offline",
+  requireAuth,
+  requireRole("admin", "staff"),
+  asyncHandler(completeOfflineExit),
 );
 exitRoutes.post(
   "/resolve-mismatch",

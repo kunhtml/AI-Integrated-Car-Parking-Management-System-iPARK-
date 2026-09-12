@@ -279,11 +279,44 @@ export function UsersView() {
     () => ({
       total: visibleUsers.length,
       active: visibleUsers.filter((u) => u.status === "Đang hoạt động").length,
+      locked: visibleUsers.filter((u) => u.status === "Đã khóa").length,
       staff: visibleUsers.filter((u) => u.role === "staff").length,
       customer: visibleUsers.filter((u) => u.role === "customer").length,
     }),
     [visibleUsers],
   );
+
+  type StatKey = "total" | "active" | "locked" | "staff" | "customer";
+  const activeStat: StatKey = filterStatus
+    ? filterStatus === "Đang hoạt động"
+      ? "active"
+      : "locked"
+    : filterRole === "staff"
+      ? "staff"
+      : filterRole === "customer"
+        ? "customer"
+        : "total";
+
+  function handleStatClick(key: StatKey) {
+    if (key === "total") {
+      setFilterRole("");
+      setFilterStatus("");
+    } else if (key === "active") {
+      setFilterRole("");
+      setFilterStatus(
+        filterStatus === "Đang hoạt động" ? "" : "Đang hoạt động",
+      );
+    } else if (key === "locked") {
+      setFilterRole("");
+      setFilterStatus(filterStatus === "Đã khóa" ? "" : "Đã khóa");
+    } else if (key === "staff") {
+      setFilterStatus("");
+      setFilterRole(filterRole === "staff" ? "" : "staff");
+    } else {
+      setFilterStatus("");
+      setFilterRole(filterRole === "customer" ? "" : "customer");
+    }
+  }
 
   if (!currentUser) return null;
 
@@ -356,7 +389,12 @@ export function UsersView() {
 
       {/* Stats */}
       <div className="users-stats-grid">
-        <div className="user-stat-card">
+        <button
+          type="button"
+          className={`user-stat-card${activeStat === "total" ? " is-active" : ""}`}
+          onClick={() => handleStatClick("total")}
+          title="Xem tất cả tài khoản"
+        >
           <div className="user-stat-icon total">
             <UsersRound size={20} />
           </div>
@@ -364,8 +402,13 @@ export function UsersView() {
             <span className="user-stat-value">{stats.total}</span>
             <span className="user-stat-label">Tổng tài khoản</span>
           </div>
-        </div>
-        <div className="user-stat-card">
+        </button>
+        <button
+          type="button"
+          className={`user-stat-card${activeStat === "active" ? " is-active" : ""}`}
+          onClick={() => handleStatClick("active")}
+          title="Lọc tài khoản đang hoạt động"
+        >
           <div className="user-stat-icon active">
             <Check size={20} />
           </div>
@@ -373,8 +416,27 @@ export function UsersView() {
             <span className="user-stat-value">{stats.active}</span>
             <span className="user-stat-label">Đang hoạt động</span>
           </div>
-        </div>
-        <div className="user-stat-card">
+        </button>
+        <button
+          type="button"
+          className={`user-stat-card${activeStat === "locked" ? " is-active" : ""}`}
+          onClick={() => handleStatClick("locked")}
+          title="Lọc tài khoản đã khóa"
+        >
+          <div className="user-stat-icon locked">
+            <Ban size={20} />
+          </div>
+          <div className="user-stat-content">
+            <span className="user-stat-value">{stats.locked}</span>
+            <span className="user-stat-label">Đã khóa</span>
+          </div>
+        </button>
+        <button
+          type="button"
+          className={`user-stat-card${activeStat === "staff" ? " is-active" : ""}`}
+          onClick={() => handleStatClick("staff")}
+          title="Lọc theo vai trò nhân viên"
+        >
           <div className="user-stat-icon staff">
             <Shield size={20} />
           </div>
@@ -382,8 +444,13 @@ export function UsersView() {
             <span className="user-stat-value">{stats.staff}</span>
             <span className="user-stat-label">Nhân viên</span>
           </div>
-        </div>
-        <div className="user-stat-card">
+        </button>
+        <button
+          type="button"
+          className={`user-stat-card${activeStat === "customer" ? " is-active" : ""}`}
+          onClick={() => handleStatClick("customer")}
+          title="Lọc theo vai trò khách hàng"
+        >
           <div className="user-stat-icon customer">
             <Building size={20} />
           </div>
@@ -391,7 +458,7 @@ export function UsersView() {
             <span className="user-stat-value">{stats.customer}</span>
             <span className="user-stat-label">Khách hàng</span>
           </div>
-        </div>
+        </button>
       </div>
 
       {/* Search & Filter */}

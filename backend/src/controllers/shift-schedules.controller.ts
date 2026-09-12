@@ -10,12 +10,14 @@ import {
   serializeShiftSchedule,
 } from "../utils/serializers.js";
 
-
 /** Snapshot gọn cho audit — không lưu Document populate / ObjectId dump. */
 function staffRefId(staff: unknown): string | null {
   if (!staff) return null;
   if (typeof staff === "string") return staff;
-  const obj = staff as { _id?: { toString(): string }; toString?: () => string };
+  const obj = staff as {
+    _id?: { toString(): string };
+    toString?: () => string;
+  };
   if (obj._id?.toString) return obj._id.toString();
   if (typeof obj.toString === "function") {
     const s = obj.toString();
@@ -24,7 +26,11 @@ function staffRefId(staff: unknown): string | null {
   return null;
 }
 
-function staffDisplay(staff: unknown): { staffId: string | null; staffName: string | null; staffEmail: string | null } {
+function staffDisplay(staff: unknown): {
+  staffId: string | null;
+  staffName: string | null;
+  staffEmail: string | null;
+} {
   if (!staff) return { staffId: null, staffName: null, staffEmail: null };
   if (typeof staff === "string") {
     return { staffId: staff, staffName: null, staffEmail: null };
@@ -147,7 +153,7 @@ const updateScheduleSchema = z.object({
 const DEFAULT_SHIFT_TIMES: Record<string, { start: string; end: string }> = {
   morning: { start: "06:00", end: "14:00" },
   afternoon: { start: "14:00", end: "18:00" },
-  evening: { start: "18:00", end: "02:00" },
+  evening: { start: "18:00", end: "22:00" },
   night: { start: "22:00", end: "06:00" },
 };
 
@@ -727,7 +733,7 @@ export async function checkInShift(request: Request, response: Response) {
     }
 
     // Check if it's within the scheduled time.
-    // Ca đêm / evening là ca xuyên đêm (vd 22:00 → 06:00 hôm sau), nên cho
+    // Ca đêm là ca xuyên đêm (vd 22:00 → 06:00 hôm sau), nên cho
     // phép check-in "trễ" từ 12h TRƯỚC scheduledStart (tức là từ 10:00 sáng hôm
     // trước cho tới khi ca kết thúc). Điều này đảm bảo nhân viên ca đêm có thể
     // check-in ngay khi vào ca, kể cả khi 02:00 sáng hôm sau.
@@ -857,7 +863,7 @@ export async function getShiftTypes(request: Request, response: Response) {
         startTime: "14:00",
         endTime: "18:00",
       },
-      { key: "evening", label: "Ca tối", startTime: "18:00", endTime: "02:00" },
+      { key: "evening", label: "Ca tối", startTime: "18:00", endTime: "22:00" },
       { key: "night", label: "Ca đêm", startTime: "22:00", endTime: "06:00" },
     ],
   });

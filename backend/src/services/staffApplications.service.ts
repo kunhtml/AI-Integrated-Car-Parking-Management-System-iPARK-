@@ -179,7 +179,7 @@ async function isReplicaSet(): Promise<boolean> {
   return _isReplicaSetCached;
 }
 
-async function runWithTransactionOrDirect<T>(
+export async function runWithTransactionOrDirect<T>(
   fn: (session?: mongoose.ClientSession) => Promise<T>,
 ): Promise<T> {
   const hasReplica = await isReplicaSet();
@@ -211,7 +211,6 @@ async function runWithTransactionOrDirect<T>(
     }
   }
 }
-
 
 export async function createApplication(
   userId: string,
@@ -412,7 +411,6 @@ export async function submitExistingApplication(
     return updated;
   });
 }
-
 
 export async function getApplicationHistory(
   applicationId: string,

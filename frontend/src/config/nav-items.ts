@@ -183,9 +183,10 @@ export const adminOnlyPaths = [
 ];
 
 export function getNavItemsForRole(role: Role, viewAs?: ViewAsMode) {
-  void viewAs;
   // Nếu staff đang ở "member mode", show navigation của customer
-  return navItems.filter((item) => item.roles.includes(role));
+  const effectiveRole: Role =
+    role === "staff" && viewAs === "customer" ? "customer" : role;
+  return navItems.filter((item) => item.roles.includes(effectiveRole));
 }
 
 export function getDefaultPathForRole(role: Role) {
