@@ -279,6 +279,7 @@ export function UsersView() {
     () => ({
       total: visibleUsers.length,
       active: visibleUsers.filter((u) => u.status === "Đang hoạt động").length,
+      locked: visibleUsers.filter((u) => u.status === "Đã khóa").length,
       staff: visibleUsers.filter((u) => u.role === "staff").length,
       customer: visibleUsers.filter((u) => u.role === "customer").length,
     }),
@@ -356,7 +357,16 @@ export function UsersView() {
 
       {/* Stats */}
       <div className="users-stats-grid">
-        <div className="user-stat-card">
+        <div
+          className={`user-stat-card ${!filterRole && !filterStatus ? "active" : ""}`}
+          onClick={() => {
+            setFilterRole("");
+            setFilterStatus("");
+            setSearch("");
+          }}
+          style={{ cursor: "pointer" }}
+          title="Bấm để xem tất cả tài khoản"
+        >
           <div className="user-stat-icon total">
             <UsersRound size={20} />
           </div>
@@ -365,7 +375,12 @@ export function UsersView() {
             <span className="user-stat-label">Tổng tài khoản</span>
           </div>
         </div>
-        <div className="user-stat-card">
+        <div
+          className={`user-stat-card ${filterStatus === "Đang hoạt động" ? "active" : ""}`}
+          onClick={() => setFilterStatus((curr) => (curr === "Đang hoạt động" ? "" : "Đang hoạt động"))}
+          style={{ cursor: "pointer" }}
+          title="Bấm để lọc tài khoản Đang hoạt động"
+        >
           <div className="user-stat-icon active">
             <Check size={20} />
           </div>
@@ -374,7 +389,26 @@ export function UsersView() {
             <span className="user-stat-label">Đang hoạt động</span>
           </div>
         </div>
-        <div className="user-stat-card">
+        <div
+          className={`user-stat-card ${filterStatus === "Đã khóa" ? "active" : ""}`}
+          onClick={() => setFilterStatus((curr) => (curr === "Đã khóa" ? "" : "Đã khóa"))}
+          style={{ cursor: "pointer", borderColor: filterStatus === "Đã khóa" ? "#ef4444" : undefined }}
+          title="Bấm để lọc tài khoản Đã khóa"
+        >
+          <div className="user-stat-icon" style={{ background: "rgba(239, 68, 68, 0.12)", color: "#ef4444" }}>
+            <UserX size={20} />
+          </div>
+          <div className="user-stat-content">
+            <span className="user-stat-value" style={{ color: "#ef4444" }}>{stats.locked}</span>
+            <span className="user-stat-label">Đã khóa</span>
+          </div>
+        </div>
+        <div
+          className={`user-stat-card ${filterRole === "staff" ? "active" : ""}`}
+          onClick={() => setFilterRole((curr) => (curr === "staff" ? "" : "staff"))}
+          style={{ cursor: "pointer" }}
+          title="Bấm để lọc Nhân viên"
+        >
           <div className="user-stat-icon staff">
             <Shield size={20} />
           </div>
@@ -383,7 +417,12 @@ export function UsersView() {
             <span className="user-stat-label">Nhân viên</span>
           </div>
         </div>
-        <div className="user-stat-card">
+        <div
+          className={`user-stat-card ${filterRole === "customer" ? "active" : ""}`}
+          onClick={() => setFilterRole((curr) => (curr === "customer" ? "" : "customer"))}
+          style={{ cursor: "pointer" }}
+          title="Bấm để lọc Khách hàng"
+        >
           <div className="user-stat-icon customer">
             <Building size={20} />
           </div>
