@@ -3557,8 +3557,9 @@ function ExitCard({
               </div>
             )}
 
-            {/* Đã xác nhận đối chiếu thủ công thì không hiển thị nút Mở barie điện tử nữa (nhân viên mở cơ) */}
-            {exitRfidManuallyVerified || Boolean(exitRfidManualNote) ? null : (              <p className="staff-desk__exit-rfid-prompt">{rfidPrompt}</p>
+            {/* Nếu mất kết nối bridge hoặc đã xác nhận thủ công thì ẩn hoàn toàn dòng nhắc 'Thẻ không hợp lệ — quét lại' */}
+            {fullHardwareOutage || exitRfidManuallyVerified || Boolean(exitRfidManualNote) ? null : (
+              <p className="staff-desk__exit-rfid-prompt">{rfidPrompt}</p>
             )}
 
             {noSession ? (
@@ -3587,34 +3588,19 @@ function ExitCard({
               </div>
             ) : null}
 
-            {canHandleMissingEntryRfid && !exitVerifyData && !hasPaymentData ? (
+            {canHandleMissingEntryRfid && !exitVerifyData && !hasPaymentData && !fullHardwareOutage ? (
               <div className="staff-desk__manual-rfid">
-                {fullHardwareOutage ? (
-                  <div
-                    className="staff-desk__alert staff-desk__alert--danger"
-                    role="alert"
-                  >
-                    <CircleAlert size={18} />
-                    <span>
-                      Không thể kết nối camera, barie và đầu đọc RFID. Đối chiếu
-                      biển số xe với luồng vào trước khi xác nhận thủ công.
-                    </span>
-                  </div>
-                ) : (
-                  <p>
-                    Không có UID RFID lúc vào. Nhân viên có thể xác nhận thủ
-                    công sau khi kiểm tra xe và biển số.
-                  </p>
-                )}
+                <p>
+                  Không có UID RFID lúc vào. Nhân viên có thể xác nhận thủ
+                  công sau khi kiểm tra xe và biển số.
+                </p>
                 {!showManualRfidForm ? (
                   <button
                     type="button"
                     className="btn btn-ghost"
                     onClick={() => setShowManualRfidForm(true)}
                   >
-                    {fullHardwareOutage
-                      ? "Xác nhận xe khớp luồng vào"
-                      : "Xử lý thủ công"}
+                    Xử lý thủ công
                   </button>
                 ) : (
                   <div className="staff-desk__manual-rfid-form">
@@ -3821,8 +3807,7 @@ function ExitCard({
                   ) : null}
                 </div>
               ) : null
-            ) : (scanPhase === "error" || scanPhase === "timeout") &&
-              !(fullHardwareOutage && canHandleMissingEntryRfid) ? (
+            ) : (scanPhase === "error" || scanPhase === "timeout") && !fullHardwareOutage ? (
               <div className="staff-desk__exit-rfid-waiting">
                 <div className="staff-desk__alert staff-desk__alert--danger">
                   <XCircle size={18} />
