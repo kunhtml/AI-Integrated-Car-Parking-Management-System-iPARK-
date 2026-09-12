@@ -227,32 +227,113 @@ export async function updateVehicle(request: Request, response: Response) {
         .json({ message: "Biển số đã tồn tại trong hệ thống." });
       return;
     }
-    oldPlate = existing.plate;
-    existing.plate = normPlate;
+    if (request.user?.role !== "customer") {
+      oldPlate = existing.plate;
+      existing.plate = normPlate;
+    }
   }
-  if (body.ownerName !== undefined) existing.ownerName = body.ownerName;
-  if (body.ownerPhone !== undefined) existing.ownerPhone = body.ownerPhone;
-  if (body.ownerAddress !== undefined)
-    existing.ownerAddress = body.ownerAddress;
-  if (body.brand !== undefined) existing.brand = body.brand;
-  if (body.model !== undefined) existing.set("model", body.model);
-  if (body.color !== undefined) existing.color = body.color;
-  if (body.year !== undefined) existing.year = body.year;
-  if (body.engineNo !== undefined) existing.engineNo = body.engineNo;
-  if (body.chassisNo !== undefined) existing.chassisNo = body.chassisNo;
-  if (request.user?.role !== "customer") {
+
+  // Nếu là KHÁCH HÀNG sửa xe -> Chuyển trạng thái xe thành 'Cần duyệt' và tạo VehicleRequest chờ Admin duyệt
+  if (request.user?.role === "customer") {
+    const requestedChanges: Record<string, any> = {};
+    if (body.plate) requestedChanges.plate = body.plate.trim().toUpperCase().replace(/[\s-]+/g, "");
+    if (body.ownerName !== undefined) requestedChanges.ownerName = body.ownerName;
+    if (body.ownerPhone !== undefined) requestedChanges.ownerPhone = body.ownerPhone;
+    if (body.ownerAddress !== undefined) requestedChanges.ownerAddress = body.ownerAddress;
+    if (body.brand !== undefined) requestedChanges.brand = body.brand;
+    if (body.model !== undefined) requestedChanges.model = body.model;
+    if (body.color !== undefined) requestedChanges.color = body.color;
+    if (body.imageUrl !== undefined) requestedChanges.imageUrl = body.imageUrl;
+
+    // Đổi trạng thái xe thành Cần duyệt
+    existing.status = "Cần duyệt";
+    await existing.save();
+
+    // Tạo yêu cầu sửa xe để Admin duyệt tại tab Yêu cầu
+    await VehicleRequest.create({
+      vehicleId: existing._id,
+      userId: request.user.id,
+      type: "edit",
+      status: "pending",
+      requestedChanges,
+    });
+  } else {
+    // Admin / Staff sửa trực tiếp
+    if (body.ownerName !== undefined) existing.ownerName = body.ownerName;
+    if (body.ownerPhone !== undefined) existing.ownerPhone = body.ownerPhone;
+    if (body.ownerAddress !== undefined) existing.ownerAddress = body.ownerAddress;
+    if (body.brand !== undefined) existing.brand = body.brand;
+    if (body.model !== undefined) existing.set("model", body.model);
+    if (body.color !== undefined) existing.color = body.color;
+    if (body.year !== undefined) existing.year = body.year;
+    if (body.engineNo !== undefined) existing.engineNo = body.engineNo;
+    if (body.chassisNo !== undefined) existing.chassisNo = body.chassisNo;
     if (body.status !== undefined) {
       existing.status = body.status;
       if (body.status === "Đã đăng ký" || body.status === "Cần duyệt") {
         existing.rejectionReason = undefined;
       }
     }
-    if (body.rejectionReason !== undefined)
-      existing.rejectionReason = body.rejectionReason;
-  }
-  if (body.imageUrl !== undefined) existing.imageUrl = body.imageUrl;
+    if (body.rejectionReason !== undefined) existing.rejectionReason = body.rejectionReason;
+    if (body.imageUrl !== undefined) existing.imageUrl = body.imageUrl;
+    await existing.save();
 
-  await existing.save();
+    if (oldPlate && oldPlate !== existing.plate) {
+      await RfidCard.updateMany(
+        { $or: [{ vehicleId: existing._id }, { plate: oldPlate }] },
+        { $set: { plate: existing.plate } },
+      );
+      await ParkingSession.updateMany(
+        {
+          status: "Đang gửi",
+          $or: [{ vehicleId: existing._id }, { plate: oldPlate }],
+        },
+        { $set: { plate: existing.plate } },
+      );
+    }
+  }
+
+  // Nếu là KHÁCH HÀNG sửa xe -> Chuyển trạng thái xe thành 'Cần duyệt' và tạo VehicleRequest chờ Admin duyệt
+  if (request.user?.role === "customer") {
+    const requestedChanges: Record<string, any> = {};
+    if (body.plate) requestedChanges.plate = body.plate.trim().toUpperCase().replace(/[\s-]+/g, "");
+    if (body.ownerName !== undefined) requestedChanges.ownerName = body.ownerName;
+    if (body.ownerPhone !== undefined) requestedChanges.ownerPhone = body.ownerPhone;
+    if (body.ownerAddress !== undefined) requestedChanges.ownerAddress = body.ownerAddress;
+    if (body.brand !== undefined) requestedChanges.brand = body.brand;
+    if (body.model !== undefined) requestedChanges.model = body.model;
+    if (body.color !== undefined) requestedChanges.color = body.color;
+    if (body.imageUrl !== undefined) requestedChanges.imageUrl = body.imageUrl;
+
+    // Đổi trạng thái xe thành Cần duyệt
+    existing.status = "Cần duyệt";
+    await existing.save();
+
+    // Tạo yêu cầu sửa xe để Admin duyệt tại tab Yêu cầu
+    await VehicleRequest.create({
+      vehicleId: existing._id,
+      userId: request.user.id,
+      type: "edit",
+      status: "pending",
+      requestedChanges,
+    });
+  } else {
+    // Admin / Staff sửa trực tiếp
+    if (body.plate) existing.plate = body.plate.trim().toUpperCase().replace(/[\s-]+/g, "");
+    if (body.ownerName !== undefined) existing.ownerName = body.ownerName;
+    if (body.ownerPhone !== undefined) existing.ownerPhone = body.ownerPhone;
+    if (body.ownerAddress !== undefined) existing.ownerAddress = body.ownerAddress;
+    if (body.brand !== undefined) existing.brand = body.brand;
+    if (body.model !== undefined) existing.set("model", body.model);
+    if (body.color !== undefined) existing.color = body.color;
+    if (body.year !== undefined) existing.year = body.year;
+    if (body.engineNo !== undefined) existing.engineNo = body.engineNo;
+    if (body.chassisNo !== undefined) existing.chassisNo = body.chassisNo;
+    if (body.status !== undefined) existing.status = body.status;
+    if (body.rejectionReason !== undefined) existing.rejectionReason = body.rejectionReason;
+    if (body.imageUrl !== undefined) existing.imageUrl = body.imageUrl;
+    await existing.save();
+  }
 
   if (oldPlate && oldPlate !== existing.plate) {
     await RfidCard.updateMany(

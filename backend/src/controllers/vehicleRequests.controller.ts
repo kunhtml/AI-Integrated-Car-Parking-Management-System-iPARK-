@@ -308,7 +308,18 @@ export async function resolveVehicleRequest(
       vehicleDoc.status = "Đã đăng ký";
       vehicleDoc.rejectionReason = undefined;
       await vehicleDoc.save();
-    } else if (vr.type === "edit" && vr.requestedChanges && vehicleDoc && sub) {
+
+      // Khi Admin duyệt đổi biển xe A -> B:
+      // Đồng bộ biển mới sang thẻ RFID và gói Subscription (nếu có)
+      if (changes.plate) {
+        const normNewPlate = (changes.plate as string).toUpperCase().replace(/[\s-]+/g, "");
+        const { RfidCard } = await import("../models/RfidCard.js");
+        await RfidCard.updateMany(
+          { vehicleId: vehicleDoc._id },
+          { $set: { plate: normNewPlate } },
+        );
+      }
+    } else if (vr.type === "edit" && vr.requestedChanges && vehicleDoc) {
       const changes = vr.requestedChanges as Record<string, unknown>;
       if (changes.plate) {
         const existing = await Vehicle.findOne({

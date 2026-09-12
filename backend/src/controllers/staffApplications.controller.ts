@@ -379,20 +379,18 @@ export async function reviewStaffApplication(
   // + history trong một transaction; approve thêm CAS nâng role user trong
   // cùng transaction để không có staff đi kèm đơn rejected/cancelled do race.
   // Thông báo chỉ gửi sau khi commit thành công.
-  const session = await mongoose.startSession();
+  let application: StaffApplicationDocument | undefined;
   try {
-    let application: StaffApplicationDocument | undefined;
-    await session.withTransaction(async () => {
-      const current = await StaffApplication.findOne({
+    application = await runWithTransactionOrDirect(async (session) => {
+      const q = StaffApplication.findOne({
         _id: String(request.params.id),
         status: "pending",
-      }).session(session);
+      });
+      const current = session ? await q.session(session) : await q;
       if (!current) {
-        const existing = await StaffApplication.findOne(
-          { _id: String(request.params.id) },
-          null,
-          { session },
-        );
+        const existing = session
+          ? await StaffApplication.findOne({ _id: String(request.params.id) }, null, { session })
+          : await StaffApplication.findOne({ _id: String(request.params.id) });
         throw Object.assign(
           new Error(
             existing ? "Đơn này đã được xử lý." : "Không tìm thấy đơn đăng ký.",
@@ -405,6 +403,8 @@ export async function reviewStaffApplication(
       const oldStatus = current.status;
       const now = new Date();
       const reviewerId = new mongoose.Types.ObjectId(request.user!.id);
+      const updateOptions: any = { new: true };
+      if (session) updateOptions.session = session;
 
       if (body.decision === "rejected") {
         const updated = await StaffApplication.findOneAndUpdate(
@@ -417,7 +417,7 @@ export async function reviewStaffApplication(
               reviewedAt: now,
             },
           },
-          { new: true, session },
+          updateOptions,
         );
         if (!updated) {
           throw Object.assign(new Error("Đơn vừa được xử lý trước đó."), {
@@ -432,8 +432,7 @@ export async function reviewStaffApplication(
           before,
           session,
         });
-        application = updated;
-        return;
+        return updated;
       }
 
       // Approve: CAS user role trước, rồi cập nhật application + history.
@@ -444,7 +443,7 @@ export async function reviewStaffApplication(
           status: "Đang hoạt động",
         },
         { $set: { role: "staff" } },
-        { new: true, session },
+        updateOptions,
       );
       if (!updatedUser) {
         throw Object.assign(
@@ -465,7 +464,7 @@ export async function reviewStaffApplication(
             approvedAt: now,
           },
         },
-        { new: true, session },
+        updateOptions,
       );
       if (!updated) {
         throw Object.assign(new Error("Đơn vừa được xử lý trước đó."), {
@@ -480,7 +479,7 @@ export async function reviewStaffApplication(
         before,
         session,
       });
-      application = updated;
+      return updated;
     });
 
     if (!application) {

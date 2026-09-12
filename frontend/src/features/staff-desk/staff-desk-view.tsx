@@ -2554,10 +2554,12 @@ function IngestCard(props: {
         </div>
         <button
           className="btn btn-ghost"
+          type="button"
           onClick={props.onDismiss}
-          aria-label="Bỏ qua"
+          aria-label={duplicateSession || eventIsStale || props.scanError ? "Đóng cảnh báo" : "Bỏ qua"}
+          title={duplicateSession || eventIsStale || props.scanError ? "Đóng cảnh báo" : "Bỏ qua"}
         >
-          <XCircle size={16} />
+          <CircleX size={16} />
         </button>
       </div>
 

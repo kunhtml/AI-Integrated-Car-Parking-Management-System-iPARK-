@@ -48,10 +48,10 @@ function validate(
   state: FormState,
 ): { field: keyof FormState; message: string } | null {
   const phone = state.phone.trim();
-  if (!/^[0-9+\-\s()]{6,20}$/.test(phone)) {
+  if (!/^0\d{9,10}$/.test(phone)) {
     return {
       field: "phone",
-      message: "Số điện thoại không hợp lệ (6-20 ký tự).",
+      message: "Số điện thoại phải bắt đầu bằng số 0 và có từ 10 đến 11 chữ số.",
     };
   }
   const idCard = state.idCardNumber.trim();

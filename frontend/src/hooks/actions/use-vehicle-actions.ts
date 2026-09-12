@@ -167,7 +167,11 @@ export function createVehicleActions({
     setRegisteredVehicles((items) =>
       items.map((v) => (v.id === id ? (result.vehicle as RegisteredVehicle) : v)),
     );
-    setActionLog("Đã cập nhật thông tin xe.");
+    if (result.vehicle?.status === "Cần duyệt") {
+      setActionLog("Đã gửi yêu cầu chỉnh sửa thông tin xe, vui lòng chờ quản trị viên duyệt.");
+    } else {
+      setActionLog("Đã cập nhật thông tin xe.");
+    }
     return { ok: true, vehicle: result.vehicle };
   }
 
