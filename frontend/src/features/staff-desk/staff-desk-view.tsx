@@ -1044,11 +1044,8 @@ export function StaffDeskView() {
       setActiveExit((current) =>
         current ? { ...current, barrierOpened: true } : current,
       );
-      exitDismissTimerRef.current = window.setTimeout(() => {
-        exitDismissTimerRef.current = null;
-        exitGateOpenedAtRef.current = 0;
-        clearExitUi();
-      }, 5000);
+      // Tạm thời tắt tự động đóng sau 5s theo yêu cầu test để giữ thông báo thành công trên màn hình
+      // exitDismissTimerRef.current = window.setTimeout(() => { exitDismissTimerRef.current = null; exitGateOpenedAtRef.current = 0; clearExitUi(); }, 5000);
     }
   }, [
     activeExit?.sessionId,
@@ -1082,10 +1079,8 @@ export function StaffDeskView() {
         if (exitDismissTimerRef.current !== null) {
           window.clearTimeout(exitDismissTimerRef.current);
         }
-        exitDismissTimerRef.current = window.setTimeout(() => {
-          exitDismissTimerRef.current = null;
-          clearExitUi();
-        }, 5000);
+        // Tạm thời tắt tự động đóng sau 5s theo yêu cầu test để giữ thông báo thành công trên màn hình
+        // exitDismissTimerRef.current = window.setTimeout(() => { exitDismissTimerRef.current = null; clearExitUi(); }, 5000);
       } catch {
         setExitScanError("Lỗi kết nối server khi kết thúc phiên thủ công.");
         setExitScanPhase("error");
