@@ -969,16 +969,17 @@ export function VehicleDetailModal({
           )}
         </div>
 
-        <div
-          style={{
-            marginTop: 24,
-            display: "flex",
-            justifyContent: "flex-end",
-            alignItems: "center",
-            gap: 8,
-            flexWrap: "wrap",
-          }}
-        >
+        {isRejected && (
+          <div
+            style={{
+              marginTop: 24,
+              display: "flex",
+              justifyContent: "flex-end",
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
+            }}
+          >
           {isRejected && onEdit && (
             <button
               className="small-button primary"
@@ -1016,32 +1017,11 @@ export function VehicleDetailModal({
               </button>
             </>
           )}
-          {isPending && isAdmin && (
-            <>
-              <button
-                className="small-button"
-                onClick={onReject}
-                disabled={processing}
-                type="button"
-                style={{ color: "#dc2626", borderColor: "#fecaca" }}
-              >
-                <X size={14} /> Từ chối
-              </button>
-              <button
-                className="small-button"
-                onClick={onApprove}
-                disabled={processing}
-                type="button"
-                style={{ color: "#15803d", borderColor: "#bbf7d0" }}
-              >
-                <Check size={14} /> Duyệt
-              </button>
-            </>
-          )}
           <button className="small-button" onClick={onClose} type="button">
             Đóng
           </button>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Modal Lightbox phóng to ảnh đính kèm */}
@@ -4327,42 +4307,26 @@ export function VehiclesView() {
                   >
                     <Eye size={13} />
                   </button>
-                  <button
-                    className="small-button"
-                    onClick={() => {
-                      if (
-                        isCustomer &&
-                        vehicle.id &&
-                        vehicleSubscriptionMap.has(vehicle.id)
-                      ) {
-                        setCustomerEditTarget(vehicle);
-                        return;
-                      }
-                      setEditingVehicle(vehicle);
-                      setShowAddForm(false);
-                    }}
-                    title={isCustomerView ? "Gửi yêu cầu chỉnh sửa" : "Chỉnh sửa"}
-                    type="button"
-                    style={{ padding: "3px 7px" }}
-                  >
-                    <Edit size={13} />
-                  </button>
-
-                  {isAdmin && vehicle.status === "Blacklist" && (
+                  {!isAdmin && (
                     <button
                       className="small-button"
-                      onClick={async () => {
-                        await approveVehicle(vehicle);
-                        await Promise.all([
-                          loadVehicles(),
-                          loadVehicleRequests({ includeResolved: true }),
-                        ]);
+                      onClick={() => {
+                        if (
+                          isCustomer &&
+                          vehicle.id &&
+                          vehicleSubscriptionMap.has(vehicle.id)
+                        ) {
+                          setCustomerEditTarget(vehicle);
+                          return;
+                        }
+                        setEditingVehicle(vehicle);
+                        setShowAddForm(false);
                       }}
-                      title="Duyệt lại đơn xe này"
+                      title={isCustomerView ? "Gửi yêu cầu chỉnh sửa" : "Chỉnh sửa"}
                       type="button"
-                      style={{ padding: "3px 7px", color: "#16a34a" }}
+                      style={{ padding: "3px 7px" }}
                     >
-                      <Check size={13} />
+                      <Edit size={13} />
                     </button>
                   )}
                   {isAdmin && (
