@@ -199,6 +199,7 @@ export async function updateVehicle(request: Request, response: Response) {
       status: z.enum(["Đã đăng ký", "Cần duyệt", "Blacklist"]).optional(),
       rejectionReason: z.string().trim().max(500).optional(),
       imageUrl: z.string().optional(),
+      requestApproval: z.boolean().optional(),
     })
     .parse(request.body);
 
@@ -242,14 +243,26 @@ export async function updateVehicle(request: Request, response: Response) {
       return;
     }
     validatedNormPlate = normPlate;
-    if (request.user?.role !== "customer") {
+    if (request.user?.role !== "customer" && !body.requestApproval) {
       oldPlate = existing.plate;
       existing.plate = normPlate;
     }
   }
 
-  // Nếu là KHÁCH HÀNG sửa xe -> Chuyển trạng thái xe thành 'Cần duyệt' và tạo VehicleRequest chờ Admin duyệt
-  if (request.user?.role === "customer") {
+  // Khách hàng, hoặc nhân sự đang thao tác trong Khu vực Người dùng, phải chờ admin duyệt.
+  if (request.user?.role === "customer" || body.requestApproval) {
+    const pendingRequest = await VehicleRequest.findOne({
+      vehicleId: existing._id,
+      type: "edit",
+      status: "pending",
+    });
+    if (pendingRequest) {
+      response
+        .status(409)
+        .json({ message: "Xe này đã có yêu cầu chỉnh sửa đang chờ duyệt." });
+      return;
+    }
+
     const requestedChanges: Record<string, any> = {};
     if (validatedNormPlate) requestedChanges.plate = validatedNormPlate;
     if (body.ownerName !== undefined) requestedChanges.ownerName = body.ownerName;
@@ -258,6 +271,9 @@ export async function updateVehicle(request: Request, response: Response) {
     if (body.brand !== undefined) requestedChanges.brand = body.brand;
     if (body.model !== undefined) requestedChanges.model = body.model;
     if (body.color !== undefined) requestedChanges.color = body.color;
+    if (body.year !== undefined) requestedChanges.year = body.year;
+    if (body.engineNo !== undefined) requestedChanges.engineNo = body.engineNo;
+    if (body.chassisNo !== undefined) requestedChanges.chassisNo = body.chassisNo;
     if (body.imageUrl !== undefined) requestedChanges.imageUrl = body.imageUrl;
 
     // Đổi trạng thái xe thành Cần duyệt
