@@ -67,9 +67,27 @@ async function buildSessionForEntry(
   rfidUid?: string,
   imagePath?: string,
 ) {
+  const clean = plate.trim().toUpperCase();
+  const norm = clean.replace(/[\s\.-]+/g, "");
+  const regexPattern = norm
+    .split("")
+    .map((c) => c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("[\\s\\.-]*");
+  const plateRegex = new RegExp(`^${regexPattern}$`, "i");
+
   const dup = await ParkingSession.findOne({
-    plate,
     status: "\u0110ang g\u1EEDi",
+    $or: [
+      { plate: clean },
+      { plate: norm },
+      { plate: plateRegex },
+      { entryDetectedPlate: clean },
+      { entryDetectedPlate: norm },
+      { entryDetectedPlate: plateRegex },
+      { manualPlate: clean },
+      { manualPlate: norm },
+      { manualPlate: plateRegex },
+    ],
   });
   if (dup) return { duplicate: true, session: dup };
 
@@ -390,6 +408,7 @@ export async function pushCameraLog(request: Request, response: Response) {
     if (result.duplicate) {
       action = "duplicate";
       sessionId = result.session?._id;
+      openSession = result.session;
     } else if ((result as any).cameraOnly) {
       // Camera-only detect: không tạo phiên, chỉ hiển thị lên UI để staff xử lý
       action = "skipped";
