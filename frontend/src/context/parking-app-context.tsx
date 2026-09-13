@@ -242,6 +242,7 @@ type ParkingAppContextValue = {
       chassisNo?: string;
       status?: string;
       imageUrl?: string;
+      requestApproval?: boolean;
     },
   ) => Promise<{ ok: boolean; message?: string; vehicle?: any } | void>;
   removeVehicle: (id: string) => Promise<void>;
