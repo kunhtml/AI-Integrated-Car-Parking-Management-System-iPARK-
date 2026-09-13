@@ -310,6 +310,12 @@ export function StaffDeskView() {
     ownerName?: string;
     isSubscriber?: boolean;
     cardUid?: string;
+    activeSession?: {
+      id?: string;
+      plate: string;
+      checkInAt: string;
+      slot?: string;
+    } | null;
   } | null>(null);
   const [pendingManualEntryRfid, setPendingManualEntryRfid] = useState(false);
   const [showEntryRfidExceptionForm, setShowEntryRfidExceptionForm] =
@@ -693,18 +699,32 @@ export function StaffDeskView() {
         );
         return;
       }
+      const blockingSession = details.activeSession || details.plateActiveSession;
+      if (blockingSession) {
+        const checkInTime = blockingSession.checkInAt
+          ? new Date(blockingSession.checkInAt).toLocaleString("vi-VN")
+          : "";
+        setManualEntryError(
+          `Xe biển số ${blockingSession.plate || normalized} đang có phiên gửi trong bãi${
+            checkInTime ? ` (vào lúc ${checkInTime})` : ""
+          } chưa checkout! Không thể tạo phiên mới.`,
+        );
+      }
       setManualEntryVehicle({
         ownerName: details.vehicle?.ownerName,
         isSubscriber: Boolean(details.isSubscriber),
         cardUid: details.card?.uid,
+        activeSession: blockingSession || null,
       });
       setManualPlate(normalized);
       setShowManualEntryForm(false);
       setShowEntryRfidExceptionForm(false);
-      setPendingManualEntryRfid(true);
-      // The member still presents the physical card at the gate; scan it to
-      // verify the UID before creating the session and opening the barrier.
-      await startScan();
+      if (!blockingSession) {
+        setPendingManualEntryRfid(true);
+        // The member still presents the physical card at the gate; scan it to
+        // verify the UID before creating the session and opening the barrier.
+        await startScan();
+      }
     } catch {
       setManualEntryError("Không thể tra cứu thông tin biển số.");
     } finally {
@@ -1322,7 +1342,10 @@ export function StaffDeskView() {
         );
         // Nếu đang ở chế độ thủ công hoặc mất kết nối bridge: kết thúc phiên offline luôn
         const reason = offlineExitReasonRef.current || "Đã thu đủ tiền mặt và đối chiếu chính xác biển số";
-        if (offlineExitReasonRef.current || fullHardwareOutage || scanPhase === "error") {
+        const fullHardwareOutage =
+          exitScanPhase === "error" &&
+          /bridge|port\s*5050/i.test(exitScanError);
+        if (offlineExitReasonRef.current || fullHardwareOutage || exitScanPhase === "error") {
           await completeOfflineExit(reason);
         } else {
           try {
@@ -1799,6 +1822,7 @@ export function StaffDeskView() {
                 onToggleManualEntryForm={() => {
                   setShowManualEntryForm((v) => !v);
                   setManualEntryError("");
+                  setManualEntryVehicle(null);
                 }}
                 onManualEntryPlateChange={(v) => {
                   setManualEntryPlate(v.toUpperCase());
@@ -1816,6 +1840,10 @@ export function StaffDeskView() {
                   void createSessionManual(
                     manualEntryVehicle?.cardUid,
                     manualEntryPlate,
+                    {
+                      fromIdleForm: true,
+                      manualRfidReason: "Mở barie xe thành viên đối chiếu thủ công",
+                    },
                   )
                 }
               />
@@ -2025,6 +2053,12 @@ function WaitingCard({
     ownerName?: string;
     isSubscriber?: boolean;
     cardUid?: string;
+    activeSession?: {
+      id?: string;
+      plate: string;
+      checkInAt: string;
+      slot?: string;
+    } | null;
   } | null;
   onToggleManualEntryForm?: () => void;
   onManualEntryPlateChange?: (value: string) => void;
@@ -2141,9 +2175,58 @@ function WaitingCard({
         </div>
       ) : null}
 
+      {isEntry && manualEntryPlate && !showManualForm && (manualEntryVehicle?.activeSession || manualError) ? (
+        <div
+          className="staff-desk__alert staff-desk__alert--warn"
+          role="alert"
+          style={{ width: "100%", maxWidth: 420, margin: "0.5rem auto", textAlign: "left" }}
+        >
+          <CircleAlert size={20} style={{ color: "#ef4444", flexShrink: 0, marginTop: 2 }} />
+          <div>
+            <strong style={{ color: "#dc2626", display: "block", marginBottom: 2 }}>
+              Xe đang có phiên gửi trong bãi (chưa checkout)
+            </strong>
+            <span style={{ fontSize: "0.85rem", color: "#374151", lineHeight: 1.4 }}>
+              {manualError ||
+                `Biển số ${manualEntryPlate} chưa checkout khỏi bãi (vào lúc ${
+                  manualEntryVehicle?.activeSession?.checkInAt
+                    ? new Date(manualEntryVehicle.activeSession.checkInAt).toLocaleString("vi-VN")
+                    : ""
+                }). Không thể tạo phiên mới và không mở barie.`}
+            </span>
+          </div>
+        </div>
+      ) : null}
+
+      {isEntry && !showManualForm && !manualEntryPlate && manualError ? (
+        <p className="staff-desk__hint staff-desk__hint--danger" style={{ maxWidth: 360, margin: "0.5rem auto" }}>
+          <CircleAlert size={16} /> {manualError}
+        </p>
+      ) : null}
+
       <div className="staff-desk__exit-idle-actions" style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%", maxWidth: 360, margin: "0 auto" }}>
         {/* Nút xử lý thủ công nhanh: xác nhận biển số chính xác & cho xe vào */}
         {isEntry && manualEntryPlate && !showManualForm ? (
+          manualEntryVehicle?.activeSession ? (
+            <button
+              type="button"
+              className="btn btn-primary btn-lg"
+              style={{
+                width: "100%",
+                justifyContent: "center",
+                background: "#ef4444",
+                borderColor: "#dc2626",
+                opacity: 0.75,
+                cursor: "not-allowed",
+                fontWeight: 700,
+              }}
+              disabled
+              title="Xe đang có phiên gửi trong bãi chưa checkout"
+            >
+              <CircleAlert size={18} />
+              Đang có phiên gửi — Không thể cho vào
+            </button>
+          ) : (
           <button
             type="button"
             className="btn btn-primary btn-lg"
@@ -2158,9 +2241,10 @@ function WaitingCard({
             {phase === "creating" ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
             Xác nhận biển số chính xác & Cho xe vào
           </button>
+          )
         ) : null}
 
-        {isEntry && manualEntryVehicle?.cardUid && !showManualForm ? (
+        {isEntry && manualEntryVehicle?.cardUid && !showManualForm && !manualEntryVehicle?.activeSession ? (
           <button
             type="button"
             className="btn btn-ghost staff-desk__exit-manual-btn"
@@ -2262,18 +2346,12 @@ function WaitingCard({
                   RFID không đọc được
                 </button>
               ) : null}
-              {(scanPhase === "timeout" || scanPhase === "error") &&
-              onManualUid ? (
+              {scanPhase === "timeout" && onManualUid ? (
                 <ManualUidInput onSubmit={onManualUid} />
               ) : null}
               {scanPhase === "timeout" && (
                 <p className="staff-desk__hint staff-desk__hint--warn">
                   Hết thời gian chờ quét thẻ.
-                </p>
-              )}
-              {scanPhase === "error" && scanError && (
-                <p className="staff-desk__hint staff-desk__hint--danger">
-                  <CircleAlert size={14} /> {scanError}
                 </p>
               )}
             </>
