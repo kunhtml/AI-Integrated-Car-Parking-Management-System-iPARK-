@@ -657,17 +657,46 @@ export async function lookupByUid(request: Request, response: Response) {
             ...(card.cardId ? [{ rfidCardId: card.cardId }] : []),
           ],
         })
-          .select("plate checkInAt")
+          .select("_id plate checkInAt slot")
           .sort({ checkInAt: -1 })
           .lean()
       : null;
   // Anti-passback theo biển: xe của thẻ này còn phiên đang gửi (vào bằng đường khác).
+  const cleanPlateForUid = plate ? plate.replace(/[\s\.-]+/g, "") : "";
+  const plateRegexForUid = cleanPlateForUid
+    ? new RegExp(
+        `^${cleanPlateForUid
+          .split("")
+          .map((c) => c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+          .join("[\\s\\.-]*")}$`,
+        "i",
+      )
+    : null;
   const plateActiveSession = plate
     ? await ParkingSession.findOne({
         status: "Đang gửi",
-        $or: [{ plate }, { entryDetectedPlate: plate }, { manualPlate: plate }],
+        $or: [
+          { plate },
+          ...(cleanPlateForUid
+            ? [{ plate: cleanPlateForUid }, { plate: plateRegexForUid }]
+            : []),
+          { entryDetectedPlate: plate },
+          ...(cleanPlateForUid
+            ? [
+                { entryDetectedPlate: cleanPlateForUid },
+                { entryDetectedPlate: plateRegexForUid },
+              ]
+            : []),
+          { manualPlate: plate },
+          ...(cleanPlateForUid
+            ? [
+                { manualPlate: cleanPlateForUid },
+                { manualPlate: plateRegexForUid },
+              ]
+            : []),
+        ],
       })
-        .select("plate checkInAt")
+        .select("_id plate checkInAt slot")
         .sort({ checkInAt: -1 })
         .lean()
     : null;
@@ -704,14 +733,23 @@ export async function lookupByPlate(request: Request, response: Response) {
     response.status(400).json({ ok: false, message: "Biển số không hợp lệ." });
     return;
   }
+  const cleanPlate = plate.replace(/[\s\.-]+/g, "");
+  const regexPattern = cleanPlate
+    .split("")
+    .map((c) => c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("[\\s\\.-]*");
+  const plateRegex = new RegExp(`^${regexPattern}$`, "i");
+
   const card = await RfidCard.findOne({
-    plate,
+    $or: [{ plate }, { plate: cleanPlate }, { plate: plateRegex }],
     status: { $in: ["active", "in-use"] },
   });
 
   // Check xem biển số có thuộc subscriber (gói active) hay không
   const now = new Date();
-  const vehicle = await Vehicle.findOne({ plate });
+  const vehicle = await Vehicle.findOne({
+    $or: [{ plate }, { plate: cleanPlate }, { plate: plateRegex }],
+  });
   const subscription = vehicle
     ? await Subscription.findOne({
         primaryVehicleId: vehicle._id,
@@ -722,30 +760,71 @@ export async function lookupByPlate(request: Request, response: Response) {
   const isSubscriber = !!subscription;
   const isResident = isSubscriber || vehicle?.status === "Đã đăng ký";
 
-  if (card) {
-    response.json({
-      ok: true,
-      isSubscriber,
-      isResident,
-      card: serializeCard(card),
-      vehicle: vehicle
-        ? { id: vehicle._id.toString(), ownerName: vehicle.ownerName }
-        : null,
-    });
-    return;
-  }
-  // Fallback: tra trong Vehicle
+  // Anti-passback theo biển: xe còn phiên đang gửi trong bãi (chưa checkout)
+  const plateActiveSession = await ParkingSession.findOne({
+    status: "Đang gửi",
+    $or: [
+      { plate },
+      { plate: cleanPlate },
+      { plate: plateRegex },
+      { entryDetectedPlate: plate },
+      { entryDetectedPlate: cleanPlate },
+      { entryDetectedPlate: plateRegex },
+      { manualPlate: plate },
+      { manualPlate: cleanPlate },
+      { manualPlate: plateRegex },
+    ],
+  })
+    .select("_id plate checkInAt slot")
+    .sort({ checkInAt: -1 })
+    .lean();
+
+  const cardActiveSession =
+    card && card.status === "in-use"
+      ? await ParkingSession.findOne({
+          status: "Đang gửi",
+          $or: [
+            ...(card.uid ? [{ rfidCardId: card.uid }] : []),
+            ...(card.cardId ? [{ rfidCardId: card.cardId }] : []),
+          ],
+        })
+          .select("_id plate checkInAt slot")
+          .sort({ checkInAt: -1 })
+          .lean()
+      : null;
+
+  const activeSession = plateActiveSession || cardActiveSession;
+
   response.json({
     ok: true,
     isSubscriber,
     isResident,
-    card: null,
+    card: card ? serializeCard(card) : null,
     vehicle: vehicle
       ? {
           id: vehicle._id.toString(),
           plate: vehicle.plate,
           ownerName: vehicle.ownerName,
           status: vehicle.status,
+        }
+      : null,
+    subscription: subscription
+      ? { planName: subscription.planName, endDate: subscription.endDate }
+      : null,
+    activeSession: activeSession
+      ? {
+          id: activeSession._id.toString(),
+          plate: activeSession.plate,
+          checkInAt: activeSession.checkInAt,
+          slot: (activeSession as any).slot,
+        }
+      : null,
+    plateActiveSession: plateActiveSession
+      ? {
+          id: plateActiveSession._id.toString(),
+          plate: plateActiveSession.plate,
+          checkInAt: plateActiveSession.checkInAt,
+          slot: (plateActiveSession as any).slot,
         }
       : null,
   });
