@@ -46,13 +46,20 @@ function completedDuration(checkIn: string, checkOut?: string): string | null {
   if (!checkOut) return null;
   const [inHour, inMinute] = checkIn.split(":").map(Number);
   const [outHour, outMinute] = checkOut.split(":").map(Number);
-  if (![inHour, inMinute, outHour, outMinute].every(Number.isFinite)) return null;
+  if (![inHour, inMinute, outHour, outMinute].every(Number.isFinite))
+    return null;
   let minutes = outHour * 60 + outMinute - (inHour * 60 + inMinute);
   if (minutes < 0) minutes += 24 * 60;
   return formatDuration(minutes);
 }
 
-function LiveMinutes({ checkIn, checkInAt }: { checkIn: string; checkInAt?: string }) {
+function LiveMinutes({
+  checkIn,
+  checkInAt,
+}: {
+  checkIn: string;
+  checkInAt?: string;
+}) {
   const [minutes, setMinutes] = useState(0);
 
   useEffect(() => {
@@ -83,7 +90,10 @@ function LiveMinutes({ checkIn, checkInAt }: { checkIn: string; checkInAt?: stri
 function StatusBadge({ status }: { status: string }) {
   if (status === "Đang gửi")
     return (
-      <span className="status-pill status-active" aria-label="Phiên đang hoạt động">
+      <span
+        className="status-pill status-active"
+        aria-label="Phiên đang hoạt động"
+      >
         <span className="pulse-dot" aria-hidden /> Đang gửi
       </span>
     );
@@ -96,9 +106,19 @@ function StatusBadge({ status }: { status: string }) {
   return <span className="status-pill status-cancelled">{status}</span>;
 }
 
-function PayBadge({ paymentStatus, paymentMethod }: { paymentStatus?: string; paymentMethod?: string }) {
+function PayBadge({
+  paymentStatus,
+  paymentMethod,
+}: {
+  paymentStatus?: string;
+  paymentMethod?: string;
+}) {
   if (paymentMethod === "subscription")
     return <span className="pay-pill pay-paid">Theo gói thành viên</span>;
+  if (paymentStatus === "fully_paid" && paymentMethod === "payos")
+    return <span className="pay-pill pay-paid">Đã thanh toán PayOS</span>;
+  if (paymentStatus === "fully_paid" && paymentMethod === "cash")
+    return <span className="pay-pill pay-paid">Đã thanh toán tiền mặt</span>;
   if (paymentStatus === "fully_paid")
     return <span className="pay-pill pay-paid">Đã thanh toán</span>;
   if (paymentStatus === "partial_paid")
@@ -110,12 +130,14 @@ function paymentMethodLabel(paymentMethod?: string, paymentStatus?: string) {
   if (paymentMethod === "payos") return "Thanh toán PayOS";
   if (paymentMethod === "cash") return "Thanh toán tiền mặt";
   if (paymentMethod === "subscription") return "Theo gói thành viên";
-  if (paymentStatus === "fully_paid") return "Đã thanh toán (chưa xác định phương thức)";
+  if (paymentStatus === "fully_paid")
+    return "Đã thanh toán (chưa xác định phương thức)";
   return "Chưa thanh toán";
 }
 
 function MatchBadge({ match }: { match?: string }) {
-  if (match === "Khớp") return <span className="status-pill status-done">Khớp</span>;
+  if (match === "Khớp")
+    return <span className="status-pill status-done">Khớp</span>;
   if (match === "Không khớp")
     return (
       <span className="status-pill status-warn">
@@ -126,12 +148,22 @@ function MatchBadge({ match }: { match?: string }) {
 }
 
 // Empty state with reset CTA when filters are active
-function EmptyState({ hasFilter, onReset }: { hasFilter: boolean; onReset: () => void }) {
+function EmptyState({
+  hasFilter,
+  onReset,
+}: {
+  hasFilter: boolean;
+  onReset: () => void;
+}) {
   return (
     <div className="empty-state">
       <CarFront size={42} />
       <h3>Không có phiên nào</h3>
-      <p>{hasFilter ? "Thử đổi bộ lọc hoặc từ khóa tìm kiếm." : "Chưa có phiên đỗ xe nào trong hệ thống."}</p>
+      <p>
+        {hasFilter
+          ? "Thử đổi bộ lọc hoặc từ khóa tìm kiếm."
+          : "Chưa có phiên đỗ xe nào trong hệ thống."}
+      </p>
       {hasFilter && (
         <button type="button" className="small-button" onClick={onReset}>
           <X size={14} /> Xóa bộ lọc
@@ -158,7 +190,9 @@ export function SessionsView() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [payFilter, setPayFilter] = useState<PayFilter>("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [detailSession, setDetailSession] = useState<ParkingSession | null>(null);
+  const [detailSession, setDetailSession] = useState<ParkingSession | null>(
+    null,
+  );
 
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -187,7 +221,10 @@ export function SessionsView() {
   }, [setSessions]);
 
   // Dùng viewAs để xác định chế độ hiển thị
-  const isCustomer = currentUser?.role === "staff" ? viewAs === "customer" : currentUser?.role === "customer";
+  const isCustomer =
+    currentUser?.role === "staff"
+      ? viewAs === "customer"
+      : currentUser?.role === "customer";
   const isAdmin = currentUser?.role === "admin";
 
   // Keyboard shortcut: "/" focuses search (admin only)
@@ -485,7 +522,11 @@ export function SessionsView() {
             ))}
           </div>
           {filtersActive && (
-            <button type="button" className="chip chip-ghost" onClick={resetFilters}>
+            <button
+              type="button"
+              className="chip chip-ghost"
+              onClick={resetFilters}
+            >
               <X size={12} /> Xóa lọc
             </button>
           )}
@@ -493,7 +534,11 @@ export function SessionsView() {
 
         {/* Bulk action bar (admin only) */}
         {isAdmin && selected.size > 0 && (
-          <div className="sessions-bulk-bar" role="region" aria-label="Thao tác hàng loạt">
+          <div
+            className="sessions-bulk-bar"
+            role="region"
+            aria-label="Thao tác hàng loạt"
+          >
             <span>
               Đã chọn <strong>{selected.size}</strong> phiên
             </span>
@@ -517,7 +562,10 @@ export function SessionsView() {
 
         {/* Content */}
         {pageItems.length === 0 ? (
-          <EmptyState hasFilter={filtersActive || !!searchText} onReset={resetFilters} />
+          <EmptyState
+            hasFilter={filtersActive || !!searchText}
+            onReset={resetFilters}
+          />
         ) : (
           /* LIST VIEW — denser for ops scanning */
           <div className="sessions-list-wrap">
@@ -530,9 +578,15 @@ export function SessionsView() {
                         type="button"
                         className="session-card-checkbox"
                         onClick={toggleSelectAll}
-                        aria-label={allSelected ? "Bỏ chọn tất cả" : "Chọn tất cả"}
+                        aria-label={
+                          allSelected ? "Bỏ chọn tất cả" : "Chọn tất cả"
+                        }
                       >
-                        {allSelected ? <CheckSquare size={16} /> : <Square size={16} />}
+                        {allSelected ? (
+                          <CheckSquare size={16} />
+                        ) : (
+                          <Square size={16} />
+                        )}
                       </button>
                     </th>
                   )}
@@ -559,7 +613,10 @@ export function SessionsView() {
                       onClick={() => setDetailSession(session)}
                     >
                       {isAdmin && (
-                        <td className="col-check" onClick={(event) => event.stopPropagation()}>
+                        <td
+                          className="col-check"
+                          onClick={(event) => event.stopPropagation()}
+                        >
                           {session.status === "Đang gửi" ? (
                             <button
                               type="button"
@@ -568,7 +625,11 @@ export function SessionsView() {
                               aria-label={isSelected ? "Bỏ chọn" : "Chọn"}
                               aria-pressed={isSelected}
                             >
-                              {isSelected ? <CheckSquare size={16} /> : <Square size={16} />}
+                              {isSelected ? (
+                                <CheckSquare size={16} />
+                              ) : (
+                                <Square size={16} />
+                              )}
                             </button>
                           ) : null}
                         </td>
@@ -576,13 +637,23 @@ export function SessionsView() {
                       <td>
                         <div className="cell-plate">
                           <CarFront size={14} aria-hidden />
-                          <strong>{session.plate ? session.plate.toUpperCase().replace(/[^A-Z0-9]/g, "") : "—"}</strong>
+                          <strong>
+                            {session.plate
+                              ? session.plate
+                                  .toUpperCase()
+                                  .replace(/[^A-Z0-9]/g, "")
+                              : "—"}
+                          </strong>
                           <span className="cell-id">
                             #{session.id.slice(-8).toUpperCase()}
                           </span>
                         </div>
                       </td>
-                      <td className="cell-owner">{session.owner && session.owner !== "—" ? session.owner : "Khách vãng lai"}</td>
+                      <td className="cell-owner">
+                        {session.owner && session.owner !== "—"
+                          ? session.owner
+                          : "Khách vãng lai"}
+                      </td>
                       <td className="val-mono">{session.slot}</td>
                       <td className="val-mono">
                         {session.checkInDate} {session.checkIn}
@@ -590,7 +661,9 @@ export function SessionsView() {
                       <td>
                         {session.checkOut ? (
                           <span className="val-mono">
-                            {session.checkOutDate ? `${session.checkOutDate} ` : ""}
+                            {session.checkOutDate
+                              ? `${session.checkOutDate} `
+                              : ""}
                             {session.checkOut}
                           </span>
                         ) : (
@@ -599,10 +672,19 @@ export function SessionsView() {
                       </td>
                       <td>
                         {session.status === "Đang gửi" ? (
-                          <LiveMinutes checkIn={session.checkIn} checkInAt={session.checkInAt} />
-                        ) : completedDuration(session.checkIn, session.checkOut) ? (
+                          <LiveMinutes
+                            checkIn={session.checkIn}
+                            checkInAt={session.checkInAt}
+                          />
+                        ) : completedDuration(
+                            session.checkIn,
+                            session.checkOut,
+                          ) ? (
                           <span className="val-mono">
-                            {completedDuration(session.checkIn, session.checkOut)}
+                            {completedDuration(
+                              session.checkIn,
+                              session.checkOut,
+                            )}
                           </span>
                         ) : (
                           <span className="muted">—</span>
@@ -623,10 +705,16 @@ export function SessionsView() {
                         </div>
                       </td>
                       <td>
-                        <PayBadge paymentStatus={session.paymentStatus} paymentMethod={session.paymentMethod} />
+                        <PayBadge
+                          paymentStatus={session.paymentStatus}
+                          paymentMethod={session.paymentMethod}
+                        />
                       </td>
                       <td className="col-fee">{renderFee(session)}</td>
-                      <td className="col-act" onClick={(event) => event.stopPropagation()}>
+                      <td
+                        className="col-act"
+                        onClick={(event) => event.stopPropagation()}
+                      >
                         {isAdmin && session.status === "Đang gửi" ? (
                           confirmId === session.id ? (
                             <div className="confirm-inline confirm-inline-list">
@@ -634,7 +722,9 @@ export function SessionsView() {
                                 type="button"
                                 className="small-button btn-confirm-yes"
                                 disabled={checkingOut === session.id}
-                                onClick={() => handleCheckout(session.id, session.plate)}
+                                onClick={() =>
+                                  handleCheckout(session.id, session.plate)
+                                }
                               >
                                 {checkingOut === session.id ? "…" : "Có"}
                               </button>
@@ -651,7 +741,10 @@ export function SessionsView() {
                             <button
                               type="button"
                               className="small-button btn-force-checkout"
-                              disabled={checkingOut !== null && checkingOut !== session.id}
+                              disabled={
+                                checkingOut !== null &&
+                                checkingOut !== session.id
+                              }
                               onClick={() => setConfirmId(session.id)}
                               title="Checkout"
                               aria-label={`Checkout phiên ${session.plate}`}
@@ -680,11 +773,7 @@ export function SessionsView() {
         )}
 
         {detailSession && (
-          <div
-            className="modal-overlay"
-            role="presentation"
-            
-          >
+          <div className="modal-overlay" role="presentation">
             <section
               className="modal-card session-detail-modal"
               role="dialog"
@@ -711,28 +800,105 @@ export function SessionsView() {
               </div>
 
               <div className="session-detail-grid">
-                <div><span>Mã phiên</span><strong>#{detailSession.id.slice(-8).toUpperCase()}</strong></div>
-                <div><span>Chủ xe</span><strong>{detailSession.owner || "Khách vãng lai"}</strong></div>
-                <div><span>UID RFID lúc vào</span><strong>{detailSession.entryRfidUid || detailSession.rfidCardId || "Chưa ghi nhận"}</strong></div>
-                <div><span>UID RFID lúc ra</span><strong>{detailSession.exitRfidUid || "Chưa ghi nhận"}</strong></div>
-                <div><span>Vị trí</span><strong>{detailSession.slot || "—"}</strong></div>
-                <div><span>Thời gian vào</span><strong>{detailSession.checkInDate} {detailSession.checkIn}</strong></div>
-                <div><span>Thời gian ra</span><strong>{detailSession.checkOut ? `${detailSession.checkOutDate ?? ""} ${detailSession.checkOut}`.trim() : "Chưa ra bãi"}</strong></div>
-                <div><span>Thời lượng</span><strong>{detailSession.status === "Đang gửi" ? <LiveMinutes checkIn={detailSession.checkIn} checkInAt={detailSession.checkInAt} /> : completedDuration(detailSession.checkIn, detailSession.checkOut) ?? "—"}</strong></div>
+                <div>
+                  <span>Mã phiên</span>
+                  <strong>#{detailSession.id.slice(-8).toUpperCase()}</strong>
+                </div>
+                <div>
+                  <span>Chủ xe</span>
+                  <strong>{detailSession.owner || "Khách vãng lai"}</strong>
+                </div>
+                <div>
+                  <span>UID RFID lúc vào</span>
+                  <strong>
+                    {detailSession.entryRfidUid ||
+                      detailSession.rfidCardId ||
+                      "Chưa ghi nhận"}
+                  </strong>
+                </div>
+                <div>
+                  <span>UID RFID lúc ra</span>
+                  <strong>
+                    {detailSession.exitRfidUid || "Chưa ghi nhận"}
+                  </strong>
+                </div>
+                <div>
+                  <span>Vị trí</span>
+                  <strong>{detailSession.slot || "—"}</strong>
+                </div>
+                <div>
+                  <span>Thời gian vào</span>
+                  <strong>
+                    {detailSession.checkInDate} {detailSession.checkIn}
+                  </strong>
+                </div>
+                <div>
+                  <span>Thời gian ra</span>
+                  <strong>
+                    {detailSession.checkOut
+                      ? `${detailSession.checkOutDate ?? ""} ${detailSession.checkOut}`.trim()
+                      : "Chưa ra bãi"}
+                  </strong>
+                </div>
+                <div>
+                  <span>Thời lượng</span>
+                  <strong>
+                    {detailSession.status === "Đang gửi" ? (
+                      <LiveMinutes
+                        checkIn={detailSession.checkIn}
+                        checkInAt={detailSession.checkInAt}
+                      />
+                    ) : (
+                      (completedDuration(
+                        detailSession.checkIn,
+                        detailSession.checkOut,
+                      ) ?? "—")
+                    )}
+                  </strong>
+                </div>
               </div>
 
               <div className="session-detail-status">
-                <div><span>Trạng thái</span><StatusBadge status={detailSession.status} /> <MatchBadge match={detailSession.matchStatus} /></div>
-                <div><span>Thanh toán</span><PayBadge paymentStatus={detailSession.paymentStatus} paymentMethod={detailSession.paymentMethod} /></div>
-                <div><span>Phương thức</span><strong>{paymentMethodLabel(detailSession.paymentMethod, detailSession.paymentStatus)}</strong></div>
-                <div><span>Phí {detailSession.status === "Đang gửi" ? "tạm tính" : ""}</span>{renderFee(detailSession)}</div>
+                <div>
+                  <span>Trạng thái</span>
+                  <StatusBadge status={detailSession.status} />{" "}
+                  <MatchBadge match={detailSession.matchStatus} />
+                </div>
+                <div>
+                  <span>Thanh toán</span>
+                  <PayBadge
+                    paymentStatus={detailSession.paymentStatus}
+                    paymentMethod={detailSession.paymentMethod}
+                  />
+                </div>
+                <div>
+                  <span>Phương thức</span>
+                  <strong>
+                    {paymentMethodLabel(
+                      detailSession.paymentMethod,
+                      detailSession.paymentStatus,
+                    )}
+                  </strong>
+                </div>
+                <div>
+                  <span>
+                    Phí {detailSession.status === "Đang gửi" ? "tạm tính" : ""}
+                  </span>
+                  {renderFee(detailSession)}
+                </div>
               </div>
 
-              {(detailSession.manualEntryReason || detailSession.manualExitReason || (detailSession.exitRfidManualVerified && detailSession.verificationNote)) && (
+              {(detailSession.manualEntryReason ||
+                detailSession.manualExitReason ||
+                (detailSession.exitRfidManualVerified &&
+                  detailSession.verificationNote)) && (
                 <div className="session-detail-notes">
                   <h4>Ghi chú xử lý thủ công</h4>
                   {detailSession.manualEntryReason && (
-                    <p><strong>Vào thủ công:</strong> {detailSession.manualEntryReason}</p>
+                    <p>
+                      <strong>Vào thủ công:</strong>{" "}
+                      {detailSession.manualEntryReason}
+                    </p>
                   )}
                   {detailSession.manualExitReason && (
                     <p>
@@ -744,9 +910,13 @@ export function SessionsView() {
                       {detailSession.manualExitReason}
                     </p>
                   )}
-                  {detailSession.exitRfidManualVerified && detailSession.verificationNote && (
-                    <p><strong>Xác minh RFID thủ công:</strong> {detailSession.verificationNote}</p>
-                  )}
+                  {detailSession.exitRfidManualVerified &&
+                    detailSession.verificationNote && (
+                      <p>
+                        <strong>Xác minh RFID thủ công:</strong>{" "}
+                        {detailSession.verificationNote}
+                      </p>
+                    )}
                 </div>
               )}
             </section>

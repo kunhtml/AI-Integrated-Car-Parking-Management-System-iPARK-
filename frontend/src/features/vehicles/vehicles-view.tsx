@@ -15,7 +15,6 @@ import {
   ImageIcon,
   Loader2,
   Plus,
-  RotateCcw,
   Search,
   Shield,
   ShieldAlert,
@@ -117,25 +116,26 @@ function rfidStatusBadgeClass(status: string | undefined) {
 export function VehicleDetailModal({
   vehicle,
   onClose,
-  onApprove,
   onReject,
-  onResetPending,
   rejectReason,
   onRejectReasonChange,
   processing,
   onEdit,
   isAdmin,
+  onResolveRequest,
 }: {
   vehicle: RegisteredVehicle;
   onClose: () => void;
-  onApprove: () => void;
   onReject: () => void;
-  onResetPending?: () => void;
   rejectReason: string;
   onRejectReasonChange: (value: string) => void;
   processing: boolean;
   onEdit?: () => void;
   isAdmin?: boolean;
+  onResolveRequest?: (
+    requestId: string,
+    action: "approved" | "rejected",
+  ) => void;
 }) {
   const isPending = vehicle.status === "Cần duyệt";
   const isRejected = vehicle.status === "Blacklist";
@@ -223,7 +223,6 @@ export function VehicleDetailModal({
         backdropFilter: "blur(4px)",
         padding: 16,
       }}
-      
     >
       <div
         style={{
@@ -478,7 +477,9 @@ export function VehicleDetailModal({
                 Số điện thoại
               </span>
               <div style={{ wordBreak: "break-word" }}>
-                <strong>{vehicle.ownerPhone || vehicle.user?.phone || "—"}</strong>
+                <strong>
+                  {vehicle.ownerPhone || vehicle.user?.phone || "—"}
+                </strong>
               </div>
             </div>
           </div>
@@ -675,61 +676,6 @@ export function VehicleDetailModal({
           )}
         </div>
 
-        {isRejected && (
-          <div
-            style={{
-              marginTop: 22,
-              padding: 16,
-              borderRadius: 14,
-              border: "1px solid #fecaca",
-              background: "rgba(239,68,68,0.06)",
-            }}
-          >
-            <div style={{ color: "#b91c1c", fontWeight: 700, marginBottom: 6 }}>
-              Lý do từ chối
-            </div>
-            <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-              {vehicle.rejectionReason || "Chưa có lý do từ chối."}
-            </div>
-          </div>
-        )}
-
-        {isPending && isAdmin && (
-          <div
-            style={{
-              marginTop: 22,
-              padding: 16,
-              borderRadius: 14,
-              border: "1px solid var(--border, #e2e6ef)",
-              background: "rgba(234,179,8,0.06)",
-            }}
-          >
-            <label
-              htmlFor="vehicle-reject-reason"
-              style={{ display: "block", marginBottom: 8, fontWeight: 700 }}
-            >
-              Nhập lý do từ chối
-            </label>
-            <textarea
-              id="vehicle-reject-reason"
-              value={rejectReason}
-              onChange={(event) => onRejectReasonChange(event.target.value)}
-              placeholder="Nhập lý do nếu từ chối yêu cầu..."
-              rows={3}
-              style={{
-                width: "100%",
-                resize: "vertical",
-                boxSizing: "border-box",
-                padding: "10px 12px",
-                borderRadius: 10,
-                border: "1px solid var(--border, #e2e6ef)",
-                background: "var(--surface)",
-                color: "inherit",
-              }}
-            />
-          </div>
-        )}
-
         {/* Lịch sử thay đổi xe */}
         <div style={{ marginTop: 22 }}>
           <h3
@@ -763,7 +709,10 @@ export function VehicleDetailModal({
                 background: "rgba(148,163,184,0.08)",
               }}
             >
-              <p className="muted-cell" style={{ fontSize: "0.78rem", margin: 0 }}>
+              <p
+                className="muted-cell"
+                style={{ fontSize: "0.78rem", margin: 0 }}
+              >
                 Chưa có lịch sử thay đổi nào cho phương tiện này.
               </p>
             </div>
@@ -796,13 +745,15 @@ export function VehicleDetailModal({
                         borderRadius: 999,
                         fontWeight: 600,
                         background:
-                          item.status === "approved" || item.status === "completed"
+                          item.status === "approved" ||
+                          item.status === "completed"
                             ? "rgba(34,197,94,0.12)"
                             : item.status === "rejected"
                               ? "rgba(239,68,68,0.12)"
                               : "rgba(245,158,11,0.12)",
                         color:
-                          item.status === "approved" || item.status === "completed"
+                          item.status === "approved" ||
+                          item.status === "completed"
                             ? "#15803d"
                             : item.status === "rejected"
                               ? "#b91c1c"
@@ -812,16 +763,36 @@ export function VehicleDetailModal({
                       {item.statusLabel || item.status}
                     </span>
                   </div>
-                  <div style={{ color: "var(--muted)", fontSize: "0.75rem", marginBottom: 6 }}>
+                  <div
+                    style={{
+                      color: "var(--muted)",
+                      fontSize: "0.75rem",
+                      marginBottom: 6,
+                    }}
+                  >
                     Thời gian: {formatDate(item.createdAt)}
-                    {item.performedBy ? ` · Người gửi: ${item.performedBy}` : ""}
-                    {item.resolvedBy ? ` · Người duyệt: ${item.resolvedBy}` : ""}
+                    {item.performedBy
+                      ? ` · Người gửi: ${item.performedBy}`
+                      : ""}
+                    {item.status !== "pending" && item.resolvedBy
+                      ? ` · Người duyệt: ${item.resolvedBy}`
+                      : ""}
                   </div>
                   {/* Hiển thị ảnh xe của đơn thay đổi (nếu có) */}
                   {item.changes?.imageUrl && (
-                    <div style={{ marginTop: 8, marginBottom: 8, display: "flex", alignItems: "center", gap: 10 }}>
+                    <div
+                      style={{
+                        marginTop: 8,
+                        marginBottom: 8,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                      }}
+                    >
                       <div
-                        onClick={() => setPreviewImageUrl(item.changes.imageUrl)}
+                        onClick={() =>
+                          setPreviewImageUrl(item.changes.imageUrl)
+                        }
                         title="Bấm để phóng to xem ảnh"
                         style={{
                           width: 88,
@@ -831,11 +802,13 @@ export function VehicleDetailModal({
                           border: "2px solid rgba(59, 130, 246, 0.3)",
                           background: "var(--surface)",
                           cursor: "pointer",
-                          transition: "transform 0.15s ease, box-shadow 0.15s ease",
+                          transition:
+                            "transform 0.15s ease, box-shadow 0.15s ease",
                         }}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.transform = "scale(1.04)";
-                          e.currentTarget.style.boxShadow = "0 4px 12px rgba(59, 130, 246, 0.25)";
+                          e.currentTarget.style.boxShadow =
+                            "0 4px 12px rgba(59, 130, 246, 0.25)";
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.transform = "scale(1)";
@@ -845,12 +818,23 @@ export function VehicleDetailModal({
                         <img
                           src={item.changes.imageUrl}
                           alt="Ảnh xe yêu cầu"
-                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                          }}
                         />
                       </div>
                       <span
-                        onClick={() => setPreviewImageUrl(item.changes.imageUrl)}
-                        style={{ fontSize: "0.75rem", color: "#2563eb", cursor: "pointer", textDecoration: "underline" }}
+                        onClick={() =>
+                          setPreviewImageUrl(item.changes.imageUrl)
+                        }
+                        style={{
+                          fontSize: "0.75rem",
+                          color: "#2563eb",
+                          cursor: "pointer",
+                          textDecoration: "underline",
+                        }}
                       >
                         Bấm vào ảnh để phóng to
                       </span>
@@ -878,8 +862,13 @@ export function VehicleDetailModal({
                           status: "Trạng thái",
                         };
                         return (
-                          <div key={k} style={{ fontSize: "0.75rem", lineHeight: 1.5 }}>
-                            <span style={{ color: "var(--muted)" }}>{labels[k] || k}:</span>{" "}
+                          <div
+                            key={k}
+                            style={{ fontSize: "0.75rem", lineHeight: 1.5 }}
+                          >
+                            <span style={{ color: "var(--muted)" }}>
+                              {labels[k] || k}:
+                            </span>{" "}
                             <strong>{String(v || "—")}</strong>
                           </div>
                         );
@@ -887,60 +876,46 @@ export function VehicleDetailModal({
                     </div>
                   )}
 
-                  {/* Nút duyệt / từ chối trực tiếp ở từng đơn đang chờ duyệt (dành cho Admin) */}
-                  {isAdmin && item.status === "pending" && item.type === "request" && (
-                    <div style={{ display: "flex", gap: 8, marginTop: 10, paddingTop: 8, borderTop: "1px dashed var(--border, #e2e6ef)" }}>
-                      <button
-                        type="button"
-                        className="small-button"
-                        disabled={processing}
-                        onClick={async () => {
-                          try {
-                            const res = await apiFetch("/vehicle-requests/resolve", {
-                              method: "POST",
-                              body: JSON.stringify({ id: item.id, action: "approved", adminNote: "Admin đã duyệt xe từ lịch sử." }),
-                            });
-                            if (res.ok) {
-                              onApprove();
-                              onClose();
-                            }
-                          } catch (e) {
-                            console.error("Duyệt đơn thất bại:", e);
-                          }
-                        }}
-                        style={{ color: "#15803d", borderColor: "#bbf7d0", padding: "4px 10px", fontSize: "0.78rem" }}
-                      >
-                        <Check size={12} /> Duyệt đơn này
-                      </button>
-                      <button
-                        type="button"
-                        className="small-button"
-                        disabled={processing}
-                        onClick={async () => {
-                          try {
-                            const res = await apiFetch("/vehicle-requests/resolve", {
-                              method: "POST",
-                              body: JSON.stringify({ id: item.id, action: "rejected", adminNote: "Admin từ chối đơn từ lịch sử." }),
-                            });
-                            if (res.ok) {
-                              onReject();
-                              onClose();
-                            }
-                          } catch (e) {
-                            console.error("Từ chối đơn thất bại:", e);
-                          }
-                        }}
-                        style={{ color: "#b91c1c", borderColor: "#fecaca", padding: "4px 10px", fontSize: "0.78rem" }}
-                      >
-                        <X size={12} /> Từ chối
-                      </button>
-                    </div>
-                  )}
-                  {item.adminNote && (
-                    <div style={{ marginTop: 4, fontSize: "0.75rem", color: "#b91c1c" }}>
+                  {item.status !== "pending" && item.adminNote && (
+                    <div
+                      style={{
+                        marginTop: 4,
+                        fontSize: "0.75rem",
+                        color: "#b91c1c",
+                      }}
+                    >
                       Ghi chú: {item.adminNote}
                     </div>
                   )}
+                  {isAdmin &&
+                  item.type === "request" &&
+                  item.status === "pending" ? (
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "flex-end",
+                        gap: 8,
+                        marginTop: 10,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className="small-button primary"
+                        disabled={processing}
+                        onClick={() => onResolveRequest?.(item.id, "approved")}
+                      >
+                        <Check size={14} /> Duyệt đơn này
+                      </button>
+                      <button
+                        type="button"
+                        className="small-button danger"
+                        disabled={processing}
+                        onClick={() => onResolveRequest?.(item.id, "rejected")}
+                      >
+                        <X size={14} /> Từ chối
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -980,46 +955,18 @@ export function VehicleDetailModal({
               flexWrap: "wrap",
             }}
           >
-          {isRejected && onEdit && (
-            <button
-              className="small-button primary"
-              onClick={onEdit}
-              type="button"
-            >
-              <Edit size={14} /> Chỉnh sửa và gửi lại
-            </button>
-          )}
-          {isRejected && isAdmin && (
-            <>
-              {onResetPending && (
-                <button
-                  className="small-button"
-                  onClick={onResetPending}
-                  disabled={processing}
-                  type="button"
-                  style={{ color: "#d97706", borderColor: "#fde68a" }}
-                >
-                  <RotateCcw size={14} /> Chuyển về Cần duyệt
-                </button>
-              )}
+            {isRejected && onEdit && (
               <button
-                className="small-button"
-                onClick={onApprove}
-                disabled={processing}
+                className="small-button primary"
+                onClick={onEdit}
                 type="button"
-                style={{
-                  color: "#15803d",
-                  borderColor: "#bbf7d0",
-                  background: "rgba(34,197,94,0.08)",
-                }}
               >
-                <Check size={14} /> Duyệt lại đơn
+                <Edit size={14} /> Chỉnh sửa và gửi lại
               </button>
-            </>
-          )}
-          <button className="small-button" onClick={onClose} type="button">
-            Đóng
-          </button>
+            )}
+            <button className="small-button" onClick={onClose} type="button">
+              Đóng
+            </button>
           </div>
         )}
       </div>
@@ -1041,7 +988,11 @@ export function VehicleDetailModal({
           onClick={() => setPreviewImageUrl(null)}
         >
           <div
-            style={{ position: "relative", maxWidth: "92vw", maxHeight: "92vh" }}
+            style={{
+              position: "relative",
+              maxWidth: "92vw",
+              maxHeight: "92vh",
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             <button
@@ -1132,8 +1083,13 @@ function VehicleEditModal({
       .replace(/[\s.-]+/g, "");
     if (!plate) {
       errs.plate = "Vui lòng nhập biển số.";
-    } else if (!/^\d{2}[A-Z]{1,2}\d{4,5}$/.test(plate) || plate.length < 7 || plate.length > 9) {
-      errs.plate = "Biển số không hợp lệ (tối đa 8-9 ký tự, ví dụ: 30A77770, 29A12345).";
+    } else if (
+      !/^\d{2}[A-Z]{1,2}\d{4,5}$/.test(plate) ||
+      plate.length < 7 ||
+      plate.length > 9
+    ) {
+      errs.plate =
+        "Biển số không hợp lệ (tối đa 8-9 ký tự, ví dụ: 30A77770, 29A12345).";
     }
     if (form.ownerName.trim() && form.ownerName.trim().length < 2) {
       errs.ownerName = "Họ tên phải có ít nhất 2 ký tự.";
@@ -1242,7 +1198,11 @@ function VehicleEditModal({
     );
     setSaving(false);
     if (res && !res.ok) {
-      if (res.message && (res.message.includes("Biển số") || res.message.toLowerCase().includes("plate"))) {
+      if (
+        res.message &&
+        (res.message.includes("Biển số") ||
+          res.message.toLowerCase().includes("plate"))
+      ) {
         setErrors({ plate: res.message });
       } else {
         setErrors({ general: res.message || "Thao tác thất bại." });
@@ -1272,7 +1232,6 @@ function VehicleEditModal({
         justifyContent: "center",
         background: "rgba(255,255,255,0.85)",
       }}
-      
     >
       <div
         style={{
@@ -1599,10 +1558,22 @@ function VehicleEditModal({
                       onChange={(e) => {
                         let val = e.target.value;
                         if (key === "plate") {
-                          val = val.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 9);
+                          val = val
+                            .toUpperCase()
+                            .replace(/[^A-Z0-9]/g, "")
+                            .slice(0, 9);
                           setForm((f) => ({ ...f, [key]: val }));
-                          if (val && (!/^\d{2}[A-Z]{1,2}\d{4,5}$/.test(val) || val.length < 7 || val.length > 9)) {
-                            setErrors((prev) => ({ ...prev, plate: "Biển số không hợp lệ (tối đa 8-9 ký tự, ví dụ: 30A77770, 29A12345)." }));
+                          if (
+                            val &&
+                            (!/^\d{2}[A-Z]{1,2}\d{4,5}$/.test(val) ||
+                              val.length < 7 ||
+                              val.length > 9)
+                          ) {
+                            setErrors((prev) => ({
+                              ...prev,
+                              plate:
+                                "Biển số không hợp lệ (tối đa 8-9 ký tự, ví dụ: 30A77770, 29A12345).",
+                            }));
                           } else {
                             clearError("plate");
                           }
@@ -1619,7 +1590,8 @@ function VehicleEditModal({
                         borderRadius: 8,
                         fontSize: "0.9rem",
                         boxSizing: "border-box",
-                        textTransform: key === "plate" ? "uppercase" : undefined,
+                        textTransform:
+                          key === "plate" ? "uppercase" : undefined,
                       }}
                       type={key === "year" ? "number" : "text"}
                     />
@@ -1753,10 +1725,18 @@ function ResubmitVehicleModal({
 
   function validateForm(): Record<string, string> {
     const errs: Record<string, string> = {};
-    const plate = form.plate.trim().toUpperCase().replace(/[\s.-]+/g, "");
+    const plate = form.plate
+      .trim()
+      .toUpperCase()
+      .replace(/[\s.-]+/g, "");
     if (!plate) errs.plate = "Vui lòng nhập biển số.";
-    else if (!/^\d{2}[A-Z]{1,2}\d{4,5}$/.test(plate) || plate.length < 7 || plate.length > 9)
-      errs.plate = "Biển số không hợp lệ (tối đa 8-9 ký tự, ví dụ: 30A77770, 29A12345).";
+    else if (
+      !/^\d{2}[A-Z]{1,2}\d{4,5}$/.test(plate) ||
+      plate.length < 7 ||
+      plate.length > 9
+    )
+      errs.plate =
+        "Biển số không hợp lệ (tối đa 8-9 ký tự, ví dụ: 30A77770, 29A12345).";
     if (form.ownerName.trim() && form.ownerName.trim().length < 2)
       errs.ownerName = "Họ tên phải có ít nhất 2 ký tự.";
     const phone = form.ownerPhone.trim();
@@ -1796,7 +1776,10 @@ function ResubmitVehicleModal({
     setSaving(true);
     const yearNum = form.year.trim() ? Number(form.year) : undefined;
     await onSubmit({
-      plate: form.plate.trim().toUpperCase().replace(/[\s.-]+/g, ""),
+      plate: form.plate
+        .trim()
+        .toUpperCase()
+        .replace(/[\s.-]+/g, ""),
       owner: form.ownerName.trim() || undefined,
       ownerPhone: form.ownerPhone.trim() || undefined,
       ownerAddress: form.ownerAddress.trim() || undefined,
@@ -1831,7 +1814,6 @@ function ResubmitVehicleModal({
         backdropFilter: "blur(4px)",
         padding: 16,
       }}
-      
     >
       <div
         style={{
@@ -2218,8 +2200,14 @@ function CustomerEditRequestModal({
       .trim()
       .toUpperCase()
       .replace(/[\s.-]+/g, "");
-    if (plate && (!/^\d{2}[A-Z]{1,2}\d{4,5}$/.test(plate) || plate.length < 7 || plate.length > 9))
-      errs.plate = "Biển số không hợp lệ (tối đa 8-9 ký tự, ví dụ: 30A77770, 29A12345).";
+    if (
+      plate &&
+      (!/^\d{2}[A-Z]{1,2}\d{4,5}$/.test(plate) ||
+        plate.length < 7 ||
+        plate.length > 9)
+    )
+      errs.plate =
+        "Biển số không hợp lệ (tối đa 8-9 ký tự, ví dụ: 30A77770, 29A12345).";
     if (form.ownerName.trim() && form.ownerName.trim().length < 2)
       errs.ownerName = "Họ tên phải có ít nhất 2 ký tự.";
     const phone = form.ownerPhone.trim();
@@ -2300,7 +2288,6 @@ function CustomerEditRequestModal({
         justifyContent: "center",
         background: "rgba(255,255,255,0.85)",
       }}
-      
     >
       <div
         style={{
@@ -2604,10 +2591,22 @@ function CustomerEditRequestModal({
                   onChange={(e) => {
                     let val = e.target.value;
                     if (key === "plate") {
-                      val = val.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 9);
+                      val = val
+                        .toUpperCase()
+                        .replace(/[^A-Z0-9]/g, "")
+                        .slice(0, 9);
                       setForm((f) => ({ ...f, [key]: val }));
-                      if (val && (!/^\d{2}[A-Z]{1,2}\d{4,5}$/.test(val) || val.length < 7 || val.length > 9)) {
-                        setErrors((prev) => ({ ...prev, plate: "Biển số không hợp lệ (tối đa 8-9 ký tự, ví dụ: 30A77770, 29A12345)." }));
+                      if (
+                        val &&
+                        (!/^\d{2}[A-Z]{1,2}\d{4,5}$/.test(val) ||
+                          val.length < 7 ||
+                          val.length > 9)
+                      ) {
+                        setErrors((prev) => ({
+                          ...prev,
+                          plate:
+                            "Biển số không hợp lệ (tối đa 8-9 ký tự, ví dụ: 30A77770, 29A12345).",
+                        }));
                       } else {
                         clearError("plate");
                       }
@@ -2695,7 +2694,6 @@ function CustomerDeleteRequestModal({
         justifyContent: "center",
         background: "rgba(255,255,255,0.85)",
       }}
-      
     >
       <div
         style={{
@@ -3268,33 +3266,6 @@ export function VehiclesView() {
         <VehicleDetailModal
           vehicle={detailVehicle}
           onClose={() => setDetailVehicle(null)}
-          onApprove={async () => {
-            if (!detailVehicle.id) return;
-            await approveVehicle(detailVehicle);
-            await Promise.all([
-              loadVehicles(),
-              loadVehicleRequests({ includeResolved: true }),
-            ]);
-            setDetailVehicle(null);
-          }}
-          onResetPending={async () => {
-            if (!detailVehicle.id) return;
-            const res = await apiFetch(`/vehicles/${detailVehicle.id}`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ id: detailVehicle.id, status: "Cần duyệt" }),
-            });
-            if (!res.ok) {
-              const data = await res.json().catch(() => null);
-              alert(data?.message || "Không thể chuyển trạng thái.");
-              return;
-            }
-            await Promise.all([
-              loadVehicles(),
-              loadVehicleRequests({ includeResolved: true }),
-            ]);
-            setDetailVehicle(null);
-          }}
           onReject={async () => {
             if (!detailVehicle.id) return;
             const reason = detailRejectNote.trim();
@@ -3323,6 +3294,14 @@ export function VehiclesView() {
           onRejectReasonChange={setDetailRejectNote}
           processing={resolvingId === detailVehicle.id}
           isAdmin={isAdmin}
+          onResolveRequest={async (requestId, action) => {
+            await handleResolve(requestId, action);
+            await Promise.all([
+              loadVehicles(),
+              loadVehicleRequests({ includeResolved: true }),
+            ]);
+            setDetailVehicle(null);
+          }}
           onEdit={
             isCustomer &&
             detailVehicle.id &&
@@ -3357,13 +3336,10 @@ export function VehiclesView() {
             if (showAddForm) {
               res = await addVehicle(data as Parameters<typeof addVehicle>[0]);
             } else if (editingVehicle?.id) {
-              res = await editVehicle(
-                editingVehicle.id,
-                {
-                  ...(data as Parameters<typeof editVehicle>[1]),
-                  requestApproval: isCustomerView,
-                },
-              );
+              res = await editVehicle(editingVehicle.id, {
+                ...(data as Parameters<typeof editVehicle>[1]),
+                requestApproval: isCustomerView,
+              });
             }
             if (res && !res.ok) {
               return res;
@@ -3477,7 +3453,6 @@ export function VehiclesView() {
             justifyContent: "center",
             background: "rgba(255,255,255,0.85)",
           }}
-          
         >
           <div
             style={{
@@ -4285,7 +4260,11 @@ export function VehiclesView() {
                     {vehicle.rfidCard.uid}
                   </span>
                 ) : (
-                  <span key="rfid" className="muted-cell" style={{ fontSize: "0.8rem" }}>
+                  <span
+                    key="rfid"
+                    className="muted-cell"
+                    style={{ fontSize: "0.8rem" }}
+                  >
                     —
                   </span>
                 ),
@@ -4322,7 +4301,9 @@ export function VehiclesView() {
                         setEditingVehicle(vehicle);
                         setShowAddForm(false);
                       }}
-                      title={isCustomerView ? "Gửi yêu cầu chỉnh sửa" : "Chỉnh sửa"}
+                      title={
+                        isCustomerView ? "Gửi yêu cầu chỉnh sửa" : "Chỉnh sửa"
+                      }
                       type="button"
                       style={{ padding: "3px 7px" }}
                     >
@@ -4703,7 +4684,9 @@ export function VehiclesView() {
                                   await handleResolve(req.id, "approved");
                                   await Promise.all([
                                     loadVehicles(),
-                                    loadVehicleRequests({ includeResolved: true }),
+                                    loadVehicleRequests({
+                                      includeResolved: true,
+                                    }),
                                   ]);
                                 }}
                                 style={{ padding: "3px 8px", color: "#16a34a" }}

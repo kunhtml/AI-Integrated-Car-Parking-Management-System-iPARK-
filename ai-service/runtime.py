@@ -16,7 +16,7 @@ try:
 except Exception as exc:
     print(f"[ENV] dotenv unavailable: {exc}")
 
-from flask import Flask, Response, jsonify
+from flask import Flask, Response, jsonify, request
 from config import FLASK_PORT, STATIC_DIR
 from services.orchestration import Orchestrator
 
@@ -52,6 +52,16 @@ register_health_routes(app, orchestrator)
 register_barrier_routes(app, barrier)
 register_rfid_routes(app, scanner)
 register_debug_routes(app, orchestrator)
+
+@app.post("/api/staff-desk/reset")
+def reset_staff_desk_gate():
+    body = request.get_json(silent=True) or {}
+    direction = (body.get("direction") or "").strip().lower()
+    if direction not in {"in", "out"}:
+        return jsonify({"ok": False, "error": "invalid direction"}), 400
+    scanner.cancel(direction)
+    orchestrator.reset_gate_state(direction)
+    return jsonify({"ok": True, "direction": direction})
 
 # Optional serial RFID reader (Arduino/ESP32 qua COM port). Chi bật khi
 # RFID_SERIAL_PORT(S) duoc cau hinh; neu khong, van co the nap UID qua HTTP

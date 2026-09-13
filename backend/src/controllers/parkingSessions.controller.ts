@@ -495,13 +495,17 @@ export async function createParkingSession(
       ownerUserId = card.userId;
       plateCheck = { warn: undefined, discount: 0 };
     } else {
-      const memberSubscription = await findActiveSubscriptionByPlate(
-        normalizeRfidPlate(body.plate),
-      );
-      if (memberSubscription) {
+      const registeredMemberCard = await RfidCard.findOne({
+        cardType: "member",
+        plate: normalizeRfidPlate(body.plate),
+        status: { $in: ["active", "in-use"] },
+        userId: { $exists: true, $ne: null },
+        vehicleId: { $exists: true, $ne: null },
+      }).select("_id");
+      if (registeredMemberCard) {
         response.status(409).json({
           message:
-            "Xe này đã đăng ký gói thành viên. Vui lòng dùng đúng RFID Member đã liên kết với xe.",
+            "Xe này đã gắn RFID Member. Vui lòng dùng đúng thẻ RFID Member đã liên kết với xe.",
         });
         return;
       }

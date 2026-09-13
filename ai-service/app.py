@@ -1718,18 +1718,18 @@ def _process_arduino_line(line, ser, ser_out, direction):
         result = backend.rfid_scan_register(uid, owner_name=owner_name, plate=current_plate, user_type=card_user_type)
         scanned_card = result.get("card") or {}
         scanned_card_type = str(scanned_card.get("cardType") or "guest").lower()
-        if is_subscriber and scanned_card_type != "member":
-            scan_result_by_direction[direction] = "error"
-            scan_message_by_direction[direction] = "Xe thành viên phải dùng đúng RFID Member đã liên kết với biển số này."
-        elif not result.get("ok"):
+        # Xe thành viên có thể chưa mua/gắn thẻ Member. Khi quét thẻ Guest
+        # hợp lệ, backend sẽ tạo phiên walk-in thay vì chặn tại bridge.
+        if not result.get("ok"):
             scan_result_by_direction[direction] = "error"
             scan_message_by_direction[direction] = (
                 result.get("message")
                 or ("Thẻ Member không khớp với biển số xe camera phát hiện. Vui lòng dùng đúng RFID Member liên kết."
-                    if is_subscriber
+                    if scanned_card_type == "member"
                     else "Thẻ Guest không hợp lệ hoặc chưa sẵn sàng. Vui lòng thử lại.")
             )
         else:
+            card_user_type = "resident" if scanned_card_type == "member" else "guest"
             sync_cmd = f"ADD|{uid}|{owner_name}|{current_plate}|{card_user_type}|active"
             safe_write(arduino_in, serial_lock_in, sync_cmd)
             if current_plate:

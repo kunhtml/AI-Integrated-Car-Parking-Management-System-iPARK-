@@ -31,10 +31,7 @@ export async function listVehicles(_request: Request, response: Response) {
 
   // Tìm các thẻ RFID đang liên kết theo vehicleId hoặc plate
   const rfidCards = await RfidCard.find({
-    $or: [
-      { vehicleId: { $in: vehicleIds } },
-      { plate: { $in: plates } },
-    ],
+    $or: [{ vehicleId: { $in: vehicleIds } }, { plate: { $in: plates } }],
   }).lean();
 
   const rfidMap = new Map<string, any>();
@@ -49,7 +46,10 @@ export async function listVehicles(_request: Request, response: Response) {
 
   response.json({
     vehicles: vehicles.map((v) => {
-      const card = rfidMap.get(v._id.toString()) || rfidMap.get(v.plate.toUpperCase()) || null;
+      const card =
+        rfidMap.get(v._id.toString()) ||
+        rfidMap.get(v.plate.toUpperCase()) ||
+        null;
       return serializeVehicle(v, v.userId as unknown as PopulatedUser, card);
     }),
   });
@@ -65,15 +65,15 @@ export async function getVehicle(request: Request, response: Response) {
     response.status(404).json({ message: "Không tìm thấy phương tiện." });
     return;
   }
-  if (request.user?.role === "customer" && vehicle.userId?._id?.toString() !== request.user.id) {
+  if (
+    request.user?.role === "customer" &&
+    vehicle.userId?._id?.toString() !== request.user.id
+  ) {
     response.status(404).json({ message: "Không tìm thấy phương tiện." });
     return;
   }
   const rfidCard = await RfidCard.findOne({
-    $or: [
-      { vehicleId: vehicle._id },
-      { plate: vehicle.plate },
-    ],
+    $or: [{ vehicleId: vehicle._id }, { plate: vehicle.plate }],
   }).lean();
 
   response.json({
@@ -87,7 +87,9 @@ export async function getVehicle(request: Request, response: Response) {
 
 export async function createVehicle(request: Request, response: Response) {
   if (request.user?.role !== "customer") {
-    response.status(403).json({ message: "Chỉ khách hàng mới được đăng ký phương tiện." });
+    response
+      .status(403)
+      .json({ message: "Chỉ khách hàng mới được đăng ký phương tiện." });
     return;
   }
   const body = z
@@ -112,8 +114,15 @@ export async function createVehicle(request: Request, response: Response) {
     .replace(/[\s.-]+/g, "");
 
   // Ràng buộc biển số xe chuẩn: tối đa 8 đến 9 ký tự (ví dụ: 30A77770, 51C67890)
-  if (!/^\d{2}[A-Z]{1,2}\d{4,5}$/.test(normPlate) || normPlate.length < 7 || normPlate.length > 9) {
-    response.status(400).json({ message: "Biển số không hợp lệ (tối đa 8 đến 9 ký tự, ví dụ: 30A77770, 29A12345)." });
+  if (
+    !/^\d{2}[A-Z]{1,2}\d{4,5}$/.test(normPlate) ||
+    normPlate.length < 7 ||
+    normPlate.length > 9
+  ) {
+    response.status(400).json({
+      message:
+        "Biển số không hợp lệ (tối đa 8 đến 9 ký tự, ví dụ: 30A77770, 29A12345).",
+    });
     return;
   }
   const existing = await Vehicle.findOne({ plate: normPlate });
@@ -221,6 +230,14 @@ export async function updateVehicle(request: Request, response: Response) {
     return;
   }
 
+  // Xe của chính khách hàng/nhân viên luôn cần admin duyệt, kể cả khi nhân viên
+  // đang dùng giao diện Bàn nhân viên thay vì Khu vực Người dùng.
+  const isOwnerRequest = existing.userId?.toString() === request.user?.id;
+  const requiresApproval =
+    request.user?.role === "customer" ||
+    body.requestApproval === true ||
+    (request.user?.role === "staff" && isOwnerRequest);
+
   let oldPlate: string | undefined;
   let validatedNormPlate: string | undefined;
   if (body.plate) {
@@ -230,8 +247,15 @@ export async function updateVehicle(request: Request, response: Response) {
       .replace(/[\s.-]+/g, "");
 
     // Ràng buộc biển số xe chuẩn: tối đa 8 đến 9 ký tự (ví dụ: 30A77770, 51C67890)
-    if (!/^\d{2}[A-Z]{1,2}\d{4,5}$/.test(normPlate) || normPlate.length < 7 || normPlate.length > 9) {
-      response.status(400).json({ message: "Biển số không hợp lệ (tối đa 8 đến 9 ký tự, ví dụ: 30A77770, 29A12345)." });
+    if (
+      !/^\d{2}[A-Z]{1,2}\d{4,5}$/.test(normPlate) ||
+      normPlate.length < 7 ||
+      normPlate.length > 9
+    ) {
+      response.status(400).json({
+        message:
+          "Biển số không hợp lệ (tối đa 8 đến 9 ký tự, ví dụ: 30A77770, 29A12345).",
+      });
       return;
     }
 
@@ -243,14 +267,14 @@ export async function updateVehicle(request: Request, response: Response) {
       return;
     }
     validatedNormPlate = normPlate;
-    if (request.user?.role !== "customer" && !body.requestApproval) {
+    if (!requiresApproval) {
       oldPlate = existing.plate;
       existing.plate = normPlate;
     }
   }
 
-  // Khách hàng, hoặc nhân sự đang thao tác trong Khu vực Người dùng, phải chờ admin duyệt.
-  if (request.user?.role === "customer" || body.requestApproval) {
+  // Chủ xe và nhân sự thao tác trong Khu vực Người dùng phải chờ admin duyệt.
+  if (requiresApproval) {
     const pendingRequest = await VehicleRequest.findOne({
       vehicleId: existing._id,
       type: "edit",
@@ -265,15 +289,19 @@ export async function updateVehicle(request: Request, response: Response) {
 
     const requestedChanges: Record<string, any> = {};
     if (validatedNormPlate) requestedChanges.plate = validatedNormPlate;
-    if (body.ownerName !== undefined) requestedChanges.ownerName = body.ownerName;
-    if (body.ownerPhone !== undefined) requestedChanges.ownerPhone = body.ownerPhone;
-    if (body.ownerAddress !== undefined) requestedChanges.ownerAddress = body.ownerAddress;
+    if (body.ownerName !== undefined)
+      requestedChanges.ownerName = body.ownerName;
+    if (body.ownerPhone !== undefined)
+      requestedChanges.ownerPhone = body.ownerPhone;
+    if (body.ownerAddress !== undefined)
+      requestedChanges.ownerAddress = body.ownerAddress;
     if (body.brand !== undefined) requestedChanges.brand = body.brand;
     if (body.model !== undefined) requestedChanges.model = body.model;
     if (body.color !== undefined) requestedChanges.color = body.color;
     if (body.year !== undefined) requestedChanges.year = body.year;
     if (body.engineNo !== undefined) requestedChanges.engineNo = body.engineNo;
-    if (body.chassisNo !== undefined) requestedChanges.chassisNo = body.chassisNo;
+    if (body.chassisNo !== undefined)
+      requestedChanges.chassisNo = body.chassisNo;
     if (body.imageUrl !== undefined) requestedChanges.imageUrl = body.imageUrl;
 
     // Đổi trạng thái xe thành Cần duyệt
@@ -292,7 +320,8 @@ export async function updateVehicle(request: Request, response: Response) {
     // Admin / Staff sửa trực tiếp
     if (body.ownerName !== undefined) existing.ownerName = body.ownerName;
     if (body.ownerPhone !== undefined) existing.ownerPhone = body.ownerPhone;
-    if (body.ownerAddress !== undefined) existing.ownerAddress = body.ownerAddress;
+    if (body.ownerAddress !== undefined)
+      existing.ownerAddress = body.ownerAddress;
     if (body.brand !== undefined) existing.brand = body.brand;
     if (body.model !== undefined) existing.set("model", body.model);
     if (body.color !== undefined) existing.color = body.color;
@@ -305,7 +334,8 @@ export async function updateVehicle(request: Request, response: Response) {
         existing.rejectionReason = undefined;
       }
     }
-    if (body.rejectionReason !== undefined) existing.rejectionReason = body.rejectionReason;
+    if (body.rejectionReason !== undefined)
+      existing.rejectionReason = body.rejectionReason;
     if (body.imageUrl !== undefined) existing.imageUrl = body.imageUrl;
     await existing.save();
 
@@ -328,8 +358,7 @@ export async function updateVehicle(request: Request, response: Response) {
   // Không đồng bộ trạng thái request tại đây: request vừa tạo phải luôn chờ
   // admin xử lý qua `/vehicle-requests/:id/resolve`.
   if (
-    request.user?.role !== "customer" &&
-    !body.requestApproval &&
+    !requiresApproval &&
     (body.status === "Đã đăng ký" ||
       body.status === "Blacklist" ||
       body.status === "Cần duyệt")
@@ -386,10 +415,7 @@ export async function updateVehicle(request: Request, response: Response) {
   });
 
   const rfidCard = await RfidCard.findOne({
-    $or: [
-      { vehicleId: existing._id },
-      { plate: existing.plate },
-    ],
+    $or: [{ vehicleId: existing._id }, { plate: existing.plate }],
   }).lean();
 
   response.json({
@@ -443,7 +469,12 @@ export async function resubmitVehicle(request: Request, response: Response) {
 
   const body = z
     .object({
-      plate: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{5,9}$/).optional(),
+      plate: z
+        .string()
+        .trim()
+        .toUpperCase()
+        .regex(/^[A-Z0-9]{5,9}$/)
+        .optional(),
       ownerName: z.string().optional(),
       ownerPhone: z.string().optional(),
       ownerAddress: z.string().optional(),
@@ -457,25 +488,35 @@ export async function resubmitVehicle(request: Request, response: Response) {
     })
     .parse(request.body);
 
-  // Cập nhật thông tin xe nếu customer có chỉnh sửa
-  if (body.plate !== undefined && body.plate !== vehicle.plate) {
-    const duplicate = await Vehicle.findOne({ plate: body.plate, _id: { $ne: vehicle._id } });
+  // Không ghi dữ liệu người dùng gửi lại trực tiếp vào xe. Admin phải duyệt
+  // `requestedChanges` trước khi biển số và các thông tin khác có hiệu lực.
+  const requestedChanges: Record<string, unknown> = {};
+  if (body.plate !== undefined) {
+    const normPlate = body.plate.toUpperCase().replace(/[\s.-]+/g, "");
+    const duplicate = await Vehicle.findOne({
+      plate: normPlate,
+      _id: { $ne: vehicle._id },
+    });
     if (duplicate) {
-      response.status(409).json({ message: "Biển số này đã được đăng ký cho phương tiện khác." });
+      response
+        .status(409)
+        .json({ message: "Biển số này đã được đăng ký cho phương tiện khác." });
       return;
     }
-    vehicle.plate = body.plate;
+    if (normPlate !== vehicle.plate) requestedChanges.plate = normPlate;
   }
-  if (body.ownerName !== undefined) vehicle.ownerName = body.ownerName;
-  if (body.ownerPhone !== undefined) vehicle.ownerPhone = body.ownerPhone;
-  if (body.ownerAddress !== undefined) vehicle.ownerAddress = body.ownerAddress;
-  if (body.brand !== undefined) vehicle.brand = body.brand;
-  if (body.model !== undefined) vehicle.set("model", body.model);
-  if (body.color !== undefined) vehicle.color = body.color;
-  if (body.year !== undefined) vehicle.year = body.year;
-  if (body.engineNo !== undefined) vehicle.engineNo = body.engineNo;
-  if (body.chassisNo !== undefined) vehicle.chassisNo = body.chassisNo;
-  if (body.imageUrl !== undefined) vehicle.imageUrl = body.imageUrl;
+  if (body.ownerName !== undefined) requestedChanges.ownerName = body.ownerName;
+  if (body.ownerPhone !== undefined)
+    requestedChanges.ownerPhone = body.ownerPhone;
+  if (body.ownerAddress !== undefined)
+    requestedChanges.ownerAddress = body.ownerAddress;
+  if (body.brand !== undefined) requestedChanges.brand = body.brand;
+  if (body.model !== undefined) requestedChanges.model = body.model;
+  if (body.color !== undefined) requestedChanges.color = body.color;
+  if (body.year !== undefined) requestedChanges.year = body.year;
+  if (body.engineNo !== undefined) requestedChanges.engineNo = body.engineNo;
+  if (body.chassisNo !== undefined) requestedChanges.chassisNo = body.chassisNo;
+  if (body.imageUrl !== undefined) requestedChanges.imageUrl = body.imageUrl;
 
   // Reset trạng thái về chờ duyệt
   vehicle.status = "Cần duyệt";
@@ -487,7 +528,7 @@ export async function resubmitVehicle(request: Request, response: Response) {
     vehicleId: vehicle._id,
     userId: request.user!.id,
     type: "edit",
-    requestedChanges: { status: "Đã đăng ký" },
+    requestedChanges,
   });
 
   response.json({
@@ -516,7 +557,6 @@ export async function resubmitVehicle(request: Request, response: Response) {
   });
 }
 
-
 export async function getVehicleHistory(request: Request, response: Response) {
   const vehicleId = request.params.id;
   if (!mongoose.isValidObjectId(vehicleId)) {
@@ -539,7 +579,10 @@ export async function getVehicleHistory(request: Request, response: Response) {
 
   // 2. Lấy AuditLog nếu có
   const { AuditLog } = await import("../models/AuditLog.js");
-  const auditLogs = await AuditLog.find({ entityType: "Vehicle", entityId: vehicle._id })
+  const auditLogs = await AuditLog.find({
+    entityType: "Vehicle",
+    entityId: vehicle._id,
+  })
     .sort({ createdAt: -1 })
     .populate("performedBy", "name email")
     .lean();
@@ -550,7 +593,12 @@ export async function getVehicleHistory(request: Request, response: Response) {
       type: "request",
       action: r.type === "edit" ? "Yêu cầu chỉnh sửa xe" : "Yêu cầu xóa xe",
       status: r.status,
-      statusLabel: r.status === "approved" ? "Đã duyệt" : r.status === "rejected" ? "Từ chối" : "Đang chờ duyệt",
+      statusLabel:
+        r.status === "approved"
+          ? "Đã duyệt"
+          : r.status === "rejected"
+            ? "Từ chối"
+            : "Đang chờ duyệt",
       performedBy: r.userId ? r.userId.name : "Khách hàng",
       resolvedBy: r.resolvedBy ? r.resolvedBy.name : undefined,
       adminNote: r.adminNote,
@@ -568,7 +616,9 @@ export async function getVehicleHistory(request: Request, response: Response) {
       changes: a.changes?.new || a.changes || {},
       createdAt: a.createdAt.toISOString(),
     })),
-  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  ].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
 
   response.json({ history });
 }

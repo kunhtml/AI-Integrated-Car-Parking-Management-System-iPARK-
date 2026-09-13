@@ -156,13 +156,19 @@ async function buildSessionForEntry(
         };
       }
     } else {
-      const memberSubscription = await findActiveSubscriptionByPlate(plate);
-      if (memberSubscription) {
+      const registeredMemberCard = await RfidCard.findOne({
+        cardType: "member",
+        plate,
+        status: { $in: ["active", "in-use"] },
+        userId: { $exists: true, $ne: null },
+        vehicleId: { $exists: true, $ne: null },
+      }).select("_id");
+      if (registeredMemberCard) {
         return {
           duplicate: false,
           invalidRfid: true,
           message:
-            "Xe này đã đăng ký gói thành viên. Vui lòng dùng đúng RFID Member đã liên kết với xe.",
+            "Xe này đã gắn RFID Member. Vui lòng dùng đúng thẻ RFID Member đã liên kết với xe.",
         };
       }
       // Guest RFID always consumes a walk-in slot, even for a registered plate.

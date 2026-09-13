@@ -883,10 +883,23 @@ export function StaffDeskView() {
         // Vẫn đóng UI local; session có thể restore nếu API lỗi — staff thử lại.
       }
     }
+    await bridgeFetch("/api/staff-desk/reset", {
+      method: "POST",
+      body: JSON.stringify({ direction: exitLaneRef.current }),
+    }).catch(() => undefined);
     clearExitUi();
   }, [activeExit?.sessionId, clearExitUi]);
 
-  const dismissActive = useCallback(() => {
+  const dismissActive = useCallback(async () => {
+    stopScanPolling();
+    await bridgeFetch("/api/rfid/scan/cancel", {
+      method: "POST",
+      body: JSON.stringify({ direction: entryLaneRef.current }),
+    }).catch(() => undefined);
+    await bridgeFetch("/api/staff-desk/reset", {
+      method: "POST",
+      body: JSON.stringify({ direction: entryLaneRef.current }),
+    }).catch(() => undefined);
     setActiveIngest(null);
     setPhase("idle");
     setCreateMsg("");
@@ -907,13 +920,13 @@ export function StaffDeskView() {
     setEntryRfidExceptionReason("");
     activeIngestIdRef.current = null;
     autoScanFiredRef.current = false;
-  }, []);
+  }, [stopScanPolling]);
 
   // Phiên đã tạo xong, kể cả barie mất kết nối và staff phải mở tay, chỉ là
   // thông báo tạm thời. Tự trả cổng vào trạng thái chờ sau 5 giây.
   useEffect(() => {
     if (!createdSession || (phase !== "done" && phase !== "error")) return;
-    const timer = window.setTimeout(dismissActive, 5000);
+    const timer = window.setTimeout(() => void dismissActive(), 5000);
     return () => window.clearTimeout(timer);
   }, [createdSession, dismissActive, phase]);
 
@@ -2880,13 +2893,11 @@ function IngestCard(props: {
           label="Thời gian"
           value={formatTime(event.createdAt)}
         />
-        {expectedRfidUid && (
-          <MetaRow
-            icon={<Nfc size={14} />}
-            label="RFID Member dự kiến"
-            value={expectedRfidUid}
-          />
-        )}
+        <MetaRow
+          icon={<Nfc size={14} />}
+          label="Thẻ RFID gắn với biển số"
+          value={expectedRfidUid || "RFID không gắn sẵn"}
+        />
         {(event.ownerName || displayUserType === "resident") && (
           <MetaRow
             icon={<CreditCard size={14} />}
@@ -3306,6 +3317,8 @@ function ExitCard({
       : event.rfidUid || scanUid;
   const entryRfidIsExpected = event.metadata?.entryRfidExpected === true;
   const fullHardwareOutage = /bridge|port\s*5050/i.test(gateError || "");
+  const requiresManualHardwareFallback =
+    fullHardwareOutage || scanPhase === "error" || scanPhase === "timeout";
   // Thẻ thay thế (đổi thẻ mới khi thẻ cũ hỏng/mất). Khi có giá trị này, xe
   // đang dùng thẻ mới thay cho thẻ đã quét lúc vào → hiển thị để nhân viên biết.
   const replacementCardUid =
@@ -3684,7 +3697,10 @@ function ExitCard({
             }`}
           >
             {/* Nút xử lý thủ công nhanh khi mất kết nối phần cứng */}
-            {!exitVerifyData && !hasPaymentData && !didCheckout && (
+            {requiresManualHardwareFallback &&
+            !exitVerifyData &&
+            !hasPaymentData &&
+            !didCheckout ? (
               <div
                 style={{
                   marginBottom: 16,
@@ -3729,7 +3745,7 @@ function ExitCard({
                   Xác nhận đã đối chiếu chính xác biển số
                 </button>
               </div>
-            )}
+            ) : null}
 
             {/* Nếu mất kết nối bridge hoặc đã xác nhận thủ công thì ẩn hoàn toàn dòng nhắc 'Thẻ không hợp lệ — quét lại' */}
             {fullHardwareOutage ||
