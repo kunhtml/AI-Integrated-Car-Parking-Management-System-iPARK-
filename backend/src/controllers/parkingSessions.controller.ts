@@ -368,10 +368,10 @@ export async function createParkingSession(
       const vehicle =
         memberCard.userId && memberCard.vehicleId
           ? await Vehicle.findOne({
-            _id: memberCard.vehicleId,
-            userId: memberCard.userId,
-            plate: memberPlate,
-          })
+              _id: memberCard.vehicleId,
+              userId: memberCard.userId,
+              plate: memberPlate,
+            })
           : null;
       if (
         !memberCard.userId ||
@@ -600,7 +600,8 @@ export async function createParkingSession(
   const checkInPricingSnapshot = {
     dayRate: entryPricing.dayRate,
     nightRate: entryPricing.nightRate,
-    gracePeriod: entryPricing.gracePeriod ?? (entryPricing as any).freeMinutes ?? 20,
+    gracePeriod:
+      entryPricing.gracePeriod ?? (entryPricing as any).freeMinutes ?? 20,
     dayStartHour: entryPricing.dayStartHour,
     nightStartHour: entryPricing.nightStartHour,
   };
@@ -622,14 +623,14 @@ export async function createParkingSession(
       : {}),
     ...(rfidCard
       ? {
-        rfidCardId: rfidCard.cardId || rfidCard.uid,
-        ...(body.rfidUid ? { entryRfidUid: rfidCard.uid } : {}),
-        ...(manualMemberCardUid
-          ? { entryExpectedRfidUid: manualMemberCardUid }
-          : {}),
-        rfidAssignedAt: new Date(),
-        rfidGate: "entry" as const,
-      }
+          rfidCardId: rfidCard.cardId || rfidCard.uid,
+          ...(body.rfidUid ? { entryRfidUid: rfidCard.uid } : {}),
+          ...(manualMemberCardUid
+            ? { entryExpectedRfidUid: manualMemberCardUid }
+            : {}),
+          rfidAssignedAt: new Date(),
+          rfidGate: "entry" as const,
+        }
       : {}),
     ...(body.entryDetectedPlate
       ? { entryDetectedPlate: body.entryDetectedPlate.toUpperCase() }
@@ -641,29 +642,29 @@ export async function createParkingSession(
     entrySource: isManualEntry ? "manual" : "camera",
     ...(isManualEntry
       ? {
-        entryPhotoStatus:
-          body.entryPhotoStatus ||
-          (body.entryImageUrl ? "photo_captured" : "camera_unavailable"),
-        ...(body.manualEntryReason
-          ? { manualEntryReason: body.manualEntryReason.trim() }
-          : {}),
-        ...(body.visualConfirmed
-          ? {
-            visualConfirmed: true,
-            visualConfirmedBy: objectId(request.user?.id),
-            visualConfirmedAt: new Date(),
-          }
-          : {}),
-      }
+          entryPhotoStatus:
+            body.entryPhotoStatus ||
+            (body.entryImageUrl ? "photo_captured" : "camera_unavailable"),
+          ...(body.manualEntryReason
+            ? { manualEntryReason: body.manualEntryReason.trim() }
+            : {}),
+          ...(body.visualConfirmed
+            ? {
+                visualConfirmed: true,
+                visualConfirmedBy: objectId(request.user?.id),
+                visualConfirmedAt: new Date(),
+              }
+            : {}),
+        }
       : {}),
     ...(body.entryRfidUnverified ? { entryRfidUnverified: true } : {}),
     ...(isMember
       ? {
-        paymentStatus: "fully_paid",
-        paymentMethod: "subscription",
-        fee: 0,
-        paidAmount: 0,
-      }
+          paymentStatus: "fully_paid",
+          paymentMethod: "subscription",
+          fee: 0,
+          paidAmount: 0,
+        }
       : {}),
     ...(plateCheck.warn
       ? { feeBreakdown: { subscriptionWarn: plateCheck.warn } as any }
@@ -779,7 +780,8 @@ export async function completeParkingSession(
   const finalized = await finalizeCheckout(session);
   if (!finalized) {
     response.status(409).json({
-      message: "Phiên này đã được tất toán trước đó (status không còn 'Đang gửi').",
+      message:
+        "Phiên này đã được tất toán trước đó (status không còn 'Đang gửi').",
     });
     return;
   }
@@ -908,11 +910,11 @@ export async function uploadParkingImage(request: Request, response: Response) {
       createdBy: request.user?.id,
       ...(isMember
         ? {
-          paymentStatus: "fully_paid",
-          paymentMethod: "subscription",
-          fee: 0,
-          paidAmount: 0,
-        }
+            paymentStatus: "fully_paid",
+            paymentMethod: "subscription",
+            fee: 0,
+            paidAmount: 0,
+          }
         : {}),
       ...(subscriptionWarn
         ? { feeBreakdown: { subscriptionWarn } as any }
@@ -962,7 +964,8 @@ export async function uploadParkingImage(request: Request, response: Response) {
       if (!finalized) {
         // Đã tất toán bởi request khác (webhook/reconcile) — không chạy lại.
         response.status(409).json({
-          message: "Phiên này đã được tất toán trước đó (status không còn 'Đang gửi').",
+          message:
+            "Phiên này đã được tất toán trước đó (status không còn 'Đang gửi').",
         });
         return;
       }
@@ -1044,7 +1047,8 @@ export async function approveCheckout(request: Request, response: Response) {
   const finalizedSession = await finalizeCheckout(session);
   if (!finalizedSession) {
     response.status(409).json({
-      message: "Phiên này đã được tất toán trước đó (status không còn 'Đang gửi').",
+      message:
+        "Phiên này đã được tất toán trước đó (status không còn 'Đang gửi').",
     });
     return;
   }
@@ -1135,11 +1139,11 @@ export async function cameraEntry(request: Request, response: Response) {
     createdBy: request.user?.id,
     ...(isMember
       ? {
-        paymentStatus: "fully_paid",
-        paymentMethod: "subscription",
-        fee: 0,
-        paidAmount: 0,
-      }
+          paymentStatus: "fully_paid",
+          paymentMethod: "subscription",
+          fee: 0,
+          paidAmount: 0,
+        }
       : {}),
     ...(plateCheck.warn
       ? { feeBreakdown: { subscriptionWarn: plateCheck.warn } as any }
@@ -1208,7 +1212,8 @@ export async function cameraExit(request: Request, response: Response) {
     const finalizedSession = await finalizeCheckout(session);
     if (!finalizedSession) {
       response.status(409).json({
-        message: "Phiên này đã được tất toán trước đó (status không còn 'Đang gửi').",
+        message:
+          "Phiên này đã được tất toán trước đó (status không còn 'Đang gửi').",
       });
       return;
     }

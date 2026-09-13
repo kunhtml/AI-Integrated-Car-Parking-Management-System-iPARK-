@@ -619,7 +619,7 @@ export async function pushCameraLog(request: Request, response: Response) {
           : (action as string) === "completed"
             ? "Đã hoàn thành"
             : null,
-    exitState: isExitWaiting ? (openSession?.exitState || "waiting_rfid") : null,
+    exitState: isExitWaiting ? openSession?.exitState || "waiting_rfid" : null,
     action: isExitWaiting ? "waiting_rfid" : action,
     sessionPaymentStatus: isExitWaiting ? "pending" : null,
     duplicateSession: action === "duplicate",
