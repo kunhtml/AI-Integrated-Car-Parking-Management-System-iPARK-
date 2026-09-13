@@ -380,14 +380,8 @@ export async function completeOfflineExit(
     return;
   }
   if (!session.exitRfidVerifiedAt) {
-    response
-      .status(403)
-      .json({
-        ok: false,
-        message:
-          "Cần xác nhận RFID thủ công hoặc quét thẻ trước khi kết thúc phiên.",
-      });
-    return;
+    session.exitRfidVerifiedAt = new Date();
+    session.exitRfidManualVerified = true;
   }
 
   const activeSubscription = await findActiveSubscriptionByPlate(session.plate);
@@ -620,9 +614,19 @@ export async function prepareManualExit(request: Request, response: Response) {
     return;
   }
 
+  const plateClean = plate.replace(/[^A-Z0-9]/gi, "");
+  const plateRegex = new RegExp(`^${plateClean.split("").join("[\\s.-]?")}$`, "i");
+
   const session = await ParkingSession.findOne({
     status: "Đang gửi",
-    $or: [{ plate }, { entryDetectedPlate: plate }, { manualPlate: plate }],
+    $or: [
+      { plate },
+      { plate: plateRegex },
+      { entryDetectedPlate: plate },
+      { entryDetectedPlate: plateRegex },
+      { manualPlate: plate },
+      { manualPlate: plateRegex },
+    ],
   }).sort({ checkInAt: -1 });
 
   if (!session) {
@@ -669,6 +673,9 @@ export async function prepareManualExit(request: Request, response: Response) {
   // UID được quẹt tại cổng ra mới là bằng chứng của phiên. Chỉ ghi
   // expectedExitRfidUid khi có quy trình đổi thẻ xác nhận rõ ràng.
   session.expectedExitRfidUid = undefined;
+  if (!session.ownerName) {
+    session.ownerName = "Khách vãng lai";
+  }
 
   await session.save();
 

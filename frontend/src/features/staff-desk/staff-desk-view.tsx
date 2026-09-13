@@ -838,11 +838,14 @@ export function StaffDeskView() {
         latestExitState.exitState || "",
       );
     if (!stillPending) {
-      // Barie đã mở: timer 5s trong openExitBarrier sẽ đóng UI. Không xóa ở
-      // đây để giữ thông báo "Mở barie thành công". SSE này thường về TRƯỚC
-      // khi response của openExitBarrier set được trạng thái, nên dùng CẢ
-      // flag barrierOpened lẫn timestamp (được đặt TRƯỚC khi gọi API).
-      if (activeExit.barrierOpened) return;
+      // Nếu bàn hiện tại đang hiển thị thành công (hoàn tất/mở barrier) hoặc có timer 5s: không đóng ngay!
+      if (
+        activeExit.barrierOpened ||
+        activeExit.sessionStatus === "Đã hoàn thành" ||
+        exitDismissTimerRef.current !== null
+      ) {
+        return;
+      }
       if (
         exitGateOpenedAtRef.current &&
         Date.now() - exitGateOpenedAtRef.current < 5000
@@ -1074,7 +1077,7 @@ export function StaffDeskView() {
         setExitScanError("");
         exitOfflineCompletedAtRef.current = Date.now();
         setActiveExit((current) =>
-          current ? { ...current, sessionStatus: "Đã hoàn thành" } : current,
+          current ? { ...current, sessionStatus: "Đã hoàn thành", barrierOpened: true } : current,
         );
         if (exitDismissTimerRef.current !== null) {
           window.clearTimeout(exitDismissTimerRef.current);
@@ -1341,10 +1344,16 @@ export function StaffDeskView() {
                 canOpenGate: true,
               },
         );
-        if (offlineExitReasonRef.current) {
-          await completeOfflineExit(offlineExitReasonRef.current);
+        // Nếu đang ở chế độ thủ công hoặc mất kết nối bridge: kết thúc phiên offline luôn
+        const reason = offlineExitReasonRef.current || "Đã thu đủ tiền mặt và đối chiếu chính xác biển số";
+        if (offlineExitReasonRef.current || fullHardwareOutage || scanPhase === "error") {
+          await completeOfflineExit(reason);
         } else {
-          await openExitBarrier();
+          try {
+            await openExitBarrier();
+          } catch {
+            await completeOfflineExit(reason);
+          }
         }
       } catch {
         setExitScanError("Lỗi kết nối khi thu tiền mặt.");
@@ -3549,7 +3558,7 @@ function ExitCard({
                   className="btn btn-primary btn-lg"
                   style={{ width: "100%", justifyContent: "center", background: "#2563eb", fontWeight: 700 }}
                   disabled={mismatchPending}
-                  onClick={() => onManualMissingEntryRfid?.("Đã đối chiếu chính xác biển số thủ công")}
+                  onClick={() => onManualMissingEntryRfid?.("Đã đối chiếu chính xác biển số thủ công", true)}
                 >
                   {mismatchPending ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
                   Xác nhận đã đối chiếu chính xác biển số
