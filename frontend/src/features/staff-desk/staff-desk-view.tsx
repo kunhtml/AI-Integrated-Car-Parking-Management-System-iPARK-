@@ -838,27 +838,8 @@ export function StaffDeskView() {
         latestExitState.exitState || "",
       );
     if (!stillPending) {
-      // Nếu bàn hiện tại đang hiển thị thành công (hoàn tất/mở barrier) hoặc có timer 5s: không đóng ngay!
-      if (
-        activeExit.barrierOpened ||
-        activeExit.sessionStatus === "Đã hoàn thành" ||
-        exitDismissTimerRef.current !== null
-      ) {
-        return;
-      }
-      if (
-        exitGateOpenedAtRef.current &&
-        Date.now() - exitGateOpenedAtRef.current < 5000
-      ) {
-        return;
-      }
-      if (
-        exitOfflineCompletedAtRef.current &&
-        Date.now() - exitOfflineCompletedAtRef.current < 5000
-      ) {
-        return;
-      }
-      clearExitUi();
+      // Khi phien da hoan tat: khong goi clearExitUi() ngay lap tuc
+      return;
     }
   }, [
     activeExit?.sessionId,
@@ -3360,7 +3341,7 @@ function ExitCard({
 
   return (
     <div className="staff-desk__exit-console">
-      {event.barrierOpened && (
+      {event.barrierOpened && !fullHardwareOutage && !exitRfidManuallyVerified && (
         <div className="staff-desk__gate-success" role="status">
           <CheckCircle2 size={22} />
           <div>
