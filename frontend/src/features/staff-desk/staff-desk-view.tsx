@@ -73,6 +73,7 @@ function statusLabel(s: CameraStreamStatus) {
 export function StaffDeskView() {
   const entryLaneRef = useRef<"in" | "out">("in");
   const exitLaneRef = useRef<"in" | "out">("out");
+  const [entryBridgeAvailable, setEntryBridgeAvailable] = useState(true);
   const [laneRoles, setLaneRoles] = useState({
     entryLane: "in" as "in" | "out",
     exitLane: "out" as "in" | "out",
@@ -1641,6 +1642,9 @@ export function StaffDeskView() {
             title="Cổng vào"
             streamUrl={`${bridgeBaseUrl}/video_feed/${laneRoles.entryLane}`}
             direction="in"
+            onStreamStateChange={(state) =>
+              setEntryBridgeAvailable(state === "live")
+            }
           />
           <div className="staff-desk__panel">
             {(phase === "done" || phase === "error") &&
@@ -1822,6 +1826,7 @@ export function StaffDeskView() {
                 scanPhase={scanPhase}
                 onStartScan={startScan}
                 onCancelScan={cancelScan}
+                rfidAvailable={entryBridgeAvailable}
                 onManualRfidFailure={
                   pendingManualEntryRfid ? handleEntryRfidException : undefined
                 }
@@ -1967,10 +1972,12 @@ function GateCamera({
   title,
   streamUrl,
   direction,
+  onStreamStateChange,
 }: {
   title: string;
   streamUrl: string;
   direction: "in" | "out";
+  onStreamStateChange?: (state: "live" | "offline") => void;
 }) {
   const [streamState, setStreamState] = useState<
     "loading" | "live" | "offline"
@@ -2006,8 +2013,14 @@ function GateCamera({
           src={streamUrl}
           alt={title}
           className="staff-desk__stream-img"
-          onLoad={() => setStreamState("live")}
-          onError={() => setStreamState("offline")}
+          onLoad={() => {
+            setStreamState("live");
+            onStreamStateChange?.("live");
+          }}
+          onError={() => {
+            setStreamState("offline");
+            onStreamStateChange?.("offline");
+          }}
         />
         {streamState === "offline" ? (
           <div className="staff-desk__stream-offline">
@@ -2024,6 +2037,7 @@ function WaitingCard({
   scanPhase,
   onStartScan,
   onCancelScan,
+  rfidAvailable = true,
   onManualRfidFailure,
   onManualUid,
   scanError,
@@ -2050,6 +2064,7 @@ function WaitingCard({
   scanPhase?: "idle" | "starting" | "waiting" | "success" | "timeout" | "error";
   onStartScan?: () => void;
   onCancelScan?: () => void;
+  rfidAvailable?: boolean;
   onManualRfidFailure?: () => void;
   onManualUid?: (uid: string) => void;
   scanError?: string;
@@ -2379,6 +2394,7 @@ function WaitingCard({
       {/* Ẩn hoàn toàn khu vực RFID ở cổng vào khi không kết nối được thiết bị bridge (tránh hiện Đang chờ quẹt thẻ RFID thừa thãi) */}
       {isEntry &&
       onStartScan &&
+      rfidAvailable &&
       !showManualForm &&
       !scanError?.includes("bridge") &&
       scanPhase !== "error" ? (
