@@ -194,9 +194,27 @@ async function ownerFromPlate(plate: string) {
  * AI-09: Check for duplicate plate — same plate already active in parking.
  */
 async function checkDuplicatePlate(plate: string): Promise<boolean> {
+  const clean = plate.trim().toUpperCase();
+  const norm = clean.replace(/[\s\.-]+/g, "");
+  const regexPattern = norm
+    .split("")
+    .map((c) => c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("[\\s\\.-]*");
+  const plateRegex = new RegExp(`^${regexPattern}$`, "i");
+
   const existing = await ParkingSession.findOne({
-    plate: plate.toUpperCase(),
     status: "Đang gửi",
+    $or: [
+      { plate: clean },
+      { plate: norm },
+      { plate: plateRegex },
+      { entryDetectedPlate: clean },
+      { entryDetectedPlate: norm },
+      { entryDetectedPlate: plateRegex },
+      { manualPlate: clean },
+      { manualPlate: norm },
+      { manualPlate: plateRegex },
+    ],
   });
   return !!existing;
 }
