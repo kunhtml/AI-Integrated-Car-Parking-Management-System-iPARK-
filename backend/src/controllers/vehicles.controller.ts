@@ -283,7 +283,7 @@ export async function updateVehicle(request: Request, response: Response) {
     // Tạo yêu cầu sửa xe để Admin duyệt tại tab Yêu cầu
     await VehicleRequest.create({
       vehicleId: existing._id,
-      userId: request.user.id,
+      userId: request.user!.id,
       type: "edit",
       status: "pending",
       requestedChanges,
@@ -324,8 +324,12 @@ export async function updateVehicle(request: Request, response: Response) {
     }
   }
 
+  // `requestApproval` có thể được gửi từ nhân sự đang ở Khu vực Người dùng.
+  // Không đồng bộ trạng thái request tại đây: request vừa tạo phải luôn chờ
+  // admin xử lý qua `/vehicle-requests/:id/resolve`.
   if (
     request.user?.role !== "customer" &&
+    !body.requestApproval &&
     (body.status === "Đã đăng ký" ||
       body.status === "Blacklist" ||
       body.status === "Cần duyệt")
