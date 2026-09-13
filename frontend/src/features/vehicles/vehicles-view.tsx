@@ -2891,6 +2891,7 @@ export function VehiclesView() {
     fetchVehicleDetail,
     loadVehicles,
     currentUser,
+    viewAs,
     vehicleRequests,
     resolveRequest,
     loadVehicleRequests,
@@ -2946,7 +2947,9 @@ export function VehiclesView() {
 
   const isAdmin = currentUser?.role === "admin";
   const isCustomer = currentUser?.role === "customer";
-  const canViewRequests = isAdmin || isCustomer;
+  // Nhân sự có thể mở Khu vực Người dùng. Mọi sửa xe tại đây vẫn chờ admin duyệt.
+  const isCustomerView = isCustomer || viewAs === "customer";
+  const canViewRequests = isAdmin || isCustomerView;
 
   useEffect(() => {
     if (canViewRequests) loadVehicleRequests({ includeResolved: true });
@@ -3376,7 +3379,10 @@ export function VehiclesView() {
             } else if (editingVehicle?.id) {
               res = await editVehicle(
                 editingVehicle.id,
-                data as Parameters<typeof editVehicle>[1],
+                {
+                  ...(data as Parameters<typeof editVehicle>[1]),
+                  requestApproval: isCustomerView,
+                },
               );
             }
             if (res && !res.ok) {
@@ -4324,10 +4330,18 @@ export function VehiclesView() {
                   <button
                     className="small-button"
                     onClick={() => {
+                      if (
+                        isCustomer &&
+                        vehicle.id &&
+                        vehicleSubscriptionMap.has(vehicle.id)
+                      ) {
+                        setCustomerEditTarget(vehicle);
+                        return;
+                      }
                       setEditingVehicle(vehicle);
                       setShowAddForm(false);
                     }}
-                    title="Chỉnh sửa"
+                    title={isCustomerView ? "Gửi yêu cầu chỉnh sửa" : "Chỉnh sửa"}
                     type="button"
                     style={{ padding: "3px 7px" }}
                   >
