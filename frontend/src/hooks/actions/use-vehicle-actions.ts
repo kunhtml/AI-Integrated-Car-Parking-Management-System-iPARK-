@@ -152,6 +152,7 @@ export function createVehicleActions({
     chassisNo?: string;
     status?: string;
     imageUrl?: string;
+    requestApproval?: boolean;
   }) {
     const response = await apiFetch(`/vehicles/${id}`, {
       method: "PATCH",
