@@ -233,15 +233,33 @@ export async function createPayOSPaymentLink(
 
 /**
  * Xác minh chữ ký webhook
+ *
+ * BẢO MẬT: so sánh chữ ký bằng timing-safeEqual (so sánh chuỗi === có thể bị
+ * đoán dần theo thời gian). Thiếu signature → luôn từ chối.
  */
 export function verifyWebhookSignature(
   webhookBody: WebhookData,
   checksumKey: string,
 ): boolean {
   try {
-    const { signature, ...data } = webhookBody;
-    const expectedSignature = createSignatureFromObject(data, checksumKey);
-    return signature === expectedSignature;
+    const { signature } = webhookBody;
+    if (!signature || typeof signature !== "string") return false;
+
+    // PayOS ký trên các trường của inner object `data`, không ký trên object ngoài (code, desc, success)
+    // Nếu webhookBody có chứa trường `data` (object) thì lấy dữ liệu từ `data` để tạo chuỗi ký
+    const dataToSign = webhookBody.data && typeof webhookBody.data === "object"
+      ? (webhookBody.data as unknown as Record<string, any>)
+      : (webhookBody as unknown as Record<string, any>);
+
+    const expectedSignature = createSignatureFromObject(dataToSign, checksumKey);
+    const a = Buffer.from(signature, "utf8");
+    const b = Buffer.from(expectedSignature, "utf8");
+    if (a.length !== b.length) {
+      // Vẫn tiêu tốn thời gian so sánh để tránh lộ thông tin qua độ trễ
+      crypto.timingSafeEqual(b, b);
+      return false;
+    }
+    return crypto.timingSafeEqual(a, b);
   } catch {
     return false;
   }

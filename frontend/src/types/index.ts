@@ -166,6 +166,9 @@ export type ParkingSession = {
   transactionId?: string;
   ownerEmail?: string;
   feeBreakdown?: FeeBreakdown;
+  customerType?: "guest" | "member";
+  isRegisteredMember?: boolean;
+  quotaType?: "guest" | "member";
 };
 
 export type RegisteredVehicle = {
@@ -191,6 +194,13 @@ export type RegisteredVehicle = {
     phone?: string | null;
   } | null;
   imageUrl?: string | null;
+  rfidCard?: {
+    id: string;
+    uid: string;
+    cardId?: string;
+    status: string;
+    cardType?: string;
+  } | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -405,6 +415,8 @@ export type ShiftScheduleItem = {
   note?: string;
   location?: string;
   deviceId?: string;
+  checkedInAt?: string | null;
+  completedAt?: string | null;
   createdAt: string;
   updatedAt?: string;
 };

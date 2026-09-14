@@ -24,6 +24,13 @@ export function AppShell({
 }: AppShellProps) {
   return (
     <main className="app-shell">
+      {mobileNavOpen && (
+        <div
+          className="sidebar-backdrop"
+          aria-hidden="true"
+          onClick={() => setMobileNavOpen(false)}
+        />
+      )}
       <Sidebar
         currentUser={currentUser}
         mobileNavOpen={mobileNavOpen}
@@ -36,9 +43,7 @@ export function AppShell({
           onToggleNav={() => setMobileNavOpen(!mobileNavOpen)}
         />
         <SystemLog message={actionLog} />
-          <div id="main-content">
-            {children}
-          </div>
+        <div id="main-content">{children}</div>
       </section>
     </main>
   );

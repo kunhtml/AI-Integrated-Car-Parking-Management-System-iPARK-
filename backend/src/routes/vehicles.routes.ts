@@ -3,6 +3,7 @@ import {
   createVehicle,
   deleteVehicle,
   getVehicle,
+  getVehicleHistory,
   listVehicles,
   resubmitVehicle,
   updateVehicle,
@@ -14,10 +15,11 @@ export const vehiclesRoutes = Router();
 
 vehiclesRoutes.use(requireAuth);
 vehiclesRoutes.get("/", asyncHandler(listVehicles));
+vehiclesRoutes.get("/:id/history", asyncHandler(getVehicleHistory));
 vehiclesRoutes.get("/:id", asyncHandler(getVehicle));
 vehiclesRoutes.post("/", asyncHandler(createVehicle));
 vehiclesRoutes.post("/:id/resubmit", asyncHandler(resubmitVehicle));
-vehiclesRoutes.patch("/:id", requireRole("admin"), asyncHandler(updateVehicle));
+vehiclesRoutes.patch("/:id", asyncHandler(updateVehicle));
 vehiclesRoutes.delete(
   "/:id",
   requireRole("admin"),

@@ -4,6 +4,7 @@ import {
   openGate,
   getPendingExit,
   prepareManualExit,
+  completeOfflineExit,
   dismissPendingExit,
   resolveExitMismatch,
 } from "../controllers/exit.controller.js";
@@ -12,8 +13,18 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 
 export const exitRoutes = Router();
 
-exitRoutes.get("/pending", getPendingExit);
-exitRoutes.post("/verify", verifyExit);
+exitRoutes.get(
+  "/pending",
+  requireAuth,
+  requireRole("admin", "staff"),
+  asyncHandler(getPendingExit),
+);
+exitRoutes.post(
+  "/verify",
+  requireAuth,
+  requireRole("admin", "staff"),
+  asyncHandler(verifyExit),
+);
 exitRoutes.post(
   "/prepare-manual",
   requireAuth,
@@ -26,7 +37,18 @@ exitRoutes.post(
   requireRole("admin", "staff"),
   asyncHandler(dismissPendingExit),
 );
-exitRoutes.post("/open-gate", openGate);
+exitRoutes.post(
+  "/open-gate",
+  requireAuth,
+  requireRole("admin", "staff"),
+  asyncHandler(openGate),
+);
+exitRoutes.post(
+  "/complete-offline",
+  requireAuth,
+  requireRole("admin", "staff"),
+  asyncHandler(completeOfflineExit),
+);
 exitRoutes.post(
   "/resolve-mismatch",
   requireAuth,

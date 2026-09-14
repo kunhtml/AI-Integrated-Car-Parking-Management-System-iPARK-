@@ -277,7 +277,10 @@ export async function resolveVehicleRequest(
     response.status(404).json({ message: "Không tìm thấy yêu cầu." });
     return;
   }
-  if (vr.status !== "pending") {
+  if (
+    vr.status !== "pending" &&
+    !(vr.status === "rejected" && body.action === "approved")
+  ) {
     response.status(409).json({ message: "Yêu cầu này đã được xử lý." });
     return;
   }
@@ -296,29 +299,35 @@ export async function resolveVehicleRequest(
       ? await Subscription.findById(vr.subscriptionId)
       : null;
 
-    // Xe mới đăng ký → chỉ cần cập nhật status
+    const changes = (vr.requestedChanges || {}) as Record<string, unknown>;
+
+    // Xe mới đăng ký → chỉ cần cập nhật status sang 'Đã đăng ký'
     if (
       vr.type === "edit" &&
       (vr.requestedChanges as any)?.status === "Đã đăng ký" &&
       vehicleDoc
     ) {
       vehicleDoc.status = "Đã đăng ký";
+      vehicleDoc.rejectionReason = undefined;
       await vehicleDoc.save();
-    } else if (vr.type === "edit" && vr.requestedChanges && vehicleDoc && sub) {
-      const changes = vr.requestedChanges as Record<string, unknown>;
+    } else if (vr.type === "edit" && vehicleDoc) {
       if (changes.plate) {
-        const existing = await Vehicle.findOne({
-          plate: (changes.plate as string).toUpperCase().replace(/[\s-]+/g, ""),
-        });
+        const normPlate = (changes.plate as string).toUpperCase().replace(/[\s-]+/g, "");
+        const existing = await Vehicle.findOne({ plate: normPlate });
         if (existing && existing._id.toString() !== vehicleDoc._id.toString()) {
           response
             .status(409)
             .json({ message: "Biển số đã tồn tại trong hệ thống." });
           return;
         }
-        vehicleDoc.plate = (changes.plate as string)
-          .toUpperCase()
-          .replace(/[\s-]+/g, "");
+        vehicleDoc.plate = normPlate;
+
+        // Đồng bộ biển số mới sang Thẻ RFID của xe
+        const { RfidCard } = await import("../models/RfidCard.js");
+        await RfidCard.updateMany(
+          { vehicleId: vehicleDoc._id },
+          { $set: { plate: normPlate } },
+        );
       }
       if (changes.ownerName !== undefined)
         vehicleDoc.ownerName = changes.ownerName as string;
@@ -340,6 +349,8 @@ export async function resolveVehicleRequest(
         vehicleDoc.chassisNo = changes.chassisNo as string | undefined;
       if (changes.imageUrl !== undefined)
         vehicleDoc.imageUrl = changes.imageUrl as string | undefined;
+      vehicleDoc.status = "Đã đăng ký";
+      vehicleDoc.rejectionReason = undefined;
       await vehicleDoc.save();
     }
 
@@ -354,6 +365,14 @@ export async function resolveVehicleRequest(
           `[vehicleRequests] Vehicle ${vr.vehicleId.toString()} is not the primary of subscription ${sub._id}, skipping delete.`,
         );
       }
+    }
+  } else if (body.action === "rejected") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const vehicleDoc = (await Vehicle.findById(vr.vehicleId)) as any;
+    if (vehicleDoc) {
+      vehicleDoc.status = "Blacklist";
+      vehicleDoc.rejectionReason = body.adminNote || "Xe bị từ chối.";
+      await vehicleDoc.save();
     }
   }
 

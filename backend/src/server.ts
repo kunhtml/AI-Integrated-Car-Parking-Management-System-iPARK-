@@ -21,9 +21,6 @@ try {
   console.error("[Migration] migrateLegacySubscriptionPlates failed:", err);
 }
 
-// Backfill tự động chuyển sang script riêng: scripts/migrate_per_vehicle_subscription.js
-// (đã chạy 1 lần khi chuyển schema). Giữ legacy no-op ở đây cho tương thích.
-
 app.listen(env.port, () => {
   console.log(`iPARK backend listening on http://localhost:${env.port}`);
   initScheduler();

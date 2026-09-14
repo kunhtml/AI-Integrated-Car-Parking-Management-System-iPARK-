@@ -136,43 +136,45 @@ export async function getOccupancyByHour(
  * Top customers by session count and total spending.
  */
 export async function getTopCustomers(
-  limit: number = 10,
+  limit: number = 20,
   from?: Date,
   to?: Date,
-): Promise<TopCustomerItem[]> {
+): Promise<any[]> {
   const match: Record<string, unknown> = {
-    ownerUserId: { $exists: true, $ne: null },
+    plate: { $exists: true, $ne: "" },
   };
   if (from && to) {
     match.checkInAt = { $gte: from, $lte: to };
   }
 
+  // Group theo biển số xe (plate) để gom cả khách vãng lai và thành viên
   const results = await ParkingSession.aggregate([
     { $match: match },
     {
       $group: {
-        _id: "$ownerUserId",
+        _id: "$plate",
         sessionCount: { $sum: 1 },
         totalSpent: { $sum: "$fee" },
+        ownerName: { $last: "$ownerName" },
+        customerType: { $last: "$customerType" },
+        isRegisteredMember: { $last: "$isRegisteredMember" },
+        ownerUserId: { $last: "$ownerUserId" },
       },
     },
     { $sort: { sessionCount: -1 } },
     { $limit: limit },
   ]);
 
-  // Populate user info
-  const userIds = results.map((r) => r._id);
-  const users = await User.find({ _id: { $in: userIds } });
-  const userMap = new Map(users.map((u) => [u._id.toString(), u]));
-
+  // Map lại kết quả trả về biển số xe rõ ràng
   return results.map((r) => {
-    const user = userMap.get(r._id.toString());
+    const isMember = r.customerType === "member" || r.isRegisteredMember;
     return {
-      userId: r._id.toString(),
-      name: user?.name || "Không xác định",
-      email: user?.email,
+      userId: r._id, // dùng plate làm id duy nhất
+      plate: r._id,
+      name: r.ownerName && r.ownerName !== "Guest" ? r.ownerName : (isMember ? "Thành viên" : "Khách vãng lai"),
+      customerType: isMember ? "member" : "guest",
       sessionCount: r.sessionCount,
-      totalSpent: r.totalSpent,
+      totalSpent: r.totalSpent || 0,
     };
   });
 }

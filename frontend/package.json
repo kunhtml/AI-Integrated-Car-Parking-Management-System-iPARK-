@@ -39,6 +39,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "chrome-launcher": "^1.2.1",
+    "class-variance-authority": "^0.7.1",
     "cross-env": "^10.1.0",
     "eslint": "^9",
     "eslint-config-next": "15.3.8",
@@ -47,6 +48,7 @@
     "jest-environment-jsdom": "^30.4.1",
     "lighthouse": "^12.6.1",
     "playwright": "^1.62.1",
+    "postcss": "^8.5.28",
     "ts-jest": "^29.4.12",
     "typescript": "^5"
   }

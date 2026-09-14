@@ -7,9 +7,6 @@ import { EventEmitter } from "node:events";
  *   ghi `ParkingCameraLog` thành công. Payload tối thiểu để /staff-desk
  *   render popup và cập nhật danh sách.
  * - `subscribe(listener)`: trả về hàm `unsubscribe` để đóng listener.
- *
- * Sử dụng 
-ode:events` (đã có sẵn trong Node) — KHÔNG cần thêm dependency.
  */
 export type CameraIngestEvent = {
   id: string;
@@ -33,6 +30,8 @@ export type CameraIngestEvent = {
   createdAt: string;
   metadata?: Record<string, unknown>;
   duplicateSession?: boolean;
+  /** "pending_review" với log hướng "in" chưa được nhân viên xác nhận. */
+  entryReviewState?: string | null;
 };
 
 export type ExitSessionStateEvent = {

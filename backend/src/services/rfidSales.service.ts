@@ -1,3 +1,4 @@
+import { createAuditLog } from "./auditLog.service.js";
 import mongoose from "mongoose";
 import {
   RfidCard,
@@ -40,6 +41,7 @@ async function writeAudit(
   status: "success" | "failed",
   actor?: string,
   metadata?: Record<string, unknown>,
+  cardObjectId?: mongoose.Types.ObjectId,
 ) {
   await RfidScanLog.create({
     cardId,
@@ -48,6 +50,19 @@ async function writeAudit(
     performedBy: objectId(actor),
     metadata,
   });
+
+  if (cardObjectId && actor) {
+    const actionKey = `rfid_card_${action.replace(/-/g, "_")}`;
+    await createAuditLog({
+      action: actionKey,
+      entityType: "RfidCard",
+      entityId: cardObjectId,
+      performedBy: actor,
+      changes: {
+        new: { status, ...metadata },
+      },
+    }).catch((err) => console.error("Error creating audit log in rfidSales:", err));
+  }
 }
 
 async function resolveTarget(
@@ -403,7 +418,35 @@ export async function getRfidCardDetails(cardId: string) {
   const history = await Transaction.find({ rfidCardId: card._id })
     .sort({ createdAt: -1 })
     .limit(50);
-  return { card, history };
+
+  const { AuditLog } = await import("../models/AuditLog.js");
+  const auditLogs = await AuditLog.find({
+    entityType: "RfidCard",
+    entityId: card._id,
+  })
+    .sort({ createdAt: -1 })
+    .limit(30)
+    .populate("performedBy", "name email");
+
+  const auditHistory = auditLogs.map((log: any) => ({
+    id: log._id.toString(),
+    action: log.action,
+    actionLabel: log.action === "rfid_card_created" ? "Tạo thẻ mới"
+      : log.action === "rfid_card_updated" ? "Cập nhật thông tin thẻ"
+      : log.action === "rfid_card_status_changed" ? "Thay đổi trạng thái"
+      : log.action === "rfid_card_restored" ? "Khôi phục thẻ"
+      : log.action === "rfid_card_sale" ? "Bán thẻ thành viên"
+      : log.action === "rfid_card_return" ? "Thu hồi / Trả thẻ"
+      : log.action === "rfid_card_report_lost" ? "Báo mất thẻ"
+      : log.action,
+    performedBy: log.performedBy
+      ? { id: log.performedBy._id?.toString(), name: log.performedBy.name, email: log.performedBy.email }
+      : null,
+    changes: log.changes || {},
+    createdAt: log.createdAt.toISOString(),
+  }));
+
+  return { card, history, auditHistory };
 }
 
 export async function listRfidInventory(filters: {

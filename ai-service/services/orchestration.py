@@ -125,6 +125,18 @@ class Orchestrator:
         with self._frontend_lock:
             self._frontend_active = False
 
+    def reset_gate_state(self, direction: str):
+        """Forget transient OCR state so current camera frame can be ingested anew."""
+        if direction not in {"in", "out"}:
+            raise ValueError("invalid direction")
+        setattr(self, f"_last_plate_{direction}", "")
+        setattr(self, f"_last_push_ts_{direction}", 0.0)
+        setattr(self, f"_last_seen_ts_{direction}", 0.0)
+        with state.locks[direction]:
+            state.detections[direction] = []
+            state.detected_plates[direction] = ""
+            state.snapshots[direction] = ""
+
     # ----- Viewer tracking (stream /video_feed) -----
     def add_viewer(self, direction: str):
         if direction not in self._viewers:

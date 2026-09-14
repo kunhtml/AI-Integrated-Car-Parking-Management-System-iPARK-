@@ -18,6 +18,7 @@ import {
   Users,
   Wallet,
   XCircle,
+  X,
   RefreshCw,
 } from "lucide-react";
 import { useParkingApp } from "@/context/parking-app-context";
@@ -63,8 +64,22 @@ function formatShortCurrency(value: number) {
 
 function formatDisplayDate(value: string) {
   if (!value) return "—";
-  const [year, month, day] = value.split("-");
-  return year && month && day ? `${day}/${month}/${year}` : value;
+  // Xử lý cả định dạng YYYY-MM-DD lẫn ISO string
+  if (value.includes("-")) {
+    const parts = value.split("T")[0].split("-");
+    if (parts.length === 3) {
+      const [year, month, day] = parts;
+      return `${day.padStart(2, "0")}/${month.padStart(2, "0")}/${year}`;
+    }
+  }
+  const d = new Date(value);
+  if (!isNaN(d.getTime())) {
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+  }
+  return value;
 }
 
 function toIsoDate(value: Date) {
@@ -253,9 +268,11 @@ function RepRevenueChart({ data, groupBy }: RepRevenueChartProps) {
 interface RepOccupancyChartProps {
   data: OccupancyHourPoint[];
   capacity: number;
+  totalSessions: number;
+  overallPercentage: number;
 }
 
-function RepOccupancyChart({ data, capacity }: RepOccupancyChartProps) {
+function RepOccupancyChart({ data, capacity, totalSessions, overallPercentage }: RepOccupancyChartProps) {
   if (!data.length) {
     return (
       <p className="rep-empty">
@@ -264,78 +281,35 @@ function RepOccupancyChart({ data, capacity }: RepOccupancyChartProps) {
     );
   }
   const chartCapacity = Math.max(capacity, 1);
+  const maxOcc = Math.max(...data.map((p) => p.avgOccupancy), 0);
+  // Đếm đúng số lượt xe thực tế, không cộng dồn trùng lặp qua 24 giờ
+  const displayTotal = totalSessions >= 0 ? totalSessions : 0;
+  const calculatedPct = chartCapacity > 0 ? Math.round((displayTotal / chartCapacity) * 100) : 0;
 
   return (
-    <div className="rep-chart-area">
-      <div className="rep-bar-chart">
-        {data.map((p, i) => {
-          const avgPct = Math.min(
-            100,
-            Math.round((p.avgOccupancy / chartCapacity) * 100),
-          );
-          const color =
-            avgPct >= 85 ? "#ef4444" : avgPct >= 60 ? "#f59e0b" : "#10b981";
-          return (
-            <div className="rep-bar-col" key={i}>
-              <div className="rep-bar-wrap">
-                <div
-                  className="rep-bar-fill"
-                  style={{
-                    height: `${avgPct}%`,
-                    background: color,
-                  }}
-                  title={`TB: ${p.avgOccupancy} xe`}
-                />
-              </div>
-              <span className="rep-bar-val">{p.avgOccupancy}</span>
-              <span className="rep-bar-label">
-                {String(p.hour).padStart(2, "0")}h
-              </span>
-            </div>
-          );
-        })}
+    <div>
+      {/* Thẻ thống kê tổng thể lấp đầy bãi xe */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, margin: "16px 20px 20px 20px" }}>
+        <div style={{ background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.18)", borderRadius: 12, padding: "14px 18px" }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "#2563eb", textTransform: "uppercase" }}>Tổng sức chứa bãi xe</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: "#1e293b", marginTop: 4 }}>{chartCapacity} <span style={{ fontSize: 13, fontWeight: 500, color: "#64748b" }}>slot</span></div>
+          <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>Quy mô toàn bộ bãi</div>
+        </div>
+
+        <div style={{ background: "rgba(16,185,129,0.06)", border: "1px solid rgba(16,185,129,0.18)", borderRadius: 12, padding: "14px 18px" }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "#059669", textTransform: "uppercase" }}>Tổng lượt xe vào gửi</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: "#059669", marginTop: 4 }}>{displayTotal} <span style={{ fontSize: 13, fontWeight: 500, color: "#64748b" }}>lượt xe</span></div>
+          <div style={{ fontSize: 12, color: "#059669", marginTop: 4, fontWeight: 500 }}>Trong khoảng thời gian đã chọn</div>
+        </div>
+
+        <div style={{ background: "rgba(139,92,246,0.06)", border: "1px solid rgba(139,92,246,0.18)", borderRadius: 12, padding: "14px 18px" }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "#7c3aed", textTransform: "uppercase" }}>Tỷ lệ lấp đầy / hiệu suất</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: "#7c3aed", marginTop: 4 }}>{calculatedPct}% <span style={{ fontSize: 13, fontWeight: 500, color: "#64748b" }}>công suất</span></div>
+          <div style={{ fontSize: 12, color: "#7c3aed", marginTop: 4, fontWeight: 500 }}>Chiếm {calculatedPct}% trên tổng số {chartCapacity} slot</div>
+        </div>
       </div>
-      <div className="rep-occ-legend">
-        <span>
-          <span
-            style={{
-              display: "inline-block",
-              width: 10,
-              height: 10,
-              borderRadius: 2,
-              background: "#10b981",
-              marginRight: 4,
-            }}
-          />
-          Dưới 60%
-        </span>
-        <span>
-          <span
-            style={{
-              display: "inline-block",
-              width: 10,
-              height: 10,
-              borderRadius: 2,
-              background: "#f59e0b",
-              marginRight: 4,
-            }}
-          />
-          60–85%
-        </span>
-        <span>
-          <span
-            style={{
-              display: "inline-block",
-              width: 10,
-              height: 10,
-              borderRadius: 2,
-              background: "#ef4444",
-              marginRight: 4,
-            }}
-          />
-          Trên 85%
-        </span>
-      </div>
+
+
     </div>
   );
 }
@@ -345,38 +319,72 @@ interface RepTopCustomersProps {
   data: TopCustomer[];
 }
 
-function RepTopCustomers({ data }: RepTopCustomersProps) {
+function RepTopCustomers({ data }: { data: any[] }) {
   if (!data.length) {
-    return <p className="rep-empty">Chưa có dữ liệu khách hàng.</p>;
+    return <p className="rep-empty">Chưa có dữ liệu phương tiện gửi xe.</p>;
   }
   return (
     <div className="rep-customers">
-      {data.map((c, i) => (
-        <div key={c.userId} className="rep-customer-row">
-          <div className="rep-customer-rank" data-rank={i + 1}>
-            {i + 1}
+      {data.map((c, i) => {
+        const isMember = c.customerType === "member";
+        const plate = c.plate || c.userId;
+        return (
+          <div key={plate} className="rep-customer-row">
+            <div className="rep-customer-rank" data-rank={i + 1}>
+              {i + 1}
+            </div>
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 36,
+                height: 36,
+                borderRadius: 8,
+                background: isMember ? "rgba(59,130,246,0.12)" : "rgba(100,116,139,0.12)",
+                color: isMember ? "#2563eb" : "#475569",
+                fontWeight: 700,
+                fontSize: 14,
+              }}
+            >
+              <Car size={18} />
+            </div>
+            <div className="rep-customer-info">
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <strong style={{ fontSize: "1.05rem", fontFamily: "monospace", letterSpacing: "0.04em", color: "#0f172a" }}>
+                  {plate}
+                </strong>
+                <span
+                  style={{
+                    fontSize: 11,
+                    padding: "2px 8px",
+                    borderRadius: 4,
+                    fontWeight: 600,
+                    background: isMember ? "rgba(37,99,235,0.1)" : "rgba(100,116,139,0.1)",
+                    color: isMember ? "#2563eb" : "#475569",
+                  }}
+                >
+                  {isMember ? "Thành viên" : "Vãng lai"}
+                </span>
+
+              </div>
+              <span className="rep-customer-sessions" style={{ marginTop: 2, display: "block" }}>
+                Đã gửi <strong>{c.sessionCount}</strong> phiên
+              </span>
+            </div>
+            <div className="rep-customer-spent">
+              <strong>{formatCurrency(c.totalSpent)}</strong>
+              <span className="rep-customer-avg">
+                TB{" "}
+                {c.sessionCount > 0
+                  ? formatCurrency(Math.round(c.totalSpent / c.sessionCount))
+                  : "—"}
+                /phiên
+              </span>
+            </div>
           </div>
-          <div className="rep-customer-avatar">
-            {c.name?.charAt(0).toUpperCase() ?? "?"}
-          </div>
-          <div className="rep-customer-info">
-            <span className="rep-customer-name">{c.name}</span>
-            <span className="rep-customer-sessions">
-              {c.sessionCount} phiên gửi
-            </span>
-          </div>
-          <div className="rep-customer-spent">
-            <strong>{formatCurrency(c.totalSpent)}</strong>
-            <span className="rep-customer-avg">
-              TB{" "}
-              {c.sessionCount > 0
-                ? formatCurrency(Math.round(c.totalSpent / c.sessionCount))
-                : "—"}
-              /phiên
-            </span>
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -389,6 +397,13 @@ interface RepPeakHoursProps {
 }
 
 function RepPeakHours({ data }: RepPeakHoursProps) {
+  const [selectedCell, setSelectedCell] = useState<{
+    dayLabel: string;
+    dayIndex: number;
+    hour: number;
+    count: number;
+  } | null>(null);
+
   if (!data.length) {
     return <p className="rep-empty">Chưa có dữ liệu giờ cao điểm.</p>;
   }
@@ -412,6 +427,16 @@ function RepPeakHours({ data }: RepPeakHoursProps) {
     }
   }
 
+  const dayFullNames = [
+    "Chủ Nhật",
+    "Thứ Hai",
+    "Thứ Ba",
+    "Thứ Tư",
+    "Thứ Năm",
+    "Thứ Sáu",
+    "Thứ Bảy",
+  ];
+
   return (
     <div>
       <div className="rep-heatmap-wrap">
@@ -431,50 +456,122 @@ function RepPeakHours({ data }: RepPeakHoursProps) {
                 <div
                   key={hour}
                   className="rep-heatmap-cell"
-                  style={{ background: getIntensity(count) }}
-                  title={`${DAY_LABELS[dayIndex]} ${hour}h: ${count} xe`}
+                  style={{
+                    background: getIntensity(count),
+                    cursor: "pointer",
+                    outline:
+                      selectedCell?.dayIndex === dayIndex && selectedCell?.hour === hour
+                        ? "2px solid #2563eb"
+                        : "none",
+                  }}
+                  onClick={() =>
+                    setSelectedCell({
+                      dayLabel: dayFullNames[dayIndex],
+                      dayIndex,
+                      hour,
+                      count,
+                    })
+                  }
+                  title={`Bấm xem chi tiết: ${dayFullNames[dayIndex]} ${String(hour).padStart(2, "0")}:00 — ${count} lượt xe`}
                 />
               ))}
             </div>
           ))}
         </div>
       </div>
+
       <div className="rep-heatmap-legend">
         <span>Ít</span>
-        <div
-          style={{
-            background: "rgba(59,130,246,0.2)",
-            width: 16,
-            height: 10,
-            borderRadius: 2,
-          }}
-        />
-        <div
-          style={{
-            background: "rgba(59,130,246,0.45)",
-            width: 16,
-            height: 10,
-            borderRadius: 2,
-          }}
-        />
-        <div
-          style={{
-            background: "rgba(245,158,11,0.75)",
-            width: 16,
-            height: 10,
-            borderRadius: 2,
-          }}
-        />
-        <div
-          style={{
-            background: "rgba(239,68,68,0.85)",
-            width: 16,
-            height: 10,
-            borderRadius: 2,
-          }}
-        />
+        <div style={{ background: "rgba(59,130,246,0.2)", width: 16, height: 10, borderRadius: 2 }} />
+        <div style={{ background: "rgba(59,130,246,0.45)", width: 16, height: 10, borderRadius: 2 }} />
+        <div style={{ background: "rgba(245,158,11,0.75)", width: 16, height: 10, borderRadius: 2 }} />
+        <div style={{ background: "rgba(239,68,68,0.85)", width: 16, height: 10, borderRadius: 2 }} />
         <span>Nhiều</span>
+        <span style={{ fontSize: 11, color: "var(--muted, #64748b)", marginLeft: 12 }}>
+          (Click vào ô bất kỳ để mở modal chi tiết)
+        </span>
       </div>
+
+      {/* Modal chi tiết giờ cao điểm khi click vào từng ô heatmap */}
+      {selectedCell && (
+        <div
+          className="modal-overlay"
+          
+        >
+          <div
+            className="modal-card"
+            style={{ maxWidth: 480, width: "90%", padding: "22px 24px", borderRadius: 16 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border, #e2e8f0)", paddingBottom: 12 }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 700 }}>
+                  Chi tiết lưu lượng giờ cao điểm
+                </h3>
+                <span style={{ fontSize: 13, color: "var(--muted, #64748b)" }}>
+                  {selectedCell.dayLabel} · Khung giờ {String(selectedCell.hour).padStart(2, "0")}:00 – {String(selectedCell.hour + 1).padStart(2, "0")}:00
+                </span>
+              </div>
+              <button
+                className="ghost-button"
+                
+                type="button"
+                style={{ cursor: "pointer", padding: 6 }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ padding: "18px 0" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+                <div style={{ background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.18)", borderRadius: 10, padding: "12px 14px" }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "#2563eb", textTransform: "uppercase" }}>Tổng lượt xe ghi nhận</div>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: "#2563eb", marginTop: 2 }}>{selectedCell.count} <span style={{ fontSize: 13, fontWeight: 500, color: "#64748b" }}>lượt</span></div>
+                </div>
+                <div style={{ background: "rgba(16,185,129,0.06)", border: "1px solid rgba(16,185,129,0.18)", borderRadius: 10, padding: "12px 14px" }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "#059669", textTransform: "uppercase" }}>Mức độ mật độ</div>
+                  <div style={{ fontSize: 18, fontWeight: 750, color: "#059669", marginTop: 4 }}>
+                    {selectedCell.count === 0
+                      ? "Trống / Không có xe"
+                      : selectedCell.count >= max * 0.75
+                      ? "Rất đông (Cao điểm)"
+                      : selectedCell.count >= max * 0.5
+                      ? "Đông đúc"
+                      : "Bình thường"}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ background: "rgba(0,0,0,0.02)", border: "1px solid var(--border, #e2e8f0)", borderRadius: 10, padding: "12px 16px", fontSize: 13, lineHeight: 1.6 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                  <span style={{ color: "var(--muted, #64748b)" }}>Thứ trong tuần:</span>
+                  <strong>{selectedCell.dayLabel}</strong>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                  <span style={{ color: "var(--muted, #64748b)" }}>Khoảng thời gian:</span>
+                  <strong>{String(selectedCell.hour).padStart(2, "0")}:00 – {String(selectedCell.hour + 1).padStart(2, "0")}:00</strong>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "var(--muted, #64748b)" }}>Đánh giá áp lực cổng:</span>
+                  <span style={{ fontWeight: 600, color: selectedCell.count >= max * 0.75 ? "#ef4444" : "#10b981" }}>
+                    {selectedCell.count >= max * 0.75 ? "Cần tăng cường nhân viên trực" : "Lưu thông thông suốt"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", borderTop: "1px solid var(--border, #e2e8f0)", paddingTop: 12 }}>
+              <button
+                type="button"
+                className="small-button"
+                
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -506,7 +603,7 @@ function RepZoneReport({ entries, exits }: RepZoneReportProps) {
     <div className="rep-zone-grid">
       <div className="rep-zone-col">
         <h3 className="rep-zone-col-title">
-          <ArrowDown size={14} /> Xe vào theo zone
+          <ArrowDown size={14} /> Xe vào bãi
         </h3>
         {entries.map((e) => (
           <div key={e.zone} className="rep-zone-row">
@@ -523,7 +620,7 @@ function RepZoneReport({ entries, exits }: RepZoneReportProps) {
       </div>
       <div className="rep-zone-col">
         <h3 className="rep-zone-col-title">
-          <ArrowUp size={14} /> Xe ra theo zone
+          <ArrowUp size={14} /> Xe ra bãi
         </h3>
         {exits.map((e) => (
           <div key={e.zone} className="rep-zone-row">
@@ -540,7 +637,7 @@ function RepZoneReport({ entries, exits }: RepZoneReportProps) {
       </div>
       <div className="rep-zone-revenue">
         <h3 className="rep-zone-col-title">
-          <Wallet size={14} /> Doanh thu theo zone
+          <Wallet size={14} /> Doanh thu bãi xe
         </h3>
         {exits.map((e) => (
           <div key={e.zone} className="rep-zone-rev-row">
@@ -596,6 +693,8 @@ export function ReportsView() {
   const [revenueData, setRevenueData] = useState<RevenueChartPoint[]>([]);
   const [occupancyData, setOccupancyData] = useState<OccupancyHourPoint[]>([]);
   const [occupancyCapacity, setOccupancyCapacity] = useState(1);
+  const [occupancyTotalSessions, setOccupancyTotalSessions] = useState(0);
+  const [occupancyOverallPercentage, setOccupancyOverallPercentage] = useState(0);
   const [topCustomersData, setTopCustomersData] = useState<TopCustomer[]>([]);
   const [peakHoursData, setPeakHoursData] = useState<PeakHourPoint[]>([]);
   const [entryZoneData, setEntryZoneData] = useState<ZoneEntry[]>([]);
@@ -699,10 +798,12 @@ export function ReportsView() {
         }
         const occupancyJson = await occupancyRes.json();
         setOccupancyData(occupancyJson.data ?? []);
+        setOccupancyTotalSessions(occupancyJson.totalSessions ?? 0);
+        setOccupancyOverallPercentage(occupancyJson.occupancyPercentage ?? 0);
         if (capacityRes.ok) {
           const capacityJson = await capacityRes.json();
           setOccupancyCapacity(
-            Math.max(1, Number(capacityJson.config?.globalCapacity) || 1),
+            Math.max(1, Number(capacityJson.config?.globalCapacity) || Number(occupancyJson.globalCapacity) || 1),
           );
         }
       }
@@ -752,9 +853,8 @@ export function ReportsView() {
     { key: "summary", label: "Tổng quan", icon: <BarChart3 size={14} /> },
     { key: "revenue", label: "Doanh thu", icon: <TrendingUp size={14} /> },
     { key: "occupancy", label: "Lấp đầy", icon: <ParkingCircle size={14} /> },
-    { key: "customers", label: "Khách hàng", icon: <Users size={14} /> },
+    { key: "customers", label: "Khách hàng / Xe", icon: <Users size={14} /> },
     { key: "peak", label: "Giờ cao điểm", icon: <Flame size={14} /> },
-    { key: "zones", label: "Theo zone", icon: <MapPin size={14} /> },
   ];
 
   return (
@@ -1156,6 +1256,8 @@ export function ReportsView() {
           <RepOccupancyChart
             data={occupancyData}
             capacity={occupancyCapacity}
+            totalSessions={occupancyTotalSessions}
+            overallPercentage={occupancyOverallPercentage}
           />
         </div>
       )}

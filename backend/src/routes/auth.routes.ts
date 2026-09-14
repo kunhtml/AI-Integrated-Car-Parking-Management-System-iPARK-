@@ -3,6 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import multer from "multer";
 import { Router } from "express";
+import { rateLimit } from "../middlewares/rate-limit.middleware.js";
 import {
   changePassword,
   disableTwoFactor,
@@ -69,18 +70,44 @@ const avatarUpload = multer({
   },
 });
 
+// SEC: giới hạn tần suất để chặn brute-force OTP/mật khẩu theo IP.
+const loginLimiter = rateLimit({
+  keyPrefix: "login",
+  max: 10,
+  windowMs: 5 * 60 * 1000,
+});
+const otpLimiter = rateLimit({
+  keyPrefix: "otp",
+  max: 10,
+  windowMs: 5 * 60 * 1000,
+});
+const passwordResetLimiter = rateLimit({
+  keyPrefix: "pw-reset",
+  max: 5,
+  windowMs: 15 * 60 * 1000,
+});
+
 export const authRoutes = Router();
 
 authRoutes.post("/register", asyncHandler(register));
-authRoutes.post("/verify-email", asyncHandler(verifyEmailOtp));
+authRoutes.post("/verify-email", otpLimiter, asyncHandler(verifyEmailOtp));
 authRoutes.post(
   "/resend-verification-otp",
   asyncHandler(resendVerificationOtp),
 );
-authRoutes.post("/login", asyncHandler(login));
-authRoutes.post("/forgot-password", asyncHandler(forgotPassword));
-authRoutes.post("/resend-otp", asyncHandler(resendOtp));
-authRoutes.post("/reset-password", asyncHandler(resetPassword));
+
+authRoutes.post("/login", loginLimiter, asyncHandler(login));
+authRoutes.post(
+  "/forgot-password",
+  passwordResetLimiter,
+  asyncHandler(forgotPassword),
+);
+authRoutes.post("/resend-otp", otpLimiter, asyncHandler(resendOtp));
+authRoutes.post(
+  "/reset-password",
+  passwordResetLimiter,
+  asyncHandler(resetPassword),
+);
 authRoutes.get("/google", googleLogin);
 authRoutes.get("/google/callback", asyncHandler(googleCallback));
 authRoutes.post("/logout", logout);
@@ -104,10 +131,16 @@ authRoutes.post(
   asyncHandler(verifyChangeEmail),
 );
 authRoutes.post("/2fa/setup", requireAuth, asyncHandler(setupTwoFactor));
-authRoutes.post("/2fa/verify", requireAuth, asyncHandler(verifyTwoFactor));
+authRoutes.post(
+  "/2fa/verify",
+  requireAuth,
+  otpLimiter,
+  asyncHandler(verifyTwoFactor),
+);
 authRoutes.post(
   "/2fa/resend-otp",
   requireAuth,
+  otpLimiter,
   asyncHandler(resendTwoFactorOtp),
 );
 authRoutes.post(
@@ -115,8 +148,17 @@ authRoutes.post(
   requireAuth,
   asyncHandler(requestDisableTwoFactor),
 );
-authRoutes.post("/2fa/disable", requireAuth, asyncHandler(disableTwoFactor));
-authRoutes.post("/2fa/login-verify", asyncHandler(verifyLoginTwoFactor));
+authRoutes.post(
+  "/2fa/disable",
+  requireAuth,
+  otpLimiter,
+  asyncHandler(disableTwoFactor),
+);
+authRoutes.post(
+  "/2fa/login-verify",
+  otpLimiter,
+  asyncHandler(verifyLoginTwoFactor),
+);
 authRoutes.get("/sessions", requireAuth, asyncHandler(listActiveSessions));
 authRoutes.delete("/sessions/:id", requireAuth, asyncHandler(revokeSession));
 authRoutes.delete("/sessions", requireAuth, asyncHandler(revokeAllSessions));

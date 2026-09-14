@@ -102,6 +102,8 @@ export function RfidCardsView() {
   // Card history
   const [historyCardId, setHistoryCardId] = useState<string | null>(null);
   const [historyLogs, setHistoryLogs] = useState<RfidScanLog[]>([]);
+  const [historyAuditLogs, setHistoryAuditLogs] = useState<any[]>([]);
+  const [historyTab, setHistoryTab] = useState<"audit" | "scans">("audit");
   const [historyLoading, setHistoryLoading] = useState(false);
 
   // ─── Load cards ───
@@ -254,7 +256,13 @@ export function RfidCardsView() {
       const res = await rfidApi.fetchRfidCardHistory(card.id);
       if (res.ok) {
         const data = await res.json();
-        setHistoryLogs(data.scans || data.logs || []);
+        setHistoryLogs(data.scanHistory || data.scans || data.logs || data.history || []);
+        setHistoryAuditLogs(data.auditHistory || []);
+        if (data.auditHistory && data.auditHistory.length > 0) {
+          setHistoryTab("audit");
+        } else {
+          setHistoryTab("scans");
+        }
       }
     } catch {
       /* silent */
@@ -477,8 +485,32 @@ export function RfidCardsView() {
                 {assignments.map((item) => (
                   <tr key={item.id}>
                     <td>
-                      <strong>{item.cardId}</strong>
-                      <div className="muted-cell">UID: {item.uid}</div>
+                      <button
+                        type="button"
+                        onClick={() => openHistory({ id: item.id, cardId: item.cardId, uid: item.uid } as any)}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          padding: 0,
+                          margin: 0,
+                          cursor: "pointer",
+                          textAlign: "left",
+                          color: "var(--primary, #3b82f6)",
+                          textDecoration: "underline",
+                          fontWeight: 600,
+                          fontSize: "inherit",
+                        }}
+                        title="Bấm để xem lịch sử thẻ"
+                      >
+                        {item.cardId}
+                      </button>
+                      <div
+                        onClick={() => openHistory({ id: item.id, cardId: item.cardId, uid: item.uid } as any)}
+                        style={{ fontSize: 11, color: "var(--muted)", cursor: "pointer" }}
+                        title="Bấm để xem lịch sử thẻ"
+                      >
+                        UID: {item.uid}
+                      </div>
                     </td>
                     <td>
                       <span
@@ -600,75 +632,195 @@ export function RfidCardsView() {
         )}
       </div>
 
-      {/* ───── Card History panel ───── */}
+      {/* ───── Card History Modal ───── */}
       {historyCardId && (
-        <div className="panel wide">
-          <div className="panel-heading">
-            <div>
-              <p>Lịch sử thẻ</p>
-              <h2>{historyCardId}</h2>
+        <div className="modal-overlay">
+          <div
+            className="modal"
+            style={{ maxWidth: 840, width: "95%", maxHeight: "90vh", display: "flex", flexDirection: "column" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <h3 style={{ margin: 0 }}>Lịch sử thẻ RFID</h3>
+                <span className="muted-cell" style={{ fontSize: 13 }}>Mã thẻ: <strong>{historyCardId}</strong></span>
+              </div>
+              <button
+                className="ghost-button"
+                onClick={() => {
+                  setHistoryCardId(null);
+                  setHistoryLogs([]);
+                  setHistoryAuditLogs([]);
+                }}
+                type="button"
+                style={{ padding: 6 }}
+              >
+                <X size={18} />
+              </button>
             </div>
-            <button
-              className="ghost-button"
-              onClick={() => {
-                setHistoryCardId(null);
-                setHistoryLogs([]);
-              }}
-              type="button"
-            >
-              <X size={14} /> Đóng
-            </button>
+
+            <div style={{ display: "flex", gap: 8, margin: "16px 0 12px 0", borderBottom: "1px solid var(--border)", paddingBottom: 10 }}>
+              <button
+                type="button"
+                className={historyTab === "audit" ? "primary-button" : "ghost-button"}
+                onClick={() => setHistoryTab("audit")}
+                style={{ fontSize: 13, padding: "6px 14px" }}
+              >
+                Lịch sử thay đổi thẻ ({historyAuditLogs.length})
+              </button>
+              <button
+                type="button"
+                className={historyTab === "scans" ? "primary-button" : "ghost-button"}
+                onClick={() => setHistoryTab("scans")}
+                style={{ fontSize: 13, padding: "6px 14px" }}
+              >
+                Lịch sử quét qua cổng ({historyLogs.length})
+              </button>
+            </div>
+
+            <div style={{ overflowY: "auto", flex: 1, paddingRight: 4 }}>
+              {historyLoading ? (
+                <p className="muted-text" style={{ padding: "20px 0", textAlign: "center" }}>
+                  <Loader2 className="spin" size={20} /> Đang tải lịch sử…
+                </p>
+              ) : historyTab === "audit" ? (
+                historyAuditLogs.length > 0 ? (
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Thời gian</th>
+                          <th>Hành động</th>
+                          <th>Người thực hiện</th>
+                          <th>Chi tiết thay đổi</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {historyAuditLogs.map((item) => (
+                          <tr key={item.id}>
+                            <td style={{ whiteSpace: "nowrap" }}>{fmt(item.createdAt)}</td>
+                            <td>
+                              <span className="badge" style={{ background: "rgba(59, 130, 246, 0.1)", color: "#3b82f6" }}>
+                                {item.actionLabel || item.action}
+                              </span>
+                            </td>
+                            <td>
+                              {item.performedBy ? (
+                                <span>
+                                  <strong>{item.performedBy.name}</strong>
+                                  {item.performedBy.email && (
+                                    <span className="muted-cell" style={{ display: "block", fontSize: 11 }}>
+                                      {item.performedBy.email}
+                                    </span>
+                                  )}
+                                </span>
+                              ) : (
+                                <span className="muted-cell">Hệ thống</span>
+                              )}
+                            </td>
+                            <td style={{ fontSize: 13 }}>
+                              {item.changes?.new ? (
+                                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                                  {Object.entries(item.changes.new).map(([k, v]) => {
+                                    const labels: Record<string, string> = {
+                                      status: "Trạng thái",
+                                      ownerName: "Chủ thẻ",
+                                      plate: "Biển số",
+                                      cardType: "Loại thẻ",
+                                      userType: "Loại khách",
+                                      notes: "Ghi chú",
+                                    };
+                                    return (
+                                      <div key={k}>
+                                        <span style={{ color: "var(--muted)" }}>{labels[k] || k}:</span>{" "}
+                                        <strong>{v === null || v === undefined || v === "" ? "—" : String(v)}</strong>
+                                        {item.changes?.old?.[k] !== undefined && item.changes?.old?.[k] !== v && (
+                                          <span className="muted-cell" style={{ fontSize: 11, marginLeft: 4 }}>
+                                            (cũ: {String(item.changes.old[k] ?? "—")})
+                                          </span>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <span className="muted-cell">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="muted-text" style={{ padding: "20px 0", textAlign: "center" }}>
+                    Chưa có nhật ký thay đổi nào cho thẻ này.
+                  </p>
+                )
+              ) : historyLogs.length > 0 ? (
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Thời gian</th>
+                        <th>Hành động</th>
+                        <th>Trạng thái</th>
+                        <th>Biển số</th>
+                        <th>Lý do lỗi</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historyLogs.map((log) => (
+                        <tr key={log.id}>
+                          <td style={{ whiteSpace: "nowrap" }}>{fmt(log.createdAt)}</td>
+                          <td>{SCAN_ACTION_LABELS[log.action] || log.action}</td>
+                          <td>
+                            <span
+                              className={
+                                log.status === "success"
+                                  ? "badge success"
+                                  : "badge warning"
+                              }
+                            >
+                              {log.status}
+                            </span>
+                          </td>
+                          <td>
+                            {log.plateDetected || (
+                              <span className="muted-cell">—</span>
+                            )}
+                          </td>
+                          <td>
+                            {log.failureReason || (
+                              <span className="muted-cell">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="muted-text" style={{ padding: "20px 0", textAlign: "center" }}>
+                  Chưa có lịch sử quét cho thẻ này.
+                </p>
+              )}
+            </div>
+
+            <div className="modal-actions" style={{ marginTop: 16, paddingTop: 10, borderTop: "1px solid var(--border)", display: "flex", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => {
+                  setHistoryCardId(null);
+                  setHistoryLogs([]);
+                  setHistoryAuditLogs([]);
+                }}
+              >
+                Đóng
+              </button>
+            </div>
           </div>
-          {historyLoading ? (
-            <p className="muted-text">
-              <Loader2 className="spin" size={16} /> Đang tải lịch sử…
-            </p>
-          ) : historyLogs.length > 0 ? (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Thời gian</th>
-                    <th>Hành động</th>
-                    <th>Trạng thái</th>
-                    <th>Biển số</th>
-                    <th>Lý do lỗi</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {historyLogs.map((log) => (
-                    <tr key={log.id}>
-                      <td>{fmt(log.createdAt)}</td>
-                      <td>{SCAN_ACTION_LABELS[log.action] || log.action}</td>
-                      <td>
-                        <span
-                          className={
-                            log.status === "success"
-                              ? "badge success"
-                              : "badge warning"
-                          }
-                        >
-                          {log.status}
-                        </span>
-                      </td>
-                      <td>
-                        {log.plateDetected || (
-                          <span className="muted-cell">—</span>
-                        )}
-                      </td>
-                      <td>
-                        {log.failureReason || (
-                          <span className="muted-cell">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="muted-text">Chưa có lịch sử cho thẻ này.</p>
-          )}
         </div>
       )}
 

@@ -50,7 +50,11 @@ export function daysRemaining(endDate: string): number {
 
 export function formatDate(iso: string): string {
   const d = new Date(iso);
-  return d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
+  if (isNaN(d.getTime())) return "—";
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
 }
 
 export function isVehicleBlocked(status?: string | null): boolean {

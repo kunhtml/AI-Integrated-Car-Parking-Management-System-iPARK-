@@ -144,9 +144,23 @@ function TransactionCard({ item, isCustomer, isAdmin, onView, onCancel, onConfir
           {getInitials(item.ownerName)}
         </div>
         <div className="wallet-customer">
-          <span className="wallet-customer-name">{item.ownerName || (isTopUp ? "Khách nạp ví" : "Khách vãng lai")}</span>
-          <span className="wallet-customer-handle">
-            {item.ownerEmail || (isTopUp ? "Nạp tiền" : "Khách vãng lai")}
+          <span className="wallet-customer-name">
+            {item.ownerName && item.ownerName !== "Guest" && item.ownerName !== "Guest RFID"
+              ? item.ownerName
+              : (item.subscription ? "Khách thành viên" : "Khách vãng lai")}
+          </span>
+          <span
+            className="wallet-customer-handle"
+            style={{
+              fontWeight: 500,
+              color: item.subscription || item.sessionPaymentStatus === "free" ? "#16a34a" : "var(--muted)",
+            }}
+          >
+            {isTopUp
+              ? "Nạp tiền ví"
+              : item.subscription || item.sessionPaymentStatus === "free"
+                ? "Có gói đăng ký"
+                : "Không có gói đăng ký"}
           </span>
         </div>
         <StatusBadge status={status} received={item.sessionPaidAmount} total={item.sessionFee} />

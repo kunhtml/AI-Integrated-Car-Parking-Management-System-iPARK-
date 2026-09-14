@@ -279,11 +279,44 @@ export function UsersView() {
     () => ({
       total: visibleUsers.length,
       active: visibleUsers.filter((u) => u.status === "Đang hoạt động").length,
+      locked: visibleUsers.filter((u) => u.status === "Đã khóa").length,
       staff: visibleUsers.filter((u) => u.role === "staff").length,
       customer: visibleUsers.filter((u) => u.role === "customer").length,
     }),
     [visibleUsers],
   );
+
+  type StatKey = "total" | "active" | "locked" | "staff" | "customer";
+  const activeStat: StatKey = filterStatus
+    ? filterStatus === "Đang hoạt động"
+      ? "active"
+      : "locked"
+    : filterRole === "staff"
+      ? "staff"
+      : filterRole === "customer"
+        ? "customer"
+        : "total";
+
+  function handleStatClick(key: StatKey) {
+    if (key === "total") {
+      setFilterRole("");
+      setFilterStatus("");
+    } else if (key === "active") {
+      setFilterRole("");
+      setFilterStatus(
+        filterStatus === "Đang hoạt động" ? "" : "Đang hoạt động",
+      );
+    } else if (key === "locked") {
+      setFilterRole("");
+      setFilterStatus(filterStatus === "Đã khóa" ? "" : "Đã khóa");
+    } else if (key === "staff") {
+      setFilterStatus("");
+      setFilterRole(filterRole === "staff" ? "" : "staff");
+    } else {
+      setFilterStatus("");
+      setFilterRole(filterRole === "customer" ? "" : "customer");
+    }
+  }
 
   if (!currentUser) return null;
 

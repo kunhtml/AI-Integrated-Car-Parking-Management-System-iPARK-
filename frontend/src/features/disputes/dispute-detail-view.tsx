@@ -48,7 +48,7 @@ function formatDateTime(value: string | null | undefined) {
 }
 
 function formatMoney(value: number) {
-  return `${value.toLocaleString("vi-VN")}đ`;
+  return `${Number(value || 0).toLocaleString("vi-VN")}đ`;
 }
 
 const DISPUTE_STATUSES: DisputeStatus[] = [

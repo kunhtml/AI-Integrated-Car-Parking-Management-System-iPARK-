@@ -29,9 +29,9 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 MFRC522 mfrc522(SS_PIN, RST_PIN);
 
 int readsuccess;
-byte readcard[4];
+byte readcard[10];
 char str[32] = "";
-String StrUID, user;
+String StrUID;
 
 // ===== Scan mode =====
 bool scanMode = false;
@@ -67,8 +67,8 @@ struct TheXe {
   bool status;         // true = active, false = bị khóa
 };
 
-// ===== Danh sách thẻ tối đa 15 (để tiết kiệm RAM) =====
-const int MAX_THE = 15;
+// ===== Danh sách thẻ tối đa 100 =====
+const int MAX_THE = 100;
 TheXe dsThe[MAX_THE];
 int soThe = 0; // ban đầu rỗng, thẻ sẽ được add/update từ Python qua Serial
 
@@ -111,10 +111,19 @@ void LCD_TheBiKhoa() {
   lcd.print("Lien he quan ly");
 }
 
-// ===== Quản lý mảng thẻ (tối đa 15) =====
+String normalizeUid(String u) {
+  u.trim();
+  u.toUpperCase();
+  u.replace(":", "");
+  u.replace("-", "");
+  u.replace(" ", "");
+  return u;
+}
+
+// ===== Quản lý mảng thẻ =====
 int findIndexByUID(const String &uid) {
   for (int i = 0; i < soThe; i++) {
-    if (dsThe[i].uid == uid) return i;
+    if (normalizeUid(dsThe[i].uid) == normalizeUid(uid)) return i;
   }
   return -1;
 }
@@ -130,7 +139,7 @@ void removeAt(int idx) {
 bool parseActive(String s) {
   s.trim();
   s.toLowerCase();
-  return (s == "active" || s == "1" || s == "true" || s == "on");
+  return (s == "active" || s == "available" || s == "in-use" || s == "1" || s == "true" || s == "on");
 }
 
 bool parseResident(String s) {
@@ -156,7 +165,8 @@ String getToken(const String &s, int index, char delim = '|') {
   return s.substring(start, end);
 }
 
-void upsertCard(const String &uid, const String &hoten, const String &plate, bool laResident, bool active) {
+void upsertCard(String uid, const String &hoten, const String &plate, bool laResident, bool active) {
+  uid = normalizeUid(uid);
   int idx = findIndexByUID(uid);
   if (idx == -1) {
     if (soThe >= MAX_THE) {
@@ -205,22 +215,20 @@ int getid() {
   if (!mfrc522.PICC_IsNewCardPresent()) return 0;
   if (!mfrc522.PICC_ReadCardSerial())   return 0;
 
-  for (int i = 0; i < 4; i++) {
+  byte uidSize = mfrc522.uid.size;
+  if (uidSize > 10) uidSize = 10;
+  for (byte i = 0; i < uidSize; i++) {
     readcard[i] = mfrc522.uid.uidByte[i];
-    array_to_string(readcard, 4, str);
-    StrUID = str;
   }
+  array_to_string(readcard, uidSize, str);
+  StrUID = String(str);
+  StrUID.trim();
+  StrUID.toUpperCase();
   mfrc522.PICC_HaltA();
   return 1;
 }
 
-// ===== Mở cửa =====
-// Không còn IR vật cản: giữ barrier mở 3 giây rồi tự đóng.
-// Việc xác thực RFID thuộc backend; ESP32 không tự mở theo danh sách cục bộ.
-void mo_cua() {
-  return;
-}
-
+// ===== Mở cửa bằng remote (lệnh từ Python) =====
 void mo_cua_remote() {
   cua_vao.write(90);
   LCD_TRUE();
@@ -287,7 +295,6 @@ void senddata() {
           Serial.print(dsThe[i].hoten); Serial.print(",");
           Serial.print(bienSoOCR); Serial.println(",In");
 
-          mo_cua();
           bienSoOCR = "";
         } else {
           Serial.println("Sai biển số resident!");
@@ -316,7 +323,6 @@ void senddata() {
           Serial.print(bienSoOCR);
           Serial.println(",In");
 
-          mo_cua();
           bienSoOCR = "";
         } else {
           // Guest đã có biển số -> so sánh với normalize
@@ -334,7 +340,6 @@ void senddata() {
             Serial.print(bienSoOCR);
             Serial.println(",In");
 
-            mo_cua();
             bienSoOCR = "";
           } else {
             Serial.println("Sai biển số guest!");
@@ -515,8 +520,16 @@ void setup() {
   digitalWrite(PIN_BUZZER, LOW);
 
   // SPI + RFID (chỉ định rõ chân cho chắc)
+  pinMode(RST_PIN, OUTPUT);
+  digitalWrite(RST_PIN, LOW);
+  delay(50);
+  digitalWrite(RST_PIN, HIGH);
+  delay(50);
+
   SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI, SS_PIN);
   mfrc522.PCD_Init();
+  delay(100);
+  mfrc522.PCD_SetAntennaGain(mfrc522.RxGain_max);
 
   Serial.println("CLEARDATA");
   Serial.println("LABEL,Date,Time,RFID UID,USER,Plate,IN/OUT");

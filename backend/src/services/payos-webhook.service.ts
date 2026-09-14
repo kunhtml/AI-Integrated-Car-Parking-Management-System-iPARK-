@@ -23,19 +23,45 @@ async function applyPaidTransactionToSession(
   transaction: TransactionDocument,
   session: HydratedSession,
 ) {
-  session.paidAmount = (session.paidAmount || 0) + transaction.amount;
-  session.paymentStatus = session.paidAmount >= (session.fee || 0) ? "fully_paid" : "partial_paid";
+  // Nguyên tử: $inc paidAmount để webhook + reconcile không ghi đè lẫn nhau.
+  const updated = await ParkingSession.findByIdAndUpdate(
+    session._id,
+    { $inc: { paidAmount: transaction.amount } },
+    { new: true },
+  );
+  if (!updated) {
+    throw new Error(`ParkingSession ${session._id} not found during paidAmount $inc`);
+  }
 
+  const paymentStatus =
+    (updated.paidAmount || 0) >= (updated.fee || 0) ? "fully_paid" : "partial_paid";
+
+  const setFields: Record<string, unknown> = { paymentStatus };
   // Chỉ nhả slot + chốt giờ ra khi xe đã ra bãi (phiên đã hoàn thành từ trước).
-  if (session.status === "Đã hoàn thành") {
-    if (!session.checkOutAt) session.checkOutAt = new Date();
-    const { freeSlot } = await import("../services/parkingSlot.service.js");
-    if (session.slotId) {
-      await freeSlot(session.slotId);
+  if (updated.status === "Đã hoàn thành") {
+    if (!updated.checkOutAt) {
+      setFields.checkOutAt = new Date();
     }
   }
 
-  await session.save();
+  const finalDoc = await ParkingSession.findByIdAndUpdate(
+    session._id,
+    { $set: setFields },
+    { new: true },
+  );
+  if (!finalDoc) {
+    throw new Error(`ParkingSession ${session._id} not found during paymentStatus $set`);
+  }
+
+  // Đồng bộ object in-memory để caller (reconcile loop) thấy paidAmount mới.
+  session.paidAmount = finalDoc.paidAmount;
+  session.paymentStatus = finalDoc.paymentStatus;
+  if (finalDoc.checkOutAt) session.checkOutAt = finalDoc.checkOutAt;
+
+  if (finalDoc.status === "Đã hoàn thành" && finalDoc.slotId) {
+    const { freeSlot } = await import("../services/parkingSlot.service.js");
+    await freeSlot(finalDoc.slotId);
+  }
 
   // Đánh dấu các vé phạt đang chờ của phiên này đã nộp (đã gộp vào phí khi checkout)
   const { Penalty } = await import("../models/Penalty.js");
@@ -67,9 +93,14 @@ export async function reconcileSessionPayment(
     const result = await checkPayOSPaymentStatus(String(transaction.payosOrderCode));
     if (result.status !== "paid") continue;
 
+    // IDEMPOTENT CLAIM (reconcile): như trên — pending -> paid nguyên tử để
+    // webhook và reconcile không thể cùng áp một giao dịch.
+    const claim = await Transaction.updateOne(
+      { _id: transaction._id, status: { $ne: "paid" } },
+      { $set: { status: "paid", paidAt: new Date() } },
+    );
+    if (claim.modifiedCount === 0) continue;
     transaction.status = "paid";
-    transaction.paidAt = new Date();
-    await transaction.save();
 
     await applyPaidTransactionToSession(transaction, session);
     applied = true;
@@ -88,57 +119,58 @@ export async function handlePayOSWebhook(request: Request, response: Response) {
     // Log webhook data for debugging
     console.log("[PayOS Webhook] Received:", JSON.stringify(webhookData, null, 2));
 
-    // Get checksum key from env (đồng bộ với getPayOSConfig: PAYTOS_*)
+    // BẢO MẬT: chữ ký là BẮT BUỘC trong mọi môi trường. Trước đây dev mode
+    // bỏ qua xác minh, cho phép kẻ tấn công POST body giả và đánh dấu phiên
+    // "fully_paid" miễn phí.
     const checksumKey = process.env.PAYTOS_CHECKSUM_KEY;
-    const isDev = process.env.NODE_ENV !== "production";
-
     if (!checksumKey) {
-      if (!isDev) {
-        console.error("[PayOS Webhook] Checksum key not configured");
-        response.status(500).json({ message: "Server configuration error" });
-        return;
-      }
-      console.warn("[PayOS Webhook] Checksum key not configured - skipping verification in dev mode");
-    } else {
-      // Verify signature
-      const isValid = verifyWebhookSignature(webhookData, checksumKey);
-      if (!isValid) {
-        console.warn("[PayOS Webhook] Invalid signature");
-        if (!isDev) {
-          response.status(400).json({ message: "Invalid signature" });
-          return;
-        }
-        console.warn("[PayOS Webhook] Proceeding anyway in dev mode");
-      }
+      console.error("[PayOS Webhook] Checksum key not configured - rejecting webhook");
+      response.status(500).json({ message: "Server configuration error" });
+      return;
+    }
+    const isValid = verifyWebhookSignature(webhookData, checksumKey);
+    if (!isValid) {
+      console.warn("[PayOS Webhook] Invalid signature - rejecting");
+      response.status(400).json({ message: "Invalid signature" });
+      return;
     }
 
-    // Check if payment successful
     if (webhookData.code !== "00" || !webhookData.success) {
       console.log("[PayOS Webhook] Payment not successful:", webhookData.desc);
       response.json({ message: "Payment not successful" });
       return;
     }
 
-    const { orderCode, amount, description: payosDescription } = webhookData.data;
+    const { orderCode, amount } = webhookData.data;
 
-    // Extract sessionId from PayOS description (format: "iPARK <last6>")
-    let session = null;
-    if (payosDescription) {
-      // description is like "iPARK abc123" where abc123 is last 6 of sessionId
-      const match = payosDescription.match(/\S+\s+(\S+)$/);
-      const last6 = match?.[1];
-      if (last6) {
-        // Find session by _id ending with last6 chars
-        const sessions = await ParkingSession.find({ _id: { $regex: `${last6}$` } }).limit(5);
-        session = sessions.length === 1 ? sessions[0] : null;
-        if (!session) console.warn("[PayOS Webhook] Could not resolve session from description:", payosDescription);
-      }
+    // BẢO MẬT: giao dịch được tra cứu theo payosOrderCode do server tự sinh
+    // khi tạo liên kết thanh toán — KHÔNG tạo giao dịch mới từ body của
+    // webhook (body là dữ liệu bên ngoài), và KHÔNG dò phiên bằng regex trên
+    // mô tả (kẻ tấn công kiểm soát mô tả). Phiên được lấy qua mapping
+    // Transaction.sessionId đã lưu khi tạo link.
+    const transaction = await Transaction.findOne({ payosOrderCode: String(orderCode) });
+
+    if (!transaction) {
+      console.warn("[PayOS Webhook] Unknown orderCode (no local transaction record) - ignoring:", orderCode);
+      response.json({ message: "Unknown transaction" });
+      return;
     }
 
-    // Find or create transaction by payosOrderCode
-    let transaction = await Transaction.findOne({ payosOrderCode: String(orderCode) });
+    // BẢO MẬT: đối chiếu số tiền với giao dịch đã tạo (không tin body)
+    if (typeof amount !== "number" || amount !== transaction.amount) {
+      console.warn(
+        `[PayOS Webhook] Amount mismatch for orderCode ${orderCode}: webhook=${amount}, expected=${transaction.amount} - rejecting`,
+      );
+      response.status(400).json({ message: "Amount mismatch" });
+      return;
+    }
 
-    if (transaction) {
+    let session: HydratedSession | null = null;
+    if (transaction.sessionId) {
+      session = (await ParkingSession.findById(transaction.sessionId)) as HydratedSession | null;
+    }
+
+    {
       // Idempotent: already processed
       if (transaction.status === "paid") {
         if (transaction.transactionType === "rfid_sale" || transaction.transactionType === "rfid_replacement") {
@@ -162,36 +194,27 @@ export async function handlePayOSWebhook(request: Request, response: Response) {
         return;
       }
       // Pending record exists → just update to paid
-    } else {
-      // No existing record → webhook creates the Transaction directly
-      // Use try/catch for race condition safety (unique index on payosOrderCode)
-      try {
-        transaction = await Transaction.create({
-          payosOrderCode: String(orderCode),
-          sessionId: session?._id || undefined,
-          method: "payos",
-          amount,
+    }
+
+    // IDEMPOTENT CLAIM: webhook + reconcile có thể cùng xác nhận một orderCode.
+    // Claim nguyên tử pending -> paid: request thua thấy matchedCount 0 và
+    // thoát, KHÔNG cộng tiền lần hai vào phiên/gói.
+    const claim = await Transaction.updateOne(
+      { _id: transaction._id, status: { $ne: "paid" } },
+      {
+        $set: {
           status: "paid",
           paidAt: new Date(),
           note: webhookData.data.reference || String(orderCode),
-        });
-        console.log("[PayOS Webhook] Created Transaction from webhook:", transaction._id);
-      } catch (err: any) {
-        if (err.code === 11000) {
-          console.log("[PayOS Webhook] Duplicate orderCode race condition, skipping:", orderCode);
-          response.json({ message: "Already processed" });
-          return;
-        }
-        throw err;
-      }
+        },
+      },
+    );
+    if (claim.modifiedCount === 0) {
+      console.log("[PayOS Webhook] Transaction already claimed as paid by another run:", orderCode);
+      response.json({ message: "Already processed" });
+      return;
     }
-
-    // Update to paid (handles both newly created and existing pending)
     transaction.status = "paid";
-    transaction.paidAt = new Date();
-    transaction.note = webhookData.data.reference || String(orderCode);
-    if (session && !transaction.sessionId) transaction.sessionId = session._id;
-    await transaction.save();
 
     // Giao dịch bán/cấp lại thẻ RFID → kích hoạt thẻ sau khi PayOS báo paid
     if (transaction.transactionType === "rfid_sale" || transaction.transactionType === "rfid_replacement") {
@@ -232,7 +255,6 @@ export async function handlePayOSWebhook(request: Request, response: Response) {
       return;
     }
 
-    // Update parking session - mark as paid and set checkOutAt
     if (session) {
       await applyPaidTransactionToSession(transaction, session);
     } else {

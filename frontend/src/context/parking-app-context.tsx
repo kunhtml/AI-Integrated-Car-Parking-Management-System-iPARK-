@@ -226,7 +226,7 @@ type ParkingAppContextValue = {
     engineNo?: string;
     chassisNo?: string;
     imageUrl?: string;
-  }) => Promise<void>;
+  }) => Promise<{ ok: boolean; message?: string; vehicle?: any } | void>;
   editVehicle: (
     id: string,
     data: {
@@ -242,8 +242,9 @@ type ParkingAppContextValue = {
       chassisNo?: string;
       status?: string;
       imageUrl?: string;
+      requestApproval?: boolean;
     },
-  ) => Promise<void>;
+  ) => Promise<{ ok: boolean; message?: string; vehicle?: any } | void>;
   removeVehicle: (id: string) => Promise<void>;
   zoneList: Zone[];
   setZoneList: (zones: Zone[] | ((prev: Zone[]) => Zone[])) => void;

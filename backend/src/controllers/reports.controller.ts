@@ -239,7 +239,27 @@ export async function revenueChartHandler(request: Request, response: Response) 
 export async function occupancyHourlyHandler(request: Request, response: Response) {
   const { from, to } = getDateRange(request);
   const data = await getOccupancyByHour(from, to);
-  response.json({ data });
+  
+  // Đếm tổng số phiên gửi xe (lượt xe vào) trong khoảng thời gian đã chọn
+  const { ParkingSession } = await import("../models/ParkingSession.js");
+  const totalSessions = await ParkingSession.countDocuments({
+    checkInAt: { $gte: from, $lte: to },
+  });
+
+  // Lấy tổng sức chứa toàn bãi
+  const { getOrCreateGlobalConfig } = await import("../services/capacityConfig.service.js");
+  const config = await getOrCreateGlobalConfig();
+  const globalCapacity = Math.max(config.globalCapacity || 100, 1);
+
+  // Tỷ lệ lấp đầy = (Tổng lượt xe trong khoảng thời gian / Tổng số slot) * 100%
+  const occupancyPercentage = Math.round((totalSessions / globalCapacity) * 100);
+
+  response.json({
+    data,
+    totalSessions,
+    globalCapacity,
+    occupancyPercentage,
+  });
 }
 
 export async function topCustomersHandler(request: Request, response: Response) {

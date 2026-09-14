@@ -259,6 +259,27 @@ export async function confirmTransaction(request: Request, response: Response) {
     return;
   }
 
+  // SEC: số tiền xác nhận phải khớp đúng số tiền của giao dịch PayOS.
+  if (transaction.sessionId) {
+    const session = await ParkingSession.findById(transaction.sessionId);
+    if (!session) {
+      response
+        .status(400)
+        .json({ message: "Phiên đỗ xe của giao dịch không tồn tại." });
+      return;
+    }
+    const expected = Math.max(
+      0,
+      (session.fee || 0) - (session.paidAmount || 0),
+    );
+    if (transaction.amount !== expected) {
+      response.status(400).json({
+        message: `Số tiền xác nhận (${transaction.amount}) không khớp số còn phải thu (${expected}). Vui lòng kiểm tra lại.`,
+      });
+      return;
+    }
+  }
+
   transaction.status = "paid";
   transaction.paidAt = new Date();
   transaction.note = body.note;
@@ -340,14 +361,43 @@ export async function payCashForSession(request: Request, response: Response) {
     plate: session.plate,
   });
 
-  session.paidAmount = (session.paidAmount || 0) + amount;
-  session.paymentMethod = "cash";
-  session.cashNote = body.note || session.cashNote;
-  session.collectedBy = collectorId;
-  session.transactionId = transaction._id;
-  session.paymentStatus =
-    session.paidAmount >= session.fee ? "fully_paid" : "partial_paid";
-  await session.save();
+  // Nguyên tử: $inc paidAmount rồi $set các field còn lại từ doc mới.
+  const updated = await ParkingSession.findByIdAndUpdate(
+    session._id,
+    {
+      $inc: { paidAmount: amount },
+      $set: {
+        paymentMethod: "cash",
+        cashNote: body.note || session.cashNote,
+        collectedBy: collectorId,
+        transactionId: transaction._id,
+      },
+    },
+    { new: true },
+  );
+  if (!updated) {
+    response.status(404).json({ message: "Không tìm thấy phiên đỗ xe." });
+    return;
+  }
+
+  const paymentStatus =
+    (updated.paidAmount || 0) >= (updated.fee || 0) ? "fully_paid" : "partial_paid";
+  const finalSession = await ParkingSession.findByIdAndUpdate(
+    session._id,
+    { $set: { paymentStatus } },
+    { new: true },
+  );
+  if (!finalSession) {
+    response.status(404).json({ message: "Không tìm thấy phiên đỗ xe." });
+    return;
+  }
+
+  session.paidAmount = finalSession.paidAmount;
+  session.paymentMethod = finalSession.paymentMethod;
+  session.cashNote = finalSession.cashNote;
+  session.collectedBy = finalSession.collectedBy;
+  session.transactionId = finalSession.transactionId;
+  session.paymentStatus = finalSession.paymentStatus;
 
   await createAuditLog({
     action: "cash_payment",
@@ -368,7 +418,7 @@ export async function payCashForSession(request: Request, response: Response) {
     transaction: serializeTransaction(transaction, session),
     sessionPaymentStatus: session.paymentStatus,
     paidAmount: session.paidAmount,
-    amountDue: session.fee - session.paidAmount,
+    amountDue: (session.fee || 0) - (session.paidAmount || 0),
     message: "Đã ghi nhận thanh toán tiền mặt.",
   });
 }
@@ -377,6 +427,18 @@ export async function cancelTransaction(request: Request, response: Response) {
   const transaction = await Transaction.findById(request.params.id);
   if (!transaction) {
     response.status(404).json({ message: "Không tìm thấy giao dịch." });
+    return;
+  }
+
+  // SEC: ownership check — staff chỉ được hủy giao dịch do chính mình tạo,
+  // admin được hủy mọi giao dịch (customer không tới được route này).
+  if (
+    request.user?.role !== "admin" &&
+    transaction.createdBy?.toString() !== request.user?.id
+  ) {
+    response
+      .status(403)
+      .json({ message: "Không có quyền hủy giao dịch này." });
     return;
   }
 

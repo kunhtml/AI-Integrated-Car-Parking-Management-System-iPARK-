@@ -12,7 +12,7 @@ const nextConfig: NextConfig = {
               "default-src 'self'",
               "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
               "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: blob: http://localhost:4000 http://localhost:5050",
+              "img-src 'self' data: blob: http://localhost:4000 http://localhost:5050 https://lh3.googleusercontent.com",
               "font-src 'self' data:",
               "connect-src 'self' http://localhost:4000 http://localhost:5050 ws://localhost:3000",
               "frame-ancestors 'none'",
@@ -58,8 +58,6 @@ const nextConfig: NextConfig = {
         destination: "http://localhost:4000/uploads/:path*",
       },
       // Proxy SSE từ backend để vượt qua vấn đề cookie/CORS khi browser
-      // mở EventSource cross-origin. Next.js forward headers + cookies
-      // cho destination; client vẫn kết nối same-origin tới /api/camera-logs/stream.
       {
         source: "/api/camera-logs/stream",
         destination: "http://localhost:4000/api/camera-logs/stream",
@@ -68,7 +66,6 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     // URL cũ dạng /dashboard/<segment> — route group "(dashboard)" render ở gốc
-    // nên mọi link/bookmark cũ được redirect sang đường dẫn thật, giữ SEO.
     return [
       { source: "/dashboard", destination: "/overview", permanent: true },
       { source: "/dashboard/:path*", destination: "/:path*", permanent: true },

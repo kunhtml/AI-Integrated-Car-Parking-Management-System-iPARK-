@@ -3,6 +3,7 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import {
+  Eye,
   AlertTriangle,
   BadgeDollarSign,
   Ban,
@@ -1052,8 +1053,16 @@ export function RfidSalesPanel() {
                 "Thao tác",
               ]}
               rows={filteredInventory.map((card) => [
-                <div key="card" className="rfid-card-identity">
-                  <strong>{card.cardId || card.uid}</strong>
+                <div
+                  key="card"
+                  className="rfid-card-identity"
+                  onClick={() => void loadDetails(card.id)}
+                  style={{ cursor: "pointer" }}
+                  title="Bấm để xem chi tiết & lịch sử thẻ"
+                >
+                  <strong style={{ color: "var(--primary, #3b82f6)", textDecoration: "underline" }}>
+                    {card.cardId || card.uid}
+                  </strong>
                   <span>UID: {card.uid}</span>
                 </div>,
                 <div key="owner" className="rfid-card-owner">
@@ -1081,6 +1090,14 @@ export function RfidSalesPanel() {
                   {dateTime(card.updatedAt || card.soldAt || card.createdAt)}
                 </span>,
                 <div key="actions" className="rfid-sales-actions">
+                  <button
+                    type="button"
+                    className="small-button"
+                    onClick={() => void loadDetails(card.id)}
+                    title="Xem chi tiết & lịch sử thẻ"
+                  >
+                    <Eye size={13} /> Lịch sử
+                  </button>
                   {card.status === "available" && (
                     <button
                       type="button"
@@ -1334,6 +1351,64 @@ export function RfidSalesPanel() {
                 </small>
               </div>
             </div>
+            <h4>Lịch sử thay đổi thẻ</h4>
+            {(!rfidDetails.auditHistory || rfidDetails.auditHistory.length === 0) ? (
+              <p className="muted-cell" style={{ marginBottom: 16 }}>Chưa có nhật ký thay đổi nào.</p>
+            ) : (
+              <div className="table-wrap" style={{ marginBottom: 16 }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Thời gian</th>
+                      <th>Hành động</th>
+                      <th>Người thực hiện</th>
+                      <th>Chi tiết</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rfidDetails.auditHistory.map((item) => (
+                      <tr key={item.id}>
+                        <td>{dateTime(item.createdAt)}</td>
+                        <td>
+                          <span className="badge" style={{ background: "rgba(59, 130, 246, 0.1)", color: "#3b82f6" }}>
+                            {item.actionLabel || item.action}
+                          </span>
+                        </td>
+                        <td>
+                          {item.performedBy ? (
+                            <span>
+                              <strong>{item.performedBy.name}</strong>
+                              {item.performedBy.email && (
+                                <small style={{ display: "block", color: "var(--muted)" }}>
+                                  {item.performedBy.email}
+                                </small>
+                              )}
+                            </span>
+                          ) : (
+                            <span className="muted-cell">Hệ thống</span>
+                          )}
+                        </td>
+                        <td style={{ fontSize: 12 }}>
+                          {item.changes?.new ? (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                              {Object.entries(item.changes.new).map(([k, v]) => (
+                                <span key={k}>
+                                  <span style={{ color: "var(--muted)" }}>{k}:</span>{" "}
+                                  <strong>{v === null || v === undefined || v === "" ? "—" : String(v)}</strong>
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="muted-cell">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
             <h4>Lịch sử giao dịch</h4>
             {rfidDetails.history.length === 0 ? (
               <p className="muted-cell">Chưa có giao dịch.</p>

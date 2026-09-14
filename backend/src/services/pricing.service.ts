@@ -77,11 +77,150 @@ export async function updateActivePricingConfig(
   return config;
 }
 
+const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
+
 /**
- * Tính phí theo ngày cho khách vãng lai:
- * - Giờ ra trong [dayStartHour, nightStartHour)  → day rate
- * - Giờ ra ngoài khoảng đó (>= nightStartHour hoặc < dayStartHour) → night rate
- * Mỗi chu kỳ 24 giờ tính một lần, bắt đầu từ lúc xe vào bãi.
+ * Vietnam wall-clock parts for an instant — dùng Intl với timeZone cố định
+ * thay vì cộng tay +7h (server có thể chạy UTC hoặc timezone khác).
+ */
+export function getVietnamWallClock(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: VIETNAM_TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value);
+  const hour = value("hour") % 24; // en-GB có thể trả "24" lúc nửa đêm
+  return {
+    year: value("year"),
+    month: value("month"),
+    day: value("day"),
+    hour,
+    minute: value("minute"),
+    second: value("second"),
+  };
+}
+
+function vietnamDateString(date: Date) {
+  const { year, month, day } = getVietnamWallClock(date);
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/**
+ * Tạo mốc UTC instant ứng với giờ `hour`:`minute` cùng ngày Vietnam `viDate`.
+ * (Asia/Ho_Chi_Minh = UTC+7 quanh năm, không DST.)
+ */
+function vietnamInstant(viDate: { year: number; month: number; day: number }, hour: number, minute = 0) {
+  return new Date(Date.UTC(viDate.year, viDate.month - 1, viDate.day, hour, minute, 0, 0) - 7 * 60 * 60 * 1000);
+}
+
+/** Cong them n ngay vao mot ngay Vietnam (y-m-d), khong quan tam timezone. */
+export function viDateAddDays(viDate: { year: number; month: number; day: number }, days: number) {
+  const shifted = new Date(Date.UTC(viDate.year, viDate.month - 1, viDate.day + days));
+  return {
+    year: shifted.getUTCFullYear(),
+    month: shifted.getUTCMonth() + 1,
+    day: shifted.getUTCDate(),
+  };
+}
+
+/**
+ * Tao instant UTC tu gio wall-clock VIETNAM (y-m-d, hour) — thay the
+ * new Date(year, month-1, day, hour) theo timezone server.
+ */
+export function vietnamInstantFromWallClock(year: number, month: number, day: number, hour: number, minute = 0) {
+  return new Date(Date.UTC(year, month - 1, day, hour, minute, 0, 0) - 7 * 60 * 60 * 1000);
+}
+
+export type FeeSegment = {
+  rateType: DailyRateType;
+  from: Date;
+  to: Date;
+  minutes: number;
+};
+
+/**
+ * Chia khoảng [checkInAt, checkOutAt) thành các segment ngày/đêm theo
+ * mốc dayStartHour/nightStartHour giờ Vietnam.
+ */
+export function splitIntoRateSegments(
+  checkInAt: Date,
+  checkOutAt: Date,
+  dayStartHour: number,
+  nightStartHour: number,
+): FeeSegment[] {
+  const segments: FeeSegment[] = [];
+  if (checkOutAt.getTime() <= checkInAt.getTime()) return segments;
+
+  const dayRateType: DailyRateType = "day";
+  const nightRateType: DailyRateType = "night";
+
+  // Tìm ngày Vietnam của check-in, rồi duyệt từng mốc chuyển ngày/đêm.
+  const startParts = getVietnamWallClock(checkInAt);
+  const viStart = { year: startParts.year, month: startParts.month, day: startParts.day };
+
+  const rateAtInstant = (date: Date): DailyRateType => {
+    const { hour } = getVietnamWallClock(date);
+    return hour >= dayStartHour && hour < nightStartHour ? dayRateType : nightRateType;
+  };
+
+  // Danh sách các mốc chuyển tiếp (giờ Vietnam) từ check-in tới check-out.
+  const boundaries: Date[] = [];
+  for (let dayOffset = -1; dayOffset <= 61; dayOffset++) {
+    const base = new Date(
+      Date.UTC(viStart.year, viStart.month - 1, viStart.day + dayOffset) - 7 * 60 * 60 * 1000,
+    );
+    boundaries.push(vietnamInstant({ year: viStart.year, month: viStart.month, day: viStart.day + dayOffset }, dayStartHour));
+    boundaries.push(vietnamInstant({ year: viStart.year, month: viStart.month, day: viStart.day + dayOffset }, nightStartHour));
+    void base;
+  }
+
+  let cursor = new Date(checkInAt.getTime());
+  let currentRate = rateAtInstant(cursor);
+  const sorted = boundaries
+    .filter((b) => b.getTime() > checkInAt.getTime() && b.getTime() < checkOutAt.getTime())
+    .sort((a, b) => a.getTime() - b.getTime());
+
+  for (const boundary of sorted) {
+    if (boundary.getTime() <= cursor.getTime()) continue;
+    const nextRate = rateAtInstant(boundary);
+    if (nextRate !== currentRate) {
+      segments.push({
+        rateType: currentRate,
+        from: cursor,
+        to: boundary,
+        minutes: Math.ceil((boundary.getTime() - cursor.getTime()) / 60000),
+      });
+      cursor = new Date(boundary.getTime());
+      currentRate = nextRate;
+    }
+  }
+
+  if (cursor.getTime() < checkOutAt.getTime()) {
+    segments.push({
+      rateType: currentRate,
+      from: cursor,
+      to: new Date(checkOutAt.getTime()),
+      minutes: Math.ceil((checkOutAt.getTime() - cursor.getTime()) / 60000),
+    });
+  }
+
+  return segments;
+}
+
+/**
+ * Tính phí gửi xe khách vãng lai — PRORATE theo mốc ngày/đêm giờ Vietnam:
+ * - Khung ngày  [dayStartHour, nightStartHour) → day rate
+ * - Khung đêm   ngoài khung ngày               → night rate
+ * Mỗi phần của thời gian gửi được tính theo rate của khung nó rơi vào
+ * (rate tính trên phút: rate / 24h), cộng dồn thành tổng.
+ * Grace period (freeMinutes) được khấu trừ từ đầu khoảng, miễn phí.
  */
 export function calculateParkingFee(
   checkInAt: Date,
@@ -89,10 +228,8 @@ export function calculateParkingFee(
   config: Pick<PricingConfigDocument, "dayRate" | "nightRate"> &
     Partial<Pick<PricingConfigDocument, "dayStartHour" | "nightStartHour" | "freeMinutes" | "gracePeriod">>,
 ): FeeBreakdown {
-  const dailyBreakdown: DailyBreakdownItem[] = [];
-
-  const dayRate = config.dayRate ?? 5000;
-  const nightRate = config.nightRate ?? 10000;
+  const dayRate = config.dayRate ?? 10000;
+  const nightRate = config.nightRate ?? 15000;
   const dayStartHour = config.dayStartHour ?? 6;
   const nightStartHour = config.nightStartHour ?? 22;
 
@@ -100,46 +237,69 @@ export function calculateParkingFee(
     0,
     Math.ceil((checkOutAt.getTime() - checkInAt.getTime()) / 60000),
   );
-  const freeMinutes = config.gracePeriod ?? config.freeMinutes ?? 20;
-  const exitHour = checkOutAt.getHours() + checkOutAt.getMinutes() / 60;
-  const rateType: DailyRateType =
-    exitHour >= dayStartHour && exitHour < nightStartHour ? "day" : "night";
-  const fee = rateType === "day" ? dayRate : nightRate;
-  const billingDays = totalMinutes <= freeMinutes ? 0 : Math.ceil(totalMinutes / (24 * 60));
+  const freeMinutes = config.gracePeriod ?? config.freeMinutes ?? 0;
 
-  for (let dayIndex = 0; dayIndex < billingDays; dayIndex++) {
-    const billingEnd = new Date(
-      Math.min(
-        checkInAt.getTime() + (dayIndex + 1) * 24 * 60 * 60 * 1000,
-        checkOutAt.getTime(),
-      ),
-    );
-    dailyBreakdown.push({
-      dayIndex,
-      date: `${billingEnd.getFullYear()}-${String(billingEnd.getMonth() + 1).padStart(2, "0")}-${String(billingEnd.getDate()).padStart(2, "0")}`,
-      rateType,
-      fee,
-      checkOutHour: exitHour,
-    });
+  const dailyBreakdown: DailyBreakdownItem[] = [];
+
+  if (freeMinutes > 0 && totalMinutes <= freeMinutes) {
+    return {
+      totalMinutes,
+      freeMinutes,
+      billableMinutes: 0,
+      billableHours: 0,
+      hourlyRate: 0,
+      parkingFee: 0,
+      overdueFine: 0,
+      totalFee: 0,
+      dailyBreakdown,
+    };
   }
 
-  const totalFee = totalMinutes <= freeMinutes
-    ? 0
-    : dailyBreakdown.reduce((sum, d) => sum + d.fee, 0);
+  // Chia theo ca ngày/đêm theo yêu cầu nghiệp vụ:
+  // - Xe vào ca sáng: áp luôn dayRate
+  // - Xe ở qua đêm hoặc vào ca tối: áp nightRate
+  const segments = splitIntoRateSegments(checkInAt, checkOutAt, dayStartHour, nightStartHour);
+
+  const shiftsUsed = new Map<string, DailyRateType>();
+  for (const seg of segments) {
+    const shiftKey = `${vietnamDateString(seg.from)}_${seg.rateType}`;
+    shiftsUsed.set(shiftKey, seg.rateType);
+  }
+
+  if (shiftsUsed.size === 0) {
+    const { hour } = getVietnamWallClock(checkInAt);
+    const initialRate: DailyRateType = hour >= dayStartHour && hour < nightStartHour ? "day" : "night";
+    const shiftKey = `${vietnamDateString(checkInAt)}_${initialRate}`;
+    shiftsUsed.set(shiftKey, initialRate);
+  }
+
+  let totalFee = 0;
+  for (const [shiftKey, rateType] of shiftsUsed.entries()) {
+    const [dateStr] = shiftKey.split("_");
+    const feeForShift = rateType === "day" ? dayRate : nightRate;
+    totalFee += feeForShift;
+
+    dailyBreakdown.push({
+      dayIndex: dailyBreakdown.length,
+      date: dateStr,
+      rateType,
+      fee: feeForShift,
+      checkOutHour: getVietnamWallClock(checkOutAt).hour,
+    });
+  }
 
   return {
     totalMinutes,
     freeMinutes,
-    billableMinutes: Math.max(0, totalMinutes - freeMinutes),
-    billableHours: 0,
-    hourlyRate: 0,
+    billableMinutes: totalMinutes,
+    billableHours: Math.ceil(totalMinutes / 60),
+    hourlyRate: dayRate,
     parkingFee: totalFee,
     overdueFine: 0,
     totalFee,
     dailyBreakdown,
   };
 }
-
 
 /**
  * Get pricing config for a specific zone.

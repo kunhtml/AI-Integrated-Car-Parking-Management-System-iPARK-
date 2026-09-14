@@ -239,7 +239,7 @@ export async function listAiZonesHandler(_request: Request, response: Response) 
       name: z.name,
       cameraId: z.cameraId?.toString() ?? null,
       dividerCount: z.laneDividers?.length ?? 0,
-      slotCount: 0, // deprecated: per-slot polygons now live on ParkingSlot.aiPolygon
+      slotCount: 0,
     })),
   });
 }
@@ -261,7 +261,7 @@ export async function getZoneConfigHandler(request: Request, response: Response)
     name: zone.name,
     cameraId: zone.cameraId?.toString() ?? null,
     dividers: zone.laneDividers ?? [],
-    slots: [], // deprecated: per-slot polygons now live on ParkingSlot.aiPolygon
+    slots: [],
   });
 }
 
@@ -298,7 +298,7 @@ export async function saveZoneConfigHandler(request: Request, response: Response
     name: zone.name,
     cameraId: zone.cameraId?.toString() ?? null,
     dividers: zone.laneDividers ?? [],
-    slots: [], // deprecated
+    slots: [],
     saved: true,
   });
 }

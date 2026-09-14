@@ -55,7 +55,7 @@ function statusBadgeClass(status: string) {
 }
 
 function formatMoney(value: number) {
-  return `${value.toLocaleString("vi-VN")}đ`;
+  return `${Number(value || 0).toLocaleString("vi-VN")}đ`;
 }
 
 function formatDateTime(value: string) {
@@ -601,9 +601,7 @@ export function DisputesView() {
             justifyContent: "center",
             background: "rgba(255,255,255,0.85)",
           }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setDetail(null);
-          }}
+          
         >
           <div
             style={{

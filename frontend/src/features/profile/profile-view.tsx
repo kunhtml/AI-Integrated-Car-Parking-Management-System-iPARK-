@@ -201,8 +201,8 @@ function EditFieldModal({
       setError("Email không hợp lệ.");
       return;
     }
-    if (field === "phone" && !/^[0-9+\-\s()]{6,20}$/.test(trimmed)) {
-      setError("Số điện thoại không hợp lệ.");
+    if (field === "phone" && !/^0\d{9,10}$/.test(trimmed)) {
+      setError("Số điện thoại phải bắt đầu bằng số 0 và có từ 10 đến 11 chữ số.");
       return;
     }
     setError("");
@@ -229,7 +229,7 @@ function EditFieldModal({
         justifyContent: "center",
         padding: 20,
       }}
-      onClick={() => !loading && onClose()}
+      
     >
       <div
         style={{
@@ -501,7 +501,7 @@ function ForgotPasswordModal({
         justifyContent: "center",
         padding: 20,
       }}
-      onClick={handleClose}
+      
     >
       <div
         style={{
@@ -556,7 +556,7 @@ function ForgotPasswordModal({
             </div>
           </div>
           <button
-            onClick={handleClose}
+            
             type="button"
             disabled={loading}
             style={{
@@ -640,7 +640,7 @@ function ForgotPasswordModal({
             <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
               <button
                 type="button"
-                onClick={handleClose}
+                
                 disabled={loading}
                 className="small-button"
                 style={{ flex: 1 }}
@@ -1008,7 +1008,7 @@ function ChangePasswordModal({
         justifyContent: "center",
         padding: 20,
       }}
-      onClick={() => !loading && onClose()}
+      
     >
       <div
         style={{
@@ -1711,7 +1711,7 @@ function TwoFactorModal({
         justifyContent: "center",
         padding: 20,
       }}
-      onClick={handleClose}
+      
     >
       <div
         style={{
@@ -1766,7 +1766,7 @@ function TwoFactorModal({
             </div>
           </div>
           <button
-            onClick={handleClose}
+            
             type="button"
             disabled={loading}
             style={{
@@ -1855,7 +1855,7 @@ function TwoFactorModal({
             <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
               <button
                 type="button"
-                onClick={handleClose}
+                
                 disabled={loading}
                 className="small-button"
                 style={{ flex: 1 }}
@@ -2011,7 +2011,7 @@ function TwoFactorModal({
               <div style={{ display: "flex", gap: 8 }}>
                 <button
                   type="button"
-                  onClick={handleClose}
+                  
                   disabled={loading}
                   className="small-button"
                 >
@@ -2059,11 +2059,8 @@ function maskEmail(email: string): string {
 export function ProfileView() {
   const { currentUser, viewAs, setCurrentUser, logout } = useParkingApp();
 
-  // Dùng viewAs để xác định chế độ hiển thị
-  const isCustomer =
-    currentUser?.role === "staff"
-      ? viewAs === "customer"
-      : currentUser?.role === "customer";
+  // Chỉ tài khoản có vai trò là khách hàng thực sự mới được xem/nộp đơn ứng tuyển làm nhân viên
+  const isCustomer = currentUser?.role === "customer";
 
   const [editingField, setEditingField] = useState<string | null>(null);
   const [fieldMsg, setFieldMsg] = useState<{

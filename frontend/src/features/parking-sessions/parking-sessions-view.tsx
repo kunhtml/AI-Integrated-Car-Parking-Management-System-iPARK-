@@ -404,7 +404,7 @@ export function ParkingSessionsView() {
         <div
           className="modal-overlay"
           role="presentation"
-          onClick={() => setSelected(null)}
+          
         >
           <section
             className="modal-card uc19-detail-modal"
@@ -493,9 +493,7 @@ export function ParkingSessionsView() {
                   exceptionEvidenceLabel(selected.exceptionEvidence) ||
                   selected.manualEntryReason ||
                   selected.manualExitReason ||
-                  (selected.isOverstayed
-                    ? "Phiên quá hạn"
-                    : "Không phát hiện ngoại lệ cụ thể.")}
+                  "Không phát hiện ngoại lệ cụ thể."}
               </p>
             </div>
           </section>

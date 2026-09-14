@@ -1,3 +1,5 @@
+import { createAuditLog } from "../services/auditLog.service.js";
+import { AuditLog } from "../models/AuditLog.js";
 import { Request, Response } from "express";
 import mongoose from "mongoose";
 import { z } from "zod";
@@ -14,10 +16,17 @@ function normalizePlate(plate: string): string {
     .replace(/[\s-]+/g, "");
 }
 
+function normalizeUid(uid?: string | null): string {
+  return (uid || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[\s:-]+/g, "");
+}
+
 function serializeCard(card: RfidCardDocument) {
   return {
     id: card._id.toString(),
-    uid: card.uid,
+    uid: normalizeUid(card.uid),
     cardId: card.cardId,
     ownerName: card.ownerName,
     plate: card.plate,
@@ -199,7 +208,7 @@ export async function lookupRfidCardByUid(
   request: Request,
   response: Response,
 ) {
-  const uid = String(request.params.uid || "").trim();
+  const uid = normalizeUid(String(request.params.uid || ""));
   if (!uid) {
     response
       .status(400)
@@ -213,15 +222,23 @@ export async function lookupRfidCardByUid(
 export async function createRfidCard(request: Request, response: Response) {
   const body = z
     .object({
-      uid: z.string().trim().min(1),
+      uid: z.string().trim().min(1).optional(),
+      cardId: z.string().trim().min(1).optional(),
       ownerName: z.string().trim().optional(),
       plate: z.string().trim().optional(),
       userType: z.enum(["resident", "guest"]).optional(),
       notes: z.string().trim().optional(),
     })
+    .refine((d) => Boolean(d.uid || d.cardId), {
+      message: "Phải cung cấp uid hoặc cardId.",
+    })
+    .transform((d) => ({
+      ...d,
+      uid: d.uid || d.cardId!,
+    }))
     .parse(request.body);
 
-  const uid = body.uid.trim();
+  const uid = normalizeUid(body.uid);
   const isMember = body.userType === "resident";
   const plate = normalizePlate(body.plate || "");
 
@@ -288,6 +305,7 @@ export async function createRfidCard(request: Request, response: Response) {
 
   const card = await RfidCard.create({
     uid,
+    cardId: body.cardId || uid,
     ownerName: isMember
       ? body.ownerName?.trim() || plate || "Thành viên"
       : "Guest",
@@ -305,6 +323,26 @@ export async function createRfidCard(request: Request, response: Response) {
     await Subscription.updateOne(
       { _id: boundSubscriptionId },
       { $set: { rfidCardId: card._id } },
+    );
+  }
+
+  if (request.user?.id) {
+    await createAuditLog({
+      action: "rfid_card_created",
+      entityType: "RfidCard",
+      entityId: card._id,
+      performedBy: request.user.id,
+      changes: {
+        new: {
+          uid: card.uid,
+          cardType: card.cardType,
+          status: card.status,
+          ownerName: card.ownerName,
+          plate: card.plate,
+        },
+      },
+    }).catch((err) =>
+      console.error("Error creating audit log for create card:", err),
     );
   }
 
@@ -331,12 +369,58 @@ export async function updateRfidCard(request: Request, response: Response) {
     return;
   }
 
+  const changesBefore = {
+    ownerName: card.ownerName,
+    plate: card.plate,
+    userType: card.userType,
+    notes: card.notes,
+  };
   if (body.ownerName !== undefined) card.ownerName = body.ownerName;
   if (body.plate !== undefined) card.plate = normalizePlate(body.plate);
   if (body.userType !== undefined) card.userType = body.userType;
   if (body.notes !== undefined) card.notes = body.notes;
 
   await card.save();
+
+  if (request.user?.id) {
+    await createAuditLog({
+      action: "rfid_card_updated",
+      entityType: "RfidCard",
+      entityId: card._id,
+      performedBy: request.user.id,
+      changes: {
+        old: changesBefore,
+        new: {
+          ownerName: card.ownerName,
+          plate: card.plate,
+          userType: card.userType,
+          notes: card.notes,
+        },
+      },
+    }).catch((err) =>
+      console.error("Error creating audit log for rfid update:", err),
+    );
+  }
+
+  if (request.user?.id) {
+    await createAuditLog({
+      action: "rfid_card_restored",
+      entityType: "RfidCard",
+      entityId: card._id,
+      performedBy: request.user.id,
+      changes: {
+        new: {
+          status: "available",
+          cardType: "guest",
+          userType: "guest",
+          ownerName: "Guest",
+        },
+      },
+    }).catch((err) =>
+      console.error("Error creating audit log for restore:", err),
+    );
+  }
+
   response.json({ ok: true, card: serializeCard(card) });
 }
 
@@ -444,11 +528,26 @@ export async function setRfidCardStatus(request: Request, response: Response) {
     })
     .parse(request.body);
 
+  const prevCard = await RfidCard.findById(request.params.id);
   const card = await RfidCard.findByIdAndUpdate(
     request.params.id,
     { $set: { status: body.status } },
     { new: true },
   );
+  if (card && prevCard && request.user?.id) {
+    await createAuditLog({
+      action: "rfid_card_status_changed",
+      entityType: "RfidCard",
+      entityId: card._id,
+      performedBy: request.user.id,
+      changes: {
+        old: { status: prevCard.status },
+        new: { status: card.status },
+      },
+    }).catch((err) =>
+      console.error("Error creating audit log for status change:", err),
+    );
+  }
   if (!card) {
     response
       .status(404)
@@ -476,7 +575,7 @@ export async function registerScannedCard(
     })
     .parse(request.body);
 
-  const uid = body.uid.trim();
+  const uid = normalizeUid(body.uid);
   const ownerName = body.ownerName?.trim() || "Guest";
   const plate = normalizePlate(body.plate || "");
   const userType = body.userType || "guest";
@@ -519,7 +618,7 @@ export async function registerScannedCard(
   response: Response,
 ) {
   const cards = await RfidCard.find({
-    status: { $in: ["active", "in-use"] },
+    status: { $in: ["active", "in-use", "available"] },
   }).sort({
     createdAt: 1,
   });
@@ -534,9 +633,7 @@ export async function registerScannedCard(
  */
 // Staff desk lookup sau khi quét thẻ: trả toàn bộ thông tin thẻ + xe + gói.
 export async function lookupByUid(request: Request, response: Response) {
-  const uid = String(request.params.uid || "")
-    .trim()
-    .toUpperCase();
+  const uid = normalizeUid(String(request.params.uid || ""));
   if (!uid) {
     response
       .status(400)
@@ -568,17 +665,46 @@ export async function lookupByUid(request: Request, response: Response) {
             ...(card.cardId ? [{ rfidCardId: card.cardId }] : []),
           ],
         })
-          .select("plate checkInAt")
+          .select("_id plate checkInAt slot")
           .sort({ checkInAt: -1 })
           .lean()
       : null;
   // Anti-passback theo biển: xe của thẻ này còn phiên đang gửi (vào bằng đường khác).
+  const cleanPlateForUid = plate ? plate.replace(/[\s\.-]+/g, "") : "";
+  const plateRegexForUid = cleanPlateForUid
+    ? new RegExp(
+        `^${cleanPlateForUid
+          .split("")
+          .map((c) => c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+          .join("[\\s\\.-]*")}$`,
+        "i",
+      )
+    : null;
   const plateActiveSession = plate
     ? await ParkingSession.findOne({
         status: "Đang gửi",
-        $or: [{ plate }, { entryDetectedPlate: plate }, { manualPlate: plate }],
+        $or: [
+          { plate },
+          ...(cleanPlateForUid
+            ? [{ plate: cleanPlateForUid }, { plate: plateRegexForUid }]
+            : []),
+          { entryDetectedPlate: plate },
+          ...(cleanPlateForUid
+            ? [
+                { entryDetectedPlate: cleanPlateForUid },
+                { entryDetectedPlate: plateRegexForUid },
+              ]
+            : []),
+          { manualPlate: plate },
+          ...(cleanPlateForUid
+            ? [
+                { manualPlate: cleanPlateForUid },
+                { manualPlate: plateRegexForUid },
+              ]
+            : []),
+        ],
       })
-        .select("plate checkInAt")
+        .select("_id plate checkInAt slot")
         .sort({ checkInAt: -1 })
         .lean()
     : null;
@@ -615,14 +741,23 @@ export async function lookupByPlate(request: Request, response: Response) {
     response.status(400).json({ ok: false, message: "Biển số không hợp lệ." });
     return;
   }
+  const cleanPlate = plate.replace(/[\s\.-]+/g, "");
+  const regexPattern = cleanPlate
+    .split("")
+    .map((c) => c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("[\\s\\.-]*");
+  const plateRegex = new RegExp(`^${regexPattern}$`, "i");
+
   const card = await RfidCard.findOne({
-    plate,
+    $or: [{ plate }, { plate: cleanPlate }, { plate: plateRegex }],
     status: { $in: ["active", "in-use"] },
   });
 
   // Check xem biển số có thuộc subscriber (gói active) hay không
   const now = new Date();
-  const vehicle = await Vehicle.findOne({ plate });
+  const vehicle = await Vehicle.findOne({
+    $or: [{ plate }, { plate: cleanPlate }, { plate: plateRegex }],
+  });
   const subscription = vehicle
     ? await Subscription.findOne({
         primaryVehicleId: vehicle._id,
@@ -633,30 +768,71 @@ export async function lookupByPlate(request: Request, response: Response) {
   const isSubscriber = !!subscription;
   const isResident = isSubscriber || vehicle?.status === "Đã đăng ký";
 
-  if (card) {
-    response.json({
-      ok: true,
-      isSubscriber,
-      isResident,
-      card: serializeCard(card),
-      vehicle: vehicle
-        ? { id: vehicle._id.toString(), ownerName: vehicle.ownerName }
-        : null,
-    });
-    return;
-  }
-  // Fallback: tra trong Vehicle
+  // Anti-passback theo biển: xe còn phiên đang gửi trong bãi (chưa checkout)
+  const plateActiveSession = await ParkingSession.findOne({
+    status: "Đang gửi",
+    $or: [
+      { plate },
+      { plate: cleanPlate },
+      { plate: plateRegex },
+      { entryDetectedPlate: plate },
+      { entryDetectedPlate: cleanPlate },
+      { entryDetectedPlate: plateRegex },
+      { manualPlate: plate },
+      { manualPlate: cleanPlate },
+      { manualPlate: plateRegex },
+    ],
+  })
+    .select("_id plate checkInAt slot")
+    .sort({ checkInAt: -1 })
+    .lean();
+
+  const cardActiveSession =
+    card && card.status === "in-use"
+      ? await ParkingSession.findOne({
+          status: "Đang gửi",
+          $or: [
+            ...(card.uid ? [{ rfidCardId: card.uid }] : []),
+            ...(card.cardId ? [{ rfidCardId: card.cardId }] : []),
+          ],
+        })
+          .select("_id plate checkInAt slot")
+          .sort({ checkInAt: -1 })
+          .lean()
+      : null;
+
+  const activeSession = plateActiveSession || cardActiveSession;
+
   response.json({
     ok: true,
     isSubscriber,
     isResident,
-    card: null,
+    card: card ? serializeCard(card) : null,
     vehicle: vehicle
       ? {
           id: vehicle._id.toString(),
           plate: vehicle.plate,
           ownerName: vehicle.ownerName,
           status: vehicle.status,
+        }
+      : null,
+    subscription: subscription
+      ? { planName: subscription.planName, endDate: subscription.endDate }
+      : null,
+    activeSession: activeSession
+      ? {
+          id: activeSession._id.toString(),
+          plate: activeSession.plate,
+          checkInAt: activeSession.checkInAt,
+          slot: (activeSession as any).slot,
+        }
+      : null,
+    plateActiveSession: plateActiveSession
+      ? {
+          id: plateActiveSession._id.toString(),
+          plate: plateActiveSession.plate,
+          checkInAt: plateActiveSession.checkInAt,
+          slot: (plateActiveSession as any).slot,
         }
       : null,
   });
@@ -675,12 +851,10 @@ export async function replaceActiveSessionRfid(
     status: "Đang gửi",
   }).sort({ checkInAt: -1 });
   if (!session) {
-    response
-      .status(404)
-      .json({
-        ok: false,
-        message: "Không tìm thấy phiên đang gửi của biển số này.",
-      });
+    response.status(404).json({
+      ok: false,
+      message: "Không tìm thấy phiên đang gửi của biển số này.",
+    });
     return;
   }
   const card = await RfidCard.findOne({
@@ -688,12 +862,10 @@ export async function replaceActiveSessionRfid(
     status: "available",
   });
   if (!card) {
-    response
-      .status(409)
-      .json({
-        ok: false,
-        message: "Thẻ RFID không tồn tại hoặc không còn sẵn sàng.",
-      });
+    response.status(409).json({
+      ok: false,
+      message: "Thẻ RFID không tồn tại hoặc không còn sẵn sàng.",
+    });
     return;
   }
   session.rfidCardId = card.cardId || card.uid;
@@ -733,4 +905,291 @@ export async function listMyRfidCards(request: Request, response: Response) {
     .sort({ createdAt: -1 })
     .limit(50);
   response.json({ cards: cards.map(serializeCard) });
+}
+
+export async function getRfidReportsStatus(
+  _request: Request,
+  response: Response,
+) {
+  const [available, inUse, lost, blocked, total] = await Promise.all([
+    RfidCard.countDocuments({ status: "available" }),
+    RfidCard.countDocuments({ status: "in-use" }),
+    RfidCard.countDocuments({ status: "lost" }),
+    RfidCard.countDocuments({ status: "blocked" }),
+    RfidCard.countDocuments(),
+  ]);
+  response.json({ available, inUse, lost, blocked, total });
+}
+
+export async function getRfidReportsUsage(
+  request: Request,
+  response: Response,
+) {
+  const { from, to } = request.query;
+  const query: Record<string, unknown> = {};
+  if (from || to) {
+    query.createdAt = {};
+    if (from)
+      (query.createdAt as Record<string, unknown>).$gte = new Date(
+        String(from),
+      );
+    if (to)
+      (query.createdAt as Record<string, unknown>).$lte = new Date(String(to));
+  }
+  // Group scan logs by date
+  const RfidScanLog = (await import("../models/RfidScanLog.js")).RfidScanLog;
+  const logs = await RfidScanLog.find(query).sort({ createdAt: 1 });
+  // Aggregate by day
+  const byDay: Record<
+    string,
+    {
+      day: string;
+      total: number;
+      success: number;
+      failed: number;
+      blocked: number;
+    }
+  > = {};
+  for (const log of logs) {
+    const day = log.createdAt.toISOString().slice(0, 10);
+    if (!byDay[day])
+      byDay[day] = { day, total: 0, success: 0, failed: 0, blocked: 0 };
+    byDay[day].total++;
+    const s = log.status as string;
+    if (s === "success") byDay[day].success++;
+    else if (s === "failed" || s === "mismatch") byDay[day].failed++;
+    else if (s === "blocked") byDay[day].blocked++;
+  }
+  response.json({ rows: Object.values(byDay) });
+}
+
+/**
+ * Lấy lịch sử thay đổi thẻ RFID (AuditLog) và lịch sử quét thẻ (RfidScanLog).
+ */
+export async function getRfidCardHistoryHandler(
+  request: Request,
+  response: Response,
+) {
+  const { id } = request.params;
+  const isObjectId = mongoose.isValidObjectId(id);
+
+  const card = await RfidCard.findOne(
+    isObjectId
+      ? { $or: [{ _id: id }, { uid: id }, { cardId: id }] }
+      : { $or: [{ uid: id }, { cardId: id }] },
+  );
+
+  if (!card) {
+    response
+      .status(404)
+      .json({ ok: false, message: "Không tìm thấy thẻ RFID." });
+    return;
+  }
+
+  const cardObjectId = card._id;
+  const cardIdentifiers = [card.uid, card.cardId].filter(Boolean) as string[];
+
+  // 1. Audit logs liên quan đến thẻ này
+  const auditLogs = await AuditLog.find({
+    entityType: "RfidCard",
+    entityId: cardObjectId,
+  })
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .populate("performedBy", "name email");
+
+  // 2. Scan logs liên quan đến thẻ này
+  const RfidScanLog = (await import("../models/RfidScanLog.js")).RfidScanLog;
+  const allLogs = await RfidScanLog.find({
+    cardId: { $in: cardIdentifiers },
+  })
+    .sort({ createdAt: -1 })
+    .limit(100)
+    .populate("performedBy", "name email");
+
+  // Tách biệt rõ ràng:
+  // - Lịch sử quét qua cổng chỉ bao gồm các lượt xe qua cổng: entry, exit
+  const gateActionSet = new Set(["entry", "exit"]);
+  const gateScanLogs = allLogs.filter((l) => gateActionSet.has(l.action));
+
+  // - Các hành động thao tác/thay đổi trạng thái thẻ (block, unblock, damaged, lost, sale, replace...)
+  //   phải được gộp vào Lịch sử thay đổi thẻ (Audit History)
+  const cardOpLogs = allLogs.filter((l) => !gateActionSet.has(l.action));
+
+  // Map lại format dễ hiển thị ở frontend
+  const combinedAudit = [
+    ...auditLogs.map((log: any) => ({
+      id: log._id.toString(),
+      action: log.action,
+      actionLabel: mapRfidActionLabel(log.action),
+      performedBy: log.performedBy
+        ? {
+            id: log.performedBy._id?.toString(),
+            name: log.performedBy.name,
+            email: log.performedBy.email,
+          }
+        : null,
+      changes: log.changes || {},
+      createdAt: log.createdAt.toISOString(),
+    })),
+    ...cardOpLogs.map((op: any) => ({
+      id: op._id.toString(),
+      action: op.action,
+      actionLabel: mapRfidActionLabel(op.action),
+      performedBy: op.performedBy
+        ? {
+            id: op.performedBy._id?.toString(),
+            name: op.performedBy.name,
+            email: op.performedBy.email,
+          }
+        : null,
+      changes: op.metadata ? { new: op.metadata } : {},
+      createdAt: op.createdAt.toISOString(),
+    })),
+  ].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+
+  const scanHistory = gateScanLogs.map((log: any) => ({
+    id: log._id.toString(),
+    action:
+      log.action === "entry"
+        ? "Xe vào cổng"
+        : log.action === "exit"
+          ? "Xe ra cổng"
+          : log.action,
+    status: log.status,
+    failureReason: log.failureReason || null,
+    plateDetected: log.plateDetected || null,
+    performedBy: log.performedBy ? log.performedBy.name : null,
+    createdAt: log.createdAt.toISOString(),
+  }));
+
+  const auditHistory = combinedAudit;
+
+  response.json({
+    ok: true,
+    card: serializeCard(card),
+    auditHistory,
+    scanHistory,
+    history: scanHistory, // backward compatibility với frontend rfid-cards-view
+  });
+}
+
+function mapRfidActionLabel(action: string): string {
+  const map: Record<string, string> = {
+    rfid_card_created: "Tạo thẻ mới",
+    rfid_card_updated: "Cập nhật thông tin thẻ",
+    rfid_card_status_changed: "Thay đổi trạng thái thẻ",
+    rfid_card_restored: "Khôi phục thẻ",
+    rfid_card_deleted: "Xóa thẻ",
+    rfid_card_sold: "Bán thẻ thành viên",
+    rfid_card_returned: "Trả thẻ / Thu hồi thẻ",
+    rfid_card_lost: "Báo mất thẻ",
+    rfid_card_damaged: "Báo hỏng thẻ",
+    block: "Khóa thẻ",
+    unblock: "Mở khóa thẻ",
+    lost: "Báo mất thẻ",
+    damaged: "Báo hỏng thẻ",
+    sale: "Bán thẻ thành viên",
+    replace: "Cấp lại thẻ thay thế",
+    assign: "Gán thẻ cho phương tiện",
+    return: "Thu hồi / Trả thẻ",
+  };
+  return map[action] || action;
+}
+
+/**
+ * Xóa thẻ hoặc reset dữ liệu thẻ hàng loạt (bulk-clear).
+ */
+export async function bulkClearRfidCards(request: Request, response: Response) {
+  const body = z
+    .object({
+      mode: z.enum(["reset", "delete"]),
+      ids: z.array(z.string()).optional(),
+      confirm: z.string(),
+    })
+    .parse(request.body);
+
+  if (body.confirm !== "RESET_ALL_RFID_DATA") {
+    response
+      .status(400)
+      .json({ ok: false, message: "Chuỗi xác nhận không chính xác." });
+    return;
+  }
+
+  const query: any = {};
+  if (body.ids && body.ids.length > 0) {
+    query._id = { $in: body.ids.filter((id) => mongoose.isValidObjectId(id)) };
+  }
+
+  if (body.mode === "delete") {
+    // Xóa thẻ: ngắt liên kết xe và phiên, sau đó xóa thẻ khỏi DB
+    const cards = await RfidCard.find(query);
+    const cardIds = cards.map((c) => c._id);
+    const uids = cards.map((c) => c.uid).filter(Boolean);
+
+    await Promise.all([
+      Vehicle.updateMany(
+        { rfidCardId: { $in: cardIds } },
+        { $unset: { rfidCardId: 1 } },
+      ),
+      Subscription.updateMany(
+        { rfidCardId: { $in: cardIds } },
+        { $unset: { rfidCardId: 1 } },
+      ),
+      RfidCard.deleteMany({ _id: { $in: cardIds } }),
+    ]);
+
+    response.json({
+      ok: true,
+      message: `Đã xóa thành công ${cardIds.length} thẻ RFID.`,
+      count: cardIds.length,
+    });
+    return;
+  }
+
+  if (body.mode === "reset") {
+    // Reset về guest available
+    const cards = await RfidCard.find(query);
+    const cardIds = cards.map((c) => c._id);
+
+    await Promise.all([
+      Vehicle.updateMany(
+        { rfidCardId: { $in: cardIds } },
+        { $unset: { rfidCardId: 1 } },
+      ),
+      Subscription.updateMany(
+        { rfidCardId: { $in: cardIds } },
+        { $unset: { rfidCardId: 1 } },
+      ),
+      RfidCard.updateMany(
+        { _id: { $in: cardIds } },
+        {
+          $set: {
+            status: "available",
+            cardType: "guest",
+            userType: "guest",
+            ownerName: "Guest",
+          },
+          $unset: {
+            plate: 1,
+            userId: 1,
+            vehicleId: 1,
+            notes: 1,
+            blockedReason: 1,
+          },
+        },
+      ),
+    ]);
+
+    response.json({
+      ok: true,
+      message: `Đã reset thành công ${cardIds.length} thẻ RFID về trạng thái khách có sẵn.`,
+      count: cardIds.length,
+    });
+    return;
+  }
+
+  response.status(400).json({ ok: false, message: "Chế độ không hợp lệ." });
 }

@@ -2,6 +2,8 @@ import { Router } from "express";
 import {
   createRfidCard,
   deleteRfidCard,
+  bulkClearRfidCards,
+  getRfidCardHistoryHandler,
   exportAllCards,
   getRfidCard,
   listMyRfidCards,
@@ -97,6 +99,11 @@ rfidRoutes.get(
   asyncHandler(transactions),
 );
 rfidRoutes.get(
+  "/:id/history",
+  requireRole("admin", "staff"),
+  asyncHandler(getRfidCardHistoryHandler),
+);
+rfidRoutes.get(
   "/:id/details",
   requireRole("admin", "staff"),
   asyncHandler(cardDetails),
@@ -138,6 +145,15 @@ rfidRoutes.get(
   requireRole("admin", "staff"),
   asyncHandler(listUnassignedResidents),
 );
+rfidRoutes.get(
+  "/reports/status",
+  requireRole("admin", "staff"),
+);
+rfidRoutes.get(
+  "/reports/usage",
+  requireRole("admin", "staff"),
+);
+
 // Staff desk lookup after a plate is entered manually.
 rfidRoutes.get(
   "/by-plate/:plate",
@@ -163,6 +179,7 @@ rfidRoutes.get(
   asyncHandler(getRfidCard),
 );
 rfidRoutes.patch("/:id", requireRole("admin"), asyncHandler(updateRfidCard));
+rfidRoutes.post("/bulk-clear", requireRole("admin"), asyncHandler(bulkClearRfidCards));
 rfidRoutes.delete("/:id", requireRole("admin"), asyncHandler(deleteRfidCard));
 rfidRoutes.post(
   "/:id/restore",

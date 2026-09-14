@@ -2,8 +2,14 @@ import { apiFetch } from "@/lib/client-api";
 import type { RegisteredVehicle, VehicleRequest } from "@/types";
 
 type VehicleActionsParams = {
-  setRegisteredVehicles: (vehicles: RegisteredVehicle[] | ((prev: RegisteredVehicle[]) => RegisteredVehicle[])) => void;
-  setVehicleRequests: (requests: VehicleRequest[] | ((prev: VehicleRequest[]) => VehicleRequest[])) => void;
+  setRegisteredVehicles: (
+    vehicles:
+      | RegisteredVehicle[]
+      | ((prev: RegisteredVehicle[]) => RegisteredVehicle[]),
+  ) => void;
+  setVehicleRequests: (
+    requests: VehicleRequest[] | ((prev: VehicleRequest[]) => VehicleRequest[]),
+  ) => void;
   setActionLog: (log: string) => void;
 };
 
@@ -36,7 +42,11 @@ export function createVehicleActions({
     setActionLog("Đã gửi yêu cầu sửa xe. Vui lòng chờ admin duyệt.");
   }
 
-  async function createDeleteRequest(vehicleId: string, subscriptionId: string, reason?: string) {
+  async function createDeleteRequest(
+    vehicleId: string,
+    subscriptionId: string,
+    reason?: string,
+  ) {
     const response = await apiFetch("/vehicle-requests", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -57,7 +67,9 @@ export function createVehicleActions({
   }
 
   async function loadVehicleRequests({ includeResolved = false } = {}) {
-    const url = includeResolved ? "/vehicle-requests?status=all" : "/vehicle-requests";
+    const url = includeResolved
+      ? "/vehicle-requests?status=all"
+      : "/vehicle-requests";
     const response = await apiFetch(url);
     if (!response.ok) return;
     const data = await response.json();
@@ -79,11 +91,17 @@ export function createVehicleActions({
       setActionLog(data.message || "Không xử lý được yêu cầu.");
       return;
     }
-    setVehicleRequests((items) => items.map((r) => (r.id === requestId ? (data.request as VehicleRequest) : r)));
+    setVehicleRequests((items) =>
+      items.map((r) =>
+        r.id === requestId ? (data.request as VehicleRequest) : r,
+      ),
+    );
 
     if (action === "approved" && data.vehicle) {
       setRegisteredVehicles((items) =>
-        items.map((v) => (v.id === data.vehicle.id ? (data.vehicle as RegisteredVehicle) : v)),
+        items.map((v) =>
+          v.id === data.vehicle.id ? (data.vehicle as RegisteredVehicle) : v,
+        ),
       );
     }
 
@@ -93,7 +111,9 @@ export function createVehicleActions({
       );
     }
 
-    setActionLog(action === "approved" ? "Đã duyệt yêu cầu." : "Đã từ chối yêu cầu.");
+    setActionLog(
+      action === "approved" ? "Đã duyệt yêu cầu." : "Đã từ chối yêu cầu.",
+    );
   }
 
   async function loadVehicles() {
@@ -123,8 +143,9 @@ export function createVehicleActions({
     });
     const result = await response.json();
     if (!response.ok) {
-      setActionLog(result.message || "Không thêm được xe.");
-      return;
+      const msg = result.message || "Không thêm được xe.";
+      setActionLog(msg);
+      return { ok: false, message: msg };
     }
     setRegisteredVehicles((items) => {
       if (items.some((v) => v.id === result.vehicle.id)) return items;
@@ -132,25 +153,33 @@ export function createVehicleActions({
     });
     // Nếu backend tạo request duyệt cho customer → thêm vào state
     if (result.request) {
-      setVehicleRequests((items) => [result.request as VehicleRequest, ...items]);
+      setVehicleRequests((items) => [
+        result.request as VehicleRequest,
+        ...items,
+      ]);
     }
     setActionLog(`Đã thêm xe ${data.plate}.`);
+    return { ok: true, vehicle: result.vehicle };
   }
 
-  async function editVehicle(id: string, data: {
-    plate?: string;
-    ownerName?: string;
-    ownerPhone?: string;
-    ownerAddress?: string;
-    brand?: string;
-    model?: string;
-    color?: string;
-    year?: number;
-    engineNo?: string;
-    chassisNo?: string;
-    status?: string;
-    imageUrl?: string;
-  }) {
+  async function editVehicle(
+    id: string,
+    data: {
+      plate?: string;
+      ownerName?: string;
+      ownerPhone?: string;
+      ownerAddress?: string;
+      brand?: string;
+      model?: string;
+      color?: string;
+      year?: number;
+      engineNo?: string;
+      chassisNo?: string;
+      status?: string;
+      imageUrl?: string;
+      requestApproval?: boolean;
+    },
+  ) {
     const response = await apiFetch(`/vehicles/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -158,13 +187,23 @@ export function createVehicleActions({
     });
     const result = await response.json();
     if (!response.ok) {
-      setActionLog(result.message || "Không cập nhật được xe.");
-      return;
+      const msg = result.message || "Không cập nhật được xe.";
+      setActionLog(msg);
+      return { ok: false, message: msg };
     }
     setRegisteredVehicles((items) =>
-      items.map((v) => (v.id === id ? (result.vehicle as RegisteredVehicle) : v)),
+      items.map((v) =>
+        v.id === id ? (result.vehicle as RegisteredVehicle) : v,
+      ),
     );
-    setActionLog("Đã cập nhật thông tin xe.");
+    if (result.vehicle?.status === "Cần duyệt") {
+      setActionLog(
+        "Đã gửi yêu cầu chỉnh sửa thông tin xe, vui lòng chờ quản trị viên duyệt.",
+      );
+    } else {
+      setActionLog("Đã cập nhật thông tin xe.");
+    }
+    return { ok: true, vehicle: result.vehicle };
   }
 
   async function removeVehicle(id: string) {

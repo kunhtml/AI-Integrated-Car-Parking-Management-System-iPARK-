@@ -9,3 +9,4 @@ vehicleRequestsRoutes.use(requireAuth);
 vehicleRequestsRoutes.get("/", asyncHandler(listVehicleRequests));
 vehicleRequestsRoutes.post("/", requireRole("customer"), asyncHandler(createVehicleRequest));
 vehicleRequestsRoutes.patch("/:id/resolve", requireRole("admin"), asyncHandler(resolveVehicleRequest));
+vehicleRequestsRoutes.post("/resolve", requireRole("admin"), asyncHandler(resolveVehicleRequest));

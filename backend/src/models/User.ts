@@ -10,6 +10,7 @@ export type UserDocument = {
   role: UserRole;
   status: "Đang hoạt động" | "Đã khóa";
   phone?: string;
+  address?: string;
   avatarUrl?: string;
   provider: "credentials" | "google" | "mixed";
   googleId?: string;
@@ -43,6 +44,7 @@ const userSchema = new Schema<UserDocument>(
       default: "Đang hoạt động",
     },
     phone: { type: String },
+    address: { type: String },
     avatarUrl: { type: String },
     provider: {
       type: String,

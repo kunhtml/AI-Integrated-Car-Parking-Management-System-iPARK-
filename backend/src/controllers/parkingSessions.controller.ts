@@ -38,9 +38,29 @@ import { serializeParkingSession } from "../utils/serializers.js";
 import { classifyVehicleByPlate } from "../services/parkingQuota.service.js";
 import { createAuditLog } from "../services/auditLog.service.js";
 
-async function finalizeCheckout(session: ParkingSessionDocument) {
-  session.status = "Đã hoàn thành";
-  session.checkOutAt = new Date();
+async function finalizeCheckout(
+  sessionOrId: ParkingSessionDocument | string,
+): Promise<ParkingSessionDocument | null> {
+  // IDEMPOTENT CLAIM: webhook + staff checkout + reconcile có thể cùng chạm
+  // một phiên. Chỉ request thắng claim (đổi "Đang gửi" → "Đã hoàn thành")
+  // được chạy phần thân; request thua nhận null → caller trả 409.
+  const claimed = await ParkingSession.findOneAndUpdate(
+    {
+      _id:
+        typeof sessionOrId === "string"
+          ? objectId(sessionOrId)
+          : sessionOrId._id,
+      status: "Đang gửi",
+    },
+    {
+      $set: { status: "Đã hoàn thành", checkOutAt: new Date() },
+    },
+    { new: true },
+  );
+  if (!claimed) {
+    return null;
+  }
+  const session = claimed;
 
   // Trả thẻ RFID guest về kho nếu phiên đang giữ thẻ nhưng được đóng bằng
   // luồng không quét RFID (ra thủ công / camera checkout). Luồng ra bằng RFID
@@ -62,6 +82,47 @@ async function finalizeCheckout(session: ParkingSessionDocument) {
 
   // Đã trả đủ trước đó (prepaid) → chỉ hoàn tất + nhả slot, KHÔNG tính lại phí.
   if (session.paymentStatus === "fully_paid") {
+    const paidUntil =
+      session.prepaidCheckoutAt || session.expectedCheckOutAt || null;
+    if (
+      !paidUntil ||
+      (session.checkOutAt ?? new Date()).getTime() <= paidUntil.getTime()
+    ) {
+      await freeSlot(session.slotId);
+      return session;
+    }
+
+    // Late exit: recompute full fee checkIn -> actual checkOut.
+    const slotDocPaid = session.slotId
+      ? await ParkingSlot.findById(session.slotId)
+      : null;
+    const currentPricingPaid = await getActivePricingConfigForZone(
+      slotDocPaid?.zoneId,
+    );
+    const pricingPaid = (session as any).checkInPricingSnapshot
+      ? { ...currentPricingPaid, ...(session as any).checkInPricingSnapshot }
+      : currentPricingPaid;
+    const lateFee = calculateParkingFee(
+      session.checkInAt,
+      session.checkOutAt ?? new Date(),
+      pricingPaid,
+    );
+    session.fee = lateFee.totalFee;
+    session.feeBreakdown = lateFee;
+
+    // Ha ve partial_paid neu con no va tao pending transaction cho phan chenh
+    // lech (mirror extendSession / createPendingTransactionForSession).
+    await createPendingTransactionForSession(session);
+    await ParkingSession.updateOne(
+      { _id: session._id },
+      {
+        $set: {
+          fee: session.fee,
+          feeBreakdown: session.feeBreakdown,
+          paymentStatus: session.paymentStatus,
+        },
+      },
+    );
     await freeSlot(session.slotId);
     return session;
   }
@@ -76,32 +137,13 @@ async function finalizeCheckout(session: ParkingSessionDocument) {
     : currentPricing;
   const feeBreakdown = calculateParkingFee(
     session.checkInAt,
-    session.checkOutAt,
+    session.checkOutAt ?? new Date(),
     pricing,
   );
   session.fee = feeBreakdown.totalFee;
   session.feeBreakdown = feeBreakdown;
 
-  // PM-05: Add overdue fine if applicable
-  if (
-    session.isOverstayed &&
-    session.overdueMinutes &&
-    session.overdueMinutes > 0
-  ) {
-    const { calculateOverdueFine } =
-      await import("../services/overdue.service.js");
-    const overdueResult = calculateOverdueFine(
-      session.checkInAt,
-      session.checkOutAt!,
-      {
-        gracePeriod: (pricing as any).gracePeriod ?? 0,
-      },
-    );
-    if (overdueResult.fineAmount > 0) {
-      session.fee += overdueResult.fineAmount;
-      (session.feeBreakdown as any).overdueFine = overdueResult.fineAmount;
-    }
-  }
+  // Không áp dụng phạt quá hạn: phí giữ nguyên tính theo số ca ngày/đêm thực tế gửi trong bãi.
 
   // Customer/quota type is fixed at check-in; do not reclassify or discount at checkout.
 
@@ -152,9 +194,27 @@ async function ownerFromPlate(plate: string) {
  * AI-09: Check for duplicate plate — same plate already active in parking.
  */
 async function checkDuplicatePlate(plate: string): Promise<boolean> {
+  const clean = plate.trim().toUpperCase();
+  const norm = clean.replace(/[\s\.-]+/g, "");
+  const regexPattern = norm
+    .split("")
+    .map((c) => c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("[\\s\\.-]*");
+  const plateRegex = new RegExp(`^${regexPattern}$`, "i");
+
   const existing = await ParkingSession.findOne({
-    plate: plate.toUpperCase(),
     status: "Đang gửi",
+    $or: [
+      { plate: clean },
+      { plate: norm },
+      { plate: plateRegex },
+      { entryDetectedPlate: clean },
+      { entryDetectedPlate: norm },
+      { entryDetectedPlate: plateRegex },
+      { manualPlate: clean },
+      { manualPlate: norm },
+      { manualPlate: plateRegex },
+    ],
   });
   return !!existing;
 }
@@ -308,10 +368,10 @@ export async function createParkingSession(
       const vehicle =
         memberCard.userId && memberCard.vehicleId
           ? await Vehicle.findOne({
-            _id: memberCard.vehicleId,
-            userId: memberCard.userId,
-            plate: memberPlate,
-          })
+              _id: memberCard.vehicleId,
+              userId: memberCard.userId,
+              plate: memberPlate,
+            })
           : null;
       if (
         !memberCard.userId ||
@@ -435,13 +495,17 @@ export async function createParkingSession(
       ownerUserId = card.userId;
       plateCheck = { warn: undefined, discount: 0 };
     } else {
-      const memberSubscription = await findActiveSubscriptionByPlate(
-        normalizeRfidPlate(body.plate),
-      );
-      if (memberSubscription) {
+      const registeredMemberCard = await RfidCard.findOne({
+        cardType: "member",
+        plate: normalizeRfidPlate(body.plate),
+        status: { $in: ["active", "in-use"] },
+        userId: { $exists: true, $ne: null },
+        vehicleId: { $exists: true, $ne: null },
+      }).select("_id");
+      if (registeredMemberCard) {
         response.status(409).json({
           message:
-            "Xe này đã đăng ký gói thành viên. Vui lòng dùng đúng RFID Member đã liên kết với xe.",
+            "Xe này đã gắn RFID Member. Vui lòng dùng đúng thẻ RFID Member đã liên kết với xe.",
         });
         return;
       }
@@ -525,7 +589,7 @@ export async function createParkingSession(
   const ownerInfo = await getOwnerInfoFromPlate(body.plate);
   const { name: ownerName, email: ownerEmail } = ownerInfo?.name
     ? ownerInfo
-    : { name: rfidCard ? "Guest RFID" : "Khách vãng lai", email: "" };
+    : { name: "Khách vãng lai", email: "" };
 
   if (plateCheck.warn) {
     await createNotification({
@@ -540,7 +604,8 @@ export async function createParkingSession(
   const checkInPricingSnapshot = {
     dayRate: entryPricing.dayRate,
     nightRate: entryPricing.nightRate,
-    gracePeriod: entryPricing.gracePeriod ?? (entryPricing as any).freeMinutes ?? 20,
+    gracePeriod:
+      entryPricing.gracePeriod ?? (entryPricing as any).freeMinutes ?? 20,
     dayStartHour: entryPricing.dayStartHour,
     nightStartHour: entryPricing.nightStartHour,
   };
@@ -562,14 +627,14 @@ export async function createParkingSession(
       : {}),
     ...(rfidCard
       ? {
-        rfidCardId: rfidCard.cardId || rfidCard.uid,
-        ...(body.rfidUid ? { entryRfidUid: rfidCard.uid } : {}),
-        ...(manualMemberCardUid
-          ? { entryExpectedRfidUid: manualMemberCardUid }
-          : {}),
-        rfidAssignedAt: new Date(),
-        rfidGate: "entry" as const,
-      }
+          rfidCardId: rfidCard.cardId || rfidCard.uid,
+          ...(body.rfidUid ? { entryRfidUid: rfidCard.uid } : {}),
+          ...(manualMemberCardUid
+            ? { entryExpectedRfidUid: manualMemberCardUid }
+            : {}),
+          rfidAssignedAt: new Date(),
+          rfidGate: "entry" as const,
+        }
       : {}),
     ...(body.entryDetectedPlate
       ? { entryDetectedPlate: body.entryDetectedPlate.toUpperCase() }
@@ -581,29 +646,29 @@ export async function createParkingSession(
     entrySource: isManualEntry ? "manual" : "camera",
     ...(isManualEntry
       ? {
-        entryPhotoStatus:
-          body.entryPhotoStatus ||
-          (body.entryImageUrl ? "photo_captured" : "camera_unavailable"),
-        ...(body.manualEntryReason
-          ? { manualEntryReason: body.manualEntryReason.trim() }
-          : {}),
-        ...(body.visualConfirmed
-          ? {
-            visualConfirmed: true,
-            visualConfirmedBy: objectId(request.user?.id),
-            visualConfirmedAt: new Date(),
-          }
-          : {}),
-      }
+          entryPhotoStatus:
+            body.entryPhotoStatus ||
+            (body.entryImageUrl ? "photo_captured" : "camera_unavailable"),
+          ...(body.manualEntryReason
+            ? { manualEntryReason: body.manualEntryReason.trim() }
+            : {}),
+          ...(body.visualConfirmed
+            ? {
+                visualConfirmed: true,
+                visualConfirmedBy: objectId(request.user?.id),
+                visualConfirmedAt: new Date(),
+              }
+            : {}),
+        }
       : {}),
     ...(body.entryRfidUnverified ? { entryRfidUnverified: true } : {}),
     ...(isMember
       ? {
-        paymentStatus: "fully_paid",
-        paymentMethod: "subscription",
-        fee: 0,
-        paidAmount: 0,
-      }
+          paymentStatus: "fully_paid",
+          paymentMethod: "subscription",
+          fee: 0,
+          paidAmount: 0,
+        }
       : {}),
     ...(plateCheck.warn
       ? { feeBreakdown: { subscriptionWarn: plateCheck.warn } as any }
@@ -637,7 +702,12 @@ export async function createParkingSession(
     );
   }
 
-  if (body.rfidUid || body.entryImageUrl) {
+  // Khi được gọi từ luồng xác nhận entry-review (confirmEntryReview), log
+  // camera gốc đã đại diện cho sự kiện — không tạo log "staff-desk" thứ hai.
+  const suppressEntryReviewLog = Boolean(
+    (request as { suppressEntryReviewLog?: boolean }).suppressEntryReviewLog,
+  );
+  if ((body.rfidUid || body.entryImageUrl) && !suppressEntryReviewLog) {
     const vehicle = await Vehicle.findOne({ plate: body.plate.toUpperCase() });
     await ParkingCameraLog.create({
       direction: "in",
@@ -716,7 +786,18 @@ export async function completeParkingSession(
     }
   }
 
-  await finalizeCheckout(session);
+  const finalized = await finalizeCheckout(session);
+  if (!finalized) {
+    response.status(409).json({
+      message:
+        "Phiên này đã được tất toán trước đó (status không còn 'Đang gửi').",
+    });
+    return;
+  }
+  Object.assign(session, {
+    status: finalized.status,
+    checkOutAt: finalized.checkOutAt,
+  });
   session.checkOutStaff = objectId(request.user?.id);
   // Ghi đè các trường ảnh checkout nếu payload cung cấp (ưu tiên ảnh mới hơn bridge)
   if (body.exitImageUrl) session.exitImageUrl = body.exitImageUrl;
@@ -838,11 +919,11 @@ export async function uploadParkingImage(request: Request, response: Response) {
       createdBy: request.user?.id,
       ...(isMember
         ? {
-          paymentStatus: "fully_paid",
-          paymentMethod: "subscription",
-          fee: 0,
-          paidAmount: 0,
-        }
+            paymentStatus: "fully_paid",
+            paymentMethod: "subscription",
+            fee: 0,
+            paidAmount: 0,
+          }
         : {}),
       ...(subscriptionWarn
         ? { feeBreakdown: { subscriptionWarn } as any }
@@ -888,7 +969,17 @@ export async function uploadParkingImage(request: Request, response: Response) {
     session.verificationStatus = matched ? "Không cần" : "Chờ duyệt";
 
     if (matched) {
-      await finalizeCheckout(session);
+      const finalized = await finalizeCheckout(session);
+      if (!finalized) {
+        // Đã tất toán bởi request khác (webhook/reconcile) — không chạy lại.
+        response.status(409).json({
+          message:
+            "Phiên này đã được tất toán trước đó (status không còn 'Đang gửi').",
+        });
+        return;
+      }
+      session.status = finalized.status;
+      session.checkOutAt = finalized.checkOutAt;
     } else {
       await createNotification({
         title: "Checkout cần admin duyệt",
@@ -962,7 +1053,16 @@ export async function approveCheckout(request: Request, response: Response) {
   session.verifiedBy = objectId(request.user?.id);
   session.verifiedAt = new Date();
   session.matchStatus = "Khớp";
-  await finalizeCheckout(session);
+  const finalizedSession = await finalizeCheckout(session);
+  if (!finalizedSession) {
+    response.status(409).json({
+      message:
+        "Phiên này đã được tất toán trước đó (status không còn 'Đang gửi').",
+    });
+    return;
+  }
+  session.status = finalizedSession.status;
+  session.checkOutAt = finalizedSession.checkOutAt;
   await session.save();
 
   response.json({
@@ -1048,11 +1148,11 @@ export async function cameraEntry(request: Request, response: Response) {
     createdBy: request.user?.id,
     ...(isMember
       ? {
-        paymentStatus: "fully_paid",
-        paymentMethod: "subscription",
-        fee: 0,
-        paidAmount: 0,
-      }
+          paymentStatus: "fully_paid",
+          paymentMethod: "subscription",
+          fee: 0,
+          paidAmount: 0,
+        }
       : {}),
     ...(plateCheck.warn
       ? { feeBreakdown: { subscriptionWarn: plateCheck.warn } as any }
@@ -1118,7 +1218,16 @@ export async function cameraExit(request: Request, response: Response) {
   session.verificationStatus = matched ? "Không cần" : "Chờ duyệt";
 
   if (matched) {
-    await finalizeCheckout(session);
+    const finalizedSession = await finalizeCheckout(session);
+    if (!finalizedSession) {
+      response.status(409).json({
+        message:
+          "Phiên này đã được tất toán trước đó (status không còn 'Đang gửi').",
+      });
+      return;
+    }
+    session.status = finalizedSession.status;
+    session.checkOutAt = finalizedSession.checkOutAt;
   }
 
   await session.save();

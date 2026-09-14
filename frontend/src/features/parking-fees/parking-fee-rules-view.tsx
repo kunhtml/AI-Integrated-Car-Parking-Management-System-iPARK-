@@ -44,7 +44,7 @@ export function ParkingFeeRulesView() {
 
     async function loadConfig() {
       try {
-        const response = await apiFetch("/pricing");
+        const response = await apiFetch("/pricing-config");
         const data = await response.json().catch(() => ({}));
         if (mounted && response.ok && data.pricingConfig) {
           const cfg = data.pricingConfig;
@@ -83,8 +83,8 @@ export function ParkingFeeRulesView() {
     setSaving(true);
 
     try {
-      const response = await apiFetch("/pricing", {
-        method: "PUT",
+      const response = await apiFetch("/pricing-config", {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(config),
       });

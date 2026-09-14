@@ -649,14 +649,16 @@ def sync_all_rfid_cards_to_esp32_with_stats():
             return (0, 0)
 
         for card in cards:
-            uid = (card.get("uid") or "").strip()
+            raw_uid = card.get("uid") or ""
+            uid = raw_uid.strip().upper().replace(":", "").replace("-", "").replace(" ", "")
             if not uid:
                 continue
             owner = card.get("ownerName", "")
             plate = _normalize_plate(card.get("plate", ""))
             user_type = card.get("userType", "guest")
             raw_status = str(card.get("status", "active")).lower()
-            status = "active" if raw_status in ("active", "in-use") else raw_status
+            # Guest cards with "available" status are valid for check-in; map to "active" for ESP32 firmware
+            status = "active" if raw_status in ("active", "in-use", "available") else "inactive"
             cmd = f"ADD|{uid}|{owner}|{plate}|{user_type}|{status}"
             if safe_write(arduino_in, serial_lock_in, cmd):
                 sent_in += 1
@@ -670,18 +672,74 @@ def sync_all_rfid_cards_to_esp32_with_stats():
     return (sent_in, sent_out)
 
 
+def detect_and_connect_serials():
+    global arduino_in, arduino_out
+    from serial.tools import list_ports
+    
+    ports = [p.device for p in list_ports.comports()]
+    print(f"[SERIAL][DETECT] Available ports: {ports}")
+    
+    found = {}
+    conns = {}
+    for port in ports:
+        try:
+            conn = serial.Serial(port, 9600, timeout=1.5, dsrdtr=False, rtscts=False)
+            time.sleep(0.3)
+            conn.reset_input_buffer()
+            conn.write(b"GET_ID\n")
+            conn.flush()
+            deadline = time.time() + 1.5
+            response = ""
+            while time.time() < deadline:
+                if conn.in_waiting:
+                    line = conn.readline().decode("utf-8", errors="ignore").strip()
+                    if line.startswith("ID:"):
+                        response = line
+                        break
+            if response.startswith("ID:"):
+                dev_id = response[3:].strip().upper()
+                if dev_id in ("IN", "OUT") and dev_id.lower() not in found:
+                    found[dev_id.lower()] = port
+                    conns[dev_id.lower()] = conn
+                    print(f"[SERIAL][DETECT] {port} -> {dev_id}")
+                else:
+                    conn.close()
+            else:
+                conn.close()
+        except Exception as e:
+            pass
+
+    ser_in = conns.get("in")
+    ser_out = conns.get("out")
+
+    # Fallback to configured env if not detected
+    if not ser_in and SERIAL_PORT_IN and SERIAL_PORT_IN not in found.values():
+        ser_in = safe_serial(SERIAL_PORT_IN)
+    if not ser_out and SERIAL_PORT_OUT and SERIAL_PORT_OUT not in found.values():
+        ser_out = safe_serial(SERIAL_PORT_OUT)
+
+    # SINGLE-DEVICE FALLBACK: If only 1 board is plugged in, share it for both in and out!
+    if ser_in and not ser_out:
+        print(f"[SERIAL][FALLBACK] Only IN port available ({ser_in.port}). Sharing for OUT operations.")
+        ser_out = ser_in
+    elif ser_out and not ser_in:
+        print(f"[SERIAL][FALLBACK] Only OUT port available ({ser_out.port}). Sharing for IN operations.")
+        ser_in = ser_out
+
+    return ser_in, ser_out
+
+
 def safe_serial(port):
     try:
         ser = serial.Serial(port, 9600, timeout=1)
         print(f"[OK] Connected to {port}")
         return ser
-    except serial.SerialException as e:
+    except Exception as e:
         print(f"[ERROR] {port} busy or unavailable: {e}")
         return None
 
 
-arduino_in = safe_serial(SERIAL_PORT_IN)
-arduino_out = safe_serial(SERIAL_PORT_OUT)
+arduino_in, arduino_out = detect_and_connect_serials()
 
 
 # ==== CẤU HÌNH CAMERA ====
@@ -1079,6 +1137,40 @@ last_snapshot_out = ""
 # Cập nhật bởi _ocr_worker, đọc bởi MJPEG generator.
 last_boxes_in: list = []
 last_boxes_out: list = []
+
+# ================== STAFF-DESK WATCH STATE (AI INFERENCE CONTROL) ==================
+# Frontend staff-desk ping POST /api/staff-desk/watch mỗi 10s để duy trì inference.
+# Khi rời trang, hook unmount gọi navigator.sendBeacon POST /api/staff-desk/unwatch.
+# Nếu không có heartbeat trong 30s, tự động ngưng OCR để tiết kiệm tài nguyên CPU/RAM.
+_staff_desk_active = False
+_staff_desk_lock = threading.Lock()
+_staff_desk_last_heartbeat = 0.0
+_STAFF_DESK_WATCH_TIMEOUT_SEC = 30.0
+
+
+def _is_staff_desk_active() -> bool:
+    global _staff_desk_active
+    with _staff_desk_lock:
+        if not _staff_desk_active:
+            return False
+        if time.time() - _staff_desk_last_heartbeat > _STAFF_DESK_WATCH_TIMEOUT_SEC:
+            _staff_desk_active = False
+            return False
+        return True
+
+
+def _mark_staff_desk_active():
+    global _staff_desk_active, _staff_desk_last_heartbeat
+    with _staff_desk_lock:
+        _staff_desk_active = True
+        _staff_desk_last_heartbeat = time.time()
+
+
+def _mark_staff_desk_inactive():
+    global _staff_desk_active
+    with _staff_desk_lock:
+        _staff_desk_active = False
+
 
 # Event-based wake-up cho MJPEG generator: mỗi camera có 1 threading.Event
 # được set khi camera_loop publish frame mới (last_frame đổi id). Generator
@@ -1526,7 +1618,8 @@ def process_frame(frame, plate_counter, last_plate, last_seen_time, prefix, ser,
             except Exception as e:
                 print(f"[OCR][ERROR] serial write failed: {type(e).__name__}: {e}")
 
-    if time.time() - last_seen_time > timeout:
+    # Nếu không thấy biển số hoặc qua 2.5s không thấy, reset last_plate để lần detect tiếp theo luôn kích hoạt event mới
+    if time.time() - last_seen_time > 2.5:
         last_plate = ""
 
     detected = candidate if (candidate and pattern.match(candidate)) else ""
@@ -1538,12 +1631,30 @@ def read_from_arduino(ser, ser_out=None, direction="in"):
     global pending_vehicle_info
     direction = _normalize_scan_direction(direction)
 
-    if ser is None or ser.in_waiting <= 0:
+    if ser is None:
         return
 
-    line = ser.readline().decode(errors="ignore").strip()
-    if not line:
-        return
+    # Drain buffer and process all pending lines
+    max_lines = 20
+    lines_read = 0
+    while getattr(ser, "in_waiting", 0) > 0 and lines_read < max_lines:
+        lines_read += 1
+        try:
+            line = ser.readline().decode(errors="ignore").strip()
+        except Exception:
+            break
+        if not line:
+            continue
+        _process_arduino_line(line, ser, ser_out, direction)
+
+
+def _process_arduino_line(line, ser, ser_out, direction):
+    global pending_vehicle_info
+
+    # Trigger background sync if ESP32 rebooted or reconnected
+    if line.startswith("ID:") or line.startswith("CLEARDATA"):
+        print(f"[ARDUINO][BOOT_DETECTED][{direction.upper()}] {line} -> trigger background sync_all_rfid_cards_to_esp32")
+        threading.Thread(target=sync_all_rfid_cards_to_esp32, daemon=True).start()
 
     if line.startswith("UID:"):
         print(f"[SCAN][{direction.upper()}][UID RAW]", line)
@@ -1607,39 +1718,36 @@ def read_from_arduino(ser, ser_out=None, direction="in"):
         result = backend.rfid_scan_register(uid, owner_name=owner_name, plate=current_plate, user_type=card_user_type)
         scanned_card = result.get("card") or {}
         scanned_card_type = str(scanned_card.get("cardType") or "guest").lower()
-        if is_subscriber and scanned_card_type != "member":
-            scan_result_by_direction[direction] = "error"
-            scan_message_by_direction[direction] = "Xe thành viên phải dùng đúng RFID Member đã liên kết với biển số này."
-        elif not result.get("ok"):
+        # Xe thành viên có thể chưa mua/gắn thẻ Member. Khi quét thẻ Guest
+        # hợp lệ, backend sẽ tạo phiên walk-in thay vì chặn tại bridge.
+        if not result.get("ok"):
             scan_result_by_direction[direction] = "error"
             scan_message_by_direction[direction] = (
                 result.get("message")
                 or ("Thẻ Member không khớp với biển số xe camera phát hiện. Vui lòng dùng đúng RFID Member liên kết."
-                    if is_subscriber
+                    if scanned_card_type == "member"
                     else "Thẻ Guest không hợp lệ hoặc chưa sẵn sàng. Vui lòng thử lại.")
             )
         else:
+            card_user_type = "resident" if scanned_card_type == "member" else "guest"
             sync_cmd = f"ADD|{uid}|{owner_name}|{current_plate}|{card_user_type}|active"
             safe_write(arduino_in, serial_lock_in, sync_cmd)
             if current_plate:
                 image_path = capture_snapshot_for_event("in", base_url=_last_bridge_host)
                 push_result = backend.push_camera_log(direction="in", detected_plate=current_plate, confidence=0.95, rfid_uid=uid, owner_name=owner_name, plate=current_plate, user_type=card_user_type, image_path=image_path, metadata={"source": "staff-scan", "snapshot": bool(image_path), "isSubscriber": is_subscriber})
                 if push_result.get("ok"):
-                    open_gate("in")
-                    def _auto_close_in():
-                        time.sleep(5)
-                        close_gate("in")
-                    # Thread riêng: sleep dài không được chiếm background pool
-                    threading.Thread(target=_auto_close_in, daemon=True).start()
+                    # Cổng vào KHÔNG tự mở barie: backend chỉ ghi log
+                    # pending_review; nhân viên đối chiếu biển số trên
+                    # /staff-desk rồi bấm "Xác nhận thông tin & Mở barie".
                     user_label = "Resident" if is_subscriber else "Guest"
-                    scan_message_by_direction[direction] = f"{user_label}: {current_plate} — barrier opened"
+                    scan_message_by_direction[direction] = f"{user_label}: {current_plate} — chờ nhân viên xác nhận tại màn hình"
                 else:
                     scan_result_by_direction[direction] = "error"
                     push_data = push_result.get("data") or {}
                     scan_message_by_direction[direction] = (
                         push_result.get("message")
                         or push_data.get("message")
-                        or "Không thể tạo phiên cho thẻ Guest. Vui lòng thử lại."
+                        or "Không gửi được sự kiện lên hệ thống. Vui lòng thử lại."
                     )
             else:
                 scan_message_by_direction[direction] = "Chưa detect được biển số. Vui lòng chờ camera nhận biển."
@@ -1717,30 +1825,35 @@ def read_from_arduino(ser, ser_out=None, direction="in"):
 
 # ==== BARRIER ====
 def open_gate(gate='in'):
+    # Smart fallback: prioritize targeted gate, fallback to any available gate
+    target_lock = serial_lock_in if gate == 'in' else serial_lock_out
     ser = arduino_in if gate == 'in' else arduino_out
-    if gate == 'in':
-        ok = safe_write(ser, serial_lock_in, 'OPEN_GATE')
-    else:
-        ok = safe_write(ser, serial_lock_out, 'OPEN_GATE')
+    if ser is None:
+        ser = arduino_out if gate == 'in' else arduino_in
+        target_lock = serial_lock_out if gate == 'in' else serial_lock_in
+    
+    ok = safe_write(ser, target_lock, 'OPEN_GATE') if ser else False
     if ok:
         backend.gate_control(gate, "open")
-        print(f"[MANUAL] Sent OPEN_GATE to Arduino {gate.upper()}")
+        print(f"[MANUAL] Sent OPEN_GATE to Arduino {gate.upper()} (port={getattr(ser, 'port', 'unknown')})")
     else:
-        print(f"[MANUAL][ERROR] Cannot send OPEN_GATE to Arduino {gate.upper()}")
+        print(f"[MANUAL][ERROR] Cannot send OPEN_GATE to Arduino {gate.upper()} - no online port")
     return ok
 
 
 def close_gate(gate='in'):
+    target_lock = serial_lock_in if gate == 'in' else serial_lock_out
     ser = arduino_in if gate == 'in' else arduino_out
-    if gate == 'in':
-        ok = safe_write(ser, serial_lock_in, 'CLOSE_GATE')
-    else:
-        ok = safe_write(ser, serial_lock_out, 'CLOSE_GATE')
+    if ser is None:
+        ser = arduino_out if gate == 'in' else arduino_in
+        target_lock = serial_lock_out if gate == 'in' else serial_lock_in
+
+    ok = safe_write(ser, target_lock, 'CLOSE_GATE') if ser else False
     if ok:
         backend.gate_control(gate, "close")
-        print(f"[MANUAL] Sent CLOSE_GATE to Arduino {gate.upper()}")
+        print(f"[MANUAL] Sent CLOSE_GATE to Arduino {gate.upper()} (port={getattr(ser, 'port', 'unknown')})")
     else:
-        print(f"[MANUAL][ERROR] Cannot send CLOSE_GATE to Arduino {gate.upper()}")
+        print(f"[MANUAL][ERROR] Cannot send CLOSE_GATE to Arduino {gate.upper()} - no online port")
     return ok
 
 
@@ -1762,9 +1875,13 @@ def _handle_ocr_side_effects(direction_key, last_plate, detected, detected_snap)
         else:
             last_snapshot_out = detected_snap
 
-    # detected != "" và khác last_plate → plate vừa được accept
-    if not (detected and detected != last_plate):
+    # Kích hoạt push log khi detect được biển số hợp lệ
+    if not detected:
         return
+    # Nếu trùng biển cũ nhưng đã cách hơn 4 giây (xe dừng lâu hoặc xe khác cùng biển), vẫn push để frontend không bị đơ
+    if detected == last_plate and (time.time() - getattr(_handle_ocr_side_effects, f"last_push_{direction_key}", 0)) < 4.0:
+        return
+    setattr(_handle_ocr_side_effects, f"last_push_{direction_key}", time.time())
 
     snap_path = detected_snap or ""
     conf_val = 0.0
@@ -2078,7 +2195,8 @@ def camera_loop():
                 last_preview_write_out = now
 
         # ===== BƯỚC 3: OCR — single-worker scheduler hoặc legacy dual-thread =====
-        if OCR_ENABLED:
+        # Chỉ chạy inference khi staff-desk đang mở (active heartbeat) hoặc OCR_FORCE_ALWAYS=true
+        if OCR_ENABLED and (_is_staff_desk_active() or os.getenv("OCR_FORCE_ALWAYS", "false").strip().lower() in ("1", "true", "yes", "on")):
             if use_single and _ocr_scheduler is not None:
                 if ret_in and now - last_ocr_in >= OCR_INTERVAL_SEC:
                     last_ocr_in = now
@@ -2133,7 +2251,8 @@ def camera_loop():
 
         # Đọc serial (RFID / DATA từ ESP32)
         read_from_arduino(arduino_in, ser_out=arduino_out, direction="in")
-        read_from_arduino(arduino_out, direction="out")
+        if arduino_out is not None and arduino_out != arduino_in:
+            read_from_arduino(arduino_out, direction="out")
 
         # Nếu cả 2 camera fail thì backoff để không đốt CPU.
         if not ret_in and not ret_out:
@@ -2261,7 +2380,7 @@ try:
             r"/api/cameras*": {"origins": "*"},
             r"/api/rfid/*": {"origins": "*"},
             r"/gate/*": {"origins": "*"},
-        },
+            r"/api/staff-desk/*": {"origins": "*"},        },
     )
 except ImportError:
     # Fallback thủ công nếu flask_cors chưa cài
@@ -2326,6 +2445,40 @@ def api_cameras_health():
             "degraded_reason": _ai_degraded_reason if degraded else "",
             "memory_soft_limit_mb": AI_MEMORY_SOFT_LIMIT_MB,
         },
+    })
+
+
+# ==== STAFF-DESK WATCH ENDPOINTS ====
+@app.route("/api/staff-desk/watch", methods=["GET", "POST"])
+def api_staff_desk_watch():
+    """Frontend staff-desk ping mỗi 10s để bật/duy trì AI inference."""
+    _mark_staff_desk_active()
+    return jsonify({
+        "ok": True,
+        "active": True,
+        "message": "Staff desk watch active, AI inference enabled",
+    })
+
+
+@app.route("/api/staff-desk/unwatch", methods=["POST"])
+def api_staff_desk_unwatch():
+    """Frontend thông báo rời trang staff-desk để tắt AI inference."""
+    _mark_staff_desk_inactive()
+    return jsonify({
+        "ok": True,
+        "active": False,
+        "message": "Staff desk watch deactivated, AI inference paused",
+    })
+
+
+@app.route("/api/staff-desk/status", methods=["GET"])
+def api_staff_desk_status():
+    """Kiểm tra trạng thái watch hiện tại của staff-desk."""
+    active = _is_staff_desk_active()
+    return jsonify({
+        "ok": True,
+        "active": active,
+        "inferenceRunning": active and OCR_ENABLED,
     })
 
 

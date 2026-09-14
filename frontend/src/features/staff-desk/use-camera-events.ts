@@ -23,6 +23,7 @@ export type CameraIngestEvent = {
   sessionPaymentStatus?: string | null;
   fee?: number | null;
   action?: string | null;
+  entryReviewState?: string | null;
   createdAt: string;
   metadata?: Record<string, unknown>;
   duplicateSession?: boolean;

@@ -68,10 +68,13 @@ export function serializeUser(user: UserDocument) {
 }
 
 export function serializeParkingSession(session: ParkingSessionDocument) {
+  const normPlate = session.plate ? session.plate.toUpperCase().replace(/[^A-Z0-9]/g, "") : "";
   return {
     id: session._id.toString(),
-    plate: session.plate,
-    owner: session.ownerName,
+    plate: normPlate || session.plate,
+    owner: session.ownerName && session.ownerName.trim() && session.ownerName !== "—" && session.ownerName !== "Guest RFID" && session.ownerName !== "Guest"
+      ? session.ownerName
+      : "Khách vãng lai",
     vehicleType: session.vehicleType,
     customerType: session.customerType ?? "guest",
     quotaType: session.quotaType ?? "walk_in",
@@ -164,6 +167,14 @@ export function serializeVehicle(
     email?: string;
     phone?: string | null;
   } | null,
+  rfidCard?: {
+    _id?: any;
+    id?: string;
+    uid?: string;
+    cardId?: string;
+    status?: string;
+    cardType?: string;
+  } | null,
 ) {
   return {
     id: vehicle._id.toString(),
@@ -189,6 +200,15 @@ export function serializeVehicle(
           name: populatedUser.name,
           email: populatedUser.email,
           phone: populatedUser.phone ?? null,
+        }
+      : null,
+    rfidCard: rfidCard
+      ? {
+          id: rfidCard._id ? rfidCard._id.toString() : (rfidCard.id || ""),
+          uid: rfidCard.uid || "",
+          cardId: rfidCard.cardId || rfidCard.uid || "",
+          status: rfidCard.status || "active",
+          cardType: rfidCard.cardType || "member",
         }
       : null,
     createdAt: vehicle.createdAt.toISOString(),
@@ -412,6 +432,16 @@ export function serializeShiftSchedule(
     note: schedule.note,
     location: schedule.location,
     deviceId: schedule.deviceId?.toString(),
+    checkedInAt: schedule.checkedInAt
+      ? schedule.checkedInAt instanceof Date
+        ? schedule.checkedInAt.toISOString()
+        : new Date(schedule.checkedInAt as unknown as string).toISOString()
+      : null,
+    completedAt: schedule.completedAt
+      ? schedule.completedAt instanceof Date
+        ? schedule.completedAt.toISOString()
+        : new Date(schedule.completedAt as unknown as string).toISOString()
+      : null,
     createdAt:
       schedule.createdAt instanceof Date
         ? schedule.createdAt.toISOString()

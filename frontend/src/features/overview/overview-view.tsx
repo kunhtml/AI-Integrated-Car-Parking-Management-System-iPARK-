@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity,
   AlertCircle,
   ArrowDown,
+  ArrowRight,
   ArrowUp,
   BarChart3,
   Calendar,
@@ -59,18 +61,28 @@ function monthAgoStr() {
   return dateKey(date);
 }
 
-function getSessionCheckInDate(session: Pick<ParkingSession, "checkIn" | "checkInDate"> & { checkInAt?: string }) {
+function getSessionCheckInDate(
+  session: Pick<ParkingSession, "checkIn" | "checkInDate"> & {
+    checkInAt?: string;
+  },
+) {
   if (session.checkInAt) {
     const date = new Date(session.checkInAt);
     if (!Number.isNaN(date.getTime())) return date;
   }
 
   const [day, month, year] = (session.checkInDate || "").split("/");
-  const date = new Date(`${year}-${month}-${day}T${session.checkIn || "00:00"}`);
+  const date = new Date(
+    `${year}-${month}-${day}T${session.checkIn || "00:00"}`,
+  );
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function sessionDateKey(session: Pick<ParkingSession, "checkIn" | "checkInDate"> & { checkInAt?: string }) {
+function sessionDateKey(
+  session: Pick<ParkingSession, "checkIn" | "checkInDate"> & {
+    checkInAt?: string;
+  },
+) {
   const date = getSessionCheckInDate(session);
   if (!date) return null;
   const year = date.getFullYear();
@@ -84,17 +96,26 @@ type TimeRange = "today" | "7d" | "30d";
 
 type DashboardOverview = {
   active: number;
+  activeMember?: number;
+  activeGuest?: number;
   available: number;
   capacity: number;
   revenue: number;
   entryCount: number;
+  entryMemberCount?: number;
+  entryGuestCount?: number;
   exitCount: number;
+  exitMemberCount?: number;
+  exitGuestCount?: number;
   successfulTransactionCount: number;
+  transferRevenue?: number;
+  transferCount?: number;
+  cashRevenue?: number;
+  cashCount?: number;
   freeSessionCount: number;
   customerCount: number;
   registeredVehicleCount: number;
 };
-
 
 const EMPTY_STAFF_SESSIONS: ParkingSession[] = [];
 
@@ -106,15 +127,21 @@ type StaffDashboardOverview = {
   revenue: number;
 };
 
+interface StatLayer {
+  label: string;
+  value: string | number;
+}
+
 interface StatCardProps {
   icon: React.ReactNode;
   label: string;
   value: string;
   sub?: string;
   color: "blue" | "green" | "amber" | "purple" | "red" | "cyan" | "orange";
+  layers?: StatLayer[];
 }
 
-function StatCard({ icon, label, value, sub, color }: StatCardProps) {
+function StatCard({ icon, label, value, sub, color, layers }: StatCardProps) {
   const colors: Record<string, { bg: string; color: string }> = {
     blue: { bg: "rgba(59,130,246,0.08)", color: "#3b82f6" },
     green: { bg: "rgba(16,185,129,0.08)", color: "#10b981" },
@@ -124,17 +151,76 @@ function StatCard({ icon, label, value, sub, color }: StatCardProps) {
     cyan: { bg: "rgba(6,182,212,0.08)", color: "#06b6d4" },
     orange: { bg: "rgba(249,115,22,0.08)", color: "#f97316" },
   };
-  const c = colors[color];
+  const c = colors[color] || colors.blue;
   return (
     <div className="staff-kpi-card">
-      <div className="staff-kpi-icon" style={{ background: c.bg, color: c.color }}>
+      <div
+        className="staff-kpi-icon"
+        style={{ background: c.bg, color: c.color }}
+      >
         {icon}
       </div>
       <div className="staff-kpi-body">
         <span className="staff-kpi-label">{label}</span>
         <strong className="staff-kpi-value">{value}</strong>
         {sub && <span className="staff-kpi-sub">{sub}</span>}
+        {layers && layers.length > 0 && (
+          <div className="staff-kpi-layers">
+            {layers.map((l, idx) => (
+              <div key={idx} className="staff-kpi-layer-item">
+                <span className="staff-kpi-layer-label">{l.label}</span>
+                <span className="staff-kpi-layer-value">{l.value}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+interface KpiGroupProps {
+  title: string;
+  icon: React.ReactNode;
+  tag?: string;
+  color?: "blue" | "green" | "amber" | "purple" | "cyan" | "orange";
+  className?: string;
+  children: React.ReactNode;
+}
+
+function KpiGroup({
+  title,
+  icon,
+  tag,
+  color = "blue",
+  className = "",
+  children,
+}: KpiGroupProps) {
+  const groupColors: Record<string, { bg: string; color: string }> = {
+    blue: { bg: "rgba(59,130,246,0.1)", color: "#3b82f6" },
+    green: { bg: "rgba(16,185,129,0.1)", color: "#10b981" },
+    amber: { bg: "rgba(245,158,11,0.1)", color: "#f59e0b" },
+    purple: { bg: "rgba(139,92,246,0.1)", color: "#8b5cf6" },
+    cyan: { bg: "rgba(6,182,212,0.1)", color: "#06b6d4" },
+    orange: { bg: "rgba(249,115,22,0.1)", color: "#f97316" },
+  };
+  const gc = groupColors[color] || groupColors.blue;
+
+  return (
+    <div className="staff-kpi-group">
+      <div className="staff-kpi-group-header">
+        <div className="staff-kpi-group-title-wrap">
+          <div
+            className="staff-kpi-group-icon"
+            style={{ background: gc.bg, color: gc.color }}
+          >
+            {icon}
+          </div>
+          <span className="staff-kpi-group-title">{title}</span>
+        </div>
+        {tag && <span className="staff-kpi-group-tag">{tag}</span>}
+      </div>
+      <div className={`staff-kpi-group-cards ${className}`}>{children}</div>
     </div>
   );
 }
@@ -171,6 +257,55 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: "Hủy",
 };
 
+/** Ngày ca (YYYY-MM-DD) — tránh so sánh với ISO đầy đủ. */
+function scheduleDayKey(date: string): string {
+  return date.slice(0, 10);
+}
+
+/** Ca qua ngày vẫn điểm danh được tới giờ kết thúc thực tế. */
+function isShiftCheckInAvailable(
+  schedule: ShiftScheduleItem,
+  now = new Date(),
+): boolean {
+  if (schedule.status !== "scheduled") return false;
+
+  const start = new Date(
+    `${scheduleDayKey(schedule.date)}T${schedule.startTime}`,
+  );
+  const end = new Date(`${scheduleDayKey(schedule.date)}T${schedule.endTime}`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()))
+    return false;
+
+  if (end <= start) end.setDate(end.getDate() + 1);
+  return now < end;
+}
+
+/** Hiển thị thời điểm trên thẻ ca: ưu tiên giờ click điểm danh. */
+function formatShiftCardWhen(schedule: ShiftScheduleItem): string {
+  if (schedule.checkedInAt) {
+    const d = new Date(schedule.checkedInAt);
+    if (!Number.isNaN(d.getTime())) {
+      return d.toLocaleString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+    }
+  }
+  const d = new Date(schedule.date);
+  if (!Number.isNaN(d.getTime())) {
+    return d.toLocaleDateString("vi-VN", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  }
+  return scheduleDayKey(schedule.date);
+}
+
 interface ShiftCalendarProps {
   schedules: ShiftScheduleItem[];
   currentUserId: string | undefined;
@@ -185,9 +320,7 @@ function ShiftCalendar({ schedules, currentUserId }: ShiftCalendarProps) {
   const mySchedules = useMemo(
     () =>
       schedules.filter(
-        (s) =>
-          s.staffId === currentUserId ||
-          s.staffId === currentUserId,
+        (s) => s.staffId === currentUserId || s.staffId === currentUserId,
       ),
     [schedules, currentUserId],
   );
@@ -196,7 +329,8 @@ function ShiftCalendar({ schedules, currentUserId }: ShiftCalendarProps) {
     const { year, month } = viewMonth;
     const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const days: Array<{ date: number | null; schedules: ShiftScheduleItem[] }> = [];
+    const days: Array<{ date: number | null; schedules: ShiftScheduleItem[] }> =
+      [];
 
     // padding for Sunday start
     for (let i = 0; i < firstDay; i++) days.push({ date: null, schedules: [] });
@@ -208,7 +342,11 @@ function ShiftCalendar({ schedules, currentUserId }: ShiftCalendarProps) {
     return days;
   }, [viewMonth, mySchedules]);
 
-  const monthName = new Date(viewMonth.year, viewMonth.month, 1).toLocaleDateString("vi-VN", {
+  const monthName = new Date(
+    viewMonth.year,
+    viewMonth.month,
+    1,
+  ).toLocaleDateString("vi-VN", {
     month: "long",
     year: "numeric",
   });
@@ -247,13 +385,16 @@ function ShiftCalendar({ schedules, currentUserId }: ShiftCalendarProps) {
 
       <div className="staff-shift-weekdays">
         {["CN", "T2", "T3", "T4", "T5", "T6", "T7"].map((d) => (
-          <div key={d} className="staff-shift-weekday">{d}</div>
+          <div key={d} className="staff-shift-weekday">
+            {d}
+          </div>
         ))}
       </div>
 
       <div className="staff-shift-grid">
         {calendarDays.map((day, i) => {
-          if (!day.date) return <div key={`pad-${i}`} className="staff-shift-cell empty" />;
+          if (!day.date)
+            return <div key={`pad-${i}`} className="staff-shift-cell empty" />;
           const dateStr = `${viewMonth.year}-${String(viewMonth.month + 1).padStart(2, "0")}-${String(day.date).padStart(2, "0")}`;
           const isToday = dateStr === today;
           return (
@@ -267,7 +408,10 @@ function ShiftCalendar({ schedules, currentUserId }: ShiftCalendarProps) {
                   <div
                     key={s.id}
                     className="staff-shift-event"
-                    style={{ background: SHIFT_COLORS[s.shiftType]?.bg, color: SHIFT_COLORS[s.shiftType]?.color }}
+                    style={{
+                      background: SHIFT_COLORS[s.shiftType]?.bg,
+                      color: SHIFT_COLORS[s.shiftType]?.color,
+                    }}
                     title={`${SHIFT_LABELS[s.shiftType]} (${s.startTime}–${s.endTime}) — ${STATUS_LABELS[s.status]}`}
                   >
                     {SHIFT_ICONS[s.shiftType]}
@@ -275,7 +419,9 @@ function ShiftCalendar({ schedules, currentUserId }: ShiftCalendarProps) {
                   </div>
                 ))}
                 {day.schedules.length > 2 && (
-                  <div className="staff-shift-more">+{day.schedules.length - 2}</div>
+                  <div className="staff-shift-more">
+                    +{day.schedules.length - 2}
+                  </div>
                 )}
               </div>
             </div>
@@ -289,7 +435,10 @@ function ShiftCalendar({ schedules, currentUserId }: ShiftCalendarProps) {
           <div key={type} className="staff-shift-legend-item">
             <div
               className="staff-shift-legend-dot"
-              style={{ background: SHIFT_COLORS[type]?.bg, color: SHIFT_COLORS[type]?.color }}
+              style={{
+                background: SHIFT_COLORS[type]?.bg,
+                color: SHIFT_COLORS[type]?.color,
+              }}
             >
               {SHIFT_ICONS[type]}
             </div>
@@ -308,7 +457,11 @@ interface MyShiftsListProps {
   onCheckIn: (scheduleId: string) => Promise<ShiftScheduleItem>;
 }
 
-function MyShiftsList({ schedules, currentUserId, onCheckIn }: MyShiftsListProps) {
+function MyShiftsList({
+  schedules,
+  currentUserId,
+  onCheckIn,
+}: MyShiftsListProps) {
   const [checkingInId, setCheckingInId] = useState<string | null>(null);
   const mySchedules = useMemo(
     () =>
@@ -321,22 +474,34 @@ function MyShiftsList({ schedules, currentUserId, onCheckIn }: MyShiftsListProps
 
   const stats = useMemo(() => {
     const total = mySchedules.length;
-    const completed = mySchedules.filter((s) => s.status === "completed").length;
-    const checkedIn = mySchedules.filter((s) => s.status === "checked_in").length;
-    const scheduled = mySchedules.filter((s) => s.status === "scheduled").length;
+    const completed = mySchedules.filter(
+      (s) => s.status === "completed",
+    ).length;
+    const checkedIn = mySchedules.filter(
+      (s) => s.status === "checked_in",
+    ).length;
+    const scheduled = mySchedules.filter(
+      (s) => s.status === "scheduled",
+    ).length;
     return { total, completed, checkedIn, scheduled };
   }, [mySchedules]);
 
   const today = todayStr();
-  const upcoming = mySchedules.filter((s) => s.date >= today && s.status === "scheduled").slice(0, 3);
-  const past = mySchedules.filter((s) => s.date < today || s.status !== "scheduled").slice(0, 5);
+  const upcoming = mySchedules
+    .filter((s) => scheduleDayKey(s.date) >= today && s.status === "scheduled")
+    .slice(0, 3);
+  const past = mySchedules
+    .filter((s) => scheduleDayKey(s.date) < today || s.status !== "scheduled")
+    .slice(0, 5);
 
   async function handleCheckIn(scheduleId: string) {
     setCheckingInId(scheduleId);
     try {
       await onCheckIn(scheduleId);
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Không thể điểm danh ca.");
+      window.alert(
+        error instanceof Error ? error.message : "Không thể điểm danh ca.",
+      );
     } finally {
       setCheckingInId(null);
     }
@@ -384,26 +549,39 @@ function MyShiftsList({ schedules, currentUserId, onCheckIn }: MyShiftsListProps
             <div key={s.id} className="staff-shift-card upcoming">
               <div
                 className="staff-shift-card-icon"
-                style={{ background: SHIFT_COLORS[s.shiftType]?.bg, color: SHIFT_COLORS[s.shiftType]?.color }}
+                style={{
+                  background: SHIFT_COLORS[s.shiftType]?.bg,
+                  color: SHIFT_COLORS[s.shiftType]?.color,
+                }}
               >
                 {SHIFT_ICONS[s.shiftType]}
               </div>
               <div className="staff-shift-card-body">
                 <strong>{SHIFT_LABELS[s.shiftType]}</strong>
-                <span>{s.date} · {s.startTime} – {s.endTime}</span>
+                <span>
+                  {formatShiftCardWhen(s)} · {s.startTime} – {s.endTime}
+                </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span className="staff-shift-status-badge" style={{ background: STATUS_COLORS[s.status]?.bg, color: STATUS_COLORS[s.status]?.color }}>
+                <span
+                  className="staff-shift-status-badge"
+                  style={{
+                    background: STATUS_COLORS[s.status]?.bg,
+                    color: STATUS_COLORS[s.status]?.color,
+                  }}
+                >
                   {STATUS_LABELS[s.status]}
                 </span>
-                {s.date.slice(0, 10) === today && (
+                {isShiftCheckInAvailable(s) && (
                   <button
                     type="button"
                     className="small-button primary"
                     disabled={checkingInId === s.id}
                     onClick={() => void handleCheckIn(s.id)}
                   >
-                    {checkingInId === s.id ? "Đang điểm danh..." : "Điểm danh ca"}
+                    {checkingInId === s.id
+                      ? "Đang điểm danh..."
+                      : "Điểm danh ca"}
                   </button>
                 )}
               </div>
@@ -422,17 +600,42 @@ function MyShiftsList({ schedules, currentUserId, onCheckIn }: MyShiftsListProps
             <div key={s.id} className="staff-shift-card">
               <div
                 className="staff-shift-card-icon"
-                style={{ background: SHIFT_COLORS[s.shiftType]?.bg, color: SHIFT_COLORS[s.shiftType]?.color }}
+                style={{
+                  background: SHIFT_COLORS[s.shiftType]?.bg,
+                  color: SHIFT_COLORS[s.shiftType]?.color,
+                }}
               >
                 {SHIFT_ICONS[s.shiftType]}
               </div>
               <div className="staff-shift-card-body">
                 <strong>{SHIFT_LABELS[s.shiftType]}</strong>
-                <span>{s.date} · {s.startTime} – {s.endTime}</span>
+                <span>
+                  {formatShiftCardWhen(s)} · {s.startTime} – {s.endTime}
+                </span>
               </div>
-              <span className="staff-shift-status-badge" style={{ background: STATUS_COLORS[s.status]?.bg, color: STATUS_COLORS[s.status]?.color }}>
-                {STATUS_LABELS[s.status]}
-              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span
+                  className="staff-shift-status-badge"
+                  style={{
+                    background: STATUS_COLORS[s.status]?.bg,
+                    color: STATUS_COLORS[s.status]?.color,
+                  }}
+                >
+                  {STATUS_LABELS[s.status]}
+                </span>
+                {isShiftCheckInAvailable(s) && (
+                  <button
+                    type="button"
+                    className="small-button primary"
+                    disabled={checkingInId === s.id}
+                    onClick={() => void handleCheckIn(s.id)}
+                  >
+                    {checkingInId === s.id
+                      ? "Đang điểm danh..."
+                      : "Điểm danh ca"}
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </>
@@ -456,7 +659,8 @@ function RecentSessions({ sessions }: { sessions: ParkingSession[] }) {
     [sessions],
   );
 
-  if (!recent.length) return <p className="staff-empty">Chưa có phiên gửi xe nào hôm nay.</p>;
+  if (!recent.length)
+    return <p className="staff-empty">Chưa có phiên gửi xe nào hôm nay.</p>;
 
   return (
     <div className="staff-session-list">
@@ -482,7 +686,11 @@ function RecentSessions({ sessions }: { sessions: ParkingSession[] }) {
             )}
             <span
               className={`staff-session-badge ${
-                s.status === "Đang gửi" ? "active" : s.status === "Đã hoàn thành" ? "done" : "warn"
+                s.status === "Đang gửi"
+                  ? "active"
+                  : s.status === "Đã hoàn thành"
+                    ? "done"
+                    : "warn"
               }`}
             >
               {s.status === "Đang gửi" && <Activity size={10} />}
@@ -491,7 +699,9 @@ function RecentSessions({ sessions }: { sessions: ParkingSession[] }) {
               {s.status}
             </span>
           </div>
-          {s.fee > 0 && <span className="staff-session-fee">{currency.format(s.fee)}</span>}
+          {s.fee > 0 && (
+            <span className="staff-session-fee">{currency.format(s.fee)}</span>
+          )}
         </div>
       ))}
     </div>
@@ -505,14 +715,24 @@ function TopCustomersList({ customers }: { customers: TopCustomer[] }) {
     <div className="staff-customers">
       {customers.slice(0, 5).map((c, i) => (
         <div key={i} className="staff-customer-row">
-          <div className="staff-customer-rank" data-rank={i + 1}>{i + 1}</div>
-          <div className="staff-customer-avatar">{c.name?.charAt(0).toUpperCase() ?? "?"}</div>
+          <div className="staff-customer-rank" data-rank={i + 1}>
+            {i + 1}
+          </div>
+          <div className="staff-customer-avatar">
+            {c.name?.charAt(0).toUpperCase() ?? "?"}
+          </div>
           <div className="staff-customer-info">
             <span className="staff-customer-name">{c.name}</span>
-            <span className="staff-customer-sessions">Biển số: {c.plate || "—"}</span>
-            <span className="staff-customer-sessions">{c.sessionCount} phiên</span>
+            <span className="staff-customer-sessions">
+              Biển số: {c.plate || "—"}
+            </span>
+            <span className="staff-customer-sessions">
+              {c.sessionCount} phiên
+            </span>
           </div>
-          <strong className="staff-customer-spent">{currency.format(c.totalSpent)}</strong>
+          <strong className="staff-customer-spent">
+            {currency.format(c.totalSpent)}
+          </strong>
         </div>
       ))}
     </div>
@@ -538,12 +758,19 @@ function ActivityFeed({ sessions }: { sessions: ParkingSession[] }) {
     <div className="staff-feed">
       {feed.map((s) => (
         <div key={s.id} className="staff-feed-row">
-          <div className={`staff-feed-icon ${s.status === "Đang gửi" ? "entry" : "exit"}`}>
-            {s.status === "Đang gửi" ? <ArrowDown size={12} /> : <ArrowUp size={12} />}
+          <div
+            className={`staff-feed-icon ${s.status === "Đang gửi" ? "entry" : "exit"}`}
+          >
+            {s.status === "Đang gửi" ? (
+              <ArrowDown size={12} />
+            ) : (
+              <ArrowUp size={12} />
+            )}
           </div>
           <div className="staff-feed-info">
             <span>
-              <strong>{s.plate}</strong> {s.status === "Đang gửi" ? "vào" : "ra"}
+              <strong>{s.plate}</strong>{" "}
+              {s.status === "Đang gửi" ? "vào" : "ra"}
             </span>
             <span className="staff-feed-time">
               {getSessionCheckInDate(s) &&
@@ -564,8 +791,15 @@ function ActivityFeed({ sessions }: { sessions: ParkingSession[] }) {
 }
 
 // ─── Revenue Bar Chart (admin) ───────────────────────────────────────────────
-function RevenueBarChart({ data, range }: { data: RevenueChartPoint[]; range: TimeRange }) {
-  if (!data.length) return <p className="staff-empty">Chưa có dữ liệu doanh thu.</p>;
+function RevenueBarChart({
+  data,
+  range,
+}: {
+  data: RevenueChartPoint[];
+  range: TimeRange;
+}) {
+  if (!data.length)
+    return <p className="staff-empty">Chưa có dữ liệu doanh thu.</p>;
   const maxRevenue = Math.max(...data.map((point) => point.revenue), 1);
   const compactNumber = new Intl.NumberFormat("vi-VN", {
     notation: "compact",
@@ -581,15 +815,22 @@ function RevenueBarChart({ data, range }: { data: RevenueChartPoint[]; range: Ti
           {data.map((point, index) => {
             const height = (point.revenue / maxRevenue) * 100;
             return (
-              <div className="staff-revenue-bar-column" key={`${point.date}-${index}`}>
-                <span className="staff-revenue-value">{compactNumber.format(point.revenue)}</span>
+              <div
+                className="staff-revenue-bar-column"
+                key={`${point.date}-${index}`}
+              >
+                <span className="staff-revenue-value">
+                  {compactNumber.format(point.revenue)}
+                </span>
                 <div
                   className="staff-revenue-bar"
                   style={{ height: `${height}%` }}
                   title={`${currency.format(point.revenue)} · ${point.count} phiên`}
                 />
                 <span className="staff-revenue-label">
-                  {range === "today" ? `${String(point.date).padStart(2, "0")}h` : point.date.slice(5)}
+                  {range === "today"
+                    ? `${String(point.date).padStart(2, "0")}h`
+                    : point.date.slice(5)}
                 </span>
               </div>
             );
@@ -600,35 +841,141 @@ function RevenueBarChart({ data, range }: { data: RevenueChartPoint[]; range: Ti
   );
 }
 
-// ─── Zone Bars (admin) ───────────────────────────────────────────────────────
-function ZoneBarChart({
-  zones,
+// ─── Total Parking Occupancy Bar (admin) ──────────────────────────────────────
+function TotalOccupancyBar({
+  occupied,
+  capacity,
+  slots,
 }: {
-  zones: Array<{ name: string; occupied: number; capacity: number }>;
+  occupied: number;
+  capacity: number;
+  slots: Array<{ status: string }>;
 }) {
-  if (!zones.length) return <p className="staff-empty">Không có dữ liệu zone.</p>;
-  const maxCap = Math.max(...zones.map((z) => z.capacity), 1);
+  const cap = capacity > 0 ? capacity : Math.max(slots.length, 1);
+  const empty = slots.filter((s) => s.status === "empty").length;
+  const inUse = occupied;
+  const pct = Math.min(100, Math.round((inUse / cap) * 100));
+  const color = pct >= 90 ? "#ef4444" : pct >= 70 ? "#f59e0b" : "#10b981";
 
   return (
-    <div className="staff-zone-bars">
-      {zones.map((z, i) => {
-        const pct = Math.round((z.occupied / z.capacity) * 100);
-        const color = pct >= 90 ? "#ef4444" : pct >= 70 ? "#f59e0b" : "#10b981";
-        return (
-          <div key={i} className="staff-zone-row">
-            <span className="staff-zone-name">{z.name}</span>
-            <div className="staff-zone-track">
-              <div className="staff-zone-fill" style={{ width: `${pct}%`, background: color }} />
-            </div>
-            <span className="staff-zone-pct" style={{ color }}>
-              {pct}%
-            </span>
-            <span className="staff-zone-cap">
-              {z.occupied}/{z.capacity}
-            </span>
+    <div style={{ padding: "16px 20px" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          marginBottom: 12,
+        }}
+      >
+        <div>
+          <span style={{ fontSize: "1.75rem", fontWeight: 800, color }}>
+            {pct}%
+          </span>
+          <span
+            style={{
+              marginLeft: 8,
+              fontSize: "0.85rem",
+              color: "var(--muted, #64748b)",
+            }}
+          >
+            công suất sử dụng
+          </span>
+        </div>
+        <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>
+          <span style={{ color }}>{inUse}</span> /{" "}
+          <span style={{ color: "var(--text, #1e293b)" }}>{cap}</span> chỗ
+        </div>
+      </div>
+
+      <div
+        style={{
+          width: "100%",
+          height: 16,
+          background: "rgba(0,0,0,0.06)",
+          borderRadius: 8,
+          overflow: "hidden",
+          marginBottom: 16,
+        }}
+      >
+        <div
+          style={{
+            width: `${pct}%`,
+            height: "100%",
+            background: color,
+            borderRadius: 8,
+            transition: "width 0.4s ease",
+          }}
+        />
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 12,
+          borderTop: "1px solid var(--border, #e2e8f0)",
+          paddingTop: 14,
+        }}
+      >
+        <div
+          style={{
+            background: "rgba(16, 185, 129, 0.08)",
+            padding: "10px 14px",
+            borderRadius: 10,
+            border: "1px solid rgba(16, 185, 129, 0.2)",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 11,
+              color: "#059669",
+              fontWeight: 600,
+              textTransform: "uppercase",
+            }}
+          >
+            Chỗ còn trống
           </div>
-        );
-      })}
+          <div
+            style={{
+              fontSize: 18,
+              fontWeight: 750,
+              color: "#059669",
+              marginTop: 2,
+            }}
+          >
+            {empty > 0 ? empty : Math.max(0, cap - inUse)} chỗ
+          </div>
+        </div>
+        <div
+          style={{
+            background: "rgba(59, 130, 246, 0.08)",
+            padding: "10px 14px",
+            borderRadius: 10,
+            border: "1px solid rgba(59, 130, 246, 0.2)",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 11,
+              color: "#2563eb",
+              fontWeight: 600,
+              textTransform: "uppercase",
+            }}
+          >
+            Xe đang đỗ
+          </div>
+          <div
+            style={{
+              fontSize: 18,
+              fontWeight: 750,
+              color: "#2563eb",
+              marginTop: 2,
+            }}
+          >
+            {inUse} xe
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -637,6 +984,7 @@ function ZoneBarChart({
 function StaffDashboard() {
   const {
     currentUser,
+    sessions,
     shiftScheduleList,
     checkInShift,
     zoneList,
@@ -644,7 +992,10 @@ function StaffDashboard() {
     userList,
     registeredVehicles,
   } = useParkingApp();
-  const [staffOverview, setStaffOverview] = useState<StaffDashboardOverview | null>(null);
+  const [staffOverview, setStaffOverview] =
+    useState<StaffDashboardOverview | null>(null);
+  const [generalOverview, setGeneralOverview] =
+    useState<DashboardOverview | null>(null);
 
   const loadStaffOverview = useCallback(async () => {
     try {
@@ -657,38 +1008,116 @@ function StaffDashboard() {
     }
   }, []);
 
+  const loadGeneralOverview = useCallback(async () => {
+    try {
+      const response = await apiFetch("/dashboard/overview?range=today");
+      if (!response.ok) return;
+      const data = await response.json();
+      setGeneralOverview(data.overview ?? null);
+    } catch {
+      setGeneralOverview(null);
+    }
+  }, []);
+
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => void loadStaffOverview(), 0);
+    const timeoutId = window.setTimeout(() => {
+      void loadStaffOverview();
+      void loadGeneralOverview();
+    }, 0);
     return () => window.clearTimeout(timeoutId);
-  }, [loadStaffOverview]);
+  }, [loadStaffOverview, loadGeneralOverview]);
 
   useEffect(() => {
-    const intervalId = window.setInterval(() => void loadStaffOverview(), 30_000);
+    const intervalId = window.setInterval(() => {
+      void loadStaffOverview();
+      void loadGeneralOverview();
+    }, 30_000);
     return () => window.clearInterval(intervalId);
-  }, [loadStaffOverview]);
+  }, [loadStaffOverview, loadGeneralOverview]);
 
-  const staffSessions = staffOverview?.sessions ?? EMPTY_STAFF_SESSIONS;
+  const today = todayStr();
 
-  // Today's stats
-  const todayStats = useMemo(() => {
-    const today = todayStr();
-    const todaySessions = staffSessions.filter((s) => sessionDateKey(s) === today);
-    const entryCount = todaySessions.filter((s) => s.status !== "Hủy").length;
-    const exitCount = todaySessions.filter((s) => s.status === "Đã hoàn thành").length;
-    const activeNow = staffSessions.filter((s) => s.status === "Đang gửi").length;
-    const todayRevenue = todaySessions.reduce((sum, s) => sum + (s.fee || 0), 0);
-    const myTodayShifts = shiftScheduleList.filter(
+  // Shifts of current staff today
+  const myTodayShifts = useMemo(() => {
+    return shiftScheduleList.filter(
       (s) => s.staffId === currentUser?.id && s.date === today,
     );
-    const myActiveShift = myTodayShifts.find((s) => s.status === "checked_in");
-    const myUpcomingShift = myTodayShifts.find((s) => s.status === "scheduled");
+  }, [shiftScheduleList, currentUser, today]);
 
-    return { entryCount, exitCount, activeNow, todayRevenue, myTodayShifts, myActiveShift, myUpcomingShift };
-  }, [staffSessions, shiftScheduleList, currentUser]);
+  const myActiveShift = useMemo(() => {
+    return myTodayShifts.find((s) => s.status === "checked_in");
+  }, [myTodayShifts]);
 
-  const totalSlots = slotList.length || 30;
+  const myUpcomingShift = useMemo(() => {
+    return myTodayShifts.find((s) => s.status === "scheduled");
+  }, [myTodayShifts]);
+
+  // Real lot-wide metrics (from backend overview or fallback to context)
+  const totalSlots = slotList.length || generalOverview?.capacity || 200;
   const freeSlots = slotList.filter((s) => s.status === "empty").length;
-  const occupancyPct = totalSlots > 0 ? Math.round(((totalSlots - freeSlots) / totalSlots) * 100) : 0;
+
+  const activeCount =
+    generalOverview?.active ??
+    sessions.filter((s) => s.status === "Đang gửi").length;
+  const activeMemberCount =
+    generalOverview?.activeMember ??
+    sessions.filter(
+      (s) =>
+        s.status === "Đang gửi" &&
+        (s.customerType === "member" ||
+          s.isRegisteredMember ||
+          s.quotaType === "member"),
+    ).length;
+  const activeGuestCount =
+    generalOverview?.activeGuest ??
+    Math.max(0, activeCount - activeMemberCount);
+
+  const entryCount =
+    generalOverview?.entryCount ??
+    sessions.filter((s) => s.status !== "Đã hủy" && sessionDateKey(s) === today)
+      .length;
+  const entryMemberCount =
+    generalOverview?.entryMemberCount ??
+    sessions.filter(
+      (s) =>
+        s.status !== "Đã hủy" &&
+        sessionDateKey(s) === today &&
+        (s.customerType === "member" ||
+          s.isRegisteredMember ||
+          s.quotaType === "member"),
+    ).length;
+  const entryGuestCount =
+    generalOverview?.entryGuestCount ??
+    Math.max(0, entryCount - entryMemberCount);
+
+  const exitCount =
+    generalOverview?.exitCount ??
+    sessions.filter(
+      (s) => s.status === "Đã hoàn thành" && sessionDateKey(s) === today,
+    ).length;
+  const exitMemberCount =
+    generalOverview?.exitMemberCount ??
+    sessions.filter(
+      (s) =>
+        s.status === "Đã hoàn thành" &&
+        sessionDateKey(s) === today &&
+        (s.customerType === "member" ||
+          s.isRegisteredMember ||
+          s.quotaType === "member"),
+    ).length;
+  const exitGuestCount =
+    generalOverview?.exitGuestCount ?? Math.max(0, exitCount - exitMemberCount);
+
+  const todayRevenue = generalOverview?.revenue ?? 0;
+  const successfulTxCount =
+    generalOverview?.successfulTransactionCount ?? exitCount;
+  const transferRev = generalOverview?.transferRevenue ?? 0;
+  const transferCount = generalOverview?.transferCount ?? 0;
+  const cashRev = generalOverview?.cashRevenue ?? 0;
+  const cashCount = generalOverview?.cashCount ?? 0;
+
+  const occupancyPct =
+    totalSlots > 0 ? Math.round((activeCount / totalSlots) * 100) : 0;
 
   const userName = currentUser?.name || currentUser?.email || "Nhân viên";
   const greeting = (() => {
@@ -707,7 +1136,9 @@ function StaffDashboard() {
             <BarChart3 size={22} />
           </div>
           <div>
-            <h1 className="staff-title">{greeting}, Nhân viên {userName}</h1>
+            <h1 className="staff-title">
+              {greeting}, Nhân viên {userName}
+            </h1>
             <p className="staff-subtitle">
               {new Date().toLocaleDateString("vi-VN", {
                 weekday: "long",
@@ -720,19 +1151,20 @@ function StaffDashboard() {
         </div>
         <div className="staff-header-right">
           {/* Current shift badge */}
-          {todayStats.myActiveShift && (
+          {myActiveShift && (
             <div className="staff-shift-badge active">
               <Activity size={12} />
-              Đang trong ca — {SHIFT_LABELS[todayStats.myActiveShift.shiftType]}
+              Đang trong ca — {SHIFT_LABELS[myActiveShift.shiftType]}
             </div>
           )}
-          {todayStats.myUpcomingShift && (
+          {myUpcomingShift && (
             <div className="staff-shift-badge upcoming">
               <Clock size={12} />
-              Ca tiếp — {SHIFT_LABELS[todayStats.myUpcomingShift.shiftType]} lúc {todayStats.myUpcomingShift.startTime}
+              Ca tiếp — {SHIFT_LABELS[myUpcomingShift.shiftType]} lúc{" "}
+              {myUpcomingShift.startTime}
             </div>
           )}
-          {!todayStats.myActiveShift && !todayStats.myUpcomingShift && (
+          {!myActiveShift && !myUpcomingShift && (
             <div className="staff-shift-badge idle">
               <Coffee size={12} />
               Không có ca hôm nay
@@ -741,111 +1173,169 @@ function StaffDashboard() {
         </div>
       </div>
 
-      {/* KPI Row */}
-      <div className="staff-kpi-row">
-        <StatCard
-          icon={<Car size={18} />}
-          label="Xe đang gửi"
-          value={String(todayStats.activeNow)}
-          sub={`/ ${totalSlots} chỗ`}
-          color="blue"
-        />
-        <StatCard
-          icon={<ParkingCircle size={18} />}
-          label="Chỗ trống"
-          value={String(freeSlots)}
-          sub={`${occupancyPct}% lấp đầy`}
-          color="green"
-        />
-        <StatCard
-          icon={<ArrowDown size={18} />}
-          label="Xe vào hôm nay"
-          value={String(todayStats.entryCount)}
-          sub={`${todayStats.exitCount} xe ra`}
+      {/* 4 Semantic KPI Groups */}
+      <div className="staff-kpi-groups">
+        {/* Group 1: Lưu lượng phương tiện */}
+        <KpiGroup
+          title="Lưu lượng phương tiện"
+          icon={<Car size={16} />}
+          tag="Hôm nay"
           color="cyan"
-        />
-        <StatCard
-          icon={<Wallet size={18} />}
-          label="Doanh thu hôm nay"
-          value={currency.format(todayStats.todayRevenue)}
-          sub="tổng thu"
+        >
+          <StatCard
+            icon={<ArrowDown size={16} />}
+            label="Xe vào"
+            value={String(entryCount)}
+            sub="lượt vào cổng"
+            color="cyan"
+            layers={[
+              { label: "Khách vãng lai", value: entryGuestCount },
+              { label: "Khách thành viên", value: entryMemberCount },
+            ]}
+          />
+          <StatCard
+            icon={<ArrowUp size={16} />}
+            label="Xe ra"
+            value={String(exitCount)}
+            sub="lượt xuất bến"
+            color="orange"
+            layers={[
+              { label: "Khách vãng lai", value: exitGuestCount },
+              { label: "Khách thành viên", value: exitMemberCount },
+            ]}
+          />
+          <StatCard
+            icon={<Car size={16} />}
+            label="Đang trong bãi"
+            value={String(activeCount)}
+            sub="xe hiện diện"
+            color="blue"
+            layers={[
+              { label: "Khách vãng lai", value: activeGuestCount },
+              { label: "Khách thành viên", value: activeMemberCount },
+            ]}
+          />
+        </KpiGroup>
+
+        {/* Group 2: Vị trí & Sức chứa */}
+        <KpiGroup
+          title="Vị trí & Sức chứa"
+          icon={<ParkingCircle size={16} />}
+          tag="Thời gian thực"
+          color="green"
+        >
+          <StatCard
+            icon={<ParkingCircle size={16} />}
+            label="Tổng vị trí"
+            value={String(totalSlots)}
+            sub="sức chứa thiết kế"
+            color="blue"
+          />
+          <StatCard
+            icon={<CheckCircle size={16} />}
+            label="Còn trống"
+            value={String(freeSlots)}
+            sub="chỗ sẵn sàng"
+            color="green"
+          />
+          <StatCard
+            icon={<Activity size={16} />}
+            label="Đang đỗ"
+            value={String(activeCount)}
+            sub={`${occupancyPct}% lấp đầy`}
+            color="amber"
+            layers={[
+              { label: "Khách vãng lai", value: activeGuestCount },
+              { label: "Khách thành viên", value: activeMemberCount },
+            ]}
+          />
+        </KpiGroup>
+
+        {/* Group 3: Doanh thu & Giao dịch */}
+        <KpiGroup
+          title="Doanh thu & Giao dịch"
+          icon={<Wallet size={16} />}
+          tag="Hôm nay"
           color="amber"
-        />
-        <StatCard
-          icon={<Calendar size={18} />}
-          label="Ca trực hôm nay"
-          value={String(todayStats.myTodayShifts.length)}
-          sub={todayStats.myActiveShift ? "đang làm" : todayStats.myUpcomingShift ? "sắp tới" : "không có ca"}
+          className="cards-4"
+        >
+          <StatCard
+            icon={<Wallet size={16} />}
+            label="Doanh thu hôm nay"
+            value={currency.format(todayRevenue)}
+            sub="tổng thu trong ngày"
+            color="amber"
+          />
+          <StatCard
+            icon={<CheckCircle size={16} />}
+            label="Tổng giao dịch xong"
+            value={String(successfulTxCount)}
+            sub="lượt thanh toán"
+            color="green"
+          />
+          <StatCard
+            icon={<TrendingUp size={16} />}
+            label="Thanh toán chuyển khoản"
+            value={currency.format(transferRev)}
+            sub={`${transferCount} phiên`}
+            color="cyan"
+          />
+          <StatCard
+            icon={<Wallet size={16} />}
+            label="Thanh toán tiền mặt"
+            value={currency.format(cashRev)}
+            sub={`${cashCount} phiên`}
+            color="orange"
+          />
+        </KpiGroup>
+
+        {/* Group 4: Ca trực & Vận hành */}
+        <KpiGroup
+          title="Ca trực & Vận hành"
+          icon={<Calendar size={16} />}
+          tag="Cá nhân"
           color="purple"
-        />
-        <StatCard
-          icon={<CheckCircle size={18} />}
-          label="Tổng phiên hôm nay"
-          value={String(todayStats.entryCount)}
-          sub={`${todayStats.exitCount} đã hoàn thành`}
-          color="orange"
-        />
-      </div>
-
-      {/* Main Content: 3 columns */}
-      <div className="staff-main-grid">
-        {/* Left: Shift Schedule */}
-        <div className="staff-col-main">
-          <div className="staff-panel">
-            <div className="staff-panel-head">
-              <div className="staff-panel-head-left">
-                <div className="staff-panel-icon purple">
-                  <Calendar size={16} />
-                </div>
-                <div>
-                  <p className="staff-panel-kicker">Lịch trực</p>
-                  <h2 className="staff-panel-title">Lịch làm việc của tôi</h2>
-                </div>
-              </div>
-            </div>
-            <MyShiftsList
-              schedules={shiftScheduleList}
-              currentUserId={currentUser?.id == null ? undefined : String(currentUser.id)}
-              onCheckIn={checkInShift}
-            />
-          </div>
-        </div>
-
-        {/* Right: Calendar + Sessions */}
-        <div className="staff-col-side">
-          {/* Shift Calendar */}
-          <div className="staff-panel">
-            <div className="staff-panel-head">
-              <div className="staff-panel-head-left">
-                <div className="staff-panel-icon amber">
-                  <Calendar size={16} />
-                </div>
-                <div>
-                  <p className="staff-panel-kicker">Tháng</p>
-                  <h2 className="staff-panel-title">Lịch trực tháng</h2>
-                </div>
-              </div>
-            </div>
-            <ShiftCalendar schedules={shiftScheduleList} currentUserId={currentUser?.id == null ? undefined : String(currentUser.id)} />
-          </div>
-
-          {/* Recent Sessions */}
-          <div className="staff-panel">
-            <div className="staff-panel-head">
-              <div className="staff-panel-head-left">
-                <div className="staff-panel-icon blue">
-                  <Car size={16} />
-                </div>
-                <div>
-                  <p className="staff-panel-kicker">Phiên gửi xe</p>
-                  <h2 className="staff-panel-title">Ca làm hôm nay</h2>
-                </div>
-              </div>
-              <span className="staff-panel-count">{staffSessions.length}</span>
-            </div>
-            <RecentSessions sessions={staffSessions} />
-          </div>
-        </div>
+        >
+          <StatCard
+            icon={<Calendar size={16} />}
+            label="Ca trực hôm nay"
+            value={String(myTodayShifts.length)}
+            sub="ca phân bổ hôm nay"
+            color="purple"
+          />
+          <StatCard
+            icon={<Clock size={16} />}
+            label="Ca đang làm"
+            value={
+              myActiveShift
+                ? SHIFT_LABELS[myActiveShift.shiftType] || "Đang làm"
+                : "Chưa nhận ca"
+            }
+            sub={
+              myActiveShift
+                ? `${myActiveShift.startTime} - ${myActiveShift.endTime}`
+                : "chờ vào ca"
+            }
+            color="green"
+          />
+          <StatCard
+            icon={<Sun size={16} />}
+            label="Ca tiếp theo"
+            value={
+              myUpcomingShift
+                ? SHIFT_LABELS[myUpcomingShift.shiftType] || "Sắp tới"
+                : myTodayShifts.length > 0
+                  ? "Hết ca"
+                  : "Không có ca"
+            }
+            sub={
+              myUpcomingShift
+                ? `bắt đầu lúc ${myUpcomingShift.startTime}`
+                : "lịch làm việc"
+            }
+            color="blue"
+          />
+        </KpiGroup>
       </div>
     </section>
   );
@@ -887,11 +1377,22 @@ function AdminDashboard() {
   const capacity = (overview?.capacity ?? slotList.length) || 30;
   const activeCount = overview?.active ?? stats.active;
   const availableCount = overview?.available ?? stats.available;
-  const occupancyPct = capacity > 0 ? Math.round(((capacity - availableCount) / capacity) * 100) : 0;
-  const rangeLabel = timeRange === "today" ? "hôm nay" : timeRange === "7d" ? "7 ngày" : "30 ngày";
+  const occupancyPct =
+    capacity > 0
+      ? Math.round(((capacity - availableCount) / capacity) * 100)
+      : 0;
+  const rangeLabel =
+    timeRange === "today"
+      ? "hôm nay"
+      : timeRange === "7d"
+        ? "7 ngày"
+        : "30 ngày";
 
   const topCustomers: TopCustomer[] = useMemo(() => {
-    const map = new Map<string, { name: string; plate: string; count: number; spent: number }>();
+    const map = new Map<
+      string,
+      { name: string; plate: string; count: number; spent: number }
+    >();
     sessions.forEach((s) => {
       const name = s.owner || "Khách vãng";
       const plate = s.plate || "Không rõ biển số";
@@ -916,10 +1417,17 @@ function AdminDashboard() {
   const loadRevenue = useCallback(async () => {
     setLoading(true);
     try {
-      const from = timeRange === "today" ? todayStr() : timeRange === "7d" ? weekAgoStr() : monthAgoStr();
+      const from =
+        timeRange === "today"
+          ? todayStr()
+          : timeRange === "7d"
+            ? weekAgoStr()
+            : monthAgoStr();
       const to = todayStr();
       const groupBy = timeRange === "today" ? "hour" : "day";
-      const res = await apiFetch(`/reports/revenue-chart?from=${from}&to=${to}&groupBy=${groupBy}`);
+      const res = await apiFetch(
+        `/reports/revenue-chart?from=${from}&to=${to}&groupBy=${groupBy}`,
+      );
       if (!res.ok) {
         setRevenueData([]);
       } else {
@@ -996,14 +1504,191 @@ function AdminDashboard() {
         </div>
       </div>
 
-      {/* KPI Row */}
-      <div className="staff-kpi-row">
-        <StatCard icon={<Car size={18} />} label="Xe đang gửi" value={String(activeCount)} sub={`/ ${capacity} chỗ`} color="blue" />
-        <StatCard icon={<ParkingCircle size={18} />} label="Chỗ còn trống" value={String(availableCount)} sub={`${occupancyPct}% lấp đầy`} color="green" />
-        <StatCard icon={<Wallet size={18} />} label={`Doanh thu ${rangeLabel}`} value={currency.format(overview?.revenue ?? 0)} sub={`${overview?.successfulTransactionCount ?? 0} giao dịch thành công`} color="amber" />
-        <StatCard icon={<Activity size={18} />} label={`Xe vào ${rangeLabel}`} value={String(overview?.entryCount ?? 0)} sub={`${overview?.exitCount ?? 0} xe ra`} color="cyan" />
-        <StatCard icon={<Users size={18} />} label={`Khách đăng ký ${rangeLabel}`} value={String(overview?.customerCount ?? 0)} sub={`${overview?.registeredVehicleCount ?? 0} xe đã đăng ký`} color="purple" />
-        <StatCard icon={<TrendingUp size={18} />} label={`Tổng phiên ${rangeLabel}`} value={String(overview?.entryCount ?? 0)} sub={`${overview?.freeSessionCount ?? 0} miễn phí`} color="red" />
+      {/* 4 Semantic KPI Groups */}
+      <div className="staff-kpi-groups">
+        {/* Group 1: Lưu lượng phương tiện */}
+        <KpiGroup
+          title="Lưu lượng phương tiện"
+          icon={<Car size={16} />}
+          tag={rangeLabel}
+          color="cyan"
+        >
+          <StatCard
+            icon={<ArrowDown size={16} />}
+            label="Xe vào"
+            value={String(overview?.entryCount ?? 0)}
+            sub="lượt vào cổng"
+            color="cyan"
+            layers={[
+              {
+                label: "Khách vãng lai",
+                value:
+                  overview?.entryGuestCount ??
+                  Math.max(
+                    0,
+                    (overview?.entryCount ?? 0) -
+                      (overview?.entryMemberCount ?? 0),
+                  ),
+              },
+              {
+                label: "Khách thành viên",
+                value: overview?.entryMemberCount ?? 0,
+              },
+            ]}
+          />
+          <StatCard
+            icon={<ArrowUp size={16} />}
+            label="Xe ra"
+            value={String(overview?.exitCount ?? 0)}
+            sub="lượt xuất bến"
+            color="orange"
+            layers={[
+              {
+                label: "Khách vãng lai",
+                value:
+                  overview?.exitGuestCount ??
+                  Math.max(
+                    0,
+                    (overview?.exitCount ?? 0) -
+                      (overview?.exitMemberCount ?? 0),
+                  ),
+              },
+              {
+                label: "Khách thành viên",
+                value: overview?.exitMemberCount ?? 0,
+              },
+            ]}
+          />
+          <StatCard
+            icon={<Car size={16} />}
+            label="Đang trong bãi"
+            value={String(activeCount)}
+            sub="xe hiện diện"
+            color="blue"
+            layers={[
+              {
+                label: "Khách vãng lai",
+                value:
+                  overview?.activeGuest ??
+                  Math.max(0, activeCount - (overview?.activeMember ?? 0)),
+              },
+              {
+                label: "Khách thành viên",
+                value: overview?.activeMember ?? 0,
+              },
+            ]}
+          />
+        </KpiGroup>
+
+        {/* Group 2: Vị trí & Sức chứa */}
+        <KpiGroup
+          title="Vị trí & Sức chứa"
+          icon={<ParkingCircle size={16} />}
+          tag="Thời gian thực"
+          color="green"
+        >
+          <StatCard
+            icon={<ParkingCircle size={16} />}
+            label="Tổng vị trí"
+            value={String(capacity)}
+            sub="sức chứa thiết kế"
+            color="blue"
+          />
+          <StatCard
+            icon={<CheckCircle size={16} />}
+            label="Còn trống"
+            value={String(availableCount)}
+            sub="chỗ sẵn sàng"
+            color="green"
+          />
+          <StatCard
+            icon={<Activity size={16} />}
+            label="Đang đỗ"
+            value={String(activeCount)}
+            sub={`${occupancyPct}% lấp đầy`}
+            color="amber"
+            layers={[
+              {
+                label: "Khách vãng lai",
+                value:
+                  overview?.activeGuest ??
+                  Math.max(0, activeCount - (overview?.activeMember ?? 0)),
+              },
+              {
+                label: "Khách thành viên",
+                value: overview?.activeMember ?? 0,
+              },
+            ]}
+          />
+        </KpiGroup>
+
+        {/* Group 3: Doanh thu & Giao dịch */}
+        <KpiGroup
+          title="Doanh thu & Giao dịch"
+          icon={<Wallet size={16} />}
+          tag={rangeLabel}
+          color="amber"
+          className="cards-4"
+        >
+          <StatCard
+            icon={<Wallet size={16} />}
+            label={`Doanh thu ${rangeLabel}`}
+            value={currency.format(overview?.revenue ?? 0)}
+            sub="tổng thu thực tế"
+            color="amber"
+          />
+          <StatCard
+            icon={<CheckCircle size={16} />}
+            label="Tổng giao dịch xong"
+            value={String(overview?.successfulTransactionCount ?? 0)}
+            sub="lượt thanh toán"
+            color="green"
+          />
+          <StatCard
+            icon={<TrendingUp size={16} />}
+            label="Thanh toán chuyển khoản"
+            value={currency.format(overview?.transferRevenue ?? 0)}
+            sub={`${overview?.transferCount ?? 0} phiên`}
+            color="cyan"
+          />
+          <StatCard
+            icon={<Wallet size={16} />}
+            label="Thanh toán tiền mặt"
+            value={currency.format(overview?.cashRevenue ?? 0)}
+            sub={`${overview?.cashCount ?? 0} phiên`}
+            color="orange"
+          />
+        </KpiGroup>
+
+        {/* Group 4: Khách hàng & Phương tiện */}
+        <KpiGroup
+          title="Khách hàng & Đăng ký"
+          icon={<Users size={16} />}
+          tag={rangeLabel}
+          color="purple"
+        >
+          <StatCard
+            icon={<Users size={16} />}
+            label="Khách đăng ký"
+            value={String(overview?.customerCount ?? 0)}
+            sub="hồ sơ khách hàng"
+            color="purple"
+          />
+          <StatCard
+            icon={<Car size={16} />}
+            label="Xe đã đăng ký"
+            value={String(overview?.registeredVehicleCount ?? 0)}
+            sub="phương tiện trong hệ thống"
+            color="cyan"
+          />
+          <StatCard
+            icon={<Activity size={16} />}
+            label="Phiên miễn phí"
+            value={String(overview?.freeSessionCount ?? 0)}
+            sub="vé ưu đãi / 0đ"
+            color="blue"
+          />
+        </KpiGroup>
       </div>
 
       {/* Main Charts Row */}
@@ -1019,7 +1704,12 @@ function AdminDashboard() {
                 <h2 className="staff-panel-title">Biểu đồ doanh thu</h2>
               </div>
             </div>
-            <button className="staff-refresh-btn" onClick={loadRevenue} disabled={loading} type="button">
+            <button
+              className="staff-refresh-btn"
+              onClick={loadRevenue}
+              disabled={loading}
+              type="button"
+            >
               <RefreshCw size={14} className={loading ? "spin" : ""} />
             </button>
           </div>
@@ -1033,12 +1723,16 @@ function AdminDashboard() {
                 <ParkingCircle size={16} />
               </div>
               <div>
-                <p className="staff-panel-kicker">Công suất</p>
-                <h2 className="staff-panel-title">Lấp đầy theo zone</h2>
+                <p className="staff-panel-kicker">Công suất bãi xe</p>
+                <h2 className="staff-panel-title">Tỷ lệ lấp đầy bãi xe</h2>
               </div>
             </div>
           </div>
-          <ZoneBarChart zones={zoneOccupancy} />
+          <TotalOccupancyBar
+            occupied={activeCount}
+            capacity={capacity}
+            slots={slotList}
+          />
         </div>
       </div>
 

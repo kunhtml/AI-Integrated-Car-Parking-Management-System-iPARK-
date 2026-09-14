@@ -4,7 +4,7 @@ import { RfidScanLog } from "../models/RfidScanLog.js";
 import { ParkingSession } from "../models/ParkingSession.js";
 import { Subscription } from "../models/Subscription.js";
 import { AppError } from "../utils/AppError.js";
-import { allocateSlot, occupySlot } from "./parkingSlot.service.js";
+import { allocateSlot, freeSlot, occupySlot } from "./parkingSlot.service.js";
 import { classifyVehicleByPlate } from "./parkingQuota.service.js";
 import { findActiveSubscriptionByPlate } from "./subscription.service.js";
 
@@ -77,13 +77,11 @@ export async function getCardDetail(id: string) {
     throw new AppError("Không tìm thấy thẻ RFID.", 404);
   }
 
-  // Get current active session using this card
   const activeSession = await ParkingSession.findOne({
     rfidCardId: card.cardId,
     status: "Đang gửi",
   });
 
-  // Get scan log count
   const scanCount = await RfidScanLog.countDocuments({ cardId: card.cardId });
 
   return { card, activeSession, scanCount };
@@ -474,6 +472,10 @@ export async function validateExit(
   card.lastUsedAt = new Date();
   await card.save();
 
+  // SLOT-FIX: cả nhánh guest lẫn subscription đều kết thúc phiên ở đây.
+  // Nhả slot về empty như luồng checkout thường để slot không bị "treo".
+  await freeSlot(activeSession.slotId);
+
   await logScan({
     cardId,
     action: "exit",
@@ -552,6 +554,9 @@ export async function confirmExitWithMismatch(
   }
   card.lastUsedAt = new Date();
   await card.save();
+
+  // SLOT-FIX: nhả slot về empty khi xác nhận exit bằng tay (camera hỏng).
+  await freeSlot(session.slotId);
 
   await logScan({
     cardId,

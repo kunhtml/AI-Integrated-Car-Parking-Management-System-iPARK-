@@ -10,36 +10,24 @@ import {
 import { RfidCard } from "../models/RfidCard.js";
 import { Vehicle } from "../models/Vehicle.js";
 import { cameraEventBus } from "../services/camera-event-bus.js";
+import { freeSlot } from "../services/parkingSlot.service.js";
 import {
-  allocateSlot,
-  freeSlot,
-  occupySlot,
-} from "../services/parkingSlot.service.js";
-import {
-  checkSubscriptionDiscountForPlate,
   findActiveSubscriptionByPlate,
   findLatestSubscriptionEndByPlate,
-  getOwnerInfoFromPlate,
 } from "../services/subscription.service.js";
-import { createNotification } from "../services/notification.service.js";
 import { createPendingTransactionForSession } from "../services/transaction.service.js";
-import { serializeParkingSession } from "../utils/serializers.js";
 import {
   calculateParkingFee,
   getActivePricingConfig,
 } from "../services/pricing.service.js";
-import { classifyVehicleByPlate } from "../services/parkingQuota.service.js";
+import { createParkingSession } from "./parkingSessions.controller.js";
+import { createAuditLog } from "../services/auditLog.service.js";
 
 function normalizePlate(plate: string): string {
   return (plate || "")
     .trim()
     .toUpperCase()
     .replace(/[\s-]+/g, "");
-}
-
-async function ownerFromPlate(plate: string) {
-  const vehicle = await Vehicle.findOne({ plate });
-  return vehicle?.userId;
 }
 
 /**
@@ -61,214 +49,6 @@ export function calcSimpleFee(
   return Math.max(0, hours * hourlyRate);
 }
 
-async function buildSessionForEntry(
-  plate: string,
-  source: "rfid" | "camera" | "manual",
-  rfidUid?: string,
-  imagePath?: string,
-) {
-  const dup = await ParkingSession.findOne({
-    plate,
-    status: "\u0110ang g\u1EEDi",
-  });
-  if (dup) return { duplicate: true, session: dup };
-
-  // Camera detection alone must not create a parking session.
-  if (source === "camera") return { duplicate: false, cameraOnly: true };
-
-  const rfidCard =
-    source === "rfid" && rfidUid
-      ? await RfidCard.findOne({ uid: rfidUid.trim() })
-      : null;
-
-  if (source === "rfid" && !rfidCard) {
-    return {
-      duplicate: false,
-      invalidRfid: true,
-      message: "Kh\u00F4ng t\u00ECm th\u1EA5y th\u1EBB RFID.",
-    };
-  }
-
-  let quotaAccess = await classifyVehicleByPlate(plate);
-  const isMemberRfid = rfidCard?.cardType === "member";
-
-  if (rfidCard) {
-    if (isMemberRfid) {
-      const memberPlate = normalizePlate(rfidCard.plate || "");
-      if (
-        !["active", "in-use"].includes(rfidCard.status) ||
-        !rfidCard.userId ||
-        !rfidCard.vehicleId ||
-        !memberPlate
-      ) {
-        return {
-          duplicate: false,
-          invalidRfid: true,
-          message:
-            "Th\u1EBB RFID Member ch\u01B0a s\u1EB5n s\u00E0ng ho\u1EB7c thi\u1EBFu li\u00EAn k\u1EBFt xe/t\u00E0i kho\u1EA3n.",
-        };
-      }
-      if (memberPlate !== plate) {
-        return {
-          duplicate: false,
-          invalidRfid: true,
-          message:
-            "Bi\u1EC3n s\u1ED1 kh\u00F4ng kh\u1EDBp v\u1EDBi xe g\u1EAFn tr\u00EAn RFID Member.",
-        };
-      }
-      const subscription = await findActiveSubscriptionByPlate(memberPlate);
-      if (
-        subscription &&
-        subscription.primaryVehicleId === rfidCard.vehicleId.toString()
-      ) {
-        // Thành viên có gói: dùng quota member, miễn phí.
-        quotaAccess = {
-          customerType: "member",
-          quotaType: "member",
-          isRegistered: true,
-        };
-      } else {
-        // Thành viên đã đăng ký RFID nhưng chưa mua gói tháng:
-        // vẫn cho vào (nhận diện là thành viên) nhưng dùng quota vãng lai
-        // và tính phí như khách -> UI hiển thị "Thành viên (chưa có gói)".
-        quotaAccess = {
-          customerType: "member",
-          quotaType: "walk_in",
-          isRegistered: true,
-        };
-      }
-    } else {
-      const memberSubscription = await findActiveSubscriptionByPlate(plate);
-      if (memberSubscription) {
-        return {
-          duplicate: false,
-          invalidRfid: true,
-          message:
-            "Xe này đã đăng ký gói thành viên. Vui lòng dùng đúng RFID Member đã liên kết với xe.",
-        };
-      }
-      // Guest RFID always consumes a walk-in slot, even for a registered plate.
-      if (!["available", "active"].includes(rfidCard.status)) {
-        const activeSession = await ParkingSession.findOne({
-          status: "Đang gửi",
-          $or: [
-            { rfidCardId: rfidCard.uid },
-            ...(rfidCard.cardId ? [{ rfidCardId: rfidCard.cardId }] : []),
-          ],
-        })
-          .select("plate checkInAt")
-          .sort({ checkInAt: -1 })
-          .lean();
-        const uid = rfidCard.uid || rfidCard.cardId || "không xác định";
-        return {
-          duplicate: false,
-          invalidRfid: true,
-          message: activeSession
-            ? `RFID Guest UID ${uid} đã được cấp cho xe ${activeSession.plate} lúc ${activeSession.checkInAt.toLocaleString("vi-VN")}. Thẻ đang gắn với phiên này nên không thể cấp tiếp cho xe ${plate}.`
-            : `RFID Guest UID ${uid} đang ở trạng thái ${rfidCard.status}, chưa sẵn sàng để cấp cho xe ${plate}.`,
-        };
-      }
-      quotaAccess = {
-        customerType: "guest",
-        quotaType: "walk_in",
-        isRegistered: !!(await ownerFromPlate(plate)),
-      };
-    }
-  }
-
-  // Thành viên CÓ GÓI mới dùng quota member; thành viên chưa mua gói vẫn
-  // dùng quota walk_in (tính phí như khách).
-  const isSubscriber = quotaAccess.quotaType === "member";
-  const slotDoc = await allocateSlot("\u00D4 t\u00F4", undefined, {
-    isSubscriber,
-    quotaType: quotaAccess.quotaType,
-  });
-  if (!slotDoc) return { duplicate: false, noSlot: true };
-
-  const ownerUserId = isMemberRfid
-    ? rfidCard?.userId
-    : source === "rfid"
-      ? undefined
-      : await ownerFromPlate(plate);
-  const plateCheck =
-    source === "rfid"
-      ? { warn: undefined as string | undefined }
-      : await checkSubscriptionDiscountForPlate(ownerUserId, plate);
-  const isMember = quotaAccess.customerType === "member";
-  const { name: ownerName, email: ownerEmail } = isMemberRfid
-    ? { name: "Member", email: "" }
-    : source === "rfid"
-      ? { name: "Guest RFID", email: "" }
-      : await getOwnerInfoFromPlate(plate);
-
-  if (plateCheck.warn) {
-    await createNotification({
-      title: "Subscription plate mismatch",
-      content: `Plate ${plate} entered through ${source} but is not covered by a subscription.`,
-      targetRole: "staff",
-    });
-  }
-
-  if (
-    rfidCard &&
-    !isMember &&
-    (rfidCard.plate || rfidCard.userId || rfidCard.vehicleId)
-  ) {
-    // RFID Guest dùng chung theo lượt; không mang theo biển/chủ xe của phiên cũ.
-    rfidCard.plate = "";
-    rfidCard.ownerName = "Guest";
-    rfidCard.userId = undefined;
-    rfidCard.vehicleId = undefined;
-    await rfidCard.save();
-  }
-
-  const session = await ParkingSession.create({
-    plate,
-    ownerName,
-    ownerEmail,
-    vehicleType: "\u00D4 t\u00F4",
-    slot: slotDoc.slotCode,
-    slotId: slotDoc._id,
-    customerType: quotaAccess.customerType,
-    quotaType: quotaAccess.quotaType,
-    isRegisteredMember: quotaAccess.isRegistered,
-    ...(ownerUserId ? { ownerUserId } : {}),
-    ...(rfidCard
-      ? {
-          rfidCardId: rfidCard.cardId || rfidCard.uid,
-          entryRfidUid: rfidCard.uid,
-          rfidAssignedAt: new Date(),
-          rfidGate: "entry" as const,
-        }
-      : {}),
-    entryDetectedPlate: plate,
-    entryConfidence: source === "rfid" ? 1 : 0.9,
-    ...(imagePath ? { entryImageUrl: imagePath } : {}),
-    ...(isSubscriber
-      ? {
-          paymentStatus: "fully_paid",
-          paymentMethod: "subscription",
-          fee: 0,
-          paidAmount: 0,
-        }
-      : {}),
-    ...(plateCheck.warn
-      ? { feeBreakdown: { subscriptionWarn: plateCheck.warn } as any }
-      : {}),
-  });
-
-  await occupySlot(slotDoc._id, session._id);
-  if (rfidCard) {
-    rfidCard.status = "in-use";
-    rfidCard.lastUsedAt = new Date();
-    await rfidCard.save();
-  }
-
-  console.log(
-    `[buildSessionForEntry] Created session: ${session._id} plate=${plate} source=${source}`,
-  );
-  return { duplicate: false, session };
-}
 /**
  * Xử lý checkout cho phiên đang đỗ.
  * Bridge không có AI service đầy đủ nên dùng giá đơn giản (giờ * 5000).
@@ -370,39 +150,43 @@ export async function pushCameraLog(request: Request, response: Response) {
 
   let sessionId: any = undefined;
   let action:
-    | "created"
-    | "completed"
     | "skipped"
     | "no_session"
-    | "invalid_rfid"
-    | "duplicate" = "skipped";
-  let failureMessage = "";
+    | "duplicate"
+    | "pending_review" = "skipped";
   let openSession: typeof ParkingSession.prototype | null = null;
+  let entryReviewState: "pending_review" | undefined;
 
   if (direction === "in" && plate) {
-    // Chỉ tự tạo phiên khi có biển số — guest chưa có biển sẽ tạo phiên qua ManualPlateCard
-    const result = await buildSessionForEntry(
-      plate,
-      body.rfidUid ? "rfid" : "camera",
-      body.rfidUid,
-      body.imagePath,
-    );
-    if (result.duplicate) {
+    // Cổng vào: camera/RFID CHỈ phát hiện — không tạo phiên, không mở barie.
+    // Nhân viên phải đối chiếu biển số trên /staff-desk rồi bấm
+    // "Xác nhận thông tin & Mở barie" (POST /camera-logs/entry-reviews/:id/confirm).
+    entryReviewState = "pending_review";
+    action = "pending_review";
+    const norm = plate.replace(/[\s\.-]+/g, "");
+    const regexPattern = norm
+      .split("")
+      .map((c) => c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+      .join("[\\s\\.-]*");
+    const plateRegex = new RegExp(`^${regexPattern}$`, "i");
+    const dup = await ParkingSession.findOne({
+      status: "Đang gửi",
+      $or: [
+        { plate },
+        { plate: norm },
+        { plate: plateRegex },
+        { entryDetectedPlate: plate },
+        { entryDetectedPlate: norm },
+        { entryDetectedPlate: plateRegex },
+        { manualPlate: plate },
+        { manualPlate: norm },
+        { manualPlate: plateRegex },
+      ],
+    });
+    if (dup) {
+      // Chỉ cảnh báo trùng trên UI — vẫn KHÔNG tự tạo/gắn sessionId vào log.
       action = "duplicate";
-      sessionId = result.session?._id;
-    } else if ((result as any).cameraOnly) {
-      // Camera-only detect: không tạo phiên, chỉ hiển thị lên UI để staff xử lý
-      action = "skipped";
-    } else if (result.noSlot) {
-      action = "skipped";
-    } else if (result.session) {
-      sessionId = result.session._id;
-      action = "created";
-    } else if ((result as any).invalidRfid) {
-      action = "invalid_rfid";
-      failureMessage = (result as any).message || "RFID không hợp lệ.";
-    } else if ((result as any).noSlot) {
-      failureMessage = "Bãi xe không còn slot phù hợp cho xe Guest.";
+      openSession = dup;
     }
     console.log(
       `[pushCameraLog] direction=in plate=${plate} rfidUid=${body.rfidUid ?? "none"} action=${action} sessionId=${sessionId ?? "none"}`,
@@ -498,6 +282,7 @@ export async function pushCameraLog(request: Request, response: Response) {
     vehicleId: vehicle?._id,
     rfidCardId: rfidCard?._id,
     metadata: body.metadata,
+    ...(entryReviewState ? { entryReviewState } : {}),
   });
 
   // Realtime push tới /staff-desk qua SSE bus cho cả cổng vào và cổng ra.
@@ -554,6 +339,9 @@ export async function pushCameraLog(request: Request, response: Response) {
     null;
   const eventMetadata = {
     ...(body.metadata ?? {}),
+    vehicleBrand: vehicle?.brand || null,
+    vehicleModel: vehicle?.model || null,
+    vehicleType: (vehicle as any)?.type || vehicle?.vehicleType || null,
     ...(activeMemberSubscription
       ? { isSubscriber: true, expectedRfidUid }
       : {}),
@@ -590,17 +378,14 @@ export async function pushCameraLog(request: Request, response: Response) {
     sessionId: sessionId?.toString() ?? null,
     checkInAt: openSession?.checkInAt?.toISOString() ?? null,
     sessionStatus:
-      action === "created"
-        ? "Đang gửi"
-        : isExitWaiting
+      isExitWaiting
           ? "Đang gửi"
-          : (action as string) === "completed"
-            ? "Đã hoàn thành"
-            : null,
-    exitState: isExitWaiting ? (openSession?.exitState || "waiting_rfid") : null,
+          : null,
+    exitState: isExitWaiting ? openSession?.exitState || "waiting_rfid" : null,
     action: isExitWaiting ? "waiting_rfid" : action,
     sessionPaymentStatus: isExitWaiting ? "pending" : null,
     duplicateSession: action === "duplicate",
+    entryReviewState: entryReviewState ?? null,
     metadata: {
       ...eventMetadata,
       customerType:
@@ -614,17 +399,12 @@ export async function pushCameraLog(request: Request, response: Response) {
   });
 
   // Phân biệt:
-  // - `created` → 201, tạo phiên thành công.
-  // - `skipped` (camera-only detect, no RFID) → 200 OK, vẫn là flow bình
-  //   thường; staff sẽ xác nhận biển trên UI rồi quét thẻ để tạo phiên.
-  // - `duplicate` / `invalid_rfid` → 409, thực sự bị từ chối.
-  const status =
-    action === "created"
-      ? 201
-      : action === "invalid_rfid" || action === "duplicate"
-        ? 409
-        : 200;
-  const ok = status === 201 || status === 200;
+  // - Cổng vào KHÔNG BAO GIỜ tự tạo phiên: `pending_review` → 200, log chờ
+  //   nhân viên đối chiếu biển số rồi xác nhận qua entry-reviews/:id/confirm.
+  // - `duplicate` ở cổng vào chỉ là cảnh báo cho staff (vẫn 200 — quyền
+  //   quyết định thuộc về nhân viên, không phải máy).
+  const status = 200;
+  const ok = true;
   response.status(status).json({
     ok,
     log: {
@@ -636,20 +416,11 @@ export async function pushCameraLog(request: Request, response: Response) {
       sessionId: sessionId?.toString(),
     },
     message:
-      action === "created"
-        ? `Đã mở phiên cho biển ${plate}`
-        : (action as string) === "completed"
-          ? `Đã checkout phiên cho biển ${plate}`
-          : (action as string) === "duplicate"
-            ? `Xe ${plate} đang có phiên gửi trong bãi. Từ chối vào.`
-            : (action as string) === "invalid_rfid"
-              ? failureMessage ||
-                "RFID không hợp lệ với biển số hoặc gói thành viên của xe này."
-              : (action as string) === "no_session"
-                ? `Không tìm thấy phiên đang gửi cho biển ${plate}`
-                : (action as string) === "skipped"
-                  ? `AI đã nhận biển ${plate} — chờ staff xác nhận.`
-                  : `Không thể tạo phiên cho biển ${plate}: bãi có thể đã hết chỗ phù hợp.`,
+      action === "duplicate"
+        ? `Xe ${plate} đang có phiên gửi trong bãi — nhân viên đối chiếu trước khi mở barie.`
+        : action === "no_session"
+          ? `Không tìm thấy phiên đang gửi cho biển ${plate}`
+          : `AI đã nhận biển ${plate} — chờ nhân viên xác nhận.`,
   });
 }
 
@@ -776,4 +547,362 @@ export async function bridgeRoi(_request: Request, response: Response) {
     }
   }
   response.json({ ok: true, rois });
+}
+
+/* ------------------------------------------------------------------ */
+/* Entry review — nhân viên đối chiếu biển số camera trước khi mở barie */
+/* ------------------------------------------------------------------ */
+
+function serializeEntryReview(log: {
+  _id: mongoose.Types.ObjectId;
+  detectedPlate?: string | null;
+  plate?: string | null;
+  confidence?: number | null;
+  rfidUid?: string | null;
+  ownerName?: string | null;
+  userType?: string | null;
+  imagePath?: string | null;
+  entryReviewState?: string | null;
+  confirmedPlate?: string | null;
+  createdAt: Date;
+  metadata?: Record<string, unknown> | null;
+}) {
+  return {
+    id: log._id.toString(),
+    direction: "in" as const,
+    detectedPlate: log.detectedPlate || "",
+    plate: log.plate || log.detectedPlate || "",
+    confidence: log.confidence,
+    rfidUid: log.rfidUid,
+    ownerName: log.ownerName,
+    userType: log.userType || "unknown",
+    imagePath: log.imagePath,
+    entryReviewState: log.entryReviewState || "pending_review",
+    confirmedPlate: log.confirmedPlate,
+    createdAt: log.createdAt.toISOString(),
+    metadata: log.metadata ?? {},
+  };
+}
+
+/**
+ * GET /api/camera-logs/entry-reviews/pending
+ * Danh sách sự kiện camera cổng vào còn chờ nhân viên xác nhận
+ * (dùng để khôi phục hàng đợi khi /staff-desk tải lại hoặc SSE reconnect).
+ */
+export async function listPendingEntryReviews(
+  _request: Request,
+  response: Response,
+) {
+  const logs = await ParkingCameraLog.find({
+    direction: "in",
+    entryReviewState: "pending_review",
+    sessionId: null,
+  })
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .lean();
+  // Một biển có thể được camera đẩy nhiều lần — giữ sự kiện mới nhất.
+  const seen = new Set<string>();
+  const reviews: ReturnType<typeof serializeEntryReview>[] = [];
+  for (const log of logs) {
+    const key = normalizePlate(log.plate || log.detectedPlate || "") || String(log._id);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    reviews.push(serializeEntryReview(log));
+  }
+  response.json({ ok: true, reviews });
+}
+
+/**
+ * POST /api/camera-logs/entry-reviews/:id/confirm
+ * Body: { plate, confirmationNote?, rfidUid? }
+ *
+ * Nhân viên đã đối chiếu biển số (có thể sửa nếu AI nhận sai) → tạo phiên
+ * qua cùng luồng kiểm tra với POST /parking-sessions, gắn phiên vào log gốc
+ * và chuyển log sang "confirmed". Barie do frontend mở sau khi confirm OK.
+ * Idempotent: log đã confirm/dismissed → 409.
+ */
+export async function confirmEntryReview(
+  request: Request,
+  response: Response,
+) {
+  const logId = String(request.params.id || "");
+  if (!mongoose.Types.ObjectId.isValid(logId)) {
+    response.status(400).json({ ok: false, message: "ID sự kiện không hợp lệ." });
+    return;
+  }
+  const body = z
+    .object({
+      plate: z.string().trim().min(5, "Biển số phải có ít nhất 5 ký tự."),
+      confirmationNote: z.string().trim().optional(),
+      rfidUid: z.string().trim().optional(),
+    })
+    .parse(request.body);
+
+  const plate = normalizePlate(body.plate);
+  const log = await ParkingCameraLog.findById(logId);
+  if (!log) {
+    response.status(404).json({ ok: false, message: "Không tìm thấy sự kiện camera." });
+    return;
+  }
+  if (log.direction !== "in") {
+    response.status(400).json({
+      ok: false,
+      message: "Chỉ sự kiện cổng vào mới cần xác nhận.",
+    });
+    return;
+  }
+  if (log.entryReviewState !== "pending_review" || log.sessionId) {
+    response.status(409).json({
+      ok: false,
+      message:
+        log.entryReviewState === "confirmed"
+          ? "Sự kiện đã được xác nhận trước đó."
+          : "Sự kiện không còn ở trạng thái chờ xác nhận.",
+      sessionId: log.sessionId?.toString() ?? null,
+    });
+    return;
+  }
+
+  const detectedPlate = normalizePlate(log.detectedPlate || log.plate || "");
+  const plateCorrected = Boolean(detectedPlate) && plate !== detectedPlate;
+  if (plateCorrected && (body.confirmationNote || "").trim().length < 8) {
+    response.status(400).json({
+      ok: false,
+      message: "Cần ghi chú giải thích khi sửa biển số AI nhận sai (tối thiểu 8 ký tự).",
+    });
+    return;
+  }
+
+  // Claim nguyên tử: hai màn hình staff cùng bấm chỉ một request thắng.
+  const claimed = await ParkingCameraLog.findOneAndUpdate(
+    { _id: log._id, entryReviewState: "pending_review", sessionId: null },
+    {
+      $set: {
+        entryReviewState: "confirmed",
+        confirmedPlate: plate,
+        ...(body.confirmationNote
+          ? { confirmationNote: body.confirmationNote.trim() }
+          : {}),
+        confirmedBy: request.user?.id,
+        confirmedAt: new Date(),
+      },
+    },
+    { new: true },
+  );
+  if (!claimed) {
+    response.status(409).json({
+      ok: false,
+      message: "Sự kiện vừa được xử lý ở màn hình khác.",
+    });
+    return;
+  }
+
+  const sessionBody: Record<string, unknown> = {
+    plate,
+    vehicleType: "Ô tô",
+    ...(body.rfidUid ? { rfidUid: body.rfidUid } : {}),
+    ...(plateCorrected
+      ? {
+          // Staff sửa biển → luồng manual có minh chứng: ghi chú + ảnh camera.
+          entrySource: "manual",
+          entryPhotoStatus: log.imagePath
+            ? "photo_captured"
+            : "camera_unavailable",
+          manualEntryReason: (body.confirmationNote || "").trim(),
+          visualConfirmed: true,
+          ...(body.rfidUid ? {} : { entryRfidUnverified: true }),
+        }
+      : {
+          entrySource: "camera",
+          ...(detectedPlate ? { entryDetectedPlate: detectedPlate } : {}),
+        }),
+    ...(typeof log.confidence === "number"
+      ? { entryConfidence: log.confidence }
+      : {}),
+    ...(log.imagePath ? { entryImageUrl: log.imagePath } : {}),
+  };
+
+  // Chuyển tiếp sang createParkingSession để dùng lại toàn bộ kiểm tra
+  // RFID/Member/quota/slot; log gốc đã đại diện cho sự kiện nên không tạo
+  // log "staff-desk" thứ hai.
+  const forwarded = Object.create(request) as Request & {
+    suppressEntryReviewLog?: boolean;
+  };
+  forwarded.body = sessionBody;
+  forwarded.suppressEntryReviewLog = true;
+  const result = await new Promise<{
+    status: number;
+    body: Record<string, unknown>;
+  }>((resolve, reject) => {
+    let settled = false;
+    const fakeResponse = {
+      statusCode: 200,
+      status(code: number) {
+        this.statusCode = code;
+        return this;
+      },
+      json(payload: Record<string, unknown>) {
+        if (!settled) {
+          settled = true;
+          resolve({ status: this.statusCode, body: payload });
+        }
+        return this;
+      },
+    };
+    createParkingSession(
+      forwarded,
+      fakeResponse as unknown as Response,
+    ).catch((err: unknown) => {
+      if (!settled) {
+        settled = true;
+        reject(err);
+      }
+    });
+  }).catch((err: unknown): { status: number; body: Record<string, unknown> } => {
+    console.error("[confirmEntryReview] createParkingSession lỗi:", err);
+    return { status: 500, body: { message: "Lỗi server khi tạo phiên." } };
+  });
+
+  if (result.status !== 201) {
+    // Hoàn tất claim để nhân viên còn cơ hội sửa rồi xác nhận lại.
+    await ParkingCameraLog.updateOne(
+      { _id: claimed._id, sessionId: null },
+      {
+        $set: { entryReviewState: "pending_review" },
+        $unset: { confirmedPlate: "", confirmationNote: "", confirmedBy: "", confirmedAt: "" },
+      },
+    );
+    const message =
+      typeof result.body.message === "string"
+        ? result.body.message
+        : "Không thể tạo phiên cho sự kiện này.";
+    response.status(result.status === 200 ? 502 : result.status).json({
+      ok: false,
+      message,
+    });
+    return;
+  }
+
+  const sessionDoc = result.body.session as { id?: string; _id?: string };
+  const sessionId = sessionDoc?.id || sessionDoc?._id;
+  if (sessionId && mongoose.Types.ObjectId.isValid(sessionId)) {
+    claimed.sessionId = new mongoose.Types.ObjectId(sessionId);
+    await claimed.save();
+    // Các log pending cùng biển (camera đẩy lặp) đóng theo, tránh "ma" tái
+    // xuất hiện trên /staff-desk khi reconnect SSE.
+    await ParkingCameraLog.updateMany(
+      {
+        _id: { $ne: claimed._id },
+        direction: "in",
+        entryReviewState: "pending_review",
+        sessionId: null,
+        $or: [{ plate }, ...(detectedPlate ? [{ detectedPlate }] : [])],
+      },
+      {
+        $set: {
+          entryReviewState: "dismissed",
+          confirmedPlate: plate,
+          confirmedBy: request.user?.id,
+          confirmedAt: new Date(),
+          confirmationNote: "Đóng tự động: sự kiện cùng biển đã được xác nhận.",
+        },
+      },
+    );
+  }
+
+  await createAuditLog({
+    action: "entry_review_confirmed",
+    entityType: "ParkingCameraLog",
+    entityId: claimed._id,
+    performedBy: request.user?.id ?? "",
+    changes: {
+      new: {
+        plate,
+        detectedPlate,
+        corrected: plateCorrected,
+        rfidUid: body.rfidUid ?? null,
+        confirmationNote: body.confirmationNote ?? null,
+        sessionId: sessionId ?? null,
+      },
+    },
+  });
+
+  // Cho các màn hình staff khác biết sự kiện đã xử lý qua SSE.
+  cameraEventBus.emitIngest({
+    id: claimed._id.toString(),
+    direction: "in",
+    plate,
+    detectedPlate,
+    confidence: claimed.confidence,
+    rfidUid: claimed.rfidUid,
+    ownerName: claimed.ownerName,
+    userType: (claimed.userType || "unknown") as "resident" | "guest" | "unknown",
+    imagePath: claimed.imagePath,
+    barrierOpened: false,
+    sessionId: sessionId ?? null,
+    action: "entry_confirmed",
+    entryReviewState: "confirmed",
+    createdAt: claimed.createdAt.toISOString(),
+  });
+
+  response.status(201).json({
+    ok: true,
+    session: result.body.session,
+    isMember: result.body.isMember,
+    memberRfidManual: result.body.memberRfidManual,
+    subscriptionWarn: result.body.subscriptionWarn,
+    review: serializeEntryReview(claimed),
+    message: `Đã tạo phiên cho biển ${plate}. Mở barie để xe vào.`,
+  });
+}
+
+/**
+ * POST /api/camera-logs/entry-reviews/:id/dismiss
+ * Bỏ qua sự kiện (không tạo phiên, không mở barie).
+ */
+export async function dismissEntryReview(
+  request: Request,
+  response: Response,
+) {
+  const logId = String(request.params.id || "");
+  if (!mongoose.Types.ObjectId.isValid(logId)) {
+    response.status(400).json({ ok: false, message: "ID sự kiện không hợp lệ." });
+    return;
+  }
+  const updated = await ParkingCameraLog.findOneAndUpdate(
+    { _id: logId, direction: "in", entryReviewState: "pending_review" },
+    {
+      $set: {
+        entryReviewState: "dismissed",
+        confirmedBy: request.user?.id,
+        confirmedAt: new Date(),
+      },
+    },
+    { new: true },
+  );
+  if (!updated) {
+    response.status(409).json({
+      ok: false,
+      message: "Sự kiện không còn ở trạng thái chờ xác nhận.",
+    });
+    return;
+  }
+  cameraEventBus.emitIngest({
+    id: updated._id.toString(),
+    direction: "in",
+    plate: updated.plate || updated.detectedPlate || "",
+    detectedPlate: updated.detectedPlate || "",
+    confidence: updated.confidence,
+    rfidUid: updated.rfidUid,
+    ownerName: updated.ownerName,
+    userType: (updated.userType || "unknown") as "resident" | "guest" | "unknown",
+    imagePath: updated.imagePath,
+    barrierOpened: false,
+    sessionId: null,
+    action: "entry_dismissed",
+    entryReviewState: "dismissed",
+    createdAt: updated.createdAt.toISOString(),
+  });
+  response.json({ ok: true, review: serializeEntryReview(updated) });
 }
