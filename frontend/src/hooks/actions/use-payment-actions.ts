@@ -45,7 +45,7 @@ export function createPaymentActions({
       }
 
       setPricingConfigState(data.pricingConfig);
-      setActionLog("Đã cập nhật bảng giá trong MongoDB.");
+      setActionLog("Đã cập nhật vào hệ thống.");
       return true;
     } catch {
       setActionLog("Không kết nối được API cấu hình giá.");

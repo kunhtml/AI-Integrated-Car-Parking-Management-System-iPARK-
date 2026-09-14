@@ -15,8 +15,15 @@ type PopulatedUser = {
 const USER_POPULATE_SELECT = "name email phone";
 
 export async function listVehicles(_request: Request, response: Response) {
+  // Staff bấm "Khu vực Người dùng" (as=customer) -> chỉ thấy xe của chính họ.
+  const asCustomer =
+    _request.query.as === "customer" &&
+    _request.user?.role !== "admin" &&
+    _request.user?.role !== "manager";
   const criteria =
-    _request.user?.role === "customer" ? { userId: _request.user.id } : {};
+    _request.user?.role === "customer" || asCustomer
+      ? { userId: _request.user!.id }
+      : {};
   const vehicles = await Vehicle.find(criteria)
     .sort({ createdAt: -1 })
     .limit(200)

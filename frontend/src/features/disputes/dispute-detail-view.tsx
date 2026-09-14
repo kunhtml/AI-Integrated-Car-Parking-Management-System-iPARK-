@@ -60,7 +60,7 @@ const DISPUTE_STATUSES: DisputeStatus[] = [
 
 export function DisputeDetailView({ id }: { id: string }) {
   const router = useRouter();
-  const { currentUser, setActionLog } = useParkingApp();
+  const { currentUser, viewAs, setActionLog } = useParkingApp();
   const [detail, setDetail] = useState<DisputeItem | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -70,13 +70,18 @@ export function DisputeDetailView({ id }: { id: string }) {
 
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
-  const isStaff =
-    currentUser?.role === "admin" || currentUser?.role === "staff";
+  // Staff đang ở "Khu vực Người dùng" -> đối xử như khách hàng.
+  const asCustomer = currentUser?.role === "staff" && viewAs === "customer";
+  const effectiveRole = asCustomer ? "customer" : currentUser?.role;
+  const isStaff = effectiveRole === "admin" || effectiveRole === "staff";
 
   const loadDetail = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await apiFetch(`/disputes/${encodeURIComponent(id)}`);
+      const qs = asCustomer ? "?as=customer" : "";
+      const response = await apiFetch(
+        `/disputes/${encodeURIComponent(id)}${qs}`,
+      );
       const data = await response.json();
       if (!response.ok) {
         setActionLog(data.message || "Không tải được chi tiết khiếu nại.");
@@ -91,7 +96,7 @@ export function DisputeDetailView({ id }: { id: string }) {
     } finally {
       setLoading(false);
     }
-  }, [id, router, setActionLog]);
+  }, [id, router, setActionLog, asCustomer]);
 
   useEffect(() => {
     loadDetail();

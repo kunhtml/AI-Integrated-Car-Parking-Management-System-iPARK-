@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useParkingApp } from "@/context/parking-app-context";
+import { ShiftDetailModal } from "@/features/shifts/shift-detail-modal";
 import type { ParkingSession, ShiftScheduleItem } from "@/types";
 
 const SHIFT_LABELS: Record<string, string> = {
@@ -197,10 +198,45 @@ function formatShiftCardWhen(s: ShiftScheduleItem): string {
   return `${weekday}, ${d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}`;
 }
 
-function isShiftCheckInAvailable(s: ShiftScheduleItem): boolean {
-  if (s.status !== "scheduled") return false;
+// Ca xuyên đêm (end <= start) được tính sang ngày hôm sau.
+function shiftWindow(s: {
+  date: string | Date;
+  startTime: string;
+  endTime: string;
+}): { start: number; end: number; overnight: boolean } | null {
   const day = scheduleDayKey(s.date);
-  return day === todayStr();
+  const start = new Date(`${day}T${s.startTime}`).getTime();
+  let end = new Date(`${day}T${s.endTime}`).getTime();
+  if (Number.isNaN(start) || Number.isNaN(end)) return null;
+  const overnight = end <= start;
+  if (overnight) end += 24 * 60 * 60 * 1000;
+  return { start, end, overnight };
+}
+
+function dayStartMs(dayKey: string): number {
+  return new Date(`${dayKey}T00:00:00`).getTime();
+}
+
+// Thuộc ngày hôm nay: ca bắt đầu hôm nay, hoặc ca đêm hôm qua còn đang chạy.
+function isShiftForToday(
+  s: ShiftScheduleItem,
+  now = todayStr(),
+): boolean {
+  const w = shiftWindow(s);
+  if (!w) return false;
+  const todayStart = dayStartMs(now);
+  return w.end > todayStart && w.start < todayStart + 24 * 60 * 60 * 1000;
+}
+
+function isShiftCheckInAvailable(
+  s: ShiftScheduleItem,
+  now: number = Date.now(),
+): boolean {
+  if (s.status !== "scheduled") return false;
+  const w = shiftWindow(s);
+  if (!w) return false;
+  const earlyMs = (w.overnight ? 12 * 60 : 30) * 60 * 1000;
+  return now >= w.start - earlyMs && now < w.end;
 }
 
 function getSessionCheckInDate(s: ParkingSession): Date | null {
@@ -227,6 +263,8 @@ export function ShiftCalendar({
     const d = new Date();
     return { year: d.getFullYear(), month: d.getMonth() };
   });
+  const [detailSchedule, setDetailSchedule] =
+    useState<ShiftScheduleItem | null>(null);
 
   const mySchedules = useMemo(
     () =>
@@ -324,6 +362,10 @@ export function ShiftCalendar({
                   <div
                     key={s.id}
                     className="staff-shift-event"
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => { e.stopPropagation(); setDetailSchedule(s); }}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDetailSchedule(s); } }}
                     style={{
                       background: SHIFT_COLORS[s.shiftType]?.bg,
                       color: SHIFT_COLORS[s.shiftType]?.color,
@@ -362,6 +404,13 @@ export function ShiftCalendar({
           </div>
         ))}
       </div>
+
+      {detailSchedule && (
+        <ShiftDetailModal
+          schedule={detailSchedule}
+          onClose={() => setDetailSchedule(null)}
+        />
+      )}
     </div>
   );
 }
@@ -395,6 +444,21 @@ export function MyShiftsList({
     [schedules, currentUserId],
   );
 
+  const now = Date.now();
+  const active = allMySchedules.filter((s) => s.status === "checked_in");
+  // Ca chưa kết thúc ở hiện tại (kể cả ca đêm bắt đầu từ hôm qua).
+  const upcoming = allMySchedules
+    .filter(
+      (s) =>
+        s.status === "scheduled" &&
+        (shiftWindow(s)?.end ?? 0) > now &&
+        !active.some((a) => a.id === s.id),
+    )
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const past = allMySchedules.filter(
+    (s) => s.status !== "checked_in" && !upcoming.some((u) => u.id === s.id),
+  );
+
   const stats = useMemo(() => {
     const total = allMySchedules.length;
     const completed = allMySchedules.filter(
@@ -403,25 +467,8 @@ export function MyShiftsList({
     const checkedIn = allMySchedules.filter(
       (s) => s.status === "checked_in",
     ).length;
-    const scheduled = allMySchedules.filter(
-      (s) => s.status === "scheduled",
-    ).length;
-    return { total, completed, checkedIn, scheduled };
-  }, [allMySchedules]);
-
-  const today = todayStr();
-  const active = allMySchedules.filter((s) => s.status === "checked_in");
-  const upcoming = allMySchedules
-    .filter(
-      (s) =>
-        scheduleDayKey(s.date) >= today &&
-        s.status === "scheduled" &&
-        !active.some((a) => a.id === s.id),
-    )
-    .sort((a, b) => a.date.localeCompare(b.date));
-  const past = allMySchedules.filter(
-    (s) => s.status !== "checked_in" && !upcoming.some((u) => u.id === s.id),
-  );
+    return { total, completed, checkedIn, scheduled: upcoming.length };
+  }, [allMySchedules, upcoming.length]);
 
   async function handleCheckIn(scheduleId: string) {
     setCheckingInId(scheduleId);
@@ -569,69 +616,6 @@ export function MyShiftsList({
   );
 }
 
-// ─── Recent Sessions Component ──────────────────────────────────────────────
-export function ShiftRecentSessions({
-  sessions,
-}: {
-  sessions: ParkingSession[];
-}) {
-  const recent = useMemo(
-    () =>
-      [...sessions]
-        .filter((s) => getSessionCheckInDate(s))
-        .sort((a, b) => {
-          const ta = getSessionCheckInDate(a)?.getTime() ?? 0;
-          const tb = getSessionCheckInDate(b)?.getTime() ?? 0;
-          return tb - ta;
-        })
-        .slice(0, 15),
-    [sessions],
-  );
-
-  if (!recent.length)
-    return <p className="staff-empty">Chưa có phiên gửi xe nào hôm nay.</p>;
-
-  return (
-    <div className="staff-session-list">
-      {recent.map((s) => {
-        const inDate = getSessionCheckInDate(s);
-        const timeStr = inDate
-          ? inDate.toLocaleTimeString("vi-VN", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })
-          : "—";
-        const isCompleted = s.status === "Đã hoàn thành";
-        const fee = s.fee != null ? `${s.fee.toLocaleString("vi-VN")}đ` : "—";
-
-        return (
-          <div key={s.id} className="staff-session-row">
-            <span className="staff-session-plate">{s.plate}</span>
-            <div className="staff-session-info">
-              <span>{s.vehicleType || "Xe máy"}</span>
-              <span className="staff-session-slot">
-                {s.slotId ? `Vị trí ${s.slotId}` : "Chưa gắn vị trí"}
-              </span>
-            </div>
-            <div className="staff-session-meta">
-              <span className="staff-session-time">
-                <Clock size={10} />
-                {timeStr}
-              </span>
-              {isCompleted && <span className="staff-session-fee">{fee}</span>}
-            </div>
-            <span
-              className={`staff-session-badge ${isCompleted ? "done" : "active"}`}
-            >
-              {isCompleted ? "Đã xuất" : "Đang đỗ"}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 // ─── Dedicated Work Schedule View ───────────────────────────────────────────
 export function MyScheduleView() {
   const { currentUser, shiftScheduleList, checkInShift, sessions } =
@@ -648,7 +632,7 @@ export function MyScheduleView() {
       (s) =>
         currentUserId != null &&
         String(s.staffId) === currentUserId &&
-        scheduleDayKey(s.date) === today,
+        isShiftForToday(s, today),
     );
   }, [shiftScheduleList, currentUserId, today]);
 
@@ -794,67 +778,45 @@ export function MyScheduleView() {
         />
       </div>
 
-      {/* Main layout — 2 cột cân đối: chính = lịch tháng + phiên hôm nay, phụ = danh sách ca (cuộn) */}
+      {/* Main layout — 2 cột cân đối: Lịch làm việc của tôi & Lịch trực tháng (ngang bằng nhau) */}
       <div className="shift-layout">
-        {/* Cột chính */}
-        <div className="shift-col shift-col-primary">
-          <div className="staff-panel">
-            <div className="staff-panel-head">
-              <div className="staff-panel-head-left">
-                <div className="staff-panel-icon purple">
-                  <Calendar size={16} />
-                </div>
-                <div>
-                  <p className="staff-panel-kicker">Tháng</p>
-                  <h2 className="staff-panel-title">Lịch trực tháng</h2>
-                </div>
+        <div className="staff-panel shift-panel-schedule">
+          <div className="staff-panel-head">
+            <div className="staff-panel-head-left">
+              <div className="staff-panel-icon amber">
+                <Clock size={16} />
+              </div>
+              <div>
+                <p className="staff-panel-kicker">Lịch trực</p>
+                <h2 className="staff-panel-title">Lịch làm việc của tôi</h2>
               </div>
             </div>
-            <ShiftCalendar
+          </div>
+          <div className="shift-list-scroll">
+            <MyShiftsList
               schedules={shiftScheduleList}
               currentUserId={currentUserId}
+              onCheckIn={checkInShift}
             />
-          </div>
-
-          <div className="staff-panel">
-            <div className="staff-panel-head">
-              <div className="staff-panel-head-left">
-                <div className="staff-panel-icon blue">
-                  <Car size={16} />
-                </div>
-                <div>
-                  <p className="staff-panel-kicker">Hoạt động</p>
-                  <h2 className="staff-panel-title">Ca làm hôm nay</h2>
-                </div>
-              </div>
-              <span className="staff-panel-count">{staffSessions.length}</span>
-            </div>
-            <ShiftRecentSessions sessions={staffSessions} />
           </div>
         </div>
 
-        {/* Cột phụ */}
-        <div className="shift-col shift-col-secondary">
-          <div className="staff-panel">
-            <div className="staff-panel-head">
-              <div className="staff-panel-head-left">
-                <div className="staff-panel-icon amber">
-                  <Clock size={16} />
-                </div>
-                <div>
-                  <p className="staff-panel-kicker">Lịch trực</p>
-                  <h2 className="staff-panel-title">Lịch làm việc của tôi</h2>
-                </div>
+        <div className="staff-panel shift-panel-calendar">
+          <div className="staff-panel-head">
+            <div className="staff-panel-head-left">
+              <div className="staff-panel-icon purple">
+                <Calendar size={16} />
+              </div>
+              <div>
+                <p className="staff-panel-kicker">Tháng</p>
+                <h2 className="staff-panel-title">Lịch trực tháng</h2>
               </div>
             </div>
-            <div className="shift-list-scroll">
-              <MyShiftsList
-                schedules={shiftScheduleList}
-                currentUserId={currentUserId}
-                onCheckIn={checkInShift}
-              />
-            </div>
           </div>
+          <ShiftCalendar
+            schedules={shiftScheduleList}
+            currentUserId={currentUserId}
+          />
         </div>
       </div>
     </div>

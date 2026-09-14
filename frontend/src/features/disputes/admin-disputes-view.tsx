@@ -54,7 +54,7 @@ export function AdminDisputesView() {
       : disputes.filter((d) => d.status === statusFilter);
 
   return (
-    <section className="content-single">
+    <section className="content-single admin-disputes-view">
       <div className="panel">
         <div className="panel-heading">
           <div>
@@ -92,6 +92,7 @@ export function AdminDisputesView() {
               "Người gửi",
               "Lý do",
               "Biển số",
+              "NV phụ trách",
               "Trạng thái",
               "Tin nhắn",
               "Ngày gửi",
@@ -103,10 +104,19 @@ export function AdminDisputesView() {
               d.contactName,
               d.reason,
               d.plate || "—",
+              d.assignedStaffName || (
+                <span key="na" style={{ color: "var(--fg-muted)" }}>
+                  Chưa phân công
+                </span>
+              ),
               <span key="status" className={statusBadgeClass(d.status)}>
                 {d.status}
               </span>,
-              <span key="msgs" className="admin-disputes-msg-count">
+              <span
+                key="msgs"
+                className="admin-disputes-msg-count"
+                data-empty={(d.messages ?? []).length === 0 ? "true" : undefined}
+              >
                 {(d.messages ?? []).length > 0
                   ? (d.messages ?? []).length
                   : "—"}

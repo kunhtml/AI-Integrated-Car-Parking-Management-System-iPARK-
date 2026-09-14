@@ -309,7 +309,13 @@ export function createAuthActions({
   }
 
   async function logout() {
-    await apiFetch("/auth/logout", { method: "POST" });
+    // Kể cả khi backend chậm/không phản hồi vẫn phải kết thúc phiên phía UI —
+    // nếu await ném lỗi hoặc treo, các trang gọi logout() sẽ kẹt tại chỗ.
+    try {
+      await apiFetch("/auth/logout", { method: "POST" });
+    } catch {
+      // bỏ qua — mục tiêu cuối vẫn là đăng xuất client-side.
+    }
     setCurrentUser(null);
     showInfo("Đã đăng xuất.");
   }

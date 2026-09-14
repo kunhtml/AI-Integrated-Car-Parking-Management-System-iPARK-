@@ -698,6 +698,7 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
 
   useOperationalData({
     currentUser: state.currentUser,
+    viewAs: state.viewAs,
     setSessions,
     setRegisteredVehicles,
     setUserList,
@@ -790,8 +791,9 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
         setRegisteredVehicles,
         setVehicleRequests,
         setActionLog,
+        viewAs: state.viewAs,
       }),
-    [setRegisteredVehicles, setVehicleRequests, setActionLog],
+    [setRegisteredVehicles, setVehicleRequests, setActionLog, state.viewAs],
   );
   const zoneActions = useMemo(
     () => createZoneActions({ setZoneList, setActionLog }),

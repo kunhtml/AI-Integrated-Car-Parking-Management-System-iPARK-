@@ -747,9 +747,12 @@ export async function checkInShift(request: Request, response: Response) {
 
     // earlyCheckin: mốc sớm nhất được phép check-in.
     // - Ca thường (không xuyên đêm): scheduledStart - 30 phút.
-    // - Ca xuyên đêm (end <= start): scheduledStart - 12 giờ (đủ rộng cho
-    //   nhân viên ca đêm check-in vào giữa đêm, vd 02:15 AM).
-    const isOvernight = scheduledEnd.getTime() <= scheduledStart.getTime();
+    // - Ca xuyên đêm (endTime <= startTime trên giờ tường minh): scheduledStart -
+    //   12 giờ (đủ rộng cho nhân viên ca đêm check-in vào giữa đêm, vd 02:15 AM).
+    // Lưu ý: phải xét ca xuyên đêm TRƯỚC khi shiftEndAt roll end sang hôm sau,
+    // vì sau khi roll thì scheduledEnd luôn > scheduledStart.
+    const rawEnd = shiftDateTime(schedule.date, schedule.endTime);
+    const isOvernight = rawEnd !== null && rawEnd.getTime() <= scheduledStart.getTime();
     const earlyMinutes = isOvernight ? 12 * 60 : 30;
     const earlyThreshold = new Date(scheduledStart);
     earlyThreshold.setMinutes(earlyThreshold.getMinutes() - earlyMinutes);

@@ -6,9 +6,13 @@ import { AdminDisputesView } from "@/features/disputes/admin-disputes-view";
 import { DisputesView } from "@/features/disputes/disputes-view";
 
 export default function DisputesPage() {
-  const { currentUser } = useParkingApp();
-  const isStaffRole =
-    currentUser?.role === "admin" || currentUser?.role === "staff";
+  const { currentUser, viewAs } = useParkingApp();
+  // Staff ở "Khu vực Người dùng" (viewAs=customer) xem như khách hàng.
+  const effectiveRole =
+    currentUser?.role === "staff" && viewAs === "customer"
+      ? "customer"
+      : currentUser?.role;
+  const isStaffRole = effectiveRole === "admin" || effectiveRole === "staff";
 
   return (
     <RoleGuard allowedRoles={["customer", "admin", "manager", "staff"]}>

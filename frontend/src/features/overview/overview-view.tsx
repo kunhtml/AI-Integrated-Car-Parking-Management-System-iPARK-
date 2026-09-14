@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { useParkingApp } from "@/context/parking-app-context";
 import { apiFetch } from "@/lib/client-api";
+import { ShiftDetailModal } from "@/features/shifts/shift-detail-modal";
 import { useDashboardPolling } from "@/hooks/use-dashboard-polling";
 import { currency } from "@/lib/constants";
 import type {
@@ -59,6 +60,18 @@ function monthAgoStr() {
   const date = new Date();
   date.setDate(date.getDate() - 29);
   return dateKey(date);
+}
+
+// Giống isShiftForToday trong my-schedule-view: ca đêm bắt đầu hôm qua
+// nhưng chưa kết thúc vẫn tính là "của hôm nay".
+function shiftActiveToday(s: ShiftScheduleItem, today: string): boolean {
+  const day = String(s.date).slice(0, 10);
+  const start = new Date(`${day}T${s.startTime}`).getTime();
+  let end = new Date(`${day}T${s.endTime}`).getTime();
+  if (Number.isNaN(start) || Number.isNaN(end)) return day === today;
+  if (end <= start) end += 24 * 60 * 60 * 1000;
+  const todayStart = new Date(`${today}T00:00:00`).getTime();
+  return end > todayStart && start < todayStart + 24 * 60 * 60 * 1000;
 }
 
 function getSessionCheckInDate(
@@ -316,6 +329,8 @@ function ShiftCalendar({ schedules, currentUserId }: ShiftCalendarProps) {
     const d = new Date();
     return { year: d.getFullYear(), month: d.getMonth() };
   });
+  const [detailSchedule, setDetailSchedule] =
+    useState<ShiftScheduleItem | null>(null);
 
   const mySchedules = useMemo(
     () =>
@@ -408,6 +423,10 @@ function ShiftCalendar({ schedules, currentUserId }: ShiftCalendarProps) {
                   <div
                     key={s.id}
                     className="staff-shift-event"
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => { e.stopPropagation(); setDetailSchedule(s); }}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDetailSchedule(s); } }}
                     style={{
                       background: SHIFT_COLORS[s.shiftType]?.bg,
                       color: SHIFT_COLORS[s.shiftType]?.color,
@@ -446,6 +465,13 @@ function ShiftCalendar({ schedules, currentUserId }: ShiftCalendarProps) {
           </div>
         ))}
       </div>
+
+      {detailSchedule && (
+        <ShiftDetailModal
+          schedule={detailSchedule}
+          onClose={() => setDetailSchedule(null)}
+        />
+      )}
     </div>
   );
 }
@@ -996,6 +1022,8 @@ function StaffDashboard() {
     useState<StaffDashboardOverview | null>(null);
   const [generalOverview, setGeneralOverview] =
     useState<DashboardOverview | null>(null);
+  // "" = hôm nay; khác => ngày cụ thể YYYY-MM-DD để lọc KPI.
+  const [filterDate, setFilterDate] = useState("");
 
   const loadStaffOverview = useCallback(async () => {
     try {
@@ -1010,14 +1038,15 @@ function StaffDashboard() {
 
   const loadGeneralOverview = useCallback(async () => {
     try {
-      const response = await apiFetch("/dashboard/overview?range=today");
+      const dateParam = filterDate ? `&date=${filterDate}` : "";
+      const response = await apiFetch(`/dashboard/overview?range=today${dateParam}`);
       if (!response.ok) return;
       const data = await response.json();
       setGeneralOverview(data.overview ?? null);
     } catch {
       setGeneralOverview(null);
     }
-  }, []);
+  }, [filterDate]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -1040,9 +1069,16 @@ function StaffDashboard() {
   // Shifts of current staff today
   const myTodayShifts = useMemo(() => {
     return shiftScheduleList.filter(
-      (s) => s.staffId === currentUser?.id && s.date === today,
+      (s) =>
+        s.staffId === currentUser?.id && shiftActiveToday(s, today),
     );
   }, [shiftScheduleList, currentUser, today]);
+
+  const myCompletedShifts = useMemo(() => {
+    return shiftScheduleList.filter(
+      (s) => s.staffId === currentUser?.id && s.status === "completed",
+    );
+  }, [shiftScheduleList, currentUser]);
 
   const myActiveShift = useMemo(() => {
     return myTodayShifts.find((s) => s.status === "checked_in");
@@ -1053,8 +1089,9 @@ function StaffDashboard() {
   }, [myTodayShifts]);
 
   // Real lot-wide metrics (from backend overview or fallback to context)
+  // Khi chọn ngày filter, fallback client-side cũng lọc theo ngày đó.
+  const statDate = filterDate || today;
   const totalSlots = slotList.length || generalOverview?.capacity || 200;
-  const freeSlots = slotList.filter((s) => s.status === "empty").length;
 
   const activeCount =
     generalOverview?.active ??
@@ -1071,17 +1108,22 @@ function StaffDashboard() {
   const activeGuestCount =
     generalOverview?.activeGuest ??
     Math.max(0, activeCount - activeMemberCount);
+  // ponytail: suy ra chỗ trống từ số xe đang trong bãi để khớp với card
+  // "Đang trong bãi"; slot DB sync lag nên không đáng tin. Nâng cấp = backend
+  // trả occupancy chuẩn theo session.
+  const freeSlots = Math.max(0, totalSlots - activeCount);
 
   const entryCount =
     generalOverview?.entryCount ??
-    sessions.filter((s) => s.status !== "Đã hủy" && sessionDateKey(s) === today)
+    sessions
+      .filter((s) => s.status !== "Đã hủy" && sessionDateKey(s) === statDate)
       .length;
   const entryMemberCount =
     generalOverview?.entryMemberCount ??
     sessions.filter(
       (s) =>
         s.status !== "Đã hủy" &&
-        sessionDateKey(s) === today &&
+        sessionDateKey(s) === statDate &&
         (s.customerType === "member" ||
           s.isRegisteredMember ||
           s.quotaType === "member"),
@@ -1093,14 +1135,14 @@ function StaffDashboard() {
   const exitCount =
     generalOverview?.exitCount ??
     sessions.filter(
-      (s) => s.status === "Đã hoàn thành" && sessionDateKey(s) === today,
+      (s) => s.status === "Đã hoàn thành" && sessionDateKey(s) === statDate,
     ).length;
   const exitMemberCount =
     generalOverview?.exitMemberCount ??
     sessions.filter(
       (s) =>
         s.status === "Đã hoàn thành" &&
-        sessionDateKey(s) === today &&
+        sessionDateKey(s) === statDate &&
         (s.customerType === "member" ||
           s.isRegisteredMember ||
           s.quotaType === "member"),
@@ -1116,10 +1158,14 @@ function StaffDashboard() {
   const cashRev = generalOverview?.cashRevenue ?? 0;
   const cashCount = generalOverview?.cashCount ?? 0;
 
-  const occupancyPct =
-    totalSlots > 0 ? Math.round((activeCount / totalSlots) * 100) : 0;
-
   const userName = currentUser?.name || currentUser?.email || "Nhân viên";
+  const statDateLabel = filterDate
+    ? new Date(`${filterDate}T00:00:00`).toLocaleDateString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      })
+    : "Hôm nay";
   const greeting = (() => {
     const h = new Date().getHours();
     if (h < 12) return "Chào buổi sáng";
@@ -1150,6 +1196,54 @@ function StaffDashboard() {
           </div>
         </div>
         <div className="staff-header-right">
+          {/* Filter ngày cho KPI lưu lượng & doanh thu */}
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              fontSize: 12,
+              fontWeight: 600,
+              color: "#64748b",
+            }}
+          >
+            <Calendar size={14} />
+            <input
+              type="date"
+              value={filterDate || today}
+              max={today}
+              onChange={(e) => {
+                const v = e.target.value;
+                setFilterDate(!v || v === today ? "" : v);
+              }}
+              style={{
+                border: "1px solid #e2e8f0",
+                borderRadius: 8,
+                padding: "4px 8px",
+                fontSize: 12,
+                background: "#fff",
+                color: "#334155",
+              }}
+            />
+            {filterDate && (
+              <button
+                type="button"
+                onClick={() => setFilterDate("")}
+                style={{
+                  border: "none",
+                  background: "rgba(59,130,246,0.1)",
+                  color: "#2563eb",
+                  borderRadius: 6,
+                  padding: "3px 8px",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Hôm nay
+              </button>
+            )}
+          </label>
           {/* Current shift badge */}
           {myActiveShift && (
             <div className="staff-shift-badge active">
@@ -1179,8 +1273,9 @@ function StaffDashboard() {
         <KpiGroup
           title="Lưu lượng phương tiện"
           icon={<Car size={16} />}
-          tag="Hôm nay"
+          tag={statDateLabel}
           color="cyan"
+          className="cards-2"
         >
           <StatCard
             icon={<ArrowDown size={16} />}
@@ -1197,22 +1292,11 @@ function StaffDashboard() {
             icon={<ArrowUp size={16} />}
             label="Xe ra"
             value={String(exitCount)}
-            sub="lượt xuất bến"
+            sub="đã checkout thành công"
             color="orange"
             layers={[
               { label: "Khách vãng lai", value: exitGuestCount },
               { label: "Khách thành viên", value: exitMemberCount },
-            ]}
-          />
-          <StatCard
-            icon={<Car size={16} />}
-            label="Đang trong bãi"
-            value={String(activeCount)}
-            sub="xe hiện diện"
-            color="blue"
-            layers={[
-              { label: "Khách vãng lai", value: activeGuestCount },
-              { label: "Khách thành viên", value: activeMemberCount },
             ]}
           />
         </KpiGroup>
@@ -1240,9 +1324,8 @@ function StaffDashboard() {
           />
           <StatCard
             icon={<Activity size={16} />}
-            label="Đang đỗ"
+            label="Đang trong bãi"
             value={String(activeCount)}
-            sub={`${occupancyPct}% lấp đầy`}
             color="amber"
             layers={[
               { label: "Khách vãng lai", value: activeGuestCount },
@@ -1255,7 +1338,7 @@ function StaffDashboard() {
         <KpiGroup
           title="Doanh thu & Giao dịch"
           icon={<Wallet size={16} />}
-          tag="Hôm nay"
+          tag={statDateLabel}
           color="amber"
           className="cards-4"
         >
@@ -1293,14 +1376,14 @@ function StaffDashboard() {
         <KpiGroup
           title="Ca trực & Vận hành"
           icon={<Calendar size={16} />}
-          tag="Cá nhân"
+          tag="Hiện tại"
           color="purple"
         >
           <StatCard
             icon={<Calendar size={16} />}
-            label="Ca trực hôm nay"
-            value={String(myTodayShifts.length)}
-            sub="ca phân bổ hôm nay"
+            label="Số ca làm việc hoàn thành"
+            value={String(myCompletedShifts.length)}
+            sub="toàn bộ"
             color="purple"
           />
           <StatCard
@@ -1331,7 +1414,7 @@ function StaffDashboard() {
             sub={
               myUpcomingShift
                 ? `bắt đầu lúc ${myUpcomingShift.startTime}`
-                : "lịch làm việc"
+                : ""
             }
             color="blue"
           />
@@ -1353,8 +1436,6 @@ function AdminDashboard() {
     setSlotList,
   } = useParkingApp();
   const [timeRange, setTimeRange] = useState<TimeRange>("7d");
-  const [revenueData, setRevenueData] = useState<RevenueChartPoint[]>([]);
-  const [loading, setLoading] = useState(false);
   const [overview, setOverview] = useState<DashboardOverview | null>(null);
 
   // Real-time polling for admin dashboard
@@ -1377,10 +1458,6 @@ function AdminDashboard() {
   const capacity = (overview?.capacity ?? slotList.length) || 30;
   const activeCount = overview?.active ?? stats.active;
   const availableCount = overview?.available ?? stats.available;
-  const occupancyPct =
-    capacity > 0
-      ? Math.round(((capacity - availableCount) / capacity) * 100)
-      : 0;
   const rangeLabel =
     timeRange === "today"
       ? "hôm nay"
@@ -1414,32 +1491,6 @@ function AdminDashboard() {
       .slice(0, 5);
   }, [sessions]);
 
-  const loadRevenue = useCallback(async () => {
-    setLoading(true);
-    try {
-      const from =
-        timeRange === "today"
-          ? todayStr()
-          : timeRange === "7d"
-            ? weekAgoStr()
-            : monthAgoStr();
-      const to = todayStr();
-      const groupBy = timeRange === "today" ? "hour" : "day";
-      const res = await apiFetch(
-        `/reports/revenue-chart?from=${from}&to=${to}&groupBy=${groupBy}`,
-      );
-      if (!res.ok) {
-        setRevenueData([]);
-      } else {
-        const json = await res.json();
-        setRevenueData(Array.isArray(json.data) ? json.data : []);
-      }
-    } catch {
-      setRevenueData([]);
-    }
-    setLoading(false);
-  }, [timeRange]);
-
   const loadOverview = useCallback(async () => {
     try {
       const response = await apiFetch(`/dashboard/overview?range=${timeRange}`);
@@ -1453,12 +1504,11 @@ function AdminDashboard() {
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
-      void loadRevenue();
       void loadOverview();
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
-  }, [loadOverview, loadRevenue]);
+  }, [loadOverview]);
 
   useEffect(() => {
     const intervalId = setInterval(() => {
@@ -1512,6 +1562,7 @@ function AdminDashboard() {
           icon={<Car size={16} />}
           tag={rangeLabel}
           color="cyan"
+          className="cards-2"
         >
           <StatCard
             icon={<ArrowDown size={16} />}
@@ -1540,7 +1591,7 @@ function AdminDashboard() {
             icon={<ArrowUp size={16} />}
             label="Xe ra"
             value={String(overview?.exitCount ?? 0)}
-            sub="lượt xuất bến"
+            sub="đã checkout thành công"
             color="orange"
             layers={[
               {
@@ -1556,25 +1607,6 @@ function AdminDashboard() {
               {
                 label: "Khách thành viên",
                 value: overview?.exitMemberCount ?? 0,
-              },
-            ]}
-          />
-          <StatCard
-            icon={<Car size={16} />}
-            label="Đang trong bãi"
-            value={String(activeCount)}
-            sub="xe hiện diện"
-            color="blue"
-            layers={[
-              {
-                label: "Khách vãng lai",
-                value:
-                  overview?.activeGuest ??
-                  Math.max(0, activeCount - (overview?.activeMember ?? 0)),
-              },
-              {
-                label: "Khách thành viên",
-                value: overview?.activeMember ?? 0,
               },
             ]}
           />
@@ -1603,9 +1635,8 @@ function AdminDashboard() {
           />
           <StatCard
             icon={<Activity size={16} />}
-            label="Đang đỗ"
+            label="Đang trong bãi"
             value={String(activeCount)}
-            sub={`${occupancyPct}% lấp đầy`}
             color="amber"
             layers={[
               {
@@ -1689,51 +1720,6 @@ function AdminDashboard() {
             color="blue"
           />
         </KpiGroup>
-      </div>
-
-      {/* Main Charts Row */}
-      <div className="staff-charts-row">
-        <div className="staff-panel staff-panel-wide">
-          <div className="staff-panel-head">
-            <div className="staff-panel-head-left">
-              <div className="staff-panel-icon blue">
-                <TrendingUp size={16} />
-              </div>
-              <div>
-                <p className="staff-panel-kicker">Doanh thu</p>
-                <h2 className="staff-panel-title">Biểu đồ doanh thu</h2>
-              </div>
-            </div>
-            <button
-              className="staff-refresh-btn"
-              onClick={loadRevenue}
-              disabled={loading}
-              type="button"
-            >
-              <RefreshCw size={14} className={loading ? "spin" : ""} />
-            </button>
-          </div>
-          <RevenueBarChart data={revenueData} range={timeRange} />
-        </div>
-
-        <div className="staff-panel">
-          <div className="staff-panel-head">
-            <div className="staff-panel-head-left">
-              <div className="staff-panel-icon green">
-                <ParkingCircle size={16} />
-              </div>
-              <div>
-                <p className="staff-panel-kicker">Công suất bãi xe</p>
-                <h2 className="staff-panel-title">Tỷ lệ lấp đầy bãi xe</h2>
-              </div>
-            </div>
-          </div>
-          <TotalOccupancyBar
-            occupied={activeCount}
-            capacity={capacity}
-            slots={slotList}
-          />
-        </div>
       </div>
 
       {/* Bottom Row */}

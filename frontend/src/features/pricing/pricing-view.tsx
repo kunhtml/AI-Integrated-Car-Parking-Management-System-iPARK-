@@ -184,6 +184,9 @@ export function PricingView() {
 
   // Modals
   const [pricingModalOpen, setPricingModalOpen] = useState(false);
+  const [graceEditing, setGraceEditing] = useState(false);
+  const [graceDraft, setGraceDraft] = useState(20);
+  const [graceSaving, setGraceSaving] = useState(false);
   const [createTplModalOpen, setCreateTplModalOpen] = useState(false);
   const [editTplModalOpen, setEditTplModalOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] =
@@ -227,6 +230,21 @@ export function PricingView() {
     if (success) {
       setPricingModalOpen(false);
     }
+  }
+
+  async function handleSaveGrace() {
+    const minutes = Math.max(0, Math.min(120, Math.round(graceDraft) || 0));
+    setGraceSaving(true);
+    const formData = new FormData();
+    formData.set("dayRate", String(pricingForm.dayRate));
+    formData.set("rfidCardSalePrice", String(pricingForm.rfidCardSalePrice));
+    formData.set("nightRate", String(pricingForm.nightRate));
+    formData.set("dayStartHour", String(pricingForm.dayStartHour));
+    formData.set("nightStartHour", String(pricingForm.nightStartHour));
+    formData.set("gracePeriod", String(minutes));
+    const success = await updatePricing(formData);
+    setGraceSaving(false);
+    if (success) setGraceEditing(false);
   }
 
   async function loadTemplates() {
@@ -407,10 +425,67 @@ export function PricingView() {
             </h4>
             <div className="pricing-info-grid">
               <div className="pricing-info-item">
-                <span className="pricing-info-label">Bắt đầu tính phí sau</span>
-                <span className="pricing-info-value">
-                  {pricingConfigState.gracePeriod ?? 20} phút
+                <span className="pricing-info-label">
+                  Bắt đầu tính phí sau{" "}
+                  <em style={{ fontSize: "0.75em", color: "#8a97a8", fontStyle: "normal" }}>
+                    (thời gian miễn phí để xe vào ổn định tại slot)
+                  </em>
                 </span>
+                {graceEditing ? (
+                  <span className="pricing-grace-editor">
+                    <input
+                      type="number"
+                      min={0}
+                      max={120}
+                      step={1}
+                      value={graceDraft}
+                      autoFocus
+                      onChange={(e) => setGraceDraft(Number(e.target.value))}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void handleSaveGrace();
+                        } else if (e.key === "Escape") {
+                          setGraceEditing(false);
+                        }
+                      }}
+                    />
+                    <span>phút</span>
+                    <button
+                      type="button"
+                      className="pricing-grace-btn pricing-grace-btn--save"
+                      disabled={graceSaving}
+                      onClick={() => void handleSaveGrace()}
+                      title="Lưu thời gian miễn phí"
+                    >
+                      <Save size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      className="pricing-grace-btn"
+                      disabled={graceSaving}
+                      onClick={() => setGraceEditing(false)}
+                      title="Hủy"
+                    >
+                      <X size={14} />
+                    </button>
+                  </span>
+                ) : (
+                  <span className="pricing-info-value pricing-info-value--editable">
+                    {pricingConfigState.gracePeriod ?? 20} phút
+                    <button
+                      type="button"
+                      className="pricing-grace-btn"
+                      onClick={() => {
+                        setGraceDraft(pricingConfigState.gracePeriod ?? 20);
+                        setGraceEditing(true);
+                      }}
+                      title="Chỉnh sửa thời gian miễn phí"
+                    >
+                      <Pencil size={13} />
+                    </button>
+                  </span>
+                )}
               </div>
               <div className="pricing-info-item">
                 <span className="pricing-info-label">Khung giờ ngày</span>

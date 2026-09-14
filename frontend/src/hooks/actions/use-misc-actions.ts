@@ -96,7 +96,7 @@ export function createMiscActions({
     setRegisteredVehicles((items) =>
       items.map((item) => (item.id === vehicle.id ? data.vehicle : item)),
     );
-    simulateAction(`Đã duyệt xe ${vehicle.plate} trong MongoDB.`);
+    simulateAction(`Đã duyệt xe ${vehicle.plate}.`);
   }
 
   async function fetchVehicleDetail(

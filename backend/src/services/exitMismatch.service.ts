@@ -337,5 +337,9 @@ export async function settleExitAfterVerify(session: SessionDoc) {
     paymentStatus,
     isSubscriber,
     canOpenGate,
+    // Cho UI phân biệt "Miễn phí theo quy định" (thời gian ra nằm trong
+    // khoảng miễn phí admin cài) với các trạng thái thanh toán khác.
+    freeMinutes: session.feeBreakdown?.freeMinutes ?? null,
+    totalMinutes: session.feeBreakdown?.totalMinutes ?? null,
   };
 }
