@@ -63,6 +63,15 @@ def reset_staff_desk_gate():
     orchestrator.reset_gate_state(direction)
     return jsonify({"ok": True, "direction": direction})
 
+@app.post("/api/staff-desk/reset-all")
+def reset_all_staff_desk_state():
+    """Clear transient AI/RFID/barrier state for both physical lanes."""
+    for direction in ("in", "out"):
+        scanner.cancel(direction)
+        orchestrator.reset_gate_state(direction)
+        barrier.close(direction)
+    return jsonify({"ok": True, "directions": ["in", "out"]})
+
 # Optional serial RFID reader (Arduino/ESP32 qua COM port). Chi bật khi
 # RFID_SERIAL_PORT(S) duoc cau hinh; neu khong, van co the nap UID qua HTTP
 # POST /api/rfid/scan/record.
@@ -88,6 +97,7 @@ def _build_rfid_port_spec() -> str:
 
     if explicit:
         return explicit
+
     # Fallback: tự ghép từ SERIAL_PORT_IN / SERIAL_PORT_OUT (đã có sẵn trong .env).
     parts = []
     for direction, key in (("in", "SERIAL_PORT_IN"), ("out", "SERIAL_PORT_OUT")):

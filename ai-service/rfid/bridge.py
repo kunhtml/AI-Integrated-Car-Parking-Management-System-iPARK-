@@ -17,6 +17,7 @@ Two transports are supported:
 """
 from __future__ import annotations
 
+import os
 import threading
 import time
 import re
@@ -99,8 +100,12 @@ def detect_rfid_port_spec(baudrate: int = 9600, timeout: float = 2.5) -> str:
         print("[RFID][detect] no RFID device identified (ID:IN/ID:OUT not found)")
         return ""
 
-    parts = [f"{d}={found[d]}:{baudrate}" for d in ("in", "out") if d in found]
-    return ",".join(parts)
+    swap_rfid = os.environ.get("RFID_SWAP_DIRECTIONS", "false").strip().lower() in ("1", "true", "yes", "on")
+    if swap_rfid and "in" in found and "out" in found:
+        found["in"], found["out"] = found["out"], found["in"]
+        print(f"[RFID][detect][SWAP] Swapped ports: in={found['in']}, out={found['out']}")
+
+    return ",".join(f"{d}={found[d]}:{baudrate}" for d in ("in", "out") if d in found)
 
 
 def parse_port_spec(spec: str, default_direction: str | None = None) -> list[tuple[str, str, int]]:

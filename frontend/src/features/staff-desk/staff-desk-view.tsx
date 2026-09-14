@@ -307,6 +307,8 @@ export function StaffDeskView() {
   const [manualEntryPlate, setManualEntryPlate] = useState("");
   const [manualEntryError, setManualEntryError] = useState("");
   const [manualEntryLoading, setManualEntryLoading] = useState(false);
+  const [manualEntryConfirmationNote, setManualEntryConfirmationNote] =
+    useState("");
   const [manualEntryVehicle, setManualEntryVehicle] = useState<{
     ownerName?: string;
     isSubscriber?: boolean;
@@ -533,6 +535,7 @@ export function StaffDeskView() {
         fromIdleForm?: boolean;
         fromIngestCorrection?: boolean;
         manualRfidReason?: string;
+        confirmationNote?: string;
       },
     ) => {
       const normalized = plate
@@ -568,11 +571,13 @@ export function StaffDeskView() {
           entryPhotoStatus: hasCameraImage
             ? "photo_captured"
             : "camera_unavailable",
-          manualEntryReason: opts?.manualRfidReason
-            ? opts.manualRfidReason
-            : opts?.fromIngestCorrection
-              ? "AI nhận diện sai/không đọc được; staff nhập biển thủ công"
-              : "Staff nhập biển thủ công tại cổng vào",
+          manualEntryReason: opts?.confirmationNote
+            ? opts.confirmationNote
+            : opts?.manualRfidReason
+              ? opts.manualRfidReason
+              : opts?.fromIngestCorrection
+                ? "AI nhận diện sai/không đọc được; staff nhập biển thủ công"
+                : "Staff nhập biển thủ công tại cổng vào",
           visualConfirmed: true,
           entryRfidUnverified: !uid,
         };
@@ -618,6 +623,7 @@ export function StaffDeskView() {
         if (opts?.fromIdleForm) {
           setShowManualEntryForm(false);
           setManualEntryPlate("");
+          setManualEntryConfirmationNote("");
         }
         if (opts?.fromIngestCorrection || activeIngest) {
           setShowIngestManualEntry(false);
@@ -656,6 +662,7 @@ export function StaffDeskView() {
           setEntrySuccessNotice(null);
           setShowManualEntryForm(false);
           setManualEntryPlate("");
+          setManualEntryConfirmationNote("");
           setManualEntryError("");
           setManualEntryVehicle(null);
           setPendingManualEntryRfid(false);
@@ -883,11 +890,11 @@ export function StaffDeskView() {
         // Vẫn đóng UI local; session có thể restore nếu API lỗi — staff thử lại.
       }
     }
-    await bridgeFetch("/api/staff-desk/reset", {
+    await bridgeFetch("/api/staff-desk/reset-all", {
       method: "POST",
-      body: JSON.stringify({ direction: exitLaneRef.current }),
     }).catch(() => undefined);
     clearExitUi();
+    window.location.reload();
   }, [activeExit?.sessionId, clearExitUi]);
 
   const dismissActive = useCallback(async () => {
@@ -1625,8 +1632,7 @@ export function StaffDeskView() {
         <div>
           <h1>Bàn nhân viên</h1>
           <p className="staff-desk__subtitle">
-            Xem camera cổng vào · nhận biển số tự động · quét thẻ để tạo phiên &
-            mở barie
+            Nhận diện xe vào xe ra · Quét thẻ RFID · Mở barie
           </p>
         </div>
         <div className="staff-desk__status">
@@ -1652,7 +1658,7 @@ export function StaffDeskView() {
       <div className="staff-desk__gates">
         <section className="staff-desk__gate staff-desk__gate--entry">
           <GateCamera
-            title="Cổng vào"
+            title="Xe vào"
             streamUrl={`${bridgeBaseUrl}/video_feed/${laneRoles.entryLane}`}
             direction="in"
             onStreamStateChange={(state) =>
@@ -1850,21 +1856,25 @@ export function StaffDeskView() {
                 manualEntryError={manualEntryError}
                 manualEntryLoading={manualEntryLoading}
                 manualEntryVehicle={manualEntryVehicle}
+                manualEntryConfirmationNote={manualEntryConfirmationNote}
                 onToggleManualEntryForm={() => {
                   setShowManualEntryForm((v) => !v);
                   setManualEntryError("");
                   setManualEntryVehicle(null);
+                  setManualEntryConfirmationNote("");
                 }}
                 onManualEntryPlateChange={(v) => {
                   setManualEntryPlate(v.toUpperCase());
                   setManualEntryError("");
                 }}
+                onManualEntryConfirmationNoteChange={
+                  setManualEntryConfirmationNote
+                }
                 onSubmitManualEntry={() => void startManualEntryRfidFlow()}
                 onConfirmManualPlate={(plate) => {
                   void createSessionManual(undefined, plate, {
                     fromIdleForm: true,
-                    manualRfidReason:
-                      "Mất kết nối phần cứng; nhân viên đã đối chiếu biển số chính xác bằng mắt và cho xe vào thủ công",
+                    confirmationNote: manualEntryConfirmationNote.trim(),
                   });
                 }}
                 phase={phase}
@@ -1917,7 +1927,7 @@ export function StaffDeskView() {
 
         <section className="staff-desk__gate staff-desk__gate--exit">
           <GateCamera
-            title="Cổng ra"
+            title="Xe ra"
             streamUrl={`${bridgeBaseUrl}/video_feed/${laneRoles.exitLane}`}
             direction="out"
           />
@@ -2066,8 +2076,10 @@ function WaitingCard({
   manualEntryError,
   manualEntryLoading,
   manualEntryVehicle,
+  manualEntryConfirmationNote,
   onToggleManualEntryForm,
   onManualEntryPlateChange,
+  onManualEntryConfirmationNoteChange,
   onSubmitManualEntry,
   onOpenVerifiedMember,
   onConfirmManualPlate,
@@ -2092,6 +2104,7 @@ function WaitingCard({
   manualEntryPlate?: string;
   manualEntryError?: string;
   manualEntryLoading?: boolean;
+  manualEntryConfirmationNote?: string;
   manualEntryVehicle?: {
     ownerName?: string;
     isSubscriber?: boolean;
@@ -2105,6 +2118,7 @@ function WaitingCard({
   } | null;
   onToggleManualEntryForm?: () => void;
   onManualEntryPlateChange?: (value: string) => void;
+  onManualEntryConfirmationNoteChange?: (value: string) => void;
   onSubmitManualEntry?: () => void;
   onOpenVerifiedMember?: () => void;
   onConfirmManualPlate?: (plate: string) => void;
@@ -2218,6 +2232,27 @@ function WaitingCard({
         </div>
       ) : null}
 
+      {isEntry && manualEntryPlate && !showManualForm ? (
+        <div style={{ width: "100%", maxWidth: 396, margin: "0.75rem auto 0" }}>
+          <label
+            className="staff-desk__exit-manual-label"
+            htmlFor="manual-entry-confirmation-note"
+          >
+            Ghi chú xác nhận
+          </label>
+          <textarea
+            id="manual-entry-confirmation-note"
+            className="staff-desk__exit-manual-input"
+            value={manualEntryConfirmationNote || ""}
+            onChange={(event) =>
+              onManualEntryConfirmationNoteChange?.(event.target.value)
+            }
+            placeholder="VD: Đã đối chiếu biển số xe thực tế, thông tin chính xác"
+            rows={3}
+          />
+        </div>
+      ) : null}
+
       {isEntry &&
       manualEntryPlate &&
       !showManualForm &&
@@ -2310,7 +2345,11 @@ function WaitingCard({
                 borderColor: "#15803d",
                 fontWeight: 700,
               }}
-              disabled={Boolean(manualLoading) || phase === "creating"}
+              disabled={
+                Boolean(manualLoading) ||
+                phase === "creating" ||
+                !manualEntryConfirmationNote?.trim()
+              }
               onClick={() => {
                 if (manualEntryPlate) {
                   onConfirmManualPlate?.(manualEntryPlate);
@@ -2346,7 +2385,9 @@ function WaitingCard({
             className="btn btn-primary staff-desk__exit-manual-btn"
             onClick={onToggleManual}
           >
-            {manualEntryPlate ? "Đổi biển số khác" : "Nhập thủ công biển số xe"}
+            {manualEntryPlate
+              ? "Nhập lại thông tin biển số xe"
+              : "Nhập thủ công biển số xe"}
           </button>
         ) : (
           <form
