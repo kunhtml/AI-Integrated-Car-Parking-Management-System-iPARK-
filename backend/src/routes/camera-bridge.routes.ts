@@ -4,7 +4,10 @@ import {
   bridgeHealth,
   bridgeRoi,
   clearCameraLogs,
+  confirmEntryReview,
+  dismissEntryReview,
   listCameraLogs,
+  listPendingEntryReviews,
   pushCameraLog,
 } from "../controllers/camera-bridge.controller.js";
 import { streamCameraEvents } from "../controllers/camera-stream.controller.js";
@@ -40,6 +43,23 @@ cameraBridgeAdminRoutes.get(
   "/stream",
   requireRole("admin", "staff"),
   asyncHandler(streamCameraEvents),
+);
+
+// Entry review — nhân viên đối chiếu biển số camera trước khi mở barie.
+cameraBridgeAdminRoutes.get(
+  "/entry-reviews/pending",
+  requireRole("admin", "staff"),
+  asyncHandler(listPendingEntryReviews),
+);
+cameraBridgeAdminRoutes.post(
+  "/entry-reviews/:id/confirm",
+  requireRole("admin", "staff"),
+  asyncHandler(confirmEntryReview),
+);
+cameraBridgeAdminRoutes.post(
+  "/entry-reviews/:id/dismiss",
+  requireRole("admin", "staff"),
+  asyncHandler(dismissEntryReview),
 );
 
 export { cameraBridgeAdminRoutes };

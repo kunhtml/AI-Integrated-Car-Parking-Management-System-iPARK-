@@ -20,6 +20,7 @@ import {
 import { useParkingApp } from "@/context/parking-app-context";
 import { apiFetch } from "@/lib/client-api";
 import { logger } from "@/lib/logger";
+import { MyScheduleView } from "./my-schedule-view";
 import type {
   ShiftScheduleHistoryItem,
   ShiftScheduleItem,
@@ -237,7 +238,9 @@ export function ShiftScheduleView() {
   const [preselectedShiftType, setPreselectedShiftType] = useState<
     string | null
   >(null);
-  const [activeTab, setActiveTab] = useState<"schedule" | "stats">("schedule");
+  const [activeTab, setActiveTab] = useState<"my-schedule" | "schedule" | "stats">(() => {
+    return currentUser?.role === "staff" ? "my-schedule" : "schedule";
+  });
 
   // Stats state
   const [statsMonth, setStatsMonth] = useState(new Date().getMonth() + 1);
@@ -604,6 +607,20 @@ export function ShiftScheduleView() {
             <h2>Lịch làm việc</h2>
           </div>
           <div className="inline-actions">
+            <button
+              className={`small-button ${activeTab === "my-schedule" ? "primary" : ""}`}
+              onClick={() => setActiveTab("my-schedule")}
+              type="button"
+            >
+              <User size={14} /> Lịch của tôi
+            </button>
+            <button
+              className={`small-button ${activeTab === "schedule" ? "primary" : ""}`}
+              onClick={() => setActiveTab("schedule")}
+              type="button"
+            >
+              <Calendar size={14} /> Lịch toàn bãi
+            </button>
             {isAdmin && (
               <>
                 <button
@@ -612,13 +629,6 @@ export function ShiftScheduleView() {
                   type="button"
                 >
                   <BarChart3 size={14} /> Thống kê
-                </button>
-                <button
-                  className={`small-button ${activeTab === "schedule" ? "primary" : ""}`}
-                  onClick={() => setActiveTab("schedule")}
-                  type="button"
-                >
-                  <Calendar size={14} /> Lịch
                 </button>
                 <button
                   className="small-button"
@@ -656,6 +666,13 @@ export function ShiftScheduleView() {
             )}
           </div>
         </div>
+
+        {/* My Schedule Tab */}
+        {activeTab === "my-schedule" && (
+          <div style={{ padding: "16px 0" }}>
+            <MyScheduleView />
+          </div>
+        )}
 
         {/* Stats Tab */}
         {activeTab === "stats" && isAdmin && (

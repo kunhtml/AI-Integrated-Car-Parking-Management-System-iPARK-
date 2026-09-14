@@ -85,7 +85,7 @@ export const navItems: NavItem[] = [
   {
     id: "shifts",
     path: "/shifts",
-    label: "Ca làm việc",
+    label: "Lịch làm việc",
     icon: CalendarDays,
     roles: ["admin", "manager", "staff"],
   },

@@ -1736,21 +1736,18 @@ def _process_arduino_line(line, ser, ser_out, direction):
                 image_path = capture_snapshot_for_event("in", base_url=_last_bridge_host)
                 push_result = backend.push_camera_log(direction="in", detected_plate=current_plate, confidence=0.95, rfid_uid=uid, owner_name=owner_name, plate=current_plate, user_type=card_user_type, image_path=image_path, metadata={"source": "staff-scan", "snapshot": bool(image_path), "isSubscriber": is_subscriber})
                 if push_result.get("ok"):
-                    open_gate("in")
-                    def _auto_close_in():
-                        time.sleep(5)
-                        close_gate("in")
-                    # Thread riêng: sleep dài không được chiếm background pool
-                    threading.Thread(target=_auto_close_in, daemon=True).start()
+                    # Cổng vào KHÔNG tự mở barie: backend chỉ ghi log
+                    # pending_review; nhân viên đối chiếu biển số trên
+                    # /staff-desk rồi bấm "Xác nhận thông tin & Mở barie".
                     user_label = "Resident" if is_subscriber else "Guest"
-                    scan_message_by_direction[direction] = f"{user_label}: {current_plate} — barrier opened"
+                    scan_message_by_direction[direction] = f"{user_label}: {current_plate} — chờ nhân viên xác nhận tại màn hình"
                 else:
                     scan_result_by_direction[direction] = "error"
                     push_data = push_result.get("data") or {}
                     scan_message_by_direction[direction] = (
                         push_result.get("message")
                         or push_data.get("message")
-                        or "Không thể tạo phiên cho thẻ Guest. Vui lòng thử lại."
+                        or "Không gửi được sự kiện lên hệ thống. Vui lòng thử lại."
                     )
             else:
                 scan_message_by_direction[direction] = "Chưa detect được biển số. Vui lòng chờ camera nhận biển."

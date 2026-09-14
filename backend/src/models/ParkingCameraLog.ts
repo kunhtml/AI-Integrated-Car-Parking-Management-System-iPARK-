@@ -2,6 +2,12 @@ import mongoose, { Model, Schema } from "mongoose";
 
 export type CameraDirection = "in" | "out";
 
+/**
+ * Vòng đời review xe vào: camera chỉ tạo pending review; session và barie
+ * chỉ được tạo/mở sau khi nhân viên xác nhận chéo biển số.
+ */
+export type EntryReviewState = "pending_review" | "confirmed" | "dismissed";
+
 export type ParkingCameraLogDocument = {
   _id: mongoose.Types.ObjectId;
   direction: CameraDirection;
@@ -16,6 +22,14 @@ export type ParkingCameraLogDocument = {
   sessionId?: mongoose.Types.ObjectId;
   vehicleId?: mongoose.Types.ObjectId;
   rfidCardId?: mongoose.Types.ObjectId;
+  /** Chỉ dùng cho log hướng "in": trạng thái review của nhân viên. */
+  entryReviewState?: EntryReviewState;
+  /** Biển số nhân viên xác nhận (khác detectedPlate nếu AI nhận sai). */
+  confirmedPlate?: string;
+  /** Ghi chú xác nhận của nhân viên. */
+  confirmationNote?: string;
+  confirmedBy?: mongoose.Types.ObjectId;
+  confirmedAt?: Date;
   metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
@@ -55,12 +69,31 @@ const parkingCameraLogSchema = new Schema<ParkingCameraLogDocument>(
     },
     vehicleId: { type: Schema.Types.ObjectId, ref: "Vehicle", index: true },
     rfidCardId: { type: Schema.Types.ObjectId, ref: "RfidCard", index: true },
+    entryReviewState: {
+      type: String,
+      enum: ["pending_review", "confirmed", "dismissed"],
+      default: undefined,
+      index: true,
+    },
+    confirmedPlate: {
+      type: String,
+      trim: true,
+      uppercase: true,
+    },
+    confirmationNote: { type: String, trim: true },
+    confirmedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    confirmedAt: { type: Date },
     metadata: { type: Schema.Types.Mixed },
   },
   { timestamps: true },
 );
 
 parkingCameraLogSchema.index({ createdAt: -1 });
+parkingCameraLogSchema.index({
+  direction: 1,
+  entryReviewState: 1,
+  createdAt: -1,
+});
 
 export const ParkingCameraLog: Model<ParkingCameraLogDocument> =
   mongoose.models.ParkingCameraLog ||

@@ -166,6 +166,9 @@ export type ParkingSession = {
   transactionId?: string;
   ownerEmail?: string;
   feeBreakdown?: FeeBreakdown;
+  customerType?: "guest" | "member";
+  isRegisteredMember?: boolean;
+  quotaType?: "guest" | "member";
 };
 
 export type RegisteredVehicle = {

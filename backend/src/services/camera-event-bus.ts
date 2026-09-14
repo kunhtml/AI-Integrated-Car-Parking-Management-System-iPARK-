@@ -30,6 +30,8 @@ export type CameraIngestEvent = {
   createdAt: string;
   metadata?: Record<string, unknown>;
   duplicateSession?: boolean;
+  /** "pending_review" với log hướng "in" chưa được nhân viên xác nhận. */
+  entryReviewState?: string | null;
 };
 
 export type ExitSessionStateEvent = {

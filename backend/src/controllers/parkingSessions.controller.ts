@@ -702,7 +702,12 @@ export async function createParkingSession(
     );
   }
 
-  if (body.rfidUid || body.entryImageUrl) {
+  // Khi được gọi từ luồng xác nhận entry-review (confirmEntryReview), log
+  // camera gốc đã đại diện cho sự kiện — không tạo log "staff-desk" thứ hai.
+  const suppressEntryReviewLog = Boolean(
+    (request as { suppressEntryReviewLog?: boolean }).suppressEntryReviewLog,
+  );
+  if ((body.rfidUid || body.entryImageUrl) && !suppressEntryReviewLog) {
     const vehicle = await Vehicle.findOne({ plate: body.plate.toUpperCase() });
     await ParkingCameraLog.create({
       direction: "in",
