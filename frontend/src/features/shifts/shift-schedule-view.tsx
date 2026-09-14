@@ -606,65 +606,63 @@ export function ShiftScheduleView() {
             <p>Nhân viên</p>
             <h2>Lịch làm việc</h2>
           </div>
-          <div className="inline-actions">
-            <button
-              className={`small-button ${activeTab === "my-schedule" ? "primary" : ""}`}
-              onClick={() => setActiveTab("my-schedule")}
-              type="button"
-            >
-              <User size={14} /> Lịch của tôi
-            </button>
-            <button
-              className={`small-button ${activeTab === "schedule" ? "primary" : ""}`}
-              onClick={() => setActiveTab("schedule")}
-              type="button"
-            >
-              <Calendar size={14} /> Lịch toàn bãi
-            </button>
-            {isAdmin && (
-              <>
-                <button
-                  className={`small-button ${activeTab === "stats" ? "primary" : ""}`}
-                  onClick={() => setActiveTab("stats")}
-                  type="button"
-                >
-                  <BarChart3 size={14} /> Thống kê
-                </button>
-                <button
-                  className="small-button"
-                  onClick={() => setShowBulkModal(true)}
-                  type="button"
-                >
-                  <Calendar size={14} /> Gán tuần
-                </button>
-                <button
-                  className="small-button"
-                  onClick={() => setShowMonthModal(true)}
-                  type="button"
-                >
-                  <CalendarDays size={14} /> Gán tháng
-                </button>
-                <button
-                  className="small-button"
-                  onClick={() => {
-                    setPreselectedDate(null);
-                    setPreselectedShiftType(null);
-                    setShowAddModal(true);
-                  }}
-                  type="button"
-                >
-                  <Plus size={14} /> Gán ca
-                </button>
-                <button
-                  className="small-button"
-                  onClick={() => setShowExportModal(true)}
-                  type="button"
-                >
-                  <Download size={14} /> Xuất CSV
-                </button>
-              </>
-            )}
-          </div>
+          {isAdmin && (
+            <div className="inline-actions">
+              <button
+                className={`small-button ${activeTab === "my-schedule" ? "primary" : ""}`}
+                onClick={() => setActiveTab("my-schedule")}
+                type="button"
+              >
+                <User size={14} /> Lịch của tôi
+              </button>
+              <button
+                className={`small-button ${activeTab === "schedule" ? "primary" : ""}`}
+                onClick={() => setActiveTab("schedule")}
+                type="button"
+              >
+                <Calendar size={14} /> Lịch toàn bãi
+              </button>
+              <button
+                className={`small-button ${activeTab === "stats" ? "primary" : ""}`}
+                onClick={() => setActiveTab("stats")}
+                type="button"
+              >
+                <BarChart3 size={14} /> Thống kê
+              </button>
+              <button
+                className="small-button"
+                onClick={() => setShowBulkModal(true)}
+                type="button"
+              >
+                <Calendar size={14} /> Gán tuần
+              </button>
+              <button
+                className="small-button"
+                onClick={() => setShowMonthModal(true)}
+                type="button"
+              >
+                <CalendarDays size={14} /> Gán tháng
+              </button>
+              <button
+                className="small-button"
+                onClick={() => {
+                  setPreselectedDate(null);
+                  setPreselectedShiftType(null);
+                  setShowAddModal(true);
+                }}
+                type="button"
+              >
+                <Plus size={14} /> Gán ca
+              </button>
+              <button
+                className="small-button"
+                onClick={() => setShowExportModal(true)}
+                type="button"
+              >
+                <Download size={14} /> Xuất CSV
+              </button>
+            </div>
+          )}
         </div>
 
         {/* My Schedule Tab */}

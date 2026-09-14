@@ -318,7 +318,7 @@ export function UsersView() {
     }
   }
 
-  if (!currentUser) return null;
+  if (!currentUser || !isAdmin) return null;
 
   function openEdit(user: DemoUser) {
     setEditing(user);
@@ -374,7 +374,7 @@ export function UsersView() {
           </div>
           <div className="header-text">
             <h1>Quản lý tài khoản</h1>
-            <p>{isAdmin ? "Quản trị viên" : "Nhân viên"}</p>
+            <p>Quản trị viên</p>
           </div>
         </div>
         <button
