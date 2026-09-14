@@ -48,6 +48,13 @@ export const navItems: NavItem[] = [
     roles: ["staff", "manager"],
   },
   {
+    id: "shifts",
+    path: "/shifts",
+    label: "Lịch làm việc",
+    icon: CalendarDays,
+    roles: ["admin", "manager", "staff"],
+  },
+  {
     id: "sessions",
     path: "/sessions",
     label: "Phiên đỗ xe",
@@ -81,13 +88,6 @@ export const navItems: NavItem[] = [
     label: "Thông báo",
     icon: Bell,
     roles: ["admin", "manager", "staff", "customer"],
-  },
-  {
-    id: "shifts",
-    path: "/shifts",
-    label: "Lịch làm việc",
-    icon: CalendarDays,
-    roles: ["admin", "manager", "staff"],
   },
   {
     id: "disputes",
@@ -136,7 +136,7 @@ export const navItems: NavItem[] = [
     path: "/users",
     label: "Người dùng",
     icon: UsersRound,
-    roles: ["admin", "manager", "staff"],
+    roles: ["admin"],
   },
   {
     id: "pricing",
@@ -180,6 +180,7 @@ export const adminOnlyPaths = [
   "/reports",
   "/staff-applications",
   "/devices",
+  "/users",
 ];
 
 export function getNavItemsForRole(role: Role, viewAs?: ViewAsMode) {

@@ -1185,8 +1185,12 @@ export function StaffDeskView() {
       setActiveExit((current) =>
         current ? { ...current, barrierOpened: true } : current,
       );
-      // Tạm thời tắt tự động đóng sau 5s theo yêu cầu test để giữ thông báo thành công trên màn hình
-      // exitDismissTimerRef.current = window.setTimeout(() => { exitDismissTimerRef.current = null; exitGateOpenedAtRef.current = 0; clearExitUi(); }, 5000);
+      // Auto-dismiss ExitCard sau 5 giây kể cả khi bridge offline
+      exitDismissTimerRef.current = window.setTimeout(() => {
+        exitDismissTimerRef.current = null;
+        exitGateOpenedAtRef.current = 0;
+        clearExitUi();
+      }, 5000);
     }
   }, [
     activeExit?.sessionId,
@@ -1226,8 +1230,11 @@ export function StaffDeskView() {
         if (exitDismissTimerRef.current !== null) {
           window.clearTimeout(exitDismissTimerRef.current);
         }
-        // Tạm thời tắt tự động đóng sau 5s theo yêu cầu test để giữ thông báo thành công trên màn hình
-        // exitDismissTimerRef.current = window.setTimeout(() => { exitDismissTimerRef.current = null; clearExitUi(); }, 5000);
+        // Auto-dismiss sau 5 giây (kể cả hoàn tất offline)
+        exitDismissTimerRef.current = window.setTimeout(() => {
+          exitDismissTimerRef.current = null;
+          clearExitUi();
+        }, 5000);
       } catch {
         setExitScanError("Lỗi kết nối server khi kết thúc phiên thủ công.");
         setExitScanPhase("error");
@@ -2525,7 +2532,9 @@ function WaitingCard({
               autoComplete="off"
             />
             {manualError ? (
-              <p className="staff-desk__hint staff-desk__hint--danger">
+              <p
+                className="staff-desk__hint staff-desk__hint--danger staff-desk__hint--large"
+              >
                 {manualError}
               </p>
             ) : null}

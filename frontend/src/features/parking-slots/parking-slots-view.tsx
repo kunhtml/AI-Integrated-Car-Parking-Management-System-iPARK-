@@ -43,10 +43,10 @@ type PoolConfig = {
 const POOLS: PoolConfig[] = [
   {
     key: "member",
-    label: "Khu ưu tiên thành viên",
+    label: "Khu ưu tiên thành viên có gói đăng ký",
     shortLabel: "Thành viên",
     description:
-      "Chỉ cấp cho xe có gói đăng ký đang hiệu lực. Không dùng chung quota với khách vãng lai.",
+      "Chỉ cấp cho xe có gói đăng ký đang hiệu lực. Không dùng chung quota với khách vãng lai hoặc khách thành viên không có gói đăng ký.",
     icon: UsersRound,
   },
   {
@@ -789,12 +789,12 @@ export function ParkingSlotsView() {
               <div className="quota-metrics">
                 <PoolMetric label="tổng slot" value={pool.total} />
                 <PoolMetric
-                  label="còn cấp được"
+                  label="chưa sử dụng"
                   value={pool.available}
                   tone="success"
                 />
                 <PoolMetric
-                  label="đang dùng/giữ"
+                  label="đang sử dụng"
                   value={pool.active}
                   tone="warning"
                 />
@@ -980,10 +980,7 @@ export function ParkingSlotsView() {
               </div>
               <div>
                 <span>Vị trí</span>
-                <strong>
-                  {detailSlot.slotCode +
-                    (detailSlot.zoneName ? ` · ${detailSlot.zoneName}` : "")}
-                </strong>
+                <strong>{detailSlot.slotCode}</strong>
               </div>
               {detailSession && (
                 <>
@@ -1036,7 +1033,7 @@ export function ParkingSlotsView() {
               {!detailSession && (
                 <div>
                   <span>Ghi chú</span>
-                  <strong>Không tìm thấy bản ghi phiên đầy đủ.</strong>
+                  <strong>Không có</strong>
                 </div>
               )}
             </div>

@@ -1116,9 +1116,6 @@ function StaffDashboard() {
   const cashRev = generalOverview?.cashRevenue ?? 0;
   const cashCount = generalOverview?.cashCount ?? 0;
 
-  const occupancyPct =
-    totalSlots > 0 ? Math.round((activeCount / totalSlots) * 100) : 0;
-
   const userName = currentUser?.name || currentUser?.email || "Nhân viên";
   const greeting = (() => {
     const h = new Date().getHours();
@@ -1181,6 +1178,7 @@ function StaffDashboard() {
           icon={<Car size={16} />}
           tag="Hôm nay"
           color="cyan"
+          className="cards-2"
         >
           <StatCard
             icon={<ArrowDown size={16} />}
@@ -1202,17 +1200,6 @@ function StaffDashboard() {
             layers={[
               { label: "Khách vãng lai", value: exitGuestCount },
               { label: "Khách thành viên", value: exitMemberCount },
-            ]}
-          />
-          <StatCard
-            icon={<Car size={16} />}
-            label="Đang trong bãi"
-            value={String(activeCount)}
-            sub="xe hiện diện"
-            color="blue"
-            layers={[
-              { label: "Khách vãng lai", value: activeGuestCount },
-              { label: "Khách thành viên", value: activeMemberCount },
             ]}
           />
         </KpiGroup>
@@ -1240,9 +1227,8 @@ function StaffDashboard() {
           />
           <StatCard
             icon={<Activity size={16} />}
-            label="Đang đỗ"
+            label="Đang trong bãi"
             value={String(activeCount)}
-            sub={`${occupancyPct}% lấp đầy`}
             color="amber"
             layers={[
               { label: "Khách vãng lai", value: activeGuestCount },
@@ -1353,8 +1339,6 @@ function AdminDashboard() {
     setSlotList,
   } = useParkingApp();
   const [timeRange, setTimeRange] = useState<TimeRange>("7d");
-  const [revenueData, setRevenueData] = useState<RevenueChartPoint[]>([]);
-  const [loading, setLoading] = useState(false);
   const [overview, setOverview] = useState<DashboardOverview | null>(null);
 
   // Real-time polling for admin dashboard
@@ -1377,10 +1361,6 @@ function AdminDashboard() {
   const capacity = (overview?.capacity ?? slotList.length) || 30;
   const activeCount = overview?.active ?? stats.active;
   const availableCount = overview?.available ?? stats.available;
-  const occupancyPct =
-    capacity > 0
-      ? Math.round(((capacity - availableCount) / capacity) * 100)
-      : 0;
   const rangeLabel =
     timeRange === "today"
       ? "hôm nay"
@@ -1414,32 +1394,6 @@ function AdminDashboard() {
       .slice(0, 5);
   }, [sessions]);
 
-  const loadRevenue = useCallback(async () => {
-    setLoading(true);
-    try {
-      const from =
-        timeRange === "today"
-          ? todayStr()
-          : timeRange === "7d"
-            ? weekAgoStr()
-            : monthAgoStr();
-      const to = todayStr();
-      const groupBy = timeRange === "today" ? "hour" : "day";
-      const res = await apiFetch(
-        `/reports/revenue-chart?from=${from}&to=${to}&groupBy=${groupBy}`,
-      );
-      if (!res.ok) {
-        setRevenueData([]);
-      } else {
-        const json = await res.json();
-        setRevenueData(Array.isArray(json.data) ? json.data : []);
-      }
-    } catch {
-      setRevenueData([]);
-    }
-    setLoading(false);
-  }, [timeRange]);
-
   const loadOverview = useCallback(async () => {
     try {
       const response = await apiFetch(`/dashboard/overview?range=${timeRange}`);
@@ -1453,12 +1407,11 @@ function AdminDashboard() {
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
-      void loadRevenue();
       void loadOverview();
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
-  }, [loadOverview, loadRevenue]);
+  }, [loadOverview]);
 
   useEffect(() => {
     const intervalId = setInterval(() => {
@@ -1512,6 +1465,7 @@ function AdminDashboard() {
           icon={<Car size={16} />}
           tag={rangeLabel}
           color="cyan"
+          className="cards-2"
         >
           <StatCard
             icon={<ArrowDown size={16} />}
@@ -1559,25 +1513,6 @@ function AdminDashboard() {
               },
             ]}
           />
-          <StatCard
-            icon={<Car size={16} />}
-            label="Đang trong bãi"
-            value={String(activeCount)}
-            sub="xe hiện diện"
-            color="blue"
-            layers={[
-              {
-                label: "Khách vãng lai",
-                value:
-                  overview?.activeGuest ??
-                  Math.max(0, activeCount - (overview?.activeMember ?? 0)),
-              },
-              {
-                label: "Khách thành viên",
-                value: overview?.activeMember ?? 0,
-              },
-            ]}
-          />
         </KpiGroup>
 
         {/* Group 2: Vị trí & Sức chứa */}
@@ -1603,9 +1538,8 @@ function AdminDashboard() {
           />
           <StatCard
             icon={<Activity size={16} />}
-            label="Đang đỗ"
+            label="Đang trong bãi"
             value={String(activeCount)}
-            sub={`${occupancyPct}% lấp đầy`}
             color="amber"
             layers={[
               {
@@ -1689,51 +1623,6 @@ function AdminDashboard() {
             color="blue"
           />
         </KpiGroup>
-      </div>
-
-      {/* Main Charts Row */}
-      <div className="staff-charts-row">
-        <div className="staff-panel staff-panel-wide">
-          <div className="staff-panel-head">
-            <div className="staff-panel-head-left">
-              <div className="staff-panel-icon blue">
-                <TrendingUp size={16} />
-              </div>
-              <div>
-                <p className="staff-panel-kicker">Doanh thu</p>
-                <h2 className="staff-panel-title">Biểu đồ doanh thu</h2>
-              </div>
-            </div>
-            <button
-              className="staff-refresh-btn"
-              onClick={loadRevenue}
-              disabled={loading}
-              type="button"
-            >
-              <RefreshCw size={14} className={loading ? "spin" : ""} />
-            </button>
-          </div>
-          <RevenueBarChart data={revenueData} range={timeRange} />
-        </div>
-
-        <div className="staff-panel">
-          <div className="staff-panel-head">
-            <div className="staff-panel-head-left">
-              <div className="staff-panel-icon green">
-                <ParkingCircle size={16} />
-              </div>
-              <div>
-                <p className="staff-panel-kicker">Công suất bãi xe</p>
-                <h2 className="staff-panel-title">Tỷ lệ lấp đầy bãi xe</h2>
-              </div>
-            </div>
-          </div>
-          <TotalOccupancyBar
-            occupied={activeCount}
-            capacity={capacity}
-            slots={slotList}
-          />
-        </div>
       </div>
 
       {/* Bottom Row */}
