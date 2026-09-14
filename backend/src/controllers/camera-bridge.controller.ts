@@ -67,9 +67,27 @@ async function buildSessionForEntry(
   rfidUid?: string,
   imagePath?: string,
 ) {
+  const clean = plate.trim().toUpperCase();
+  const norm = clean.replace(/[\s\.-]+/g, "");
+  const regexPattern = norm
+    .split("")
+    .map((c) => c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("[\\s\\.-]*");
+  const plateRegex = new RegExp(`^${regexPattern}$`, "i");
+
   const dup = await ParkingSession.findOne({
-    plate,
     status: "\u0110ang g\u1EEDi",
+    $or: [
+      { plate: clean },
+      { plate: norm },
+      { plate: plateRegex },
+      { entryDetectedPlate: clean },
+      { entryDetectedPlate: norm },
+      { entryDetectedPlate: plateRegex },
+      { manualPlate: clean },
+      { manualPlate: norm },
+      { manualPlate: plateRegex },
+    ],
   });
   if (dup) return { duplicate: true, session: dup };
 
@@ -138,13 +156,19 @@ async function buildSessionForEntry(
         };
       }
     } else {
-      const memberSubscription = await findActiveSubscriptionByPlate(plate);
-      if (memberSubscription) {
+      const registeredMemberCard = await RfidCard.findOne({
+        cardType: "member",
+        plate,
+        status: { $in: ["active", "in-use"] },
+        userId: { $exists: true, $ne: null },
+        vehicleId: { $exists: true, $ne: null },
+      }).select("_id");
+      if (registeredMemberCard) {
         return {
           duplicate: false,
           invalidRfid: true,
           message:
-            "Xe này đã đăng ký gói thành viên. Vui lòng dùng đúng RFID Member đã liên kết với xe.",
+            "Xe này đã gắn RFID Member. Vui lòng dùng đúng thẻ RFID Member đã liên kết với xe.",
         };
       }
       // Guest RFID always consumes a walk-in slot, even for a registered plate.
@@ -390,6 +414,7 @@ export async function pushCameraLog(request: Request, response: Response) {
     if (result.duplicate) {
       action = "duplicate";
       sessionId = result.session?._id;
+      openSession = result.session;
     } else if ((result as any).cameraOnly) {
       // Camera-only detect: không tạo phiên, chỉ hiển thị lên UI để staff xử lý
       action = "skipped";
@@ -600,7 +625,7 @@ export async function pushCameraLog(request: Request, response: Response) {
           : (action as string) === "completed"
             ? "Đã hoàn thành"
             : null,
-    exitState: isExitWaiting ? (openSession?.exitState || "waiting_rfid") : null,
+    exitState: isExitWaiting ? openSession?.exitState || "waiting_rfid" : null,
     action: isExitWaiting ? "waiting_rfid" : action,
     sessionPaymentStatus: isExitWaiting ? "pending" : null,
     duplicateSession: action === "duplicate",
