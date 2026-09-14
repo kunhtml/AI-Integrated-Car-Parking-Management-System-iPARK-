@@ -61,6 +61,18 @@ function monthAgoStr() {
   return dateKey(date);
 }
 
+// Giống isShiftForToday trong my-schedule-view: ca đêm bắt đầu hôm qua
+// nhưng chưa kết thúc vẫn tính là "của hôm nay".
+function shiftActiveToday(s: ShiftScheduleItem, today: string): boolean {
+  const day = String(s.date).slice(0, 10);
+  const start = new Date(`${day}T${s.startTime}`).getTime();
+  let end = new Date(`${day}T${s.endTime}`).getTime();
+  if (Number.isNaN(start) || Number.isNaN(end)) return day === today;
+  if (end <= start) end += 24 * 60 * 60 * 1000;
+  const todayStart = new Date(`${today}T00:00:00`).getTime();
+  return end > todayStart && start < todayStart + 24 * 60 * 60 * 1000;
+}
+
 function getSessionCheckInDate(
   session: Pick<ParkingSession, "checkIn" | "checkInDate"> & {
     checkInAt?: string;
@@ -1040,9 +1052,16 @@ function StaffDashboard() {
   // Shifts of current staff today
   const myTodayShifts = useMemo(() => {
     return shiftScheduleList.filter(
-      (s) => s.staffId === currentUser?.id && s.date === today,
+      (s) =>
+        s.staffId === currentUser?.id && shiftActiveToday(s, today),
     );
   }, [shiftScheduleList, currentUser, today]);
+
+  const myCompletedShifts = useMemo(() => {
+    return shiftScheduleList.filter(
+      (s) => s.staffId === currentUser?.id && s.status === "completed",
+    );
+  }, [shiftScheduleList, currentUser]);
 
   const myActiveShift = useMemo(() => {
     return myTodayShifts.find((s) => s.status === "checked_in");
@@ -1284,9 +1303,9 @@ function StaffDashboard() {
         >
           <StatCard
             icon={<Calendar size={16} />}
-            label="Ca trực hôm nay"
-            value={String(myTodayShifts.length)}
-            sub="ca phân bổ hôm nay"
+            label="Tổng số ca đã làm"
+            value={String(myCompletedShifts.length)}
+            sub="ca đã hoàn thành"
             color="purple"
           />
           <StatCard

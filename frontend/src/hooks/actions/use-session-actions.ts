@@ -104,7 +104,7 @@ export function createSessionActions({
       }
       setSessions((items) => items.map((item) => (item.id === id ? data.session : item)));
       await reloadSlots();
-      setActionLog(`Đã hoàn thành phiên ${id} và lưu biên lai vào MongoDB.`);
+      setActionLog(`Đã hoàn thành phiên ${id} và lưu biên lai.`);
     } catch {
       setActionLog("Không kết nối được API hoàn thành phiên.");
     }
