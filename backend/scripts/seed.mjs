@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { User } from "../src/models/User.js";
 import { Vehicle } from "../src/models/Vehicle.js";
 import { Device } from "../src/models/Device.js";
+import { Dispute } from "../src/models/Dispute.js";
 import { Notification } from "../src/models/Notification.js";
 import { NotificationTemplate } from "../src/models/NotificationTemplate.js";
 import { PaymentConfig } from "../src/models/PaymentConfig.js";
@@ -337,56 +338,24 @@ for (const zone of seedZones) {
 }
 console.log(`[Seed] Zones: ${seedZones.length} seeded.`);
 
-// ─── 9. ParkingSlots ────────────────────────────────────────────────────────
-const seedSlots = [
-  // Zone A: 10 regular
-  ...Array.from({ length: 10 }, (_, i) => ({
-    slotCode: `A-${String(i + 1).padStart(2, "0")}`,
-    zoneName: "A",
-    slotType: "regular",
-    features: [],
-    floor: 0,
-  })),
-  // Zone B: 7 regular + 2 electric + 1 VIP
-  ...Array.from({ length: 7 }, (_, i) => ({
-    slotCode: `B-${String(i + 1).padStart(2, "0")}`,
-    zoneName: "B",
-    slotType: "regular",
-    features: [],
-    floor: 0,
-  })),
-  { slotCode: "B-08", zoneName: "B", slotType: "electric", features: ["charging"], floor: 0 },
-  { slotCode: "B-09", zoneName: "B", slotType: "electric", features: ["charging"], floor: 0 },
-  { slotCode: "B-10", zoneName: "B", slotType: "VIP", features: ["rain_cover", "cctv"], floor: 0 },
-  // Zone C: 7 regular + 2 handicap + 1 regular rain_cover
-  ...Array.from({ length: 7 }, (_, i) => ({
-    slotCode: `C-${String(i + 1).padStart(2, "0")}`,
-    zoneName: "C",
-    slotType: "regular",
-    features: [],
-    floor: 0,
-  })),
-  { slotCode: "C-08", zoneName: "C", slotType: "handicap", features: ["rain_cover"], floor: 0 },
-  { slotCode: "C-09", zoneName: "C", slotType: "handicap", features: ["rain_cover"], floor: 0 },
-  { slotCode: "C-10", zoneName: "C", slotType: "regular", features: ["rain_cover"], floor: 0 },
-];
-
+// ─── 9. ParkingSlots — chỉ tạo khi DB chưa có slot nào; mã số thuần (1, 2, 3...)
 let slotsCreated = 0;
-for (const slot of seedSlots) {
-  const result = await ParkingSlot.updateOne(
-    { slotCode: slot.slotCode },
-    {
-      $setOnInsert: {
-        ...slot,
-        zoneId: zoneIds[slot.zoneName],
-        status: "empty",
-      },
-    },
-    { upsert: true },
-  );
-  if (result.upsertedCount > 0) slotsCreated++;
+const existingSlotCount = await ParkingSlot.countDocuments();
+if (existingSlotCount === 0) {
+  const seedSlots = Array.from({ length: 30 }, (_, i) => ({
+    slotCode: String(i + 1),
+    zoneId: zoneIds.A,
+    slotType: "regular",
+    features: [],
+    floor: 0,
+    status: "empty",
+  }));
+  await ParkingSlot.insertMany(seedSlots);
+  slotsCreated = seedSlots.length;
 }
-console.log(`[Seed] Slots: ${slotsCreated} created, ${seedSlots.length - slotsCreated} already existed.`);
+console.log(
+  `[Seed] Slots: ${slotsCreated} created, ${existingSlotCount} already existed.`,
+);
 
 // ─── 10. SubscriptionPlans (3 plans, maxVehicles=null nghĩa là không giới hạn) ──
 const seedPlans = [
@@ -456,6 +425,108 @@ if (migratedCount > 0) {
   console.log(`[Migration] Updated ${result.modifiedCount} transactions from "vietqr" to "payos".`);
 } else {
   console.log("[Migration] No transactions with method 'vietqr' found. Skipped.");
+}
+
+// ─── 13. Disputes gán cho nhân viên le492381@gmail.com ─────────────────────
+const assignedStaff = await User.findOne({ email: "le492381@gmail.com" });
+const disputeCustomer = await User.findOne({ email: "khach01@ipark.vn" });
+
+if (assignedStaff && disputeCustomer) {
+  const hoursAgo = (h) => new Date(Date.now() - h * 3600 * 1000);
+
+  const seedDisputes = [
+    {
+      code: "KN-SEED-0001",
+      userId: disputeCustomer._id,
+      assignedStaffId: assignedStaff._id,
+      plate: "30H-678.90",
+      reason: "Sai phí gửi xe",
+      content:
+        "Tôi gửi xe từ 8:00 đến 9:30 nhưng hệ thống tính phí 3 tiếng. Nhờ ban quản lý kiểm tra lại giúp tôi.",
+      contactName: disputeCustomer.name,
+      contactPhone: "0901234567",
+      contactEmail: disputeCustomer.email,
+      status: "Mới",
+      createdAt: hoursAgo(5),
+      messages: [],
+    },
+    {
+      code: "KN-SEED-0002",
+      userId: disputeCustomer._id,
+      assignedStaffId: assignedStaff._id,
+      plate: "30F-222.11",
+      reason: "Nhận dạng biển số sai",
+      content:
+        "Khi ra bãi camera nhận dạng sai biển số thành xe khác, dẫn đến không cho ra. Đề nghị xác minh.",
+      contactName: disputeCustomer.name,
+      contactPhone: "0901234567",
+      contactEmail: disputeCustomer.email,
+      status: "Đang xử lý",
+      createdAt: hoursAgo(30),
+      messages: [
+        {
+          senderId: disputeCustomer._id,
+          senderRole: "customer",
+          senderName: disputeCustomer.name,
+          content: "Tôi đã đính kèm ảnh biên lai, mong sớm được giải quyết.",
+          createdAt: hoursAgo(26),
+        },
+        {
+          senderId: assignedStaff._id,
+          senderRole: "staff",
+          senderName: assignedStaff.name,
+          content:
+            "Dạ em tiếp nhận rồi, đang đối chiếu log camera cổng ra, sẽ phản hồi trong hôm nay ạ.",
+          createdAt: hoursAgo(24),
+        },
+      ],
+    },
+    {
+      code: "KN-SEED-0003",
+      userId: disputeCustomer._id,
+      assignedStaffId: assignedStaff._id,
+      plate: "30H-678.90",
+      reason: "Thanh toán trùng / chưa ghi nhận",
+      content:
+        "Tôi đã thanh toán qua ví nhưng hệ thống vẫn báo chưa thu phí và giữ barie không cho ra.",
+      contactName: disputeCustomer.name,
+      contactPhone: "0901234567",
+      contactEmail: disputeCustomer.email,
+      status: "Đã xử lý",
+      createdAt: hoursAgo(52),
+      resolutionNote:
+        "Đối chiếu thành công giao dịch ví (txn trùng lặp do bấm 2 lần). Đã hoàn tiền và mở barie cho khách.",
+      handledBy: assignedStaff._id,
+      handledAt: hoursAgo(48),
+      messages: [
+        {
+          senderId: assignedStaff._id,
+          senderRole: "staff",
+          senderName: assignedStaff.name,
+          content:
+            "Dạ bên em đã kiểm tra và hoàn tiền giao dịch trùng, khách thông cảm ạ.",
+          createdAt: hoursAgo(48),
+        },
+      ],
+    },
+  ];
+
+  let disputesCreated = 0;
+  for (const dispute of seedDisputes) {
+    const result = await Dispute.updateOne(
+      { code: dispute.code },
+      { $setOnInsert: dispute },
+      { upsert: true },
+    );
+    if (result.upsertedCount > 0) disputesCreated++;
+  }
+  console.log(
+    `[Seed] Disputes: ${disputesCreated} created, ${seedDisputes.length - disputesCreated} already existed (assigned to ${assignedStaff.name}).`,
+  );
+} else {
+  console.log(
+    "[Seed] Disputes skipped: staff le492381@gmail.com hoặc customer khach01@ipark.vn không tồn tại.",
+  );
 }
 
 await mongoose.disconnect();

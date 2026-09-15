@@ -998,8 +998,9 @@ function HeroSection({
             Bãi xe không vé · Nhận diện biển số bằng AI
           </span>
           <h1>
-            Gửi xe thông minh,{" "}
-            <span className="highlight">thanh toán qua PayOS</span>
+            Hệ thống đỗ xe hiện đại
+            <br />
+            <span className="highlight">Thanh toán qua PAYOS</span>
           </h1>
           <p>
             Dành cho khách vãng lai: không giữ vé giấy, không cài ứng dụng. Xe
