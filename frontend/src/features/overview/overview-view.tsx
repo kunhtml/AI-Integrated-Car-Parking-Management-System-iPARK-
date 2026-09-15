@@ -425,8 +425,16 @@ function ShiftCalendar({ schedules, currentUserId }: ShiftCalendarProps) {
                     className="staff-shift-event"
                     role="button"
                     tabIndex={0}
-                    onClick={(e) => { e.stopPropagation(); setDetailSchedule(s); }}
-                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDetailSchedule(s); } }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDetailSchedule(s);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setDetailSchedule(s);
+                      }
+                    }}
                     style={{
                       background: SHIFT_COLORS[s.shiftType]?.bg,
                       color: SHIFT_COLORS[s.shiftType]?.color,
@@ -1039,7 +1047,9 @@ function StaffDashboard() {
   const loadGeneralOverview = useCallback(async () => {
     try {
       const dateParam = filterDate ? `&date=${filterDate}` : "";
-      const response = await apiFetch(`/dashboard/overview?range=today${dateParam}`);
+      const response = await apiFetch(
+        `/dashboard/overview?range=today${dateParam}`,
+      );
       if (!response.ok) return;
       const data = await response.json();
       setGeneralOverview(data.overview ?? null);
@@ -1069,8 +1079,7 @@ function StaffDashboard() {
   // Shifts of current staff today
   const myTodayShifts = useMemo(() => {
     return shiftScheduleList.filter(
-      (s) =>
-        s.staffId === currentUser?.id && shiftActiveToday(s, today),
+      (s) => s.staffId === currentUser?.id && shiftActiveToday(s, today),
     );
   }, [shiftScheduleList, currentUser, today]);
 
@@ -1115,9 +1124,9 @@ function StaffDashboard() {
 
   const entryCount =
     generalOverview?.entryCount ??
-    sessions
-      .filter((s) => s.status !== "Đã hủy" && sessionDateKey(s) === statDate)
-      .length;
+    sessions.filter(
+      (s) => s.status !== "Đã hủy" && sessionDateKey(s) === statDate,
+    ).length;
   const entryMemberCount =
     generalOverview?.entryMemberCount ??
     sessions.filter(
@@ -1412,9 +1421,7 @@ function StaffDashboard() {
                   : "Không có ca"
             }
             sub={
-              myUpcomingShift
-                ? `bắt đầu lúc ${myUpcomingShift.startTime}`
-                : ""
+              myUpcomingShift ? `bắt đầu lúc ${myUpcomingShift.startTime}` : ""
             }
             color="blue"
           />
