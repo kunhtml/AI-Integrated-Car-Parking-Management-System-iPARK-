@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Clock3,
   ExternalLink,
+  Landmark,
   FileText,
   FolderSearch,
   Printer,
@@ -358,7 +359,16 @@ export function WalletView() {
     searchQuery !== "" || statusFilter !== "all" || methodFilter !== "all" || fromDate !== "" || toDate !== "";
 
   const visibleTransactions = filteredTransactions.slice(0, visibleCount);
+  const paidTransactions = transactionList.filter(
+    (item) => (item.sessionPaymentStatus || item.status) === "paid" || (item.sessionPaymentStatus || item.status) === "fully_paid",
+  );
   const totalSpend = transactionList.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  const sumByMethod = (methods: string[]) =>
+    paidTransactions
+      .filter((item) => methods.includes(item.method))
+      .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  const cashTotal = sumByMethod(["cash"]);
+  const transferTotal = sumByMethod(["payos", "wallet"]);
   const latestTransaction = [...transactionList]
     .sort((a, b) => (parseTransactionDate(b.createdAt)?.getTime() ?? 0) - (parseTransactionDate(a.createdAt)?.getTime() ?? 0))[0];
 
@@ -469,6 +479,22 @@ export function WalletView() {
               <span className="wallet-stat-label">Giao dịch gần đây</span>
               <strong>{latestTransaction ? currency.format(latestTransaction.amount) : "Không có"}</strong>
               <span className="wallet-stat-caption">{latestTransaction ? formatTransactionDate(latestTransaction.createdAt) : "Chưa có dữ liệu"}</span>
+            </div>
+          </div>
+          <div className="wallet-stat-card">
+            <div className="wallet-stat-icon wallet-stat-icon-blue"><Banknote size={22} /></div>
+            <div className="wallet-stat-content">
+              <span className="wallet-stat-label">Tiền mặt</span>
+              <strong>{currency.format(cashTotal)}</strong>
+              <span className="wallet-stat-caption">giao dịch đã thu</span>
+            </div>
+          </div>
+          <div className="wallet-stat-card">
+            <div className="wallet-stat-icon wallet-stat-icon-purple"><Landmark size={22} /></div>
+            <div className="wallet-stat-content">
+              <span className="wallet-stat-label">Chuyển khoản</span>
+              <strong>{currency.format(transferTotal)}</strong>
+              <span className="wallet-stat-caption">PayOS, chuyển khoản</span>
             </div>
           </div>
         </div>

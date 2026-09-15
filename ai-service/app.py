@@ -741,6 +741,103 @@ def safe_serial(port):
 
 arduino_in, arduino_out = detect_and_connect_serials()
 
+# ==== HARDWARE BRIDGE STATE (serial/camera) ====
+# Rút cáp -> SerialException phải chuyển ngay sang luồng "bridge offline".
+# Watchdog thread phát hiện cắm lại theo danh sách COM port (không đếm ngược):
+# port bridge biến mất -> offline, port xuất hiện lại -> reconnect ngay.
+_hard_lock = threading.Lock()
+_hw = {
+    "serial_in_ok": arduino_in is not None,
+    "serial_out_ok": arduino_out is not None,
+    "cam_in_ok": False,
+    "cam_out_ok": False,
+    "last_serial_error_at": 0.0,
+    "last_serial_error": "",
+    "last_reconnect_try": 0.0,
+    "bridge_ports": {
+        getattr(arduino_in, "port", None),
+        getattr(arduino_out, "port", None),
+    } - {None},
+}
+_serial_watch_event = threading.Event()
+
+
+def _hw_mark(key: str, ok: bool, err: str = "") -> None:
+    global _hw
+    changed = False
+    with _hard_lock:
+        prev = _hw.get(key)
+        _hw[key] = ok
+        changed = prev != ok
+        if not ok and changed and key.startswith("serial"):
+            _hw["last_serial_error_at"] = time.time()
+            _hw["last_serial_error"] = err
+            print(f"[BRIDGE][OFFLINE] {key}: {err or 'device lost'}")
+        elif ok and prev is False:
+            print(f"[BRIDGE][ONLINE] {key} recovered")
+
+
+def _hw_snapshot() -> dict:
+    with _hard_lock:
+        return dict(_hw)
+
+
+def _try_reconnect_serials() -> bool:
+    """Re-detect ESP32 ngay khi watchdog thấy port quay lại."""
+    global arduino_in, arduino_out, _hw
+    try:
+        ser_in, ser_out = detect_and_connect_serials()
+    except Exception:
+        ser_in, ser_out = None, None
+    with _hard_lock:
+        arduino_in, arduino_out = ser_in, ser_out
+        _hw["serial_in_ok"] = ser_in is not None
+        _hw["serial_out_ok"] = ser_out is not None
+        _hw["bridge_ports"] = {
+            getattr(ser_in, "port", None), getattr(ser_out, "port", None),
+        } - {None}
+        _hw["last_reconnect_try"] = time.time()
+    if ser_in or ser_out:
+        print("[BRIDGE][RECONNECT] serial restored -> online")
+        return True
+    return False
+
+
+def _serial_watchdog_loop():
+    """
+    Watchdog phát hiện cắm/rút bridge theo danh sách COM port của OS
+    (pyserial liệt kê lại qua Windows API — port biến mất/xuất hiện tức thì).
+    Không đếm ngược: poll nhẹ 2s, reconnect NGAY khi port bridge trở lại.
+    """
+    from serial.tools import list_ports
+    while True:
+        try:
+            present = {p.device for p in list_ports.comports()}
+            with _hard_lock:
+                expected = set(_hw["bridge_ports"])
+                online = _hw["serial_in_ok"] or _hw["serial_out_ok"]
+            if online:
+                #port bridge bị rút hẳn -> offline ngay, đừng chờ SerialException
+                if expected and not (expected & present):
+                    _hw_mark("serial_in_ok", False, "port removed")
+                    _hw_mark("serial_out_ok", False, "port removed")
+                    _serial_watch_event.set()
+            else:
+                # đang offline: port nào đó của ESP32 xuất hiện -> reconnect ngay
+                if present:
+                    _serial_watch_event.set()
+            # chờ event hoặc timeout 2s (poll lại port list)
+            _serial_watch_event.wait(timeout=2.0)
+            _serial_watch_event.clear()
+            if not online and present:
+                _try_reconnect_serials()
+        except Exception as e:
+            print(f"[BRIDGE][WATCHDOG] {type(e).__name__}: {e}")
+            time.sleep(2.0)
+
+
+threading.Thread(target=_serial_watchdog_loop, daemon=True, name="serial-watchdog").start()
+
 
 # ==== CẤU HÌNH CAMERA ====
 def _list_dshow_device_names() -> list[str]:
@@ -1637,15 +1734,20 @@ def read_from_arduino(ser, ser_out=None, direction="in"):
     # Drain buffer and process all pending lines
     max_lines = 20
     lines_read = 0
-    while getattr(ser, "in_waiting", 0) > 0 and lines_read < max_lines:
-        lines_read += 1
-        try:
-            line = ser.readline().decode(errors="ignore").strip()
-        except Exception:
-            break
-        if not line:
-            continue
-        _process_arduino_line(line, ser, ser_out, direction)
+    try:
+        while getattr(ser, "in_waiting", 0) > 0 and lines_read < max_lines:
+            lines_read += 1
+            try:
+                line = ser.readline().decode(errors="ignore").strip()
+            except Exception:
+                break
+            if not line:
+                continue
+            _process_arduino_line(line, ser, ser_out, direction)
+    except Exception as e:
+        # Rút cáp ESP32: ClearCommError/PermissionError -> đánh dấu bridge
+        # offline ngay, camera_loop sẽ thử reconnect theo interval.
+        _hw_mark(f"serial_{direction}_ok", False, f"{type(e).__name__}: {e}")
 
 
 def _process_arduino_line(line, ser, ser_out, direction):
@@ -2146,11 +2248,14 @@ def camera_loop():
 
     while True:
         # ===== BƯỚC 1: Đọc frame NHANH — không OCR, không chặn stream =====
+        now = time.time()
         ret_in, frame_in = _safe_read(cap_in)
         if ret_in:
             camera_loop.fail_in = 0
+            _hw_mark("cam_in_ok", True)
         else:
             camera_loop.fail_in += 1
+            _hw_mark("cam_in_ok", False)
             if cap_in is not None and camera_loop.fail_in >= 30:
                 cap_in.release()
                 cap_in = _reconnect(_CAM_INDEX_IN_RESOLVED)
@@ -2164,8 +2269,10 @@ def camera_loop():
         ret_out, frame_out = _safe_read(cap_out)
         if ret_out:
             camera_loop.fail_out = 0
+            _hw_mark("cam_out_ok", True)
         else:
             camera_loop.fail_out += 1
+            _hw_mark("cam_out_ok", False)
             if cap_out is not None and camera_loop.fail_out >= 30:
                 cap_out.release()
                 cap_out = _reconnect(_CAM_INDEX_OUT_RESOLVED)
@@ -2253,6 +2360,10 @@ def camera_loop():
         read_from_arduino(arduino_in, ser_out=arduino_out, direction="in")
         if arduino_out is not None and arduino_out != arduino_in:
             read_from_arduino(arduino_out, direction="out")
+
+        # Tự động thử kết nối lại ESP32 nếu cáp bị rút (serial exception -> marked offline)
+        if not (_hw["serial_in_ok"] or _hw["serial_out_ok"]):
+            _try_reconnect_serials()
 
         # Nếu cả 2 camera fail thì backoff để không đốt CPU.
         if not ret_in and not ret_out:
@@ -2417,15 +2528,28 @@ def api_cameras():
 
 @app.route("/api/cameras/health")
 def api_cameras_health():
-    """Health check cho camera bridge + trạng thái AI/RAM."""
+    """Health check cho camera bridge + trạng thái AI/RAM + trạng thái phần cứng (serial/camera)."""
     rss = _process_rss_mb()
     _ai_metrics["rss_mb"] = round(rss, 1)
     degraded = _is_ai_degraded()
     status = "degraded" if degraded else "ok"
+    hw = _hw_snapshot()
+    # Bridge considered offline if both serial ports are lost AND camera frames are failing
+    bridge_offline = not (hw["serial_in_ok"] or hw["serial_out_ok"]) and not (hw["cam_in_ok"] or hw["cam_out_ok"])
     return jsonify({
-        "ok": not degraded,
-        "status": status,
+        "ok": not degraded and not bridge_offline,
+        "status": status if not bridge_offline else "offline",
         "bridge_url": request.host_url.rstrip("/"),
+        "bridge_offline": bridge_offline,
+        "hardware": {
+            "serial_in_ok": hw["serial_in_ok"],
+            "serial_out_ok": hw["serial_out_ok"],
+            "cam_in_ok": hw["cam_in_ok"],
+            "cam_out_ok": hw["cam_out_ok"],
+            "last_serial_error_at": hw["last_serial_error_at"],
+            "last_serial_error": hw["last_serial_error"],
+            "last_reconnect_try": hw["last_reconnect_try"],
+        },
         "backend_url": BACKEND_URL,
         "backend_healthy": backend.health(),
         "ocr_enabled": OCR_ENABLED,

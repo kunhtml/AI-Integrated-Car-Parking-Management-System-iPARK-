@@ -27,12 +27,21 @@ function getVietnamDateParts(date = new Date()) {
   return { year: value("year"), month: value("month"), day: value("day") };
 }
 
-function getDashboardRange(value: unknown) {
+function getDashboardRange(value: unknown, dateValue?: unknown) {
+  const vietnamOffsetMs = 7 * 60 * 60 * 1000;
+  // Filter theo ngày cụ thể (YYYY-MM-DD, giờ VN) — ưu tiên hơn range tương đối.
+  if (typeof dateValue === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+    const [year, month, day] = dateValue.split("-").map(Number);
+    const start = new Date(Date.UTC(year, month - 1, day) - vietnamOffsetMs);
+    const end = new Date(
+      Date.UTC(year, month - 1, day + 1) - vietnamOffsetMs - 1,
+    );
+    return { range: "today" as DashboardRange, start, end };
+  }
   const range: DashboardRange =
     value === "7d" || value === "30d" ? value : "today";
   const days = range === "today" ? 1 : range === "7d" ? 7 : 30;
   const { year, month, day } = getVietnamDateParts();
-  const vietnamOffsetMs = 7 * 60 * 60 * 1000;
   const start = new Date(
     Date.UTC(year, month - 1, day - (days - 1)) - vietnamOffsetMs,
   );
@@ -81,7 +90,10 @@ export async function getDashboardOverview(
     return;
   }
 
-  const { range, start, end } = getDashboardRange(request.query.range);
+  const { range, start, end } = getDashboardRange(
+    request.query.range,
+    request.query.date,
+  );
   const rangeFilter = { $gte: start, $lte: end };
 
   const memberOrList = [

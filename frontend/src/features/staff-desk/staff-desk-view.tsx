@@ -83,6 +83,7 @@ export function StaffDeskView() {
   const entryLaneRef = useRef<"in" | "out">("in");
   const exitLaneRef = useRef<"in" | "out">("out");
   const [entryBridgeAvailable, setEntryBridgeAvailable] = useState(true);
+  const [exitBridgeAvailable, setExitBridgeAvailable] = useState(true);
   const [laneRoles, setLaneRoles] = useState({
     entryLane: "in" as "in" | "out",
     exitLane: "out" as "in" | "out",
@@ -364,6 +365,8 @@ export function StaffDeskView() {
     paymentStatus: string;
     isSubscriber: boolean;
     canOpenGate: boolean;
+    freeMinutes?: number | null;
+    totalMinutes?: number | null;
   } | null>(null);
   const [exitPaymentData, setExitPaymentData] = useState<{
     qrCode: string;
@@ -387,8 +390,6 @@ export function StaffDeskView() {
   const [manualEntryPlate, setManualEntryPlate] = useState("");
   const [manualEntryError, setManualEntryError] = useState("");
   const [manualEntryLoading, setManualEntryLoading] = useState(false);
-  const [manualEntryConfirmationNote, setManualEntryConfirmationNote] =
-    useState("");
   const [manualEntryVehicle, setManualEntryVehicle] = useState<{
     ownerName?: string;
     isSubscriber?: boolean;
@@ -665,7 +666,6 @@ export function StaffDeskView() {
         if (opts?.fromIdleForm) {
           setShowManualEntryForm(false);
           setManualEntryPlate("");
-          setManualEntryConfirmationNote("");
         }
         if (opts?.fromIngestCorrection || activeIngest) {
           setManualPlate("");
@@ -707,7 +707,6 @@ export function StaffDeskView() {
           setEntrySuccessNotice(null);
           setShowManualEntryForm(false);
           setManualEntryPlate("");
-          setManualEntryConfirmationNote("");
           setManualEntryError("");
           setManualEntryVehicle(null);
           setPendingManualEntryRfid(false);
@@ -1457,6 +1456,8 @@ export function StaffDeskView() {
             paymentStatus: data.paymentStatus,
             isSubscriber: data.isSubscriber,
             canOpenGate: data.canOpenGate,
+            freeMinutes: data.freeMinutes ?? null,
+            totalMinutes: data.totalMinutes ?? null,
           });
           setExitPaymentData(null);
           if (!(data.amountDue > 0) && data.canOpenGate) {
@@ -1635,6 +1636,8 @@ export function StaffDeskView() {
           paymentStatus: data.paymentStatus,
           isSubscriber: data.isSubscriber,
           canOpenGate: data.canOpenGate,
+          freeMinutes: data.freeMinutes ?? null,
+          totalMinutes: data.totalMinutes ?? null,
         });
         setExitPaymentData(null);
         const fullHardwareOutage =
@@ -1678,6 +1681,8 @@ export function StaffDeskView() {
           paymentStatus: data.paymentStatus,
           isSubscriber: data.isSubscriber,
           canOpenGate: data.canOpenGate,
+          freeMinutes: data.freeMinutes ?? null,
+          totalMinutes: data.totalMinutes ?? null,
         });
         setExitPaymentData(null);
         setActiveExit((current) =>
@@ -2018,20 +2023,15 @@ export function StaffDeskView() {
                 manualEntryError={manualEntryError}
                 manualEntryLoading={manualEntryLoading}
                 manualEntryVehicle={manualEntryVehicle}
-                manualEntryConfirmationNote={manualEntryConfirmationNote}
                 onToggleManualEntryForm={() => {
                   setShowManualEntryForm((v) => !v);
                   setManualEntryError("");
                   setManualEntryVehicle(null);
-                  setManualEntryConfirmationNote("");
                 }}
                 onManualEntryPlateChange={(v) => {
                   setManualEntryPlate(v.toUpperCase());
                   setManualEntryError("");
                 }}
-                onManualEntryConfirmationNoteChange={
-                  setManualEntryConfirmationNote
-                }
                 plateConfirmed={pendingManualEntryRfid}
                 onCancelPlateConfirm={() => {
                   void cancelScan();
@@ -2043,11 +2043,20 @@ export function StaffDeskView() {
                 }}
                 onSubmitManualEntry={() => void startManualEntryRfidFlow()}
                 onConfirmManualPlate={(plate) => {
-                  // Staff xác nhận biển số + ghi chú → chuyển sang bước quét RFID.
+                  // Staff xác nhận biển số bằng mắt → chuyển sang bước quét RFID.
                   // Kết quả quét sẽ tự tạo phiên (effect pendingManualEntryRfid).
                   setManualPlate(plate.trim().toUpperCase().replace(/[\s-]+/g, ""));
                   setPendingManualEntryRfid(true);
                   void startScan();
+                }}
+                onConfirmManualPlateNoRfid={(plate) => {
+                  // Bridge offline: không quét RFID được — tạo phiên thủ công
+                  // ngay (uid undefined → entryRfidUnverified=true).
+                  void createSessionManual(undefined, plate, {
+                    fromIdleForm: true,
+                    manualRfidReason:
+                      "Bridge mất kết nối — staff đối chiếu biển số bằng mắt, không quét RFID",
+                  });
                 }}
                 phase={phase}
                 onOpenVerifiedMember={() =>
@@ -2097,11 +2106,15 @@ export function StaffDeskView() {
             title="Xe ra"
             streamUrl={`${bridgeBaseUrl}/video_feed/${laneRoles.exitLane}`}
             direction="out"
+            onStreamStateChange={(state) =>
+              setExitBridgeAvailable(state === "live")
+            }
           />
           <div className="staff-desk__panel">
             {!activeExit ? (
               <WaitingCard
                 direction="out"
+                rfidAvailable={exitBridgeAvailable}
                 scanPhase={exitScanPhase}
                 onStartScan={startExitScan}
                 onManualUid={submitManualExitUid}
@@ -2257,13 +2270,12 @@ function WaitingCard({
   manualEntryError,
   manualEntryLoading,
   manualEntryVehicle,
-  manualEntryConfirmationNote,
   onToggleManualEntryForm,
   onManualEntryPlateChange,
-  onManualEntryConfirmationNoteChange,
   onSubmitManualEntry,
   onOpenVerifiedMember,
   onConfirmManualPlate,
+  onConfirmManualPlateNoRfid,
   plateConfirmed,
   onCancelPlateConfirm,
   phase,
@@ -2287,7 +2299,6 @@ function WaitingCard({
   manualEntryPlate?: string;
   manualEntryError?: string;
   manualEntryLoading?: boolean;
-  manualEntryConfirmationNote?: string;
   manualEntryVehicle?: {
     ownerName?: string;
     isSubscriber?: boolean;
@@ -2301,10 +2312,10 @@ function WaitingCard({
   } | null;
   onToggleManualEntryForm?: () => void;
   onManualEntryPlateChange?: (value: string) => void;
-  onManualEntryConfirmationNoteChange?: (value: string) => void;
   onSubmitManualEntry?: () => void;
   onOpenVerifiedMember?: () => void;
   onConfirmManualPlate?: (plate: string) => void;
+  onConfirmManualPlateNoRfid?: (plate: string) => void;
   plateConfirmed?: boolean;
   onCancelPlateConfirm?: () => void;
   phase?: string;
@@ -2325,10 +2336,43 @@ function WaitingCard({
   const submitLabel = isEntry ? "Xác Nhận" : "Xác nhận biển số";
   const loadingLabel = isEntry ? "Đang tạo…" : "Đang tra…";
 
+  const bridgeOfflineAlert = !rfidAvailable ? (
+    <div
+      className="staff-desk__alert staff-desk__alert--warn"
+      role="alert"
+      style={{
+        width: "100%",
+        maxWidth: 420,
+        margin: "0 0 0.75rem",
+        textAlign: "left",
+      }}
+    >
+      <CircleAlert
+        size={20}
+        style={{ color: "#ef4444", flexShrink: 0, marginTop: 2 }}
+      />
+      <div>
+        <strong
+          style={{ color: "#dc2626", display: "block", marginBottom: 2 }}
+        >
+          Mất kết nối thiết bị
+        </strong>
+        <span
+          style={{ fontSize: "0.85rem", color: "#374151", lineHeight: 1.4 }}
+        >
+          Hiện tại camera, barie và RFID đều mất kết nối. Hãy nhập thủ công biển
+          số bằng tay để cho khách {isEntry ? "vào" : "ra"} bãi, barie sẽ mở thủ
+          công ngoài bốt.
+        </span>
+      </div>
+    </div>
+  ) : null;
+
   // Entry manual form: simple confirm plate screen (wireframe)
   if (isEntry && showManualForm) {
     return (
       <div className="staff-desk__waiting staff-desk__waiting--entry staff-desk__waiting--manual-confirm">
+        {bridgeOfflineAlert}
         <p className="staff-desk__manual-confirm-title">
           Vui lòng nhập chính xác biển số xe hiện tại ở cổng chờ
         </p>
@@ -2395,6 +2439,7 @@ function WaitingCard({
         )}
       </div>
       <h2>{isEntry ? "Đang chờ xe vào" : "Đang chờ xe ra"}</h2>
+      {bridgeOfflineAlert}
       <p>
         Nếu camera không thể nhận diện biển số hãy dùng nút nhập thủ công biển
         số xe
@@ -2414,27 +2459,6 @@ function WaitingCard({
           {manualEntryVehicle?.cardUid ? (
             <span>RFID Member: {manualEntryVehicle.cardUid}</span>
           ) : null}
-        </div>
-      ) : null}
-
-      {isEntry && manualEntryPlate && !showManualForm && !plateConfirmed ? (
-        <div style={{ width: "100%", maxWidth: 396, margin: "0.75rem auto 0" }}>
-          <label
-            className="staff-desk__exit-manual-label"
-            htmlFor="manual-entry-confirmation-note"
-          >
-            Ghi chú xác nhận
-          </label>
-          <textarea
-            id="manual-entry-confirmation-note"
-            className="staff-desk__exit-manual-input"
-            value={manualEntryConfirmationNote || ""}
-            onChange={(event) =>
-              onManualEntryConfirmationNoteChange?.(event.target.value)
-            }
-            placeholder="VD: Đã đối chiếu biển số xe thực tế, thông tin chính xác"
-            rows={3}
-          />
         </div>
       ) : null}
 
@@ -2530,14 +2554,15 @@ function WaitingCard({
                 borderColor: "#15803d",
                 fontWeight: 700,
               }}
-              disabled={
-                Boolean(manualLoading) ||
-                phase === "creating" ||
-                !manualEntryConfirmationNote?.trim()
-              }
+              disabled={Boolean(manualLoading) || phase === "creating"}
               onClick={() => {
-                if (manualEntryPlate) {
+                if (!manualEntryPlate) return;
+                if (rfidAvailable) {
                   onConfirmManualPlate?.(manualEntryPlate);
+                } else {
+                  // Bridge offline: không quét được RFID — xác nhận mắt thường
+                  // rồi tạo phiên luôn (entryRfidUnverified trong payload).
+                  onConfirmManualPlateNoRfid?.(manualEntryPlate);
                 }
               }}
             >
@@ -2546,7 +2571,9 @@ function WaitingCard({
               ) : (
                 <CheckCircle2 size={18} />
               )}
-              Xác nhận biển số chính xác &amp; Quét RFID ngay
+              {rfidAvailable
+                ? "Xác nhận biển số chính xác & Quét RFID ngay"
+                : "Xác nhận biển số chính xác & Cho xe vào"}
             </button>
           )
         ) : null}
@@ -3559,6 +3586,8 @@ function ExitCard({
     paymentStatus: string;
     isSubscriber: boolean;
     canOpenGate: boolean;
+    freeMinutes?: number | null;
+    totalMinutes?: number | null;
   } | null;
   onOpenGate?: () => void;
   mismatch?: ExitMismatch | null;
@@ -3685,6 +3714,31 @@ function ExitCard({
     // subscription should be labeled as free.
     if (isSubscriber) {
       return "Miễn phí (thành viên)";
+    }
+    // "Miễn phí theo quy định" chỉ khi thời gian ra thực sự nằm trong khoảng
+    // miễn phí admin cài (totalMinutes <= freeMinutes) — từ verify hoặc metadata
+    // pending-exit (bridge offline chưa qua verify).
+    const freeWin =
+      exitVerifyData?.freeMinutes != null &&
+      exitVerifyData.totalMinutes != null
+        ? {
+            free: exitVerifyData.freeMinutes,
+            total: exitVerifyData.totalMinutes,
+          }
+        : typeof event.metadata?.freeMinutes === "number" &&
+            typeof event.metadata?.totalMinutes === "number"
+          ? {
+              free: event.metadata.freeMinutes as number,
+              total: event.metadata.totalMinutes as number,
+            }
+          : null;
+    if (
+      freeWin &&
+      freeWin.free > 0 &&
+      freeWin.total <= freeWin.free &&
+      amountDue <= 0
+    ) {
+      return "Miễn phí theo quy định";
     }
 
     const fromVerify = statusFrom(exitVerifyData?.paymentStatus);

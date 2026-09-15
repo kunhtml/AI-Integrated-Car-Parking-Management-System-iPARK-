@@ -385,8 +385,36 @@ export async function completeOfflineExit(
   }
 
   const activeSubscription = await findActiveSubscriptionByPlate(session.plate);
+  // Phiên miễn phí (free time ngắn, fee = 0) không bao giờ tới bước thanh toán
+  // → paymentStatus vẫn "unpaid"/"free". Xét theo số tiền còn thiếu, giống
+  // luồng verify: fee - paidAmount <= 0 hoặc có subscription là kết thúc được.
+  if (
+    !activeSubscription &&
+    (session.fee == null || session.fee === 0) &&
+    session.paymentStatus !== "fully_paid"
+  ) {
+    // Cầu offline bỏ qua bước verify — phải tính phí trước khi kết luận 0đ,
+    // nếu không phiên chưa tính phí bị coi là miễn phí.
+    const checkInAt = new Date(session.checkInAt);
+    const now = new Date();
+    const pricing = await getActivePricingConfig();
+    const subscriptionEnd = await findLatestSubscriptionEndByPlate(
+      session.plate,
+    );
+    const billableFrom =
+      subscriptionEnd && subscriptionEnd > checkInAt && subscriptionEnd < now
+        ? subscriptionEnd
+        : checkInAt;
+    const feeBreakdown = calculateParkingFee(billableFrom, now, pricing);
+    session.fee = feeBreakdown.totalFee;
+    session.feeBreakdown = feeBreakdown;
+    await session.save();
+  }
+  const amountDue = (session.fee || 0) - (session.paidAmount || 0);
   const paid =
-    session.paymentStatus === "fully_paid" || Boolean(activeSubscription);
+    session.paymentStatus === "fully_paid" ||
+    Boolean(activeSubscription) ||
+    amountDue <= 0;
   if (!paid) {
     response
       .status(403)
@@ -470,6 +498,19 @@ export async function getPendingExit(request: Request, response: Response) {
     .select("rfidUid")
     .lean();
 
+  // Khoảng miễn phí theo cấu hình + thời lượng thực tế → UI phân biệt
+  // "Miễn phí theo quy định" ngay cả khi bridge offline (chưa qua verify).
+  const pendingPricing = await getActivePricingConfig();
+  const pendingFreeMinutes =
+    pendingPricing.gracePeriod ?? pendingPricing.freeMinutes ?? 0;
+  const pendingExitAt = session.exitDetectedAt ?? new Date();
+  const pendingTotalMinutes = Math.max(
+    0,
+    Math.ceil(
+      (pendingExitAt.getTime() - session.checkInAt.getTime()) / 60000,
+    ),
+  );
+
   response.json({
     pending: true,
     event: {
@@ -520,6 +561,8 @@ export async function getPendingExit(request: Request, response: Response) {
         entrySource: session.entrySource || "camera",
         manualEntryReason: session.manualEntryReason || null,
         entryPhotoStatus: session.entryPhotoStatus || null,
+        freeMinutes: pendingFreeMinutes,
+        totalMinutes: pendingTotalMinutes,
       },
       createdAt: (session.exitDetectedAt ?? session.checkInAt).toISOString(),
     },

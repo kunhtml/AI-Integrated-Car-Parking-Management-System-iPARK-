@@ -748,9 +748,11 @@ tr:hover td {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 4px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle, color-mix(in srgb, var(--border) 25%, var(--bg-elevated)));
 }
 
 .admin-disputes-filter {
@@ -759,28 +761,77 @@ tr:hover td {
   gap: 8px;
   font-size: 13px;
   color: var(--fg-muted);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .admin-disputes-filter select {
   font-size: 13px;
-  padding: 4px 8px;
+  font-weight: 500;
+  padding: 6px 30px 6px 10px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
-  background: var(--bg-base);
+  background: var(--bg-elevated);
   color: var(--fg-base);
   cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.admin-disputes-filter select:hover {
+  border-color: var(--fg-muted);
+}
+
+.admin-disputes-filter select:focus-visible {
+  outline: none;
+  border-color: var(--accent, #3b82f6);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #3b82f6) 20%, transparent);
 }
 
 .admin-disputes-count {
   margin-left: auto;
-  font-size: 13px;
-  color: var(--fg-muted);
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--accent, #3b82f6);
+  background: color-mix(in srgb, var(--accent, #3b82f6) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent, #3b82f6) 22%, transparent);
+  border-radius: var(--radius-full);
+  padding: 4px 12px;
+  white-space: nowrap;
 }
 
 .admin-disputes-msg-count {
-  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 7px;
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-base);
+  background: color-mix(in srgb, var(--fg-muted) 12%, transparent);
+  border-radius: var(--radius-full);
+}
+
+/* "—" = chưa có tin nhắn, render mờ không thành chip */
+.admin-disputes-msg-count:empty,
+.admin-disputes-msg-count[data-empty="true"] {
+  background: none;
   color: var(--fg-muted);
+  font-weight: 400;
+}
+
+.admin-disputes-view table td .monospace {
+  font-size: 12px;
+  color: var(--accent, #3b82f6);
+  background: color-mix(in srgb, var(--accent, #3b82f6) 8%, transparent);
+  padding: 3px 8px;
+  border-radius: var(--radius-sm, 6px);
+  white-space: nowrap;
 }
 
 /* ── Dispute chat meta row ───────────────────────────────────── */
@@ -13969,6 +14020,18 @@ textarea.form-input {
   border-radius: 3px;
   white-space: nowrap;
   overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.1s ease, filter 0.1s ease;
+  user-select: none;
+}
+
+.staff-shift-event:hover {
+  transform: scale(1.04);
+  filter: brightness(0.95);
+}
+
+.staff-shift-event:active {
+  transform: scale(0.98);
 }
 
 .staff-shift-more {
@@ -15825,8 +15888,14 @@ textarea.form-input {
 .wallet-stats {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   margin-bottom: 16px;
+}
+
+@media (max-width: 1180px) {
+  .wallet-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .wallet-stat-card {

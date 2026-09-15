@@ -181,12 +181,53 @@ export async function listDisputeReferences(
 
 /** GET /api/disputes — khách xem khiếu nại của mình, admin/staff xem tất cả. */
 export async function listDisputes(request: Request, response: Response) {
-  const criteria =
-    request.user?.role === "customer" ? { userId: request.user.id } : {};
+  const user = request.user!;
+  // Staff bấm "Khu vực Người dùng" (viewAs=customer) -> xem khiếu nại của
+  // chính họ với tư cách khách hàng, không phải danh sách nhân viên.
+  const asCustomer =
+    request.query.as === "customer" && user.role !== "admin" && user.role !== "manager";
+  let criteria: Record<string, unknown>;
+  if (user.role === "customer" || asCustomer) {
+    criteria = { userId: user.id };
+  } else if (user.role === "staff") {
+    // Nhân viên chỉ thấy khiếu nại của phiên mình phụ trách.
+    criteria = {
+      $or: [{ assignedStaffId: user.id }, { handledBy: user.id }],
+    };
+  } else {
+    criteria = {};
+  }
   const disputes = await Dispute.find(criteria)
     .sort({ createdAt: -1 })
     .limit(200);
-  response.json({ disputes: disputes.map(serializeDispute) });
+
+  // Enrich danh sách với tên nhân viên phụ trách (1 query gộp).
+  const staffIds = [
+    ...new Set(
+      disputes
+        .map((d) => d.assignedStaffId?.toString())
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  const staffNameById = new Map<string, string>();
+  if (staffIds.length > 0) {
+    const staffUsers = await User.find(
+      { _id: { $in: staffIds } },
+      { name: 1 },
+    ).lean();
+    for (const s of staffUsers) {
+      staffNameById.set(s._id.toString(), s.name);
+    }
+  }
+
+  response.json({
+    disputes: disputes.map((d) => ({
+      ...serializeDispute(d),
+      assignedStaffName: d.assignedStaffId
+        ? staffNameById.get(d.assignedStaffId.toString()) ?? null
+        : null,
+    })),
+  });
 }
 
 /** GET /api/disputes/by-code/:code — tra cứu dispute theo code (dùng cho incidents-view). */
@@ -222,15 +263,17 @@ export async function getDispute(request: Request, response: Response) {
     return;
   }
   if (
-    request.user?.role === "customer" &&
-    dispute.userId.toString() !== request.user.id
+    request.user?.role === "customer" ||
+    (request.query.as === "customer" && request.user?.role === "staff")
   ) {
-    response
-      .status(403)
-      .json({ message: "Bạn không có quyền xem khiếu nại của người khác." });
-    return;
-  }
-  if (
+    // Đang xem ở chế độ khách hàng: chỉ được mở khiếu nại của chính mình.
+    if (dispute.userId.toString() !== request.user.id) {
+      response
+        .status(403)
+        .json({ message: "Bạn không có quyền xem khiếu nại của người khác." });
+      return;
+    }
+  } else if (
     request.user?.role === "staff" &&
     !(await staffCanHandleDispute(request.user.id, dispute))
   ) {
