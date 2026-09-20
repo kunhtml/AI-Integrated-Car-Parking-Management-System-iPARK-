@@ -1,0 +1,41 @@
+{
+  "testCase": "ADD_04",
+  "title": "Payment Callback & Timeout Handling",
+  "executedAt": "2026-09-16T16:33:23.7846462+07:00",
+  "sessionId": "6aaa5760a5f4d2e7181506e1",
+  "plate": "ADD03MATCH",
+  "steps": [
+    {
+      "step": 1,
+      "action": "Generated PayOS QR at exit booth",
+      "expected": "Active QR and waiting payment state are displayed",
+      "result": "PASS",
+      "evidence": "01_active_payos_qr.png"
+    },
+    {
+      "step": 2,
+      "action": "Simulated webhook timeout after 5 minutes",
+      "expected": "Unpaid transaction becomes expired",
+      "actual": "Transaction status became cancelled; no expired enum exists for parking transactions",
+      "result": "PARTIAL",
+      "transactionId": "6aaa619912536097b0c47836",
+      "payosOrderCode": "5510005376971"
+    },
+    {
+      "step": 3,
+      "action": "Reloaded exit booth and re-verified the same vehicle",
+      "expected": "Cashier can recover from the failed QR payment",
+      "result": "PASS",
+      "evidence": "02_timeout_cash_fallback.png"
+    },
+    {
+      "step": 4,
+      "action": "Accepted cash payment of 20000 VND",
+      "expected": "Session becomes fully paid and remains ready for gate completion",
+      "result": "PASS",
+      "evidence": "03_cash_payment_recorded.png"
+    }
+  ],
+  "overallResult": "PARTIAL_PASS",
+  "limitation": "QR generation and cash fallback work. The exact expired status and a dedicated retry-QR control are not implemented for exit parking transactions; the current transaction model uses cancelled for the simulated timeout."
+}

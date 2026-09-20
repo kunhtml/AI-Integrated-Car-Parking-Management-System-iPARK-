@@ -1,0 +1,28 @@
+{
+  "testCaseId": "<ID5>",
+  "title": "Return RFID Card to Inventory",
+  "status": "PASSED",
+  "targetUid": "5345EE56",
+  "updatedCard": {
+    "id": "6a86c2bcbd71c2641a7de166",
+    "uid": "5345EE56",
+    "ownerName": "Guest",
+    "plate": "",
+    "userType": "guest",
+    "cardType": "guest",
+    "status": "available",
+    "createdAt": "2026-08-20T09:02:52.900Z",
+    "updatedAt": "2026-09-16T14:22:12.246Z",
+    "activeSession": null
+  },
+  "evidence": [
+    "01_admin_login.png",
+    "02_rfid_cards_screen.png",
+    "03_select_target_card_checkbox.png",
+    "04_reset_modal_opened.png",
+    "05_confirmation_string_entered.png",
+    "06_reset_success_message.png",
+    "07_rfid_card_reset_verified.png",
+    "08_card_history_audit.png"
+  ]
+}

@@ -31,7 +31,7 @@ const penaltySchema = new Schema<PenaltyDocument>(
     plate: { type: String, required: true, trim: true, uppercase: true, index: true },
     violationType: {
       type: String,
-      enum: ["over_line"],
+      enum: ["over_line", "lost_card"],
       required: true,
     },
     amount: { type: Number, required: true, min: 0, default: 0 },
@@ -60,3 +60,4 @@ penaltySchema.index({ status: 1, createdAt: -1 });
 
 export const Penalty: Model<PenaltyDocument> =
   mongoose.models.Penalty || mongoose.model<PenaltyDocument>("Penalty", penaltySchema);
+

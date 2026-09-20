@@ -114,6 +114,14 @@ function cardStatusLabel(card: RfidCardItem) {
   return isInUse(card) ? "Đang dùng" : statusLabel(card.status);
 }
 
+function money(value: number | undefined) {
+  return new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency: "VND",
+    maximumFractionDigits: 0,
+  }).format(value ?? 0);
+}
+
 function formatDate(dateStr: string | null | undefined) {
   if (!dateStr) return "—";
   const d = new Date(dateStr);
@@ -167,12 +175,20 @@ export function RfidCardsView() {
   } | null>(null);
   const [bulkConfirmText, setBulkConfirmText] = useState("");
 
+  // Giá bán thẻ RFID Member — quản lý ngay tại tab Thẻ RFID (gộp về 1 nghiệp vụ,
+  // không tách sang trang bảng giá nữa).
+  const [rfidPrice, setRfidPrice] = useState(50000);
+  const [rfidPriceForm, setRfidPriceForm] = useState("50000");
+  const [rfidPriceOpen, setRfidPriceOpen] = useState(false);
+  const [rfidPriceSaving, setRfidPriceSaving] = useState(false);
+
   // RFID Card history modal state
   const [historyCard, setHistoryCard] = useState<RfidCardItem | null>(null);
   const [historyAuditLogs, setHistoryAuditLogs] = useState<any[]>([]);
   const [historyScanLogs, setHistoryScanLogs] = useState<any[]>([]);
-  const [historyTab, setHistoryTab] = useState<"audit" | "scans">("audit");
+  const [historyTab, setHistoryTab] = useState<"audit" | "scans" | "transactions">("audit");
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyTransactions, setHistoryTransactions] = useState<any[]>([]);
 
   async function openCardHistory(card: RfidCardItem) {
     setHistoryCard(card);
@@ -183,11 +199,14 @@ export function RfidCardsView() {
         const data = await res.json();
         setHistoryAuditLogs(data.auditHistory || []);
         setHistoryScanLogs(data.scanHistory || data.scans || data.logs || data.history || []);
-        if (data.auditHistory && data.auditHistory.length > 0) {
-          setHistoryTab("audit");
-        } else {
-          setHistoryTab("scans");
-        }
+        setHistoryTab("audit");
+      }
+      const txRes = await apiFetch(`/rfid/transactions?limit=100`);
+      if (txRes.ok) {
+        const txData = await txRes.json();
+        setHistoryTransactions(
+          (txData.items ?? []).filter((t: any) => t.uid === card.uid)
+        );
       }
     } catch (e) {
       console.error(e);
@@ -242,6 +261,62 @@ export function RfidCardsView() {
   useEffect(() => {
     loadCards();
   }, []);
+
+  // Tải giá bán thẻ RFID Member hiện tại từ cấu hình giá.
+  useEffect(() => {
+    if (!isAdmin) return;
+    void apiFetch("/pricing-config")
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = await res.json().catch(() => ({}));
+        const value = Number(data.pricingConfig?.rfidCardSalePrice ?? 50000);
+        setRfidPrice(value);
+        setRfidPriceForm(String(value));
+      })
+      .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin]);
+
+  async function saveRfidPrice() {
+    const value = Number(rfidPriceForm);
+    if (!Number.isFinite(value) || value < 0) {
+      setMsg("Giá thẻ RFID phải là số không âm.");
+      return;
+    }
+    setRfidPriceSaving(true);
+    try {
+      const current = await apiFetch("/pricing-config");
+      const currentData = await current.json().catch(() => ({}));
+      const config = currentData.pricingConfig || {};
+      const res = await apiFetch("/pricing-config", {
+        method: "PATCH",
+        body: JSON.stringify({
+          dayRate: Number(config.dayRate ?? 5000),
+          nightRate: Number(config.nightRate ?? 10000),
+          dayStartHour: Number(config.dayStartHour ?? 6),
+          nightStartHour: Number(config.nightStartHour ?? 22),
+          gracePeriod: Number(config.gracePeriod ?? 20),
+          maxMinutes: Number(config.maxMinutes ?? 1440),
+          overdueFineRate: Number(config.overdueFineRate ?? 20000),
+          rfidCardSalePrice: Math.round(value),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMsg(data.message || "Không thể lưu giá thẻ RFID.");
+        return;
+      }
+      const saved = Number(data.pricingConfig?.rfidCardSalePrice ?? value);
+      setRfidPrice(saved);
+      setRfidPriceForm(String(saved));
+      setRfidPriceOpen(false);
+      setMsg(`Đã cập nhật giá bán thẻ RFID Member: ${money(saved)}.`);
+    } catch {
+      setMsg("Không kết nối được API cấu hình giá.");
+    } finally {
+      setRfidPriceSaving(false);
+    }
+  }
 
   async function loadResidents() {
     try {
@@ -1004,6 +1079,20 @@ export function RfidCardsView() {
 
             {isAdmin && (
               <button
+                className="small-button"
+                onClick={() => {
+                  setRfidPriceForm(String(rfidPrice));
+                  setRfidPriceOpen(true);
+                }}
+                type="button"
+                title="Cấu hình giá bán thẻ RFID Member"
+              >
+                <CreditCard size={14} /> Giá thẻ: {money(rfidPrice)}
+              </button>
+            )}
+
+            {isAdmin && (
+              <button
                 className="small-button primary"
                 onClick={() => setShowAddForm(true)}
                 type="button"
@@ -1513,6 +1602,77 @@ export function RfidCardsView() {
                 </div>
               </form>
             ) : null}
+          </div>
+        </div>
+      )}
+
+      {/* Cấu hình giá bán thẻ RFID Member */}
+      {rfidPriceOpen && (
+        <div className="modal-overlay">
+          <div className="modal-card narrow">
+            <div className="modal-header">
+              <div className="modal-title">
+                <CreditCard size={22} />
+                <h2>Giá bán thẻ RFID Member</h2>
+              </div>
+              <button
+                onClick={() => !rfidPriceSaving && setRfidPriceOpen(false)}
+                className="modal-close"
+                type="button"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void saveRfidPrice();
+              }}
+            >
+              <div className="form-grid">
+                <div className="form-field">
+                  <label className="form-label">Giá bán thẻ (VND)</label>
+                  <input
+                    autoFocus
+                    type="number"
+                    min={0}
+                    step="any"
+                    required
+                    value={rfidPriceForm}
+                    onChange={(e) => setRfidPriceForm(e.target.value)}
+                    className="form-input"
+                  />
+                  <p
+                    className="form-hint muted-cell"
+                    style={{ fontSize: "0.78rem", marginTop: 4 }}
+                  >
+                    Giá này được dùng khi khách mua thẻ RFID Member trực tiếp
+                    trên website và khi bán/cấp thẻ tại quầy. Nhập 0 nếu muốn cấp
+                    miễn phí.
+                  </p>
+                </div>
+              </div>
+
+              <div className="modal-actions">
+                <button
+                  className="small-button"
+                  onClick={() => setRfidPriceOpen(false)}
+                  disabled={rfidPriceSaving}
+                  type="button"
+                >
+                  Hủy
+                </button>
+                <button
+                  className="small-button primary"
+                  disabled={rfidPriceSaving}
+                  type="submit"
+                >
+                  {rfidPriceSaving ? <Loader2 size={14} /> : <CreditCard size={14} />}
+                  {rfidPriceSaving ? "Đang lưu..." : "Lưu giá thẻ"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -2066,6 +2226,7 @@ export function RfidCardsView() {
                   setHistoryCard(null);
                   setHistoryAuditLogs([]);
                   setHistoryScanLogs([]);
+                  setHistoryTransactions([]);
                 }}
                 type="button"
                 style={{ padding: 6, cursor: "pointer", background: "none", border: "none" }}
@@ -2090,6 +2251,14 @@ export function RfidCardsView() {
                 style={{ fontSize: 13, padding: "6px 14px", borderRadius: 6 }}
               >
                 Lịch sử quét qua cổng ({historyScanLogs.length})
+              </button>
+              <button
+                type="button"
+                className={historyTab === "transactions" ? "small-button primary" : "small-button"}
+                onClick={() => setHistoryTab("transactions")}
+                style={{ fontSize: 13, padding: "6px 14px", borderRadius: 6 }}
+              >
+                Lịch sử thanh toán ({historyTransactions.length})
               </button>
             </div>
 
@@ -2174,7 +2343,8 @@ export function RfidCardsView() {
                     Chưa có nhật ký thay đổi nào cho thẻ này.
                   </p>
                 )
-              ) : historyScanLogs.length > 0 ? (
+              ) : historyTab === "scans" ? (
+                historyScanLogs.length > 0 ? (
                 <div className="table-wrap">
                   <table>
                     <thead>
@@ -2210,10 +2380,58 @@ export function RfidCardsView() {
                   </table>
                 </div>
               ) : (
-                <p className="muted-text" style={{ padding: "30px 0", textAlign: "center" }}>
-                  Chưa có lịch sử quét cho thẻ này.
-                </p>
-              )}
+                  <p className="muted-text" style={{ padding: "30px 0", textAlign: "center" }}>
+                    Chưa có lịch sử quét cho thẻ này.
+                  </p>
+                )
+              ) : null}
+              {historyTab === "transactions" ? (
+                historyTransactions.length > 0 ? (
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Thời gian</th>
+                          <th>Kiểu giao dịch</th>
+                          <th>Phương thức</th>
+                          <th>Số tiền</th>
+                          <th>Trạng thái</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {historyTransactions.map((t) => (
+                          <tr key={t.id}>
+                            <td style={{ whiteSpace: "nowrap", fontSize: 13 }}>
+                              {new Date(t.createdAt).toLocaleString("vi-VN")}
+                            </td>
+                            <td style={{ fontSize: 13 }}>{t.transactionType}</td>
+                            <td style={{ fontSize: 13 }}>{t.method}</td>
+                            <td style={{ fontSize: 13 }}>{Number(t.amount).toLocaleString("vi-VN")} ₫</td>
+                            <td>
+                              <span
+                                className={
+                                  t.status === "paid"
+                                    ? "badge success"
+                                    : t.status === "pending"
+                                      ? "badge warning"
+                                      : "badge danger"
+                                }
+                                style={{ fontSize: 11 }}
+                              >
+                                {t.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="muted-text" style={{ padding: "30px 0", textAlign: "center" }}>
+                    Chưa có lịch sử thanh toán cho thẻ này.
+                  </p>
+                )
+              ) : null}
             </div>
 
             <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--border, #e2e8f0)", display: "flex", justifyContent: "flex-end" }}>
@@ -2224,6 +2442,7 @@ export function RfidCardsView() {
                   setHistoryCard(null);
                   setHistoryAuditLogs([]);
                   setHistoryScanLogs([]);
+                  setHistoryTransactions([]);
                 }}
               >
                 Đóng

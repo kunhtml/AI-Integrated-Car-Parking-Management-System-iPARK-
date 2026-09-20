@@ -28,7 +28,7 @@ import {
 import { DataTable } from "@/components/ui/data-table";
 import { useParkingApp } from "@/context/parking-app-context";
 import type { FormEvent } from "react";
-import type { RfidCard, RegisteredVehicle, VehicleRequest } from "@/types";
+import type { RfidCard, RegisteredVehicle, Subscription, VehicleRequest } from "@/types";
 import { apiFetch } from "@/lib/client-api";
 import { logger } from "@/lib/logger";
 
@@ -73,6 +73,20 @@ function formatDate(dateStr: string | null | undefined) {
   return new Date(dateStr).toLocaleDateString("vi-VN");
 }
 
+function formatDateTime(dateStr: string | null | undefined) {
+  if (!dateStr) return "—";
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
 function rfidStatusLabel(status: string | undefined) {
   switch (status) {
     case "active":
@@ -115,6 +129,7 @@ function rfidStatusBadgeClass(status: string | undefined) {
 
 export function VehicleDetailModal({
   vehicle,
+  subscriptions = [],
   onClose,
   onReject,
   rejectReason,
@@ -125,6 +140,7 @@ export function VehicleDetailModal({
   onResolveRequest,
 }: {
   vehicle: RegisteredVehicle;
+  subscriptions?: Subscription[];
   onClose: () => void;
   onReject: () => void;
   rejectReason: string;
@@ -145,6 +161,30 @@ export function VehicleDetailModal({
   const [vehicleHistory, setVehicleHistory] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const subscriptionStatus = useMemo(() => {
+    const now = Date.now();
+    const linkedSubscriptions = subscriptions
+      .filter((subscription) => subscription.primaryVehicleId === vehicle.id)
+      .sort(
+        (left, right) =>
+          new Date(right.endDate).getTime() - new Date(left.endDate).getTime(),
+      );
+    const activeSubscription = linkedSubscriptions.find(
+      (subscription) =>
+        subscription.status === "active" &&
+        new Date(subscription.endDate).getTime() > now,
+    );
+    if (activeSubscription) return { state: "active" as const, subscription: activeSubscription };
+
+    const expiredSubscription = linkedSubscriptions.find(
+      (subscription) =>
+        subscription.status === "expired" ||
+        new Date(subscription.endDate).getTime() <= now,
+    );
+    return expiredSubscription
+      ? { state: "expired" as const, subscription: expiredSubscription }
+      : { state: "none" as const };
+  }, [subscriptions, vehicle.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -424,6 +464,37 @@ export function VehicleDetailModal({
                 </div>
               </div>
             ))}
+            <div
+              className="info-box"
+              style={{
+                minWidth: 0,
+                padding: "14px 16px",
+                borderRadius: 12,
+                gridColumn: "1 / -1",
+              }}
+            >
+              <span className="muted-cell" style={{ fontSize: "0.72rem" }}>
+                Gói đăng ký
+              </span>
+              {subscriptionStatus.state === "active" ? (
+                <>
+                  <div style={{ wordBreak: "break-word" }}>
+                    <strong>{subscriptionStatus.subscription.planName}</strong>
+                  </div>
+                  <div style={{ color: "var(--muted)", fontSize: "0.82rem", marginTop: 4 }}>
+                    Hiệu lực: {formatDateTime(subscriptionStatus.subscription.startDate)} đến {formatDateTime(subscriptionStatus.subscription.endDate)}
+                  </div>
+                </>
+              ) : subscriptionStatus.state === "expired" ? (
+                <div style={{ wordBreak: "break-word" }}>
+                  <strong>Gói đăng ký đã hết hạn</strong>
+                </div>
+              ) : (
+                <div style={{ wordBreak: "break-word" }}>
+                  <strong>Chưa có gói đăng ký</strong>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -3265,6 +3336,7 @@ export function VehiclesView() {
       {detailVehicle && (
         <VehicleDetailModal
           vehicle={detailVehicle}
+          subscriptions={subscriptionList}
           onClose={() => setDetailVehicle(null)}
           onReject={async () => {
             if (!detailVehicle.id) return;

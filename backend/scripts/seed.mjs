@@ -299,44 +299,34 @@ if (customer1User) {
   console.log("[Seed] Customer1 sample notifications seeded (1 read, 2 unread).");
 }
 
-// ─── 8. Zones ───────────────────────────────────────────────────────────────
+// ─── 8. Zones (Bãi chỉ có 1 khu tổng duy nhất) ──────────────────────────────
 const seedZones = [
   {
-    name: "A",
-    description: "Khu đỗ thông thường",
-    capacity: 10,
+    name: "Bãi đỗ xe tổng",
+    description: "Toàn bộ khu vực đỗ xe thông minh iPARK",
+    capacity: 200,
+    walkInQuota: 200,
+    subscriberQuota: 0,
     allowedVehicleTypes: ["Ô tô"],
     displayOrder: 1,
     isActive: true,
   },
-  {
-    name: "B",
-    description: "Khu đỗ hỗn hợp (thường + điện)",
-    capacity: 10,
-    allowedVehicleTypes: ["Ô tô"],
-    displayOrder: 2,
-    isActive: true,
-  },
-  {
-    name: "C",
-    description: "Khu đỗ có mái che + dành cho người khuyết tật",
-    capacity: 10,
-    allowedVehicleTypes: ["Ô tô"],
-    displayOrder: 3,
-    isActive: true,
-  },
 ];
+
+// Dọn dẹp các khu A, B, C cũ (bãi chỉ có 1 khu tổng duy nhất)
+await Zone.deleteMany({ name: { $in: ["A", "B", "C"] } });
 
 const zoneIds = {};
 for (const zone of seedZones) {
   const doc = await Zone.findOneAndUpdate(
-    { name: zone.name },
-    { $setOnInsert: zone },
+    { $or: [{ name: zone.name }, { name: "Bãi chung" }] },
+    { $set: zone },
     { upsert: true, returnDocument: "after" },
   );
   zoneIds[zone.name] = doc._id;
+  zoneIds["default"] = doc._id;
 }
-console.log(`[Seed] Zones: ${seedZones.length} seeded.`);
+console.log(`[Seed] Zones: ${seedZones.length} seeded (khu tổng duy nhất).`);
 
 // ─── 9. ParkingSlots — chỉ tạo khi DB chưa có slot nào; mã số thuần (1, 2, 3...)
 let slotsCreated = 0;
@@ -344,7 +334,7 @@ const existingSlotCount = await ParkingSlot.countDocuments();
 if (existingSlotCount === 0) {
   const seedSlots = Array.from({ length: 30 }, (_, i) => ({
     slotCode: String(i + 1),
-    zoneId: zoneIds.A,
+    zoneId: zoneIds["default"],
     slotType: "regular",
     features: [],
     floor: 0,

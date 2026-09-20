@@ -65,7 +65,10 @@ export async function computeActiveZoneCapacitySum(excludeZoneId?: string) {
 
 async function alignDefaultZoneCapacity(targetCapacity: number) {
   const totalZoneCapacity = await computeActiveZoneCapacitySum();
-  const defaultZone = await Zone.findOne({ name: "Bãi chung", isActive: true });
+  const defaultZone = await Zone.findOne({
+    name: { $in: ["Bãi đỗ xe tổng", "Bãi xe tổng", "Bãi chung"] },
+    isActive: true,
+  }) || await Zone.findOne({ isActive: true }).sort({ displayOrder: 1 });
   if (!defaultZone) {
     if (totalZoneCapacity > targetCapacity) {
       throw new CapacityConfigError(
@@ -120,13 +123,13 @@ async function syncSlotsToGlobalCapacity(targetCapacity: number) {
     .sort({ displayOrder: 1, name: 1 });
   if (!zone) {
     zone = await Zone.create({
-      name: "Bãi chung",
-      description: "Khu mặc định cho các slot tự động tạo theo tổng sức chứa.",
+      name: "Bãi đỗ xe tổng",
+      description: "Toàn bộ khu vực đỗ xe thông minh iPARK",
       capacity: targetCapacity,
       walkInQuota: targetCapacity,
       subscriberQuota: 0,
       allowedVehicleTypes: ["Ô tô"],
-      displayOrder: 999,
+      displayOrder: 1,
       isActive: true,
     });
   }

@@ -1,0 +1,29 @@
+*** Begin Patch
+*** Update File: backend/src/controllers/camera-bridge.controller.ts
+@@
+   const memberCardForPlate = activeMemberSubscription
+     ? await RfidCard.findOne({
+         plate,
+         cardType: "member",
+         status: { $in: ["active", "in-use"] },
+       }).select("uid")
+     : null;
++  // Thẻ Member khách đã mua đứt cho biển số — tra cả khi gói dịch vụ đã hết
++  // hạn: bàn nhân viên cần hiện UID thẻ khách đang giữ để đối chiếu thẻ vật lý.
++  const purchasedCardForPlate =
++    !memberCardForPlate && plate
++      ? await RfidCard.findOne({
++          plate,
++          cardType: "member",
++          status: { $in: ["active", "in-use"] },
++        })
++        .sort({ soldAt: -1, updatedAt: -1 })
++        .select("uid")
++        .lean()
++      : null;
+@@
+   const expectedRfidUid =
+     openSession?.expectedExitRfidUid || memberCardForPlate?.uid || null;
++  const purchasedCardUid =
++    memberCardForPlate?.uid || purchasedCardForPlate?.uid || null;
+*** End Patch

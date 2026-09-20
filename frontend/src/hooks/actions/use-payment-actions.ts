@@ -22,7 +22,7 @@ export function createPaymentActions({
   setTransactionList,
   setActionLog,
 }: PaymentActionsParams) {
-  async function updatePricing(form: FormData) {
+  async function updatePricing(form: FormData, previousRfidPrice?: number) {
     const payload = {
       dayRate: Number(form.get("dayRate") || 0),
       rfidCardSalePrice: Number(form.get("rfidCardSalePrice") || 0),
@@ -45,7 +45,10 @@ export function createPaymentActions({
       }
 
       setPricingConfigState(data.pricingConfig);
-      setActionLog("Đã cập nhật vào hệ thống.");
+      const savedPrice = Number(data.pricingConfig?.rfidCardSalePrice ?? 0);
+      const priceChanged =
+        previousRfidPrice !== undefined && savedPrice !== Number(previousRfidPrice);
+      setActionLog(priceChanged ? "Đã lưu giá thẻ RFID." : "Đã cập nhật vào hệ thống.");
       return true;
     } catch {
       setActionLog("Không kết nối được API cấu hình giá.");

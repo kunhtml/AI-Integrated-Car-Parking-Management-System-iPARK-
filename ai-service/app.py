@@ -16,7 +16,8 @@ from dotenv import load_dotenv
 
 # Load .env nằm cùng thư mục với app.py (không phụ thuộc cwd khi chạy).
 # PHẢI chạy trước khi import cv2/torch để các biến giới hạn thread có tác dụng.
-load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(_BASE_DIR, ".env"))
 
 # ================== GIỚI HẠN THREAD (CHỐNG LAG) ==================
 # torch/OpenBLAS/MKL mặc định dùng HẾT số core logic -> EasyOCR đẩy CPU lên
@@ -53,6 +54,32 @@ import requests
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from flask import Flask, Response, jsonify, request
+
+# ==== SINGLETON GUARD ====
+# Chạy 2 instance song song -> mỗi instance giành 1 ESP32 (Windows chỉ cho 1
+# connection/COM), cả hai rơi vào "shared" và board cổng ra không bao giờ
+# được đọc. Khóa file cấp OS ở đây, TRƯỚC khi nạp torch (~1GB) và mở COM:
+# instance thứ hai chết ngay, không kịp chiếm tài nguyên.
+# Dùng file lock chứ không bind socket: werkzeug cần chính socket đó cho app.run.
+if os.getenv("IPARK_ALLOW_MULTI_INSTANCE", "").strip().lower() not in (
+    "1", "true", "yes", "on",
+):
+    try:
+        import msvcrt
+
+        _singleton_lock = open(os.path.join(_BASE_DIR, ".ai-service.lock"), "a+")
+        _singleton_lock.seek(0)
+        msvcrt.locking(_singleton_lock.fileno(), msvcrt.LK_NBLCK, 1)
+    except OSError:
+        print(
+            f"[BOOT][FATAL] Đã có một AI service khác đang chạy (khóa "
+            f"{os.path.join(_BASE_DIR, '.ai-service.lock')} đang bị giữ). Chạy 2 "
+            "instance song song sẽ tranh COM port và làm cổng ra không quét "
+            "được thẻ. Thoát. (Đặt IPARK_ALLOW_MULTI_INSTANCE=1 để bỏ qua.)"
+        )
+        sys.exit(1)
+    except ImportError:
+        pass  # Không phải Windows -> không có msvcrt, bỏ qua guard.
 
 torch = None
 YOLO = None
@@ -219,7 +246,6 @@ BACKGROUND_QUEUE_SIZE = max(1, int(os.getenv("BACKGROUND_QUEUE_SIZE", "32")))
 AI_METRIC_INTERVAL_SEC = float(os.getenv("AI_METRIC_INTERVAL_SEC", "60"))
 
 # Dùng đường dẫn tuyệt đối theo thư mục app.py để không phụ thuộc CWD
-_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(_BASE_DIR, "static")
 SNAPSHOT_DIR = os.path.join(STATIC_DIR, "snapshots")
 
@@ -673,7 +699,7 @@ def sync_all_rfid_cards_to_esp32_with_stats():
 
 
 def detect_and_connect_serials():
-    global arduino_in, arduino_out
+    global arduino_in, arduino_out, _serial_shared
     from serial.tools import list_ports
     
     ports = [p.device for p in list_ports.comports()]
@@ -681,52 +707,111 @@ def detect_and_connect_serials():
     
     found = {}
     conns = {}
+    unused = []
     for port in ports:
+        conn = None
         try:
             conn = serial.Serial(port, 9600, timeout=1.5, dsrdtr=False, rtscts=False)
             time.sleep(0.3)
             conn.reset_input_buffer()
-            conn.write(b"GET_ID\n")
-            conn.flush()
-            deadline = time.time() + 1.5
             response = ""
-            while time.time() < deadline:
-                if conn.in_waiting:
-                    line = conn.readline().decode("utf-8", errors="ignore").strip()
-                    if line.startswith("ID:"):
-                        response = line
-                        break
+            # Board có thể reset khi port bên cạnh vừa mở → thử lại GET_ID.
+            for _attempt in range(3):
+                conn.write(b"GET_ID\n")
+                conn.flush()
+                deadline = time.time() + 1.2
+                while time.time() < deadline:
+                    if conn.in_waiting:
+                        line = conn.readline().decode("utf-8", errors="ignore").strip()
+                        if line.startswith("ID:"):
+                            response = line
+                            break
+                if response.startswith("ID:"):
+                    break
+                time.sleep(0.3)
             if response.startswith("ID:"):
                 dev_id = response[3:].strip().upper()
-                if dev_id in ("IN", "OUT") and dev_id.lower() not in found:
+                if dev_id in ("IN", "OUT") and dev_id.lower() not in conns:
                     found[dev_id.lower()] = port
                     conns[dev_id.lower()] = conn
                     print(f"[SERIAL][DETECT] {port} -> {dev_id}")
-                else:
-                    conn.close()
+                    continue
+                # Cùng role với board đã nhận (cả 2 cùng báo ID:OUT) → giữ lại
+                # để gán cho role còn thiếu, không đóng và không share.
+                print(f"[SERIAL][DETECT] {port} -> {dev_id} (duplicate role, keep as spare)")
+                unused.append(conn)
             else:
-                conn.close()
-        except Exception as e:
-            pass
+                # Board không trả lời GET_ID trong thời hạn → vẫn giữ lại làm
+                # spare cho role thiếu (firmware cũ/chưa flash ID).
+                print(f"[SERIAL][DETECT] {port} -> no ID response (keep as spare)")
+                unused.append(conn)
+        except Exception as _port_err:
+            # Port bị process khác giữ (PermissionError) hoặc driver lỗi.
+            # Phải log rõ: nuốt lặng ở đây khiến board cổng ra "biến mất"
+            # mà không ai biết vì sao.
+            print(f"[SERIAL][DETECT] {port} không mở được: {type(_port_err).__name__}: {_port_err}")
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
     ser_in = conns.get("in")
     ser_out = conns.get("out")
 
-    # Fallback to configured env if not detected
-    if not ser_in and SERIAL_PORT_IN and SERIAL_PORT_IN not in found.values():
-        ser_in = safe_serial(SERIAL_PORT_IN)
-    if not ser_out and SERIAL_PORT_OUT and SERIAL_PORT_OUT not in found.values():
-        ser_out = safe_serial(SERIAL_PORT_OUT)
+    # Role còn thiếu và có board spare (đã mở thành công) → gán luôn, KHÔNG
+    # share 1 board cho 2 cổng khi thực sự có nhiều board cắm.
+    for role, current in (("in", ser_in), ("out", ser_out)):
+        if current is None and unused:
+            claimed = unused.pop(0)
+            conns[role] = claimed
+            if role == "in":
+                ser_in = claimed
+            else:
+                ser_out = claimed
+            print(f"[SERIAL][DETECT] assigned spare {claimed.port} -> {role.upper()}")
 
-    # SINGLE-DEVICE FALLBACK: If only 1 board is plugged in, share it for both in and out!
-    if ser_in and not ser_out:
+    # Fallback theo env khi board không trả đúng ID role (firmware cũ / chưa
+    # flash IN-OUT). Không dùng lại port đã gán cho role kia để tránh 1 board
+    # vắt 2 vai khi thực sự có 2 board cắm.
+    if ser_in is None:
+        ser_in = _claim_env_port(SERIAL_PORT_IN, ser_out)
+    if ser_out is None:
+        ser_out = _claim_env_port(SERIAL_PORT_OUT, ser_in)
+
+    # SINGLE-DEVICE FALLBACK: chỉ share khi thực sự chỉ có 1 board.
+    shared = False
+    if ser_in is not None and ser_out is None:
+        shared = True
         print(f"[SERIAL][FALLBACK] Only IN port available ({ser_in.port}). Sharing for OUT operations.")
         ser_out = ser_in
-    elif ser_out and not ser_in:
+    elif ser_out is not None and ser_in is None:
+        shared = True
         print(f"[SERIAL][FALLBACK] Only OUT port available ({ser_out.port}). Sharing for IN operations.")
         ser_in = ser_out
 
+    _serial_shared = shared or (ser_in is not None and ser_in is ser_out)
+    if _serial_shared:
+        # Chỉ 1 board cho 2 cổng: cổng ra dùng chung board cổng vào nên đầu
+        # đọc cổng ra KHÔNG được đọc UID. Hầu hết trường hợp là board thứ hai
+        # bị process khác giữ hoặc cáp chưa cắm — cảnh báo để không đoán mò.
+        print(
+            "[SERIAL][WARN] Chỉ có 1 board ESP32 → cổng vào/ra dùng chung "
+            f"({getattr(ser_in, 'port', None)}). Cổng ra SẼ KHÔNG quét được thẻ "
+            "cho tới khi board thứ hai mở được (kiểm tra cáp / process đang giữ COM)."
+        )
+    print(f"[SERIAL][DETECT] shared={_serial_shared} in={getattr(ser_in, 'port', None)} out={getattr(ser_out, 'port', None)}")
     return ser_in, ser_out
+
+
+def _claim_env_port(role_env_port, already):
+    """Mở port theo env khi detection theo ID thiếu. Trả None nếu port đó
+    đã được gán cho role kia (không để 1 board vắt 2 vai)."""
+    if not role_env_port:
+        return None
+    if already is not None and getattr(already, "port", None) == role_env_port:
+        return None
+    return safe_serial(role_env_port)
 
 
 def safe_serial(port):
@@ -739,6 +824,7 @@ def safe_serial(port):
         return None
 
 
+_serial_shared = False
 arduino_in, arduino_out = detect_and_connect_serials()
 
 # ==== HARDWARE BRIDGE STATE (serial/camera) ====
@@ -2357,9 +2443,14 @@ def camera_loop():
                                 last_snapshot_out = detected_snap
 
         # Đọc serial (RFID / DATA từ ESP32)
-        read_from_arduino(arduino_in, ser_out=arduino_out, direction="in")
-        if arduino_out is not None and arduino_out != arduino_in:
-            read_from_arduino(arduino_out, direction="out")
+        if _serial_shared and arduino_in is not None:
+            # 1 board dùng chung: đọc 1 lần, xử lý theo direction đang bật scan.
+            shared_dir = "out" if scan_enabled_by_direction.get("out") and not scan_enabled_by_direction.get("in") else "in"
+            read_from_arduino(arduino_in, direction=shared_dir)
+        else:
+            read_from_arduino(arduino_in, ser_out=arduino_out, direction="in")
+            if arduino_out is not None and arduino_out != arduino_in:
+                read_from_arduino(arduino_out, direction="out")
 
         # Tự động thử kết nối lại ESP32 nếu cáp bị rút (serial exception -> marked offline)
         if not (_hw["serial_in_ok"] or _hw["serial_out_ok"]):
@@ -2544,6 +2635,7 @@ def api_cameras_health():
         "hardware": {
             "serial_in_ok": hw["serial_in_ok"],
             "serial_out_ok": hw["serial_out_ok"],
+            "serial_shared": _serial_shared,
             "cam_in_ok": hw["cam_in_ok"],
             "cam_out_ok": hw["cam_out_ok"],
             "last_serial_error_at": hw["last_serial_error_at"],
@@ -2943,6 +3035,39 @@ def poll_rfid_scan():
         "direction": direction,
     })
 
+
+@app.route("/api/rfid/reader/reload", methods=["POST"])
+def reload_rfid_reader():
+    """Khởi động lại đầu đọc: clear state quét, sync lại thẻ, connect lại serial."""
+    body = request.get_json(silent=True) or {}
+    direction = _normalize_scan_direction(body.get("direction", "in"))
+    try:
+        # Dừng toàn bộ scan đang chạy (cả 2 direction) trước khi khởi động lại.
+        for scan_direction in ("in", "out"):
+            set_rfid_scan_enabled(False, scan_direction)
+        global pending_vehicle_info
+        pending_vehicle_info = {
+            "plate": "", "lookupDone": False, "lookupError": False,
+            "isSubscriber": False, "ownerName": "Guest", "vehicle": None,
+            "detectedAt": 0.0,
+        }
+        # Thử kết nối lại serial nếu board bị rút.
+        _try_reconnect_serials()
+        # Sync lại toàn bộ thẻ từ backend xuống ESP32.
+        sent_in, sent_out = sync_all_rfid_cards_to_esp32_with_stats()
+        # Bật lại scan cho direction được yêu cầu.
+        set_rfid_scan_enabled(True, direction, body.get("mode", "gate"))
+        return jsonify({
+            "ok": True,
+            "direction": direction,
+            "sent_in": sent_in,
+            "sent_out": sent_out,
+            "serial_in_ok": _hw["serial_in_ok"],
+            "serial_out_ok": _hw["serial_out_ok"],
+            "shared": _serial_shared,
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "message": str(e)}), 500
 
 @app.route("/api/rfid/scan/cancel", methods=["POST"])
 def cancel_rfid_scan():

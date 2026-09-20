@@ -2310,6 +2310,30 @@ tr:hover td {
   line-height: 1.4;
 }
 
+.staff-desk__scan-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 10px;
+  padding: 11px 12px;
+  border: 2px solid #dc2626;
+  border-radius: 10px;
+  background: #fef2f2;
+  box-shadow: 0 2px 10px rgba(220, 38, 38, 0.18);
+}
+.staff-desk__scan-error-text {
+  margin: 0;
+  color: #b91c1c;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+}
+.staff-desk__scan-error-text--sm {
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .staff-desk__rfid-conflict {
   display: grid;
   gap: 10px;
@@ -2808,6 +2832,18 @@ tr:hover td {
   font-size: 0.9rem;
   font-weight: 600;
   color: #334155;
+}
+
+.staff-desk__ingest-manual-title .staff-desk__ingest-uid {
+  margin: 0 4px;
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: rgba(47, 111, 176, 0.12);
+  color: #1d4ed8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
 }
 
 input.staff-desk__manual-confirm-input {
@@ -3657,6 +3693,10 @@ input.staff-desk__manual-confirm-input:focus {
   flex-wrap: wrap;
 }
 
+.pkav-controls--single {
+  justify-content: flex-end;
+}
+
 .pkav-search {
   display: flex;
   align-items: center;
@@ -3817,6 +3857,14 @@ input.staff-desk__manual-confirm-input:focus {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 16px;
+}
+
+.pkav-grid--single {
+  grid-template-columns: 1fr;
+}
+
+.pkav-grid--single .pkav-card {
+  padding: 24px 28px;
 }
 
 /* Zone Card */
@@ -17789,6 +17837,42 @@ textarea.staff-desk__manual-confirm-input {
 .history-cancelled {
   color: #64748b;
 }
+.history-plate {
+  font-weight: 700 !important;
+  color: #1e293b !important;
+  font-size: 0.88rem !important;
+  letter-spacing: 0.02em;
+}
+.history-detail {
+  display: flex !important;
+  gap: 6px;
+  align-items: baseline;
+  color: #64748b !important;
+}
+.history-detail b {
+  color: #334155;
+  font-size: 0.82rem;
+}
+.history-renew-btn {
+  margin-top: 6px;
+  align-self: flex-start;
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  color: #fff;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.history-renew-btn:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+.history-renew-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 @media (max-width: 640px) {
   .subscription-history-row {
     align-items: flex-start;
@@ -19424,6 +19508,11 @@ textarea.staff-desk__manual-confirm-input {
   color: #15803d !important;
 }
 
+.staff-desk__exit-status--member {
+  color: #0284c7 !important;
+  font-weight: 700;
+}
+
 .staff-desk__exit-status--warn {
   color: #b45309 !important;
 }
@@ -19835,6 +19924,42 @@ textarea.staff-desk__manual-confirm-input {
 }
 .history-cancelled {
   color: #64748b;
+}
+.history-plate {
+  font-weight: 700 !important;
+  color: #1e293b !important;
+  font-size: 0.88rem !important;
+  letter-spacing: 0.02em;
+}
+.history-detail {
+  display: flex !important;
+  gap: 6px;
+  align-items: baseline;
+  color: #64748b !important;
+}
+.history-detail b {
+  color: #334155;
+  font-size: 0.82rem;
+}
+.history-renew-btn {
+  margin-top: 6px;
+  align-self: flex-start;
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  color: #fff;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.history-renew-btn:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+.history-renew-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 @media (max-width: 640px) {
   .subscription-history-row {

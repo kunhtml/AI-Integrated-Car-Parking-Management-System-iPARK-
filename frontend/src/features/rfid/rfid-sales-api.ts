@@ -56,6 +56,23 @@ export type RfidTransaction = {
   payosQrCode?: string;
 };
 
+export type RfidAuditHistoryItem = {
+  id: string;
+  action: string;
+  actionLabel?: string;
+  performedBy?: { id?: string; name?: string; email?: string } | null;
+  changes?: Record<string, unknown>;
+  createdAt: string;
+};
+
+export type RfidCardDetails = {
+  card: RfidInventoryItem;
+  owner?: { name?: string; email?: string; phone?: string } | null;
+  vehicle?: { plate?: string; ownerName?: string; brand?: string; model?: string; color?: string; status?: string } | null;
+  history: RfidTransaction[];
+  auditHistory: RfidAuditHistoryItem[];
+};
+
 export type RfidSaleInput = {
   /** Bán đứt thẻ Member đã liên kết duy nhất với một xe. */
   cardType: "member";
@@ -111,6 +128,10 @@ export async function getRfidTransactions(filters: { status?: RfidTransactionSta
   if (filters.status) query.set("status", filters.status);
   query.set("limit", String(filters.limit ?? 50));
   return parseResponse<TransactionsResponse>(await apiFetch(`/rfid/transactions?${query.toString()}`));
+}
+
+export async function getRfidCardDetails(cardId: string) {
+  return parseResponse<RfidCardDetails>(await apiFetch(`/rfid/${cardId}/details`));
 }
 
 export async function addRfidInventoryCard(input: { uid: string; notes?: string }) {

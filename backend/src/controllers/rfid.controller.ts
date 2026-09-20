@@ -1083,6 +1083,7 @@ function mapRfidActionLabel(action: string): string {
     rfid_card_status_changed: "Thay đổi trạng thái thẻ",
     rfid_card_restored: "Khôi phục thẻ",
     rfid_card_deleted: "Xóa thẻ",
+    rfid_card_reset: "Reset dữ liệu thẻ",
     rfid_card_sold: "Bán thẻ thành viên",
     rfid_card_returned: "Trả thẻ / Thu hồi thẻ",
     rfid_card_lost: "Báo mất thẻ",
@@ -1141,6 +1142,32 @@ export async function bulkClearRfidCards(request: Request, response: Response) {
       RfidCard.deleteMany({ _id: { $in: cardIds } }),
     ]);
 
+    if (request.user?.id) {
+      await Promise.all(
+        cards.map((card) =>
+          createAuditLog({
+            action: "rfid_card_deleted",
+            entityType: "RfidCard",
+            entityId: card._id,
+            performedBy: request.user!.id,
+            changes: {
+              old: {
+                uid: card.uid,
+                ownerName: card.ownerName,
+                plate: card.plate,
+                userType: card.userType,
+                cardType: card.cardType,
+                status: card.status,
+              },
+              new: undefined,
+            },
+          }).catch((err) =>
+            console.error("Error creating audit log for card deletion:", err),
+          ),
+        ),
+      );
+    }
+
     response.json({
       ok: true,
       message: `Đã xóa thành công ${cardIds.length} thẻ RFID.`,
@@ -1183,6 +1210,38 @@ export async function bulkClearRfidCards(request: Request, response: Response) {
       ),
     ]);
 
+    if (request.user?.id) {
+      await Promise.all(
+        cards.map((card) =>
+          createAuditLog({
+            action: "rfid_card_reset",
+            entityType: "RfidCard",
+            entityId: card._id,
+            performedBy: request.user!.id,
+            changes: {
+              old: {
+                ownerName: card.ownerName,
+                plate: card.plate,
+                userType: card.userType,
+                cardType: card.cardType,
+                status: card.status,
+                userId: card.userId,
+                vehicleId: card.vehicleId,
+              },
+              new: {
+                ownerName: "Guest",
+                userType: "guest",
+                cardType: "guest",
+                status: "available",
+              },
+            },
+          }).catch((err) =>
+            console.error("Error creating audit log for card reset:", err),
+          ),
+        ),
+      );
+    }
+
     response.json({
       ok: true,
       message: `Đã reset thành công ${cardIds.length} thẻ RFID về trạng thái khách có sẵn.`,
@@ -1193,3 +1252,4 @@ export async function bulkClearRfidCards(request: Request, response: Response) {
 
   response.status(400).json({ ok: false, message: "Chế độ không hợp lệ." });
 }
+

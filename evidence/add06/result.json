@@ -1,0 +1,56 @@
+{
+  "testCase": "ADD_06",
+  "title": "Realtime Recognition Monitoring",
+  "executedAt": "2026-09-16T18:01:00+07:00",
+  "account": "admin@ipark.vn",
+  "steps": [
+    {
+      "step": 1,
+      "action": "Opened the camera monitoring route",
+      "expected": "Live monitor and camera logs panel are accessible",
+      "actual": "The /cameras page briefly renders the monitor, but direct navigation later redirects to /overview before the screen is stable",
+      "result": "PARTIAL",
+      "evidence": "01_route_redirects_to_overview.png"
+    },
+    {
+      "step": 2,
+      "action": "Observed camera status and existing recognition logs",
+      "expected": "Camera stream is LIVE and recent logs are listed",
+      "actual": "Bridge online, 2 camera streams and 100 camera log records were displayed while the page was mounted",
+      "result": "PASS"
+    },
+    {
+      "step": 3,
+      "action": "Pushed test camera events ADD06RT123, ADD06RT456 and ADD06RT789",
+      "expected": "New plate scan appears in the monitor instantly",
+      "actual": "ADD06RT789 did not appear after the panel was already loaded; it appeared only after reloading /cameras, timestamp 18:00:36 16/09/2026",
+      "result": "FAIL"
+    },
+    {
+      "step": 4,
+      "action": "Checked the log table for OCR confidence percentage and timestamp",
+      "expected": "Confidence percentage and trigger timestamp are visible",
+      "actual": "Timestamp is visible, but the camera log table has no confidence column. The separate /recognition-logs route redirects to /overview, so confidence cannot be verified on screen",
+      "result": "FAIL"
+    }
+  ],
+  "testEvents": [
+    {
+      "plate": "ADD06RT123",
+      "confidence": 0.93,
+      "logId": "6aaa767112536097b0c487b5"
+    },
+    {
+      "plate": "ADD06RT456",
+      "confidence": 0.87,
+      "logId": "6aaa76b212536097b0c48a53"
+    },
+    {
+      "plate": "ADD06RT789",
+      "confidence": 0.91,
+      "logId": "6aaa76d412536097b0c48bb5"
+    }
+  ],
+  "overallResult": "PARTIAL_PASS",
+  "limitation": "Camera LIVE status and log loading work. The current cameras log panel performs a one-time load and is not subscribed to the camera event stream; it also does not display OCR confidence. The recognition-log screen/route is not reachable from the current navigation flow."
+}

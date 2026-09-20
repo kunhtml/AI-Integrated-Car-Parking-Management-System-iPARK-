@@ -370,8 +370,8 @@ export function SubscriptionsView() {
       {detailVehicle && (
         <VehicleDetailModal
           vehicle={detailVehicle}
+          subscriptions={subscriptionList}
           onClose={() => setDetailVehicle(null)}
-          onApprove={() => undefined}
           onReject={() => undefined}
           rejectReason=""
           onRejectReasonChange={() => undefined}
@@ -527,8 +527,38 @@ export function SubscriptionsView() {
                         <div className="subscription-history-row" key={sub.id}>
                           <div>
                             <strong>{sub.planName}</strong>
-                            <span>
-                              {sub.memberCode || "Không có mã thành viên"}
+                            <span className="history-detail">
+                              Loại gói:{" "}
+                              <b>
+                                {(() => {
+                                  const plan = planList.find(
+                                    (p) => p.id === sub.planId,
+                                  );
+                                  return plan?.durationDays
+                                    ? `Gói ${plan.durationDays} ngày`
+                                    : sub.planName;
+                                })()}
+                              </b>
+                            </span>
+                            <span className="history-detail">
+                              Biển số xe:{" "}
+                              <b className="history-plate">
+                                {sub.primaryVehicle?.plate ??
+                                  sub.primaryVehicleId ??
+                                  "Chưa có biển số"}
+                              </b>
+                            </span>
+                            <span className="history-detail">
+                              Mã thành viên:{" "}
+                              <b>{sub.memberCode || "Không có"}</b>
+                            </span>
+                            <span className="history-detail">
+                              ID giao dịch:{" "}
+                              <b>
+                                {sub.transactionId
+                                  ? `#${sub.transactionId.slice(-8).toUpperCase()}`
+                                  : "Chưa có"}
+                              </b>
                             </span>
                           </div>
                           <div>
@@ -552,6 +582,16 @@ export function SubscriptionsView() {
                                 ? "Đã hết hạn"
                                 : "Đã hủy"}
                             </b>
+                            {sub.status === "expired" && (
+                              <button
+                                type="button"
+                                className="history-renew-btn"
+                                disabled={purchasing}
+                                onClick={() => void handleRenew(sub.id)}
+                              >
+                                {purchasing ? "Đang xử lý..." : "Gia hạn"}
+                              </button>
+                            )}
                           </div>
                         </div>
                       ))}

@@ -275,6 +275,7 @@ export function serializeTransaction(
     userId: transaction.userId?.toString(),
     method: transaction.method,
     amount: transaction.amount,
+    penaltyAmount: transaction.penaltyAmount,
     status: transaction.status,
     paidAt: transaction.paidAt,
     note: transaction.note,
@@ -710,6 +711,7 @@ export function serializeSubscription(sub: SubscriptionDocument) {
     autoRenew: sub.autoRenew,
     transactionId: sub.transactionId?.toString(),
     renewalCount: sub.renewalCount,
+    lastRenewedAt: sub.lastRenewedAt ? sub.lastRenewedAt.toISOString() : null,
     createdAt: sub.createdAt.toISOString(),
   };
 }
@@ -861,3 +863,4 @@ export function serializeReportExport(report: any) {
     updatedAt: report.updatedAt,
   };
 }
+

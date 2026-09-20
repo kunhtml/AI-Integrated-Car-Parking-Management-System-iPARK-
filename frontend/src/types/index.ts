@@ -307,6 +307,9 @@ export type TransactionItem = {
   sessionPaymentStatus?: "unpaid" | "partial_paid" | "fully_paid";
   sessionFee?: number;
   sessionPaidAmount?: number;
+  penaltyAmount?: number;
+  penaltyId?: string;
+  note?: string;
   // Đối chiếu (UC-29)
   session?: {
     id: string;
@@ -632,6 +635,8 @@ export type Subscription = {
   autoRenew: boolean;
   transactionId?: string;
   renewalCount: number;
+  /** Ngày gia hạn gần nhất; null nếu chưa gia hạn lần nào. */
+  lastRenewedAt?: string | null;
   createdAt: string;
   // Chỉ trả về cho admin: thông tin khách hàng sở hữu gói.
   user?: SubscriptionCustomerInfo | null;
@@ -878,3 +883,4 @@ export type StaffApplicationListResponse = {
   page: number;
   limit: number;
 };
+

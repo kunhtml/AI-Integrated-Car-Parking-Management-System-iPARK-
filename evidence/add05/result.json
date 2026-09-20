@@ -1,0 +1,44 @@
+{
+  "testCase": "ADD_05",
+  "title": "Camera Configuration & ROI Editor",
+  "executedAt": "2026-09-16T16:45:00+07:00",
+  "account": "admin@ipark.vn",
+  "camera": "Camera cổng vào",
+  "steps": [
+    {
+      "step": 1,
+      "action": "Logged in as Admin and opened Camera & thiết bị",
+      "expected": "Camera Settings is accessible and stream is online",
+      "actual": "Camera cổng vào and Camera cổng ra are visible with Live từ bridge",
+      "result": "PASS",
+      "evidence": "01_camera_settings_no_roi_editor.png"
+    },
+    {
+      "step": 2,
+      "action": "Updated camera stream URL, lane and ROI note, then saved",
+      "expected": "Camera parameters are saved successfully",
+      "actual": "The UI displayed Đã cập nhật thiết bị camera.; values persisted after reopening the form",
+      "result": "PASS",
+      "evidence": [
+        "02_camera_parameters_saved.png",
+        "03_reopen_saved_config_no_roi_editor.png"
+      ]
+    },
+    {
+      "step": 3,
+      "action": "Attempted to open ROI editor and drag ROI coordinates",
+      "expected": "ROI editor is available on the Camera Settings screen",
+      "actual": "No ROI editor/open ROI control is exposed in the current /devices UI; only Test, Chỉnh sửa, Xóa and Restart are available",
+      "result": "FAIL"
+    },
+    {
+      "step": 4,
+      "action": "Attempted to save ROI coordinates and verify AI OCR handoff",
+      "expected": "ROI coordinates are saved and sent to AI OCR service",
+      "actual": "Cannot execute from the screen because the ROI editor is not wired into the Camera & thiết bị page",
+      "result": "BLOCKED"
+    }
+  ],
+  "overallResult": "PARTIAL_PASS",
+  "limitation": "Camera configuration persistence works, but the ROI editor flow required by ADD_05 is not reachable from the current UI. The repository contains an RoiEditor component and PATCH /api/devices/:id/roi endpoint, but the devices page does not expose a control to launch it."
+}

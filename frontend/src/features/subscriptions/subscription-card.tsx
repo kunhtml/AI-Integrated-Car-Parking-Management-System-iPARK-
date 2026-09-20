@@ -145,7 +145,7 @@ export function SubscriptionCard({ subscription, renewing, cancelling, onRenew, 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             <span style={{ fontSize: "0.68rem", color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-              Bắt đầu
+              Ngày bắt đầu đăng ký
             </span>
             <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: "0.85rem", color: "#475569" }}>
               <CalendarClock size={12} color="#94a3b8" /> {formatDate(s.startDate)}
@@ -153,25 +153,29 @@ export function SubscriptionCard({ subscription, renewing, cancelling, onRenew, 
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             <span style={{ fontSize: "0.68rem", color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-              Hết hạn
+              Ngày gia hạn gói
             </span>
             <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: "0.85rem", color: "#475569" }}>
-              <CalendarClock size={12} color="#94a3b8" /> {formatDate(s.endDate)}
+              <CalendarClock size={12} color="#94a3b8" />{" "}
+              {s.lastRenewedAt ? formatDate(s.lastRenewedAt) : "Chưa gia hạn"}
             </span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             <span style={{ fontSize: "0.68rem", color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-              Còn lại
+              Ngày hết hạn gói
+            </span>
+            <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: "0.85rem", color: "#475569" }}>
+              <CalendarClock size={12} color="#94a3b8" /> {formatDate(s.endDate)}
             </span>
             <span
               style={{
-                fontWeight: 800,
-                fontSize: "1rem",
+                fontWeight: 700,
+                fontSize: "0.72rem",
                 color: daysColor,
                 fontFamily: "monospace",
               }}
             >
-              {days > 0 ? `${days} ngày` : "Hết hạn"}
+              {days > 0 ? `Còn ${days} ngày` : "Hết hạn"}
             </span>
           </div>
         </div>

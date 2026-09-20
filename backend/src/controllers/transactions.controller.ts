@@ -524,3 +524,4 @@ export async function getTransaction(request: Request, response: Response) {
     transaction: serializeTransaction(transaction, session, subscription),
   });
 }
+

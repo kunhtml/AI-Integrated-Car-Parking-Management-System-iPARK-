@@ -50,3 +50,23 @@ def register_rfid_routes(app, scanner):
         except ValueError as exc:
             return jsonify({'ok': False, 'error': str(exc)}), 400
 
+    @app.post('/api/rfid/reader/reload')
+    def reload_reader():
+        """Khởi động lại đầu đọc: clear state quét cả 2 direction rồi bật lại
+        scan theo direction yêu cầu. Tương thích contract của app.py legacy."""
+        body = request.get_json(silent=True) or {}
+        direction = (body.get('direction') or 'in').strip().lower()
+        if direction not in {'in', 'out'}:
+            direction = 'in'
+        try:
+            for scan_direction in ('in', 'out'):
+                scanner.cancel(scan_direction)
+            scanner.start(direction)
+            return jsonify({
+                'ok': True,
+                'direction': direction,
+                **scanner.poll(direction),
+            })
+        except Exception as exc:
+            return jsonify({'ok': False, 'message': str(exc)}), 500
+

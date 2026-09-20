@@ -1,0 +1,15 @@
+{
+  "result": "PASS",
+  "purchaseRequestId": "6aaa4b8b12536097b0c46b81",
+  "transactionId": "6aaa4b8b12536097b0c46b82",
+  "orderCode": "5453592094016",
+  "assignedUid": "5345EE56",
+  "requestStatus": "completed",
+  "cardStatus": "active",
+  "cardPlate": "30ADD02",
+  "transactionStatus": "paid",
+  "amount": 50000,
+  "apiFailures": [
+    "401 GET http://localhost:4000/api/auth/me"
+  ]
+}

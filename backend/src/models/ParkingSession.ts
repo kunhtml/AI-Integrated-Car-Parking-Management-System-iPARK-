@@ -23,6 +23,9 @@ export type FeeBreakdown = {
   dailyBreakdown: DailyBreakdown[];
   subscriptionDiscount?: number;
   subscriptionWarn?: string;
+  penaltyFine?: number;
+  lostCardFee?: number;
+  lostCardUid?: string;
 };
 
 export type ParkingSessionDocument = {
@@ -316,3 +319,4 @@ export const ParkingSession: Model<ParkingSessionDocument> =
     "ParkingSession",
     parkingSessionSchema,
   );
+
