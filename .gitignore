@@ -72,10 +72,8 @@ audit.json
 frontend/src/app/(dashboard)/audit-logs/page.tsx
 
 # media & evidence
-bak_media/
-bak_media/**
-evidence/
-evidence/**
+/bak_media/
+/evidence/
 
 # test scripts, temporary files & dumps
 shot_*
