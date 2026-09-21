@@ -85,6 +85,7 @@ tmp*
 **/tmp*
 tmp_*
 **/tmp_*
+USER.txt
 test_*.docx
 *.docx
 *.err
