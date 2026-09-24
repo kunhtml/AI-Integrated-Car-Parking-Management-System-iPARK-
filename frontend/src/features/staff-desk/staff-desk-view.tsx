@@ -498,6 +498,8 @@ export function StaffDeskView() {
       slot?: string;
     } | null;
   } | null>(null);
+  const [manualEntryConfirmationNote, setManualEntryConfirmationNote] =
+    useState("");
   const [pendingManualEntryRfid, setPendingManualEntryRfid] = useState(false);
   const [showEntryRfidExceptionForm, setShowEntryRfidExceptionForm] =
     useState(false);
@@ -2328,10 +2330,10 @@ export function StaffDeskView() {
                   // ngay (uid undefined → entryRfidUnverified=true).
                   void createSessionManual(undefined, plate, {
                     fromIdleForm: true,
+                    confirmationNote: manualEntryConfirmationNote.trim(),
                     manualRfidReason:
                       "Bridge mất kết nối — staff đối chiếu biển số bằng mắt, không quét RFID",
                   });
-                }}
                 }}
                 phase={phase}
                 onOpenVerifiedMember={() =>
@@ -2340,6 +2342,7 @@ export function StaffDeskView() {
                     manualEntryPlate,
                     {
                       fromIdleForm: true,
+                      confirmationNote: manualEntryConfirmationNote.trim(),
                       manualRfidReason:
                         "Mở barie xe thành viên đối chiếu thủ công",
                     },
@@ -2554,6 +2557,8 @@ function WaitingCard({
   onOpenVerifiedMember,
   onConfirmManualPlate,
   onConfirmManualPlateNoRfid,
+  manualEntryConfirmationNote,
+  onManualEntryConfirmationNoteChange,
   plateConfirmed,
   onCancelPlateConfirm,
   phase,
@@ -2594,6 +2599,8 @@ function WaitingCard({
   onOpenVerifiedMember?: () => void;
   onConfirmManualPlate?: (plate: string) => void;
   onConfirmManualPlateNoRfid?: (plate: string) => void;
+  manualEntryConfirmationNote?: string;
+  onManualEntryConfirmationNoteChange?: (value: string) => void;
   plateConfirmed?: boolean;
   onCancelPlateConfirm?: () => void;
   phase?: string;
@@ -3435,19 +3442,6 @@ function IngestCard(props: {
       props.scanPhase === "error" ||
       props.scanPhase === "timeout");
   const showConfirmButton = !showAsk && !rfidPending;
-
-  // Sau khi AI đọc biển, hỏi nhân viên xác nhận biển đúng chưa TRƯỚC khi
-  // bật quét RFID: "ask" → hỏi, "confirmed" → biển đúng, đang quét thẻ,
-  // "edit" → sai, nhập lại biển.
-  const [plateStep, setPlateStep] = useState<"ask" | "confirmed" | "edit">(
-    detected ? "ask" : "edit",
-  );
-  const ingestEventId = event.id || detected;
-  useEffect(() => {
-    setPlateStep(detected ? "ask" : "edit");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ingestEventId]);
-  const showAsk = plateStep === "ask" && !busy && !eventIsStale;
 
   return (
     <div className="staff-desk__ingest">
