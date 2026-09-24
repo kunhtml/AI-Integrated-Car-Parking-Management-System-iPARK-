@@ -1,0 +1,283 @@
+Tìm thấy 811 ảnh.
+Ngôn ngữ: en | repeat: 3 | warm-up: 1
+Đang khởi tạo PaddleOCR...
+Khởi tạo model xong trong 769.428 ms.
+Warm-up hoàn tất; bắt đầu đo OCR...
+
+  33.png: 798x587 | avg 128.602 ms | 7.776 ảnh/giây | text: 29A-349.10
+  _bbox_33.jpg: 798x587 | avg 185.797 ms | 5.382 ảnh/giây | text: plate #1 conf=0.64 | 29A-349.10
+  _bbox_bien-so-xe-phong-thuy-2.jpg: 1280x720 | avg 387.606 ms | 2.580 ảnh/giây | text: YUNDA | plate#1 conf=0.59 | 30G-256.78
+  _bbox_biensoxehanoi1-1606664418049-1606664419323713408422.jpg: 1024x542 | avg 336.594 ms | 2.971 ảnh/giây | text: plate #1 conf=0.62 | 30A-777.77
+  _bbox_m8kfYEkXA8.jpg: 1200x900 | avg 385.508 ms | 2.594 ảnh/giây | text: plate#1 conf=0.58 | 18A-123.45
+  _bbox_otoso1-lam-bien-so-dai-1-7111 (1).jpg: 660x573 | avg 301.266 ms | 3.319 ảnh/giây | text: plate #1 conf=0.59 | 30E-922.91
+  _bbox_z5546274400183-94824d6811b372dc474ad9d30c8545e4.jpg: 1276x956 | avg 724.134 ms | 1.381 ảnh/giây | text: CAMERA360 | MRANG | G | TO | RA | N | E | E | 8898 | -RANDER | plate #1 conf=0.57 | 30K-899.99
+  in_20260814_220415_578_nopl_crop.jpg: 178x78 | avg 128.475 ms | 7.784 ảnh/giây | text: 30K099.99
+  in_20260814_220415_578_nopl_full.jpg: 640x480 | avg 258.061 ms | 3.875 ảnh/giây | text: YOLO0.62 | 30K-099.99
+  in_20260814_220423_705_nopl_crop.jpg: 258x97 | avg 116.950 ms | 8.551 ảnh/giây | text: 30K-899.99
+  in_20260814_220423_705_nopl_full.jpg: 640x480 | avg 211.823 ms | 4.721 ảnh/giây | text: YOLO0.5 | 30K-899.99
+  in_20260814_220654_787_nopl_crop.jpg: 231x87 | avg 157.837 ms | 6.336 ảnh/giây | text: 3 | K-899.99
+  in_20260814_220654_787_nopl_full.jpg: 640x480 | avg 208.423 ms | 4.798 ảnh/giây | text: YOLO 0.32TOLO0.5 | 30 | K-899.99
+  in_20260814_220658_881_nopl_crop.jpg: 244x88 | avg 70.736 ms | 14.137 ảnh/giây | text: 30K-899.99
+  in_20260814_220658_881_nopl_full.jpg: 640x480 | avg 138.012 ms | 7.246 ảnh/giây | text: YOLO0.54 | 30K-899.99
+  in_20260814_220755_818_nopl_crop.jpg: 245x89 | avg 80.313 ms | 12.451 ảnh/giây | text: 30K-899.99
+  in_20260814_220755_818_nopl_full.jpg: 640x480 | avg 115.379 ms | 8.667 ảnh/giây | text: 30K-899.99
+  in_20260814_220759_768_nopl_crop.jpg: 240x87 | avg 71.300 ms | 14.025 ảnh/giây | text: 30K-899.99
+  in_20260814_220759_768_nopl_full.jpg: 640x480 | avg 254.460 ms | 3.930 ảnh/giây | text: 30K-899.99
+  in_20260814_221746_074_nopl_crop.jpg: 231x89 | avg 72.483 ms | 13.796 ảnh/giây | text: 30K-899.99
+  in_20260814_221746_074_nopl_full.jpg: 640x480 | avg 136.918 ms | 7.304 ảnh/giây | text: 30K-899.99
+  in_20260814_221750_136_nopl_crop.jpg: 224x91 | avg 69.597 ms | 14.368 ảnh/giây | text: 30K-899.99
+  in_20260814_221750_136_nopl_full.jpg: 640x480 | avg 186.502 ms | 5.362 ảnh/giây | text: - | - | OL0=05 | 30K-899.99
+  in_20260814_221758_342_30K89999_5345EE56.jpg: 224x91 | avg 71.118 ms | 14.061 ảnh/giây | text: 30K-899.99
+  in_20260814_221826_686_nopl_crop.jpg: 261x134 | avg 125.723 ms | 7.954 ảnh/giây | text: GOA OODAO0
+  in_20260814_221826_686_nopl_full.jpg: 640x480 | avg 186.563 ms | 5.360 ảnh/giây | text: YOL | YOLO0.60 | GOA-000.00
+  in_20260814_221830_791_nopl_crop.jpg: 268x97 | avg 69.554 ms | 14.377 ảnh/giây | text: 60A-999.99
+  in_20260814_221830_791_nopl_full.jpg: 640x480 | avg 103.109 ms | 9.698 ảnh/giây | text: 60A-999.99
+  in_20260814_221836_833_60A99999_D0D3DE5F.jpg: 268x97 | avg 68.393 ms | 14.621 ảnh/giây | text: 60A-999.99
+  in_20260814_222634_780_nopl_crop.jpg: 279x105 | avg 116.819 ms | 8.560 ảnh/giây | text: 60A-999.99
+  in_20260814_222634_780_nopl_full.jpg: 640x480 | avg 372.840 ms | 2.682 ảnh/giây | text: YOLO | 60A-999.99
+  in_20260814_222638_867_nopl_crop.jpg: 257x96 | avg 78.465 ms | 12.745 ảnh/giây | text: 60A-999.99
+  in_20260814_222638_867_nopl_full.jpg: 640x480 | avg 184.529 ms | 5.419 ảnh/giây | text: D | 60A-999.99
+  in_20260814_222715_422_nopl_crop.jpg: 261x97 | avg 76.960 ms | 12.994 ảnh/giây | text: 60A-999.99
+  in_20260814_222715_422_nopl_full.jpg: 640x480 | avg 180.497 ms | 5.540 ảnh/giây | text: 60A-999.99
+  in_20260814_222719_592_nopl_crop.jpg: 265x97 | avg 78.949 ms | 12.666 ảnh/giây | text: 60A-999.99
+  in_20260814_222719_592_nopl_full.jpg: 640x480 | avg 138.948 ms | 7.197 ảnh/giây | text: 60A-999.99
+  in_20260814_222723_495_60A99999_D0D3DE5F.jpg: 265x97 | avg 96.078 ms | 10.408 ảnh/giây | text: 60A-999.99
+  in_20260814_223402_608_nopl_crop.jpg: 254x95 | avg 91.941 ms | 10.877 ảnh/giây | text: 60A-999.99
+  in_20260814_223402_608_nopl_full.jpg: 640x480 | avg 281.845 ms | 3.548 ảnh/giây | text: D | 60A-999.99
+  in_20260814_223406_693_nopl_crop.jpg: 255x97 | avg 98.652 ms | 10.137 ảnh/giây | text: 60A-999.99
+  in_20260814_223406_693_nopl_full.jpg: 640x480 | avg 278.541 ms | 3.590 ảnh/giây | text: D | 60A-999.99
+  in_20260814_223413_897_60A99999_D0D3DE5F.jpg: 255x97 | avg 97.078 ms | 10.301 ảnh/giây | text: 60A-999.99
+  in_20260815_002713_578_nopl_crop.jpg: 272x102 | avg 92.900 ms | 10.764 ảnh/giây | text: 30K-899.99
+  in_20260815_002713_578_nopl_full.jpg: 640x480 | avg 363.958 ms | 2.748 ảnh/giây | text: ROVER | RANGE | YOLO=0.5 | 30K-899.99
+  in_20260815_002722_509_30K89999_5345EE56.jpg: 272x102 | avg 108.377 ms | 9.227 ảnh/giây | text: 30K-899.99
+  in_20260815_012024_074_nopl_crop.jpg: 227x98 | avg 96.559 ms | 10.356 ảnh/giây | text: 30F-942.27
+  in_20260815_012024_074_nopl_full.jpg: 640x480 | avg 293.750 ms | 3.404 ảnh/giây | text: YOLO 0.43 | YOLO0.60 | 30F-942.27
+  in_20260815_012032_279_30F94227_D0D3DE5F.jpg: 227x98 | avg 112.862 ms | 8.860 ảnh/giây | text: 30F-942.27
+  in_20260815_012711_008_nopl_crop.jpg: 301x110 | avg 97.894 ms | 10.215 ảnh/giây | text: 60A-999.99
+  in_20260815_012711_008_nopl_full.jpg: 640x480 | avg 217.198 ms | 4.604 ảnh/giây | text: 60A-999.99
+  in_20260815_012828_241_nopl_crop.jpg: 193x70 | avg 135.259 ms | 7.393 ảnh/giây | text: 30K-899.99
+  in_20260815_012828_241_nopl_full.jpg: 640x480 | avg 252.347 ms | 3.963 ảnh/giây | text: thanh vien dang ky | 30K-899.99
+  in_20260815_012836_288_30K89999_5345EE56.jpg: 193x70 | avg 92.499 ms | 10.811 ảnh/giây | text: 30K-899.99
+  in_20260815_013030_328_nopl_crop.jpg: 183x74 | avg 156.202 ms | 6.402 ảnh/giây | text: 30K-899.99
+  in_20260815_013030_328_nopl_full.jpg: 640x480 | avg 300.922 ms | 3.323 ảnh/giây | text: Hom qua | n.dang.k | YOLO0.61 | 30K-899.99
+  in_20260815_013034_473_nopl_crop.jpg: 183x74 | avg 91.165 ms | 10.969 ảnh/giây | text: 30K-899.99
+  in_20260815_013034_473_nopl_full.jpg: 640x480 | avg 307.669 ms | 3.250 ảnh/giây | text: thanh vien dang ky | rOL0-0.59 | 30K-899.99
+  in_20260815_013039_220_30K89999_5345EE56.jpg: 183x74 | avg 106.294 ms | 9.408 ảnh/giây | text: 30K-899.99
+  in_20260815_013359_383_nopl_crop.jpg: 302x114 | avg 150.953 ms | 6.625 ảnh/giây | text: 30K-899.99
+  in_20260815_013359_383_nopl_full.jpg: 640x480 | avg 310.047 ms | 3.225 ảnh/giây | text: OLO-0.5. | 30K-899.99
+  in_20260815_013405_006_30K89999_5345EE56.jpg: 302x114 | avg 94.173 ms | 10.619 ảnh/giây | text: 30K-899.99
+  in_20260815_104628_565_nopl_crop.jpg: 206x80 | avg 88.539 ms | 11.294 ảnh/giây | text: 60A-999.99
+  in_20260815_104628_565_nopl_full.jpg: 640x480 | avg 650.206 ms | 1.538 ảnh/giây | text: 1406 | Tepay | YOLO-0.59 | 60A-999.99 | UEE
+  in_20260815_104644_761_nopl_crop.jpg: 223x91 | avg 132.564 ms | 7.544 ảnh/giây | text: 60A-999.99
+  in_20260815_104644_761_nopl_full.jpg: 640x480 | avg 609.619 ms | 1.640 ảnh/giây | text: YOLO0.34 | 1046 | Tepoy | YOLO0.59 | 60A-999.99 | ee
+  in_20260815_104648_849_nopl_crop.jpg: 209x84 | avg 91.093 ms | 10.978 ảnh/giây | text: 60A-999.99
+  in_20260815_104648_849_nopl_full.jpg: 640x480 | avg 452.290 ms | 2.211 ảnh/giây | text: 2E10 | YOLO0.61 | 60A-999.99 | LLE
+  in_20260815_104652_919_nopl_crop.jpg: 110x74 | avg 107.185 ms | 9.330 ảnh/giây | text: (không nhận diện được text)
+  in_20260815_104652_919_nopl_full.jpg: 640x480 | avg 457.591 ms | 2.185 ảnh/giây | text: YOLO0.67 | Tepay | YOLO0.63 | 60A-999.99
+  in_20260815_104656_960_nopl_crop.jpg: 204x80 | avg 95.506 ms | 10.471 ảnh/giây | text: 60A-999.99
+  in_20260815_104656_960_nopl_full.jpg: 640x480 | avg 384.689 ms | 2.600 ảnh/giây | text: 1046 | lopay | CEL0 | YOLO0.63 | 60A-999.99 | LTVE
+  in_20260815_104701_011_nopl_crop.jpg: 200x74 | avg 67.610 ms | 14.791 ảnh/giây | text: 60A-999.99
+  in_20260815_104701_011_nopl_full.jpg: 640x480 | avg 418.577 ms | 2.389 ảnh/giây | text: 493 | LPOL | RELD | YOLO0.64 | 60A-999.99
+  in_20260815_104705_030_nopl_crop.jpg: 197x78 | avg 70.731 ms | 14.138 ảnh/giây | text: 60A-999.53
+  in_20260815_104705_030_nopl_full.jpg: 640x480 | avg 164.055 ms | 6.096 ảnh/giây | text: YOLO0.60 | 60A-999.93
+  in_20260815_104709_087_nopl_crop.jpg: 152x57 | avg 53.786 ms | 18.592 ảnh/giây | text: (không nhận diện được text)
+  in_20260815_104709_087_nopl_full.jpg: 640x480 | avg 176.041 ms | 5.680 ảnh/giây | text: 60A99953 | YOL00.60
+  in_20260815_104717_176_nopl_crop.jpg: 210x86 | avg 67.997 ms | 14.707 ảnh/giây | text: 60A-999.99
+  in_20260815_104717_176_nopl_full.jpg: 640x480 | avg 336.319 ms | 2.973 ảnh/giây | text: 1047 | Topay | 0132 | YOLO-0.65 | 60A-999.99 | BUEY
+  in_20260815_104721_194_nopl_crop.jpg: 132x54 | avg 108.746 ms | 9.196 ảnh/giây | text: 60A-990
+  in_20260815_104721_194_nopl_full.jpg: 640x480 | avg 141.907 ms | 7.047 ảnh/giây | text: YOLO0.44 | 10A-9990
+  in_20260815_104725_237_nopl_crop.jpg: 129x53 | avg 78.575 ms | 12.727 ảnh/giây | text: 60A-999.99
+  in_20260815_104725_237_nopl_full.jpg: 640x480 | avg 145.635 ms | 6.866 ảnh/giây | text: YOLO0.59 | 60A-9999
+  in_20260815_104757_732_nopl_crop.jpg: 249x94 | avg 119.707 ms | 8.354 ảnh/giây | text: 60A-999.99
+  in_20260815_104757_732_nopl_full.jpg: 640x480 | avg 141.353 ms | 7.074 ảnh/giây | text: YOLO-0.5 | 60A-999.99
+  in_20260815_104801_815_nopl_crop.jpg: 233x92 | avg 69.473 ms | 14.394 ảnh/giây | text: 60A-999.99
+  in_20260815_104801_815_nopl_full.jpg: 640x480 | avg 219.702 ms | 4.552 ảnh/giây | text: YOLO-0.6 | 60A-999.99
+  in_20260815_104818_003_nopl_crop.jpg: 129x54 | avg 70.437 ms | 14.197 ảnh/giây | text: OA-999.99
+  in_20260815_104818_003_nopl_full.jpg: 640x480 | avg 142.580 ms | 7.014 ảnh/giây | text: YOLO 0.61 | OA-999.99
+  in_20260815_104822_021_nopl_crop.jpg: 136x56 | avg 69.432 ms | 14.403 ảnh/giây | text: 60A-999.99
+  in_20260815_104822_021_nopl_full.jpg: 640x480 | avg 141.124 ms | 7.086 ảnh/giây | text: YOLO0.57 | 60A-999.99
+  in_20260815_104922_938_nopl_crop.jpg: 199x77 | avg 69.907 ms | 14.305 ảnh/giây | text: 60A-999.99
+  in_20260815_104922_938_nopl_full.jpg: 640x480 | avg 381.101 ms | 2.624 ảnh/giây | text: ZELO | YOLO0.64 | 60A-999.99 | UE
+  in_20260815_104926_929_nopl_crop.jpg: 206x77 | avg 65.632 ms | 15.236 ảnh/giây | text: 60A-999.99
+  in_20260815_104926_929_nopl_full.jpg: 640x480 | avg 186.164 ms | 5.372 ảnh/giây | text: OLO-0.5 | 60A-999.99
+  in_20260815_104929_987_60A99999_D0D3DE5F.jpg: 206x77 | avg 72.167 ms | 13.857 ảnh/giây | text: 60A-999.99
+  in_20260815_104931_020_nopl_crop.jpg: 141x55 | avg 68.685 ms | 14.559 ảnh/giây | text: 60A-999.99
+  in_20260815_104931_020_nopl_full.jpg: 640x480 | avg 134.157 ms | 7.454 ảnh/giây | text: YOLO0.64 | 60A-999.99
+  in_20260815_104935_099_nopl_crop.jpg: 137x51 | avg 70.893 ms | 14.106 ảnh/giây | text: 60A-999.99
+  in_20260815_104935_099_nopl_full.jpg: 640x480 | avg 173.510 ms | 5.763 ảnh/giây | text: A99999 | YOLO 0.50 | 60A-999.99
+  in_20260815_105040_065_nopl_crop.jpg: 218x85 | avg 91.520 ms | 10.927 ảnh/giây | text: 60A-999.99
+  in_20260815_105040_065_nopl_full.jpg: 640x480 | avg 470.208 ms | 2.127 ảnh/giây | text: 1030 | Topay | 0132 | rOLO0.62 | 60A-999.99 | eee | L | )
+  in_20260815_105044_152_nopl_crop.jpg: 226x87 | avg 85.352 ms | 11.716 ảnh/giây | text: 60A-999.99
+  in_20260815_105044_152_nopl_full.jpg: 640x480 | avg 171.534 ms | 5.830 ảnh/giây | text: YOL00.60 | 60A-999.99 | UE
+  in_20260815_105051_057_60A99999_D0D3DE5F.jpg: 226x87 | avg 68.951 ms | 14.503 ảnh/giây | text: 60A-999.99
+  in_20260815_105052_210_nopl_crop.jpg: 137x52 | avg 73.707 ms | 13.567 ảnh/giây | text: 60A-999.99
+  in_20260815_105052_210_nopl_full.jpg: 640x480 | avg 174.738 ms | 5.723 ảnh/giây | text: BA99999 | YOLO0.61 | 60A-999.99
+  in_20260815_105056_202_nopl_crop.jpg: 132x51 | avg 70.366 ms | 14.211 ảnh/giây | text: 60A-999.99
+  in_20260815_105056_202_nopl_full.jpg: 640x480 | avg 173.521 ms | 5.763 ảnh/giây | text: G0A99999 | YOLO 0.59 | 60A-999.99
+  in_20260815_105124_547_nopl_crop.jpg: 147x55 | avg 35.632 ms | 28.064 ảnh/giây | text: (không nhận diện được text)
+  in_20260815_105124_547_nopl_full.jpg: 640x480 | avg 167.677 ms | 5.964 ảnh/giây | text: OA999 | YOLO 0.70 | 68A9999
+  in_20260815_105128_600_nopl_crop.jpg: 144x56 | avg 7.670 ms | 130.385 ảnh/giây | text: (không nhận diện được text)
+  in_20260815_105128_600_nopl_full.jpg: 640x480 | avg 172.471 ms | 5.798 ảnh/giây | text: 58A99991 | YOLO0.52 | 69A9999
+  in_20260815_105132_645_nopl_crop.jpg: 143x54 | avg 7.750 ms | 129.025 ảnh/giây | text: (không nhận diện được text)
+  in_20260815_105132_645_nopl_full.jpg: 640x480 | avg 224.001 ms | 4.464 ảnh/giây | text: 60A9999 | YOLO0.58 | 68A5999
+  in_20260815_105136_710_nopl_crop.jpg: 145x56 | avg 13.738 ms | 72.792 ảnh/giây | text: (không nhận diện được text)
+  in_20260815_105136_710_nopl_full.jpg: 640x480 | avg 248.897 ms | 4.018 ảnh/giây | text: 50A0999 | YOLO0.70 | 59A5999
+  in_20260815_105140_781_nopl_crop.jpg: 143x56 | avg 12.905 ms | 77.491 ảnh/giây | text: (không nhận diện được text)
+  in_20260815_105140_781_nopl_full.jpg: 640x480 | avg 242.783 ms | 4.119 ảnh/giây | text: 60A990 | YOLO 0.66 | 60A5995
+  in_20260815_105245_758_nopl_crop.jpg: 226x92 | avg 93.019 ms | 10.750 ảnh/giây | text: 30K-899.99
+  in_20260815_105245_758_nopl_full.jpg: 640x480 | avg 197.083 ms | 5.074 ảnh/giây | text: YOLO0.60 | 30K-899.99
+  in_20260815_105253_838_nopl_crop.jpg: 140x58 | avg 88.996 ms | 11.236 ảnh/giây | text: 30K-889.8
+  in_20260815_105253_838_nopl_full.jpg: 640x480 | avg 245.108 ms | 4.080 ảnh/giây | text: YOLO0.70 | 60A99999 | 30K-899.9
+  in_20260815_105354_708_nopl_crop.jpg: 112x58 | avg 12.836 ms | 77.908 ảnh/giây | text: (không nhận diện được text)
+  in_20260815_105354_708_nopl_full.jpg: 640x480 | avg 201.388 ms | 4.966 ảnh/giây | text: YOLO0.41 | GOA59999
+  in_20260815_110536_810_nopl_crop.jpg: 195x35 | avg 52.267 ms | 19.133 ảnh/giây | text: (không nhận diện được text)
+  in_20260815_110536_810_nopl_full.jpg: 640x480 | avg 174.971 ms | 5.715 ảnh/giây | text: GOA991
+  in_20260815_110629_581_nopl_crop.jpg: 83x133 | avg 129.950 ms | 7.695 ảnh/giây | text: (không nhận diện được text)
+  in_20260815_110629_581_nopl_full.jpg: 640x480 | avg 248.195 ms | 4.029 ảnh/giây | text: YOLO0.30 | POLO012 | 60A995
+  in_20260815_144740_834_nopl_crop.jpg: 220x42 | avg 56.745 ms | 17.623 ảnh/giây | text: (không nhận diện được text)
+  in_20260815_144740_834_nopl_full.jpg: 640x480 | avg 145.948 ms | 6.852 ảnh/giây | text: YOLO0.27
+  in_20260819_221035_279_nopl_crop.jpg: 254x125 | avg 68.839 ms | 14.527 ảnh/giây | text: (không nhận diện được text)
+  in_20260819_221035_279_nopl_full.jpg: 640x480 | avg 152.185 ms | 6.571 ảnh/giây | text: YOLO 9EO 0.68
+  in_20260819_221039_381_nopl_crop.jpg: 270x96 | avg 136.270 ms | 7.338 ảnh/giây | text: 60A-999.99
+  in_20260819_221039_381_nopl_full.jpg: 640x480 | avg 139.380 ms | 7.175 ảnh/giây | text: 60A-999.99
+  in_20260819_221051_551_nopl_crop.jpg: 279x106 | avg 134.153 ms | 7.454 ảnh/giây | text: 60A-999.99
+  in_20260819_221051_551_nopl_full.jpg: 640x480 | avg 198.740 ms | 5.032 ảnh/giây | text: YOLO0.58 | 60A-999.99
+  in_20260819_221055_578_nopl_crop.jpg: 265x99 | avg 88.726 ms | 11.271 ảnh/giây | text: 60A-999.99
+  in_20260819_221055_578_nopl_full.jpg: 640x480 | avg 280.766 ms | 3.562 ảnh/giây | text: YOLO0.27 | -YOLO-O.5 | 60A-999.99
+  in_20260820_162143_124_nopl_crop.jpg: 265x133 | avg 98.397 ms | 10.163 ảnh/giây | text: 30F-942.2
+  in_20260820_162143_124_nopl_full.jpg: 640x480 | avg 220.374 ms | 4.538 ảnh/giây | text: YOLO 0.39 | 30F-942.2
+  in_20260820_162147_221_nopl_crop.jpg: 241x117 | avg 95.346 ms | 10.488 ảnh/giây | text: 30F-942.2
+  in_20260820_162147_221_nopl_full.jpg: 640x480 | avg 210.580 ms | 4.749 ảnh/giây | text: YOLO.0.29 | 30F-942.27
+  in_20260820_162151_383_nopl_crop.jpg: 224x111 | avg 141.671 ms | 7.059 ảnh/giây | text: 30F-942.7
+  in_20260820_162151_383_nopl_full.jpg: 640x480 | avg 262.773 ms | 3.806 ảnh/giây | text: YOLQ 0.31.Y9LO 0.55 | 30F-942.27
+  in_20260820_162211_736_nopl_crop.jpg: 257x100 | avg 114.332 ms | 8.746 ảnh/giây | text: 30F-942.27
+  in_20260820_162211_736_nopl_full.jpg: 640x480 | avg 234.789 ms | 4.259 ảnh/giây | text: YOLO0.59 | 30F-942.27
+  in_20260820_162224_263_30F94227_D0D3DE5F.jpg: 257x100 | avg 100.452 ms | 9.955 ảnh/giây | text: 30F-942.27
+  in_20260820_162527_761_nopl_crop.jpg: 161x79 | avg 56.617 ms | 17.663 ảnh/giây | text: (không nhận diện được text)
+  in_20260820_162527_761_nopl_full.jpg: 640x480 | avg 173.722 ms | 5.756 ảnh/giây | text: YOLO0.26
+  in_20260820_162730_301_nopl_crop.jpg: 172x87 | avg 51.094 ms | 19.572 ảnh/giây | text: (không nhận diện được text)
+  in_20260820_162730_301_nopl_full.jpg: 640x480 | avg 160.519 ms | 6.230 ảnh/giây | text: 90866
+  in_20260820_162754_885_nopl_crop.jpg: 153x73 | avg 12.273 ms | 81.477 ảnh/giây | text: (không nhận diện được text)
+  in_20260820_162754_885_nopl_full.jpg: 640x480 | avg 115.236 ms | 8.678 ảnh/giây | text: YOLO0.26
+  in_20260820_162758_969_nopl_crop.jpg: 160x68 | avg 10.023 ms | 99.771 ảnh/giây | text: (không nhận diện được text)
+  in_20260820_162758_969_nopl_full.jpg: 640x480 | avg 149.629 ms | 6.683 ảnh/giây | text: YOLO0.27
+  in_20260820_162815_295_nopl_crop.jpg: 152x69 | avg 9.038 ms | 110.641 ảnh/giây | text: (không nhận diện được text)
+  in_20260820_162815_295_nopl_full.jpg: 640x480 | avg 111.835 ms | 8.942 ảnh/giây | text: YOLO0.27
+  in_20260820_162819_433_nopl_crop.jpg: 159x68 | avg 8.252 ms | 121.190 ảnh/giây | text: (không nhận diện được text)
+  in_20260820_162819_433_nopl_full.jpg: 640x480 | avg 143.463 ms | 6.970 ảnh/giây | text: YOLO0.26
+  in_20260820_162827_666_nopl_crop.jpg: 158x69 | avg 9.368 ms | 106.743 ảnh/giây | text: (không nhận diện được text)
+  in_20260820_162827_666_nopl_full.jpg: 640x480 | avg 119.276 ms | 8.384 ảnh/giây | text: YOLO0.29
+  in_20260820_162852_179_nopl_crop.jpg: 158x68 | avg 9.633 ms | 103.813 ảnh/giây | text: (không nhận diện được text)
+  in_20260820_162852_179_nopl_full.jpg: 640x480 | avg 144.919 ms | 6.900 ảnh/giây | text: YOLO0.30
+  in_20260820_162928_864_nopl_crop.jpg: 159x70 | avg 9.487 ms | 105.407 ảnh/giây | text: (không nhận diện được text)
+  in_20260820_162928_864_nopl_full.jpg: 640x480 | avg 115.099 ms | 8.688 ảnh/giây | text: YOLO0.27
+  in_20260820_162936_930_nopl_crop.jpg: 153x84 | avg 10.498 ms | 95.257 ảnh/giây | text: (không nhận diện được text)
+  in_20260820_162936_930_nopl_full.jpg: 640x480 | avg 115.837 ms | 8.633 ảnh/giây | text: YOLO0.30
+  in_20260820_162941_017_nopl_crop.jpg: 158x67 | avg 9.454 ms | 105.778 ảnh/giây | text: (không nhận diện được text)
+  in_20260820_162941_017_nopl_full.jpg: 640x480 | avg 113.591 ms | 8.804 ảnh/giây | text: YOLO0.27
+  in_20260820_162945_116_nopl_crop.jpg: 156x68 | avg 10.407 ms | 96.088 ảnh/giây | text: (không nhận diện được text)
+  in_20260820_162945_116_nopl_full.jpg: 640x480 | avg 112.927 ms | 8.855 ảnh/giây | text: YOLO0.36
+  in_20260820_162949_188_nopl_crop.jpg: 153x74 | avg 11.030 ms | 90.664 ảnh/giây | text: (không nhận diện được text)
+  in_20260820_162949_188_nopl_full.jpg: 640x480 | avg 111.172 ms | 8.995 ảnh/giây | text: YOLO0.29
+  in_20260820_162953_277_nopl_crop.jpg: 159x69 | avg 10.344 ms | 96.673 ảnh/giây | text: (không nhận diện được text)
+  in_20260820_162953_277_nopl_full.jpg: 640x480 | avg 214.144 ms | 4.670 ảnh/giây | text: YOLO0.30
+  in_20260820_163009_633_nopl_crop.jpg: 161x72 | avg 11.456 ms | 87.290 ảnh/giây | text: (không nhận diện được text)
+  in_20260820_163009_633_nopl_full.jpg: 640x480 | avg 114.497 ms | 8.734 ảnh/giây | text: YOLO0.34
+  in_20260820_163030_029_nopl_crop.jpg: 154x71 | avg 10.239 ms | 97.670 ảnh/giây | text: (không nhận diện được text)
+  in_20260820_163030_029_nopl_full.jpg: 640x480 | avg 111.492 ms | 8.969 ảnh/giây | text: YOLO0.31
+  in_20260820_163034_201_nopl_crop.jpg: 152x71 | avg 9.692 ms | 103.179 ảnh/giây | text: (không nhận diện được text)
+  in_20260820_163034_201_nopl_full.jpg: 640x480 | avg 113.042 ms | 8.846 ảnh/giây | text: YOLO0.31
+  in_20260820_163038_204_nopl_crop.jpg: 155x77 | avg 8.994 ms | 111.182 ảnh/giây | text: (không nhận diện được text)
+  in_20260820_163038_204_nopl_full.jpg: 640x480 | avg 109.656 ms | 9.119 ảnh/giây | text: YOLO0.28
+  in_20260820_163043_595_nopl_crop.jpg: 155x78 | avg 11.011 ms | 90.815 ảnh/giây | text: (không nhận diện được text)
+  in_20260820_163043_595_nopl_full.jpg: 640x480 | avg 106.182 ms | 9.418 ảnh/giây | text: YOLO0.30
+  in_20260820_163046_334_nopl_crop.jpg: 153x76 | avg 11.166 ms | 89.558 ảnh/giây | text: (không nhận diện được text)
+  in_20260820_163046_334_nopl_full.jpg: 640x480 | avg 115.872 ms | 8.630 ảnh/giây | text: YOLO0.27
+  in_20260820_163050_552_nopl_crop.jpg: 155x78 | avg 9.109 ms | 109.781 ảnh/giây | text: (không nhận diện được text)
+  in_20260820_163050_552_nopl_full.jpg: 640x480 | avg 110.346 ms | 9.062 ảnh/giây | text: YOLO0.25
+  in_20260820_163058_548_nopl_crop.jpg: 155x75 | avg 7.935 ms | 126.020 ảnh/giây | text: (không nhận diện được text)
+  in_20260820_163058_548_nopl_full.jpg: 640x480 | avg 117.192 ms | 8.533 ảnh/giây | text: YOLO0.32
+  in_20260820_163102_613_nopl_crop.jpg: 157x77 | avg 7.826 ms | 127.786 ảnh/giây | text: (không nhận diện được text)
+  in_20260820_163102_613_nopl_full.jpg: 640x480 | avg 109.577 ms | 9.126 ảnh/giây | text: YOLO0.25
+  in_20260820_163110_772_nopl_crop.jpg: 155x70 | avg 8.931 ms | 111.970 ảnh/giây | text: (không nhận diện được text)
+  in_20260820_163110_772_nopl_full.jpg: 640x480 | avg 111.371 ms | 8.979 ảnh/giây | text: YOLO0.28
+  in_20260820_163115_261_nopl_crop.jpg: 154x74 | avg 7.581 ms | 131.910 ảnh/giây | text: (không nhận diện được text)
+  in_20260820_163115_261_nopl_full.jpg: 640x480 | avg 106.541 ms | 9.386 ảnh/giây | text: YOLO0.33
+  in_20260820_163119_307_nopl_crop.jpg: 152x82 | avg 10.925 ms | 91.537 ảnh/giây | text: (không nhận diện được text)
+  in_20260820_163119_307_nopl_full.jpg: 640x480 | avg 111.163 ms | 8.996 ảnh/giây | text: YOLO0.26
+  in_20260820_163123_049_nopl_crop.jpg: 155x91 | avg 10.304 ms | 97.048 ảnh/giây | text: (không nhận diện được text)
+  in_20260820_163123_049_nopl_full.jpg: 640x480 | avg 117.827 ms | 8.487 ảnh/giây | text: YOLO0.26
+  in_20260820_163131_312_nopl_crop.jpg: 155x76 | avg 11.696 ms | 85.496 ảnh/giây | text: (không nhận diện được text)
+  in_20260820_163131_312_nopl_full.jpg: 640x480 | avg 125.467 ms | 7.970 ảnh/giây | text: YOLO0.31
+  in_20260820_175233_274_30K89999_crop.jpg: 400x111 | avg 120.176 ms | 8.321 ảnh/giây | text: 30K-899.99
+  in_20260820_175233_274_30K89999_full.jpg: 640x480 | avg 138.359 ms | 7.228 ảnh/giây | text: CV 0.80 | 30K-899.99
+  in_20260820_175306_387_27F22227_crop.jpg: 197x77 | avg 121.314 ms | 8.243 ảnh/giây | text: 27F-222.27
+  in_20260820_175306_387_27F22227_full.jpg: 640x480 | avg 244.213 ms | 4.095 ảnh/giây | text: CV 0.71 | CV 0.79 | CV 0.70 | CV0.75 | 27F-222.27
+  in_20260820_175550_497_27F22227_crop.jpg: 380x167 | avg 124.662 ms | 8.022 ảnh/giây | text: 27F-222.27
+  in_20260820_175550_497_27F22227_full.jpg: 640x480 | avg 208.400 ms | 4.798 ảnh/giây | text: CV0.71 | CV 0.69 | 27F-222.27
+  in_20260820_181424_745_27F22227_crop.jpg: 187x91 | avg 125.477 ms | 7.970 ảnh/giây | text: 27F-22227
+  in_20260820_181424_745_27F22227_full.jpg: 640x480 | avg 175.815 ms | 5.688 ảnh/giây | text: YOLO0.67 | 27F-22227
+  in_20260820_181436_794_27F22227_crop.jpg: 194x94 | avg 71.089 ms | 14.067 ảnh/giây | text: 27F-22227
+  in_20260820_181436_794_27F22227_full.jpg: 640x480 | avg 138.232 ms | 7.234 ảnh/giây | text: YOLO0.67 | 27F-22227
+  in_20260820_215052_442_18A12345_crop.jpg: 174x81 | avg 105.336 ms | 9.493 ảnh/giây | text: 18A-123.45
+  in_20260820_215052_442_18A12345_full.jpg: 640x480 | avg 132.781 ms | 7.531 ảnh/giây | text: YOLO0.69 | 18A-123.45
+  in_20260820_215058_260_18A12345_crop.jpg: 182x82 | avg 67.439 ms | 14.828 ảnh/giây | text: 18A-123.45
+  in_20260820_215058_260_18A12345_full.jpg: 640x480 | avg 133.367 ms | 7.498 ảnh/giây | text: YOLO0.67 | 18A-123.45
+  in_20260820_215313_943_30K89999_crop.jpg: 173x72 | avg 106.539 ms | 9.386 ảnh/giây | text: 30K-899.99
+  in_20260820_215313_943_30K89999_full.jpg: 640x480 | avg 128.542 ms | 7.780 ảnh/giây | text: YOLO-0.63 | 30K-899.99
+  in_20260820_220222_345_30K89999_crop.jpg: 176x70 | avg 67.938 ms | 14.719 ảnh/giây | text: 30K-899.99
+  in_20260820_220222_345_30K89999_full.jpg: 640x480 | avg 275.203 ms | 3.634 ảnh/giây | text: YOLO0.64 | 30K-899.99
+  in_20260820_220229_062_30K89999_D0D3DE5F.jpg: 176x70 | avg 89.135 ms | 11.219 ảnh/giây | text: 30K-899.99
+  in_20260820_220415_339_18A12345_crop.jpg: 183x76 | avg 94.801 ms | 10.548 ảnh/giây | text: 18A-123.45
+  in_20260820_220415_339_18A12345_full.jpg: 640x480 | avg 197.442 ms | 5.065 ảnh/giây | text: YOLO.0.65 | 18A-123.45
+  in_20260820_220425_340_18A12345_5345EE56.jpg: 183x76 | avg 98.679 ms | 10.134 ảnh/giây | text: 18A-123.45
+  in_20260820_233031_290_30F55775_crop.jpg: 241x123 | avg 147.026 ms | 6.802 ảnh/giây | text: 30F-557.75
+  in_20260820_233031_290_30F55775_full.jpg: 640x480 | avg 597.394 ms | 1.674 ảnh/giây | text: YOLO0.63 | 30F-557.75 | YOLO0.47 | YOLAP5251 | giai nghia bien sq xe
+  in_20260820_233038_196_30F55775_D0D3DE5F.jpg: 241x123 | avg 94.542 ms | 10.577 ảnh/giây | text: 30F-557.75
+  in_20260820_233340_501_30K89999_crop.jpg: 274x104 | avg 194.490 ms | 5.142 ảnh/giây | text: 30K-899 | 99
+  in_20260820_233340_501_30K89999_full.jpg: 640x480 | avg 198.576 ms | 5.036 ảnh/giây | text: 30K-899.99
+  in_20260820_233351_432_30K89999_D0D3DE5F.jpg: 274x104 | avg 154.747 ms | 6.462 ảnh/giây | text: 30K-899 | 99
+  in_20260820_233407_714_37A44444_crop.jpg: 157x65 | avg 102.230 ms | 9.782 ảnh/giây | text: 37A-444.44
+  in_20260820_233407_714_37A44444_full.jpg: 640x480 | avg 263.190 ms | 3.800 ảnh/giây | text: YOLO-0.63 | 37A-444.44
+  in_20260820_233419_999_37A44444_crop.jpg: 154x68 | avg 95.158 ms | 10.509 ảnh/giây | text: 37A-444.44
+  in_20260820_233419_999_37A44444_full.jpg: 640x480 | avg 305.987 ms | 3.268 ảnh/giây | text: YOLO-0.61 | 37A-444.44
+  in_20260820_233425_502_37A44444_D0D3DE5F.jpg: 154x68 | avg 114.071 ms | 8.766 ảnh/giây | text: 37A-444.44
+  in_20260820_234442_986_37A44444_crop.jpg: 141x65 | avg 131.780 ms | 7.588 ảnh/giây | text: 37A-444.44
+  in_20260820_234442_986_37A44444_full.jpg: 640x480 | avg 311.577 ms | 3.209 ảnh/giây | text: CEAO | YOLO 0.59 | 37A-444.44
+  in_20260820_234449_285_37A44444_D0D3DE5F.jpg: 141x65 | avg 94.731 ms | 10.556 ảnh/giây | text: 37A-444.44
+  in_20260821_233926_650_18A12345_crop.jpg: 304x133 | avg 156.674 ms | 6.383 ảnh/giây | text: 18A-123.45
+  in_20260821_233926_650_18A12345_full.jpg: 640x480 | avg 214.486 ms | 4.662 ảnh/giây | text: YOLO0.50 | 18A-123.45
+  in_20260821_233936_493_18A12345_5345EE56.jpg: 304x133 | avg 91.748 ms | 10.899 ảnh/giây | text: 18A-123.45
+  in_20260821_235025_553_60A99999_crop.jpg: 253x87 | avg 131.543 ms | 7.602 ảnh/giây | text: 60A-999.99
+  in_20260821_235025_553_60A99999_full.jpg: 640x480 | avg 133.345 ms | 7.499 ảnh/giây | text: 60A-999.99
+  in_20260821_235034_430_60A99999_D0D3DE5F.jpg: 253x87 | avg 86.102 ms | 11.614 ảnh/giây | text: 60A-999.99
+  in_20260821_235220_956_60A99999_D0D3DE5F.jpg: 253x87 | avg 87.216 ms | 11.466 ảnh/giây | text: 60A-999.99
+  in_20260822_181650_207_27F22227_crop.jpg: 224x123 | avg 147.636 ms | 6.773 ảnh/giây | text: 27F-222.27
+  in_20260822_181650_207_27F22227_full.jpg: 640x480 | avg 203.290 ms | 4.919 ảnh/giây | text: YOLO 0.68 | 27F-222.27
+  in_20260822_181705_171_27F22227_crop.jpg: 197x99 | avg 139.591 ms | 7.164 ảnh/giây | text: 27F-222.27
+  in_20260822_181705_171_27F22227_full.jpg: 640x480 | avg 192.792 ms | 5.187 ảnh/giây | text: YOLO0.70 | 27F-222.27
+  in_20260822_181711_357_27F22227_crop.jpg: 210x98 | avg 141.410 ms | 7.072 ảnh/giây | text: 27F-222.27
+  in_20260822_181711_357_27F22227_full.jpg: 640x480 | avg 203.832 ms | 4.906 ảnh/giây | text: YOLO0.64 | 27F-222.27
+  in_20260822_190148_688_27F22227_crop.jpg: 205x106 | avg 98.807 ms | 10.121 ảnh/giây | text: 27F-222.27
+  in_20260822_190148_688_27F22227_full.jpg: 640x480 | avg 205.270 ms | 4.872 ảnh/giây | text: YOLO.0.68 | 27F-222.27
+  in_20260822_190158_112_27F22227_84A84906.jpg: 205x106 | avg 96.781 ms | 10.333 ảnh/giây | text: 27F-222.27
+  in_20260823_001042_754_70A48425_crop.jpg: 174x72 | avg 119.197 ms | 8.389 ảnh/giây | text: 70A484.25
+  in_20260823_001042_754_70A48425_full.jpg: 640x480 | avg 273.271 ms | 3.659 ảnh/giây | text: CUD | YOLO 0.62 | 70A-484.25
+  in_20260823_014337_729_27F22227_crop.jpg: 145x67 | avg 111.168 ms | 8.995 ảnh/giây | text: 27F-22227
+  in_20260823_014337_729_27F22227_full.jpg: 640x480 | avg 572.239 ms | 1.748 ảnh/giây | text: YOLO0.46 | 27F-22227 | YOLO0.62 | www.sodepAMi.vn | Hoine1800.888.988
+  in_20260823_014346_265_27F22227_crop.jpg: 142x71 | avg 126.303 ms | 7.917 ảnh/giây | text: 27F-22227
+  in_20260823_014346_265_27F22227_full.jpg: 640x480 | avg 600.067 ms | 1.666 ảnh/giây | text: YOLO/0.49 | 27F-22227 | YOLO0.57 | OLO | Hoffine1800 888.988 | www.sodopAMi.vn
+  in_20260823_014353_091_27F22227_crop.jpg: 125x65 | avg 97.373 ms | 10.270 ảnh/giây | text: 27F-22227
+  in_20260823_014353_091_27F22227_full.jpg: 640x480 | avg 595.760 ms | 1.679 ảnh/giây | text: YOLO0.66 | 27F-22227 | YOLO0.60 | YOLO-0.59 | Hofine1800.888 988 | www.sodepAMI
+  in_20260823_014403_238_27F22227_crop.jpg: 132x65 | avg 97.423 ms | 10.264 ảnh/giây | text: 27F-22227
+  in_20260823_014403_238_27F22227_full.jpg: 640x480 | avg 531.224 ms | 1.882 ảnh/giây | text: YOLO/0.65 | 27F-22227 | YOLO 0.61 | YOLO-0.63 | Hotino1800888.988 | www.sodepAMi.vn
+  in_20260905_220553_408_51F97022_full.jpg: 640x480 | avg 220.970 ms | 4.525 ảnh/giây | text: 51F-970.22
+  in_20260905_220602_433_51F97022_1BF5F805.jpg: 640x480 | avg 61.506 ms | 16.259 ảnh/giây | text: (không nhận diện được text)
+  in_20260905_231253_063_51F97022_full.jpg: 640x480 | avg 139.035 ms | 7.192 ảnh/giây | text: 51F-970.22
+  in_20260905_231309_060_C0A99999_full.jpg: 640x480 | avg 410.948 ms | 2.433 ảnh/giây | text: COA-999.992 | Ctng an n g ve v | Shu gs tn s ze ep?
+  in_20260905_231311_922_60A99999_full.jpg: 640x480 | avg 355.812 ms | 2.810 ảnh/giây | text: 60A-99999 | Truyc | an n6l gi v6 vec
+  in_20260905_232246_985_C0A90900_full.jpg: 640x480 | avg 506.663 ms | 1.974 ảnh/giây | text: 109A99999 | ng n | Tr s | d  i6n b
+  in_20260905_232249_163_60A99999_full.jpg: 640x480 | avg 712.914 ms | 1.403 ảnh/giây | text: 60A-999.99 | Cong an noi gi  c | dsu gia bin s6 ze dep
+  in_20260905_234228_100_66666V09_full.jpg: 640x480 | avg 151.688 ms | 6.592 ảnh/giây | text: 60A-999.99
+  in_20260905_234240_362_60A99999_full.jpg: 640x480 | avg 1013.309 ms | 0.987 ảnh/giây | text: com/search?sca_esv=4d27f527c866718f&sxsrf=APpeQnu82 | 60A-999.99
+  in_20260905_234850_635_AAARFI_full.jpg: 640x480 | avg 61.811 ms | 16.178 ảnh/giây | text: (không nhận diện được text)

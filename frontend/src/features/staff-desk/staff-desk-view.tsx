@@ -12,6 +12,7 @@ import {
   Loader2,
   LogIn,
   Nfc,
+  CalendarCheck,
   Printer,
   Radio,
   RefreshCcw,
@@ -43,11 +44,17 @@ const SCAN_POLL_MS = 1000;
 
 // Thời gian giữ banner "Phiên đã hoàn tất!" trên màn hình cổng ra sau khi
 // barie mở, đủ để nhân viên in hóa đơn và xe đi qua.
-const EXIT_BANNER_MS = 7000;
+const EXIT_BANNER_MS = 15000;
 
 // Thời gian giữ thông báo "Đã cho xe vào" sau khi tạo phiên & mở barie cổng
 // vào, đủ để xe đi qua rồi tự đóng đón xe tiếp theo.
-const ENTRY_BANNER_MS = 7000;
+const ENTRY_BANNER_MS = 15000;
+
+// Camera OCR liên tục tạo ra các log "in" pending mới cho cùng một biển
+// (~mỗi khung hình). Khi nhân viên bấm "Bỏ qua", frontend chỉ đóng 1 log
+// nên các frame tiếp theo sẽ làm thẻ nhảy lại. Nhớ biển đã bỏ qua trong
+// thời gian này để bỏ qua toàn bộ frame lặp của biển đó.
+const DISMISS_PLATE_MS = 90_000;
 
 function formatDateTime(iso?: string | null) {
   if (!iso) return "—";
@@ -83,6 +90,7 @@ export function StaffDeskView() {
   const entryLaneRef = useRef<"in" | "out">("in");
   const exitLaneRef = useRef<"in" | "out">("out");
   const [entryBridgeAvailable, setEntryBridgeAvailable] = useState(true);
+  const [exitBridgeAvailable, setExitBridgeAvailable] = useState(true);
   const [laneRoles, setLaneRoles] = useState({
     entryLane: "in" as "in" | "out",
     exitLane: "out" as "in" | "out",
@@ -112,6 +120,11 @@ export function StaffDeskView() {
   const [activeIngest, setActiveIngest] = useState<CameraIngestEvent | null>(
     null,
   );
+  const [entryBlockingSession, setEntryBlockingSession] = useState<{
+    plate: string;
+    checkInAt?: string;
+    slot?: string;
+  } | null>(null);
   const [activeExit, setActiveExit] = useState<CameraIngestEvent | null>(null);
   // Mirror của `activeExit` để effect xử lý SSE không đọc trực tiếp từ state
   // (đưa `activeExit` vào deps sẽ vòng lặp vì chính effect này ghi state đó).
@@ -142,6 +155,59 @@ export function StaffDeskView() {
       .trim()
       .toUpperCase()
       .replace(/[\s.\-]+/g, "");
+  const activeIngestPlate = normPlate(
+    activeIngest?.plate || activeIngest?.detectedPlate,
+  );
+  /** Biển số nhân viên đã "Bỏ qua" gần đây → bỏ qua frame lặp cùng biển. */
+  const dismissedPlatesRef = useRef<Map<string, number>>(new Map());
+  const rememberDismissedPlate = useCallback((plate?: string | null) => {
+    const normalized = normPlate(plate);
+    if (!normalized) return;
+    dismissedPlatesRef.current.set(normalized, Date.now() + DISMISS_PLATE_MS);
+  }, []);
+  const isPlateDismissed = useCallback((plate?: string | null) => {
+    const normalized = normPlate(plate);
+    if (!normalized) return false;
+    const until = dismissedPlatesRef.current.get(normalized);
+    if (!until) return false;
+    if (Date.now() < until) return true;
+    dismissedPlatesRef.current.delete(normalized);
+    return false;
+  }, []);
+  const forgetDismissedPlate = useCallback((plate?: string | null) => {
+    const normalized = normPlate(plate);
+    if (normalized) dismissedPlatesRef.current.delete(normalized);
+  }, []);
+
+  useEffect(() => {
+    if (!activeIngestPlate) {
+      setEntryBlockingSession(null);
+      return;
+    }
+    let cancelled = false;
+    void apiFetch(`/rfid/by-plate/${encodeURIComponent(activeIngestPlate)}`)
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (cancelled || !response.ok) return;
+        const session = data.activeSession || data.plateActiveSession;
+        setEntryBlockingSession(
+          session
+            ? {
+                plate: session.plate || activeIngestPlate,
+                checkInAt: session.checkInAt,
+                slot: session.slot,
+              }
+            : null,
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setEntryBlockingSession(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeIngest?.id, activeIngestPlate]);
+
   useEffect(() => {
     if (!pendingIngest) return;
     // Bỏ qua các frame lặp lại liên tục khi xe đang hiển thị, NHƯNG nếu activeIngest đã bị dismiss về null (xe trước đã vào)
@@ -155,12 +221,20 @@ export function StaffDeskView() {
     }
     processedIngestIdRef.current = pendingIngest.id || "";
     if (pendingIngest.direction === "in") {
+      // Barie vừa mở cho xe vào: bỏ qua ingest mới trong grace period (xe đang đi qua cổng)
+      // tránh camera bắt lại đuôi/thân xe làm mất màn hình thông báo hoàn thành.
+      if (Date.now() - entryGateOpenedAtRef.current < ENTRY_BANNER_MS) {
+        return;
+      }
       // Echo xác nhận/hủy từ backend (kể cả từ màn hình staff khác): đóng thẻ.
       if (
         pendingIngest.action === "entry_confirmed" ||
         pendingIngest.action === "entry_dismissed"
       ) {
         if (selfHandledEntryIdsRef.current.has(pendingIngest.id)) return;
+        rememberDismissedPlate(
+          pendingIngest.plate || pendingIngest.detectedPlate,
+        );
         if (
           activeIngestRef.current &&
           pendingIngest.id === activeIngestRef.current.id
@@ -195,11 +269,26 @@ export function StaffDeskView() {
             ownerName: pendingIngest.ownerName,
             userType: pendingIngest.userType,
             metadata: pendingIngest.metadata ?? cur.metadata,
+            duplicateSession: Boolean(
+              cur.duplicateSession ||
+                pendingIngest.duplicateSession ||
+                pendingIngest.action === "duplicate",
+            ),
+            action:
+              cur.action === "duplicate" || pendingIngest.action === "duplicate"
+                ? "duplicate"
+                : pendingIngest.action,
           };
         });
         return;
       }
+      // Nhân viên đã "Bỏ qua" biển này gần đây: camera vẫn đẩy frame lặp
+      // của cùng xe → bỏ qua, không mở lại thẻ.
+      if (isPlateDismissed(pendingIngest.plate || pendingIngest.detectedPlate)) {
+        return;
+      }
       // Xe mới (biển khác): reset form đối chiếu, seed biển số AI đọc được.
+      setEntryBlockingSession(null);
       setActiveIngest(pendingIngest);
       setManualPlate(
         normPlate(pendingIngest.plate || pendingIngest.detectedPlate),
@@ -303,6 +392,9 @@ export function StaffDeskView() {
   const scanIntervalRef = useRef<number | null>(null);
   const activeIngestIdRef = useRef<string | null>(null);
   const autoExitScanFiredRef = useRef(false);
+  // Timestamp barie cổng vào vừa mở: giữ màn hình thành công cho xe đi qua
+  // trước khi cho phép SSE / frame camera mới xóa UI.
+  const entryGateOpenedAtRef = useRef<number>(0);
   // Timestamp barie vừa mở: giữ màn hình thành công 5s (cho xe đi qua)
   // trước khi cho phép SSE xóa UI.
   const exitGateOpenedAtRef = useRef<number>(0);
@@ -316,6 +408,9 @@ export function StaffDeskView() {
   const exitDismissTimerRef = useRef<number | null>(null);
   // UID đã auto-create phiên cho luồng nhập tay biển số; chống gọi 2 lần.
   const manualAutoCreateRef = useRef("");
+  // Biển đang chờ xác nhận ở cổng vào — dùng trong closure của interval poll
+  // (không capture được state manualPlate) để đối chiếu với thẻ vừa quét.
+  const manualPlateRef = useRef("");
   // Thông tin thẻ tra được theo UID (luồng quét thẻ trước, nhập/đối chiếu biển sau).
   const [scannedCardInfo, setScannedCardInfo] = useState<{
     card: {
@@ -335,6 +430,9 @@ export function StaffDeskView() {
   // ====== Manual plate (khi scan RFID OK nhưng không có camera ingest) ======
   const [manualPlate, setManualPlate] = useState("");
   const [manualPlateError, setManualPlateError] = useState("");
+  useEffect(() => {
+    manualPlateRef.current = manualPlate;
+  }, [manualPlate]);
 
   // ====== Create session state ======
   const [phase, setPhase] = useState<Phase>("idle");
@@ -364,6 +462,8 @@ export function StaffDeskView() {
     paymentStatus: string;
     isSubscriber: boolean;
     canOpenGate: boolean;
+    freeMinutes?: number | null;
+    totalMinutes?: number | null;
   } | null>(null);
   const [exitPaymentData, setExitPaymentData] = useState<{
     qrCode: string;
@@ -387,8 +487,6 @@ export function StaffDeskView() {
   const [manualEntryPlate, setManualEntryPlate] = useState("");
   const [manualEntryError, setManualEntryError] = useState("");
   const [manualEntryLoading, setManualEntryLoading] = useState(false);
-  const [manualEntryConfirmationNote, setManualEntryConfirmationNote] =
-    useState("");
   const [manualEntryVehicle, setManualEntryVehicle] = useState<{
     ownerName?: string;
     isSubscriber?: boolean;
@@ -407,6 +505,41 @@ export function StaffDeskView() {
   /** Ghi chú giải thích khi staff sửa biển số AI nhận sai (luồng review). */
   const [reviewNote, setReviewNote] = useState("");
   const [exitMismatchError, setExitMismatchError] = useState("");
+  const [exitReaderReloading, setExitReaderReloading] = useState(false);
+
+  // Sau khi đọc được UID, tra thẻ trong DB và đối chiếu với biển đang chờ:
+  // - Thẻ Member phải gắn ĐÚNG biển của xe đang vào. Nếu quét thẻ Member của
+  //   xe khác (vd. xe khách vãng lai quẹt thẻ của khách đăng ký) → chặn ngay,
+  //   không cho hiện "Đã nhận thẻ".
+  // Trả về "" nếu hợp lệ, hoặc thông báo lỗi để hiển thị.
+  const validateScannedCardForEntry = useCallback(
+    async (uid: string): Promise<string> => {
+      const plate = normPlate(
+        manualPlateRef.current ||
+          activeIngestRef.current?.plate ||
+          activeIngestRef.current?.detectedPlate ||
+          "",
+      );
+      try {
+        const res = await apiFetch(`/rfid/by-uid/${encodeURIComponent(uid)}`);
+        const data = await res.json().catch(() => ({}));
+        if (!data?.ok || !data.card) return "";
+        const card = data.card as { cardType?: string; plate?: string };
+        if (String(card.cardType).toLowerCase() === "member") {
+          const cardPlate = normPlate(card.plate || "");
+          if (!plate || !cardPlate || cardPlate !== plate) {
+            return `Thẻ RFID bạn vừa quét là thẻ Thành viên của xe ${cardPlate || "khác"}, không dùng được cho xe ${plate || "này"}. Vui lòng dùng thẻ khác.`;
+          }
+        }
+      } catch {
+        // Lỗi mạng khi tra thẻ: không chặn cứng, để backend validate lúc tạo phiên.
+        return "";
+      }
+      return "";
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
   const stopScanPolling = useCallback(() => {
     if (scanIntervalRef.current !== null) {
@@ -436,10 +569,17 @@ export function StaffDeskView() {
       if (!value) return;
       stopScanPolling();
       setScanError("");
+      const mismatch = await validateScannedCardForEntry(value);
+      if (mismatch) {
+        setScanUid("");
+        setScanPhase("error");
+        setScanError(mismatch);
+        return;
+      }
       setScanUid(value);
       setScanPhase("success");
     },
-    [stopScanPolling],
+    [stopScanPolling, validateScannedCardForEntry],
   );
 
   // Auto-cancel scan khi staff đóng/xử lý xong event hiện tại.
@@ -488,12 +628,20 @@ export function StaffDeskView() {
           // "duplicate" = thẻ đã tồn tại trong hệ thống → vẫn hợp lệ, xử lý như success
           if (data.status === "success" || data.status === "duplicate") {
             stopScanPolling();
-            setScanUid(data.uid || "");
-            setScanPhase("success");
             await bridgeFetch("/api/rfid/scan/cancel", {
               method: "POST",
               body: JSON.stringify({ direction: entryLaneRef.current }),
             }).catch(() => undefined);
+            const uid = data.uid || "";
+            const mismatch = await validateScannedCardForEntry(uid);
+            if (mismatch) {
+              setScanUid("");
+              setScanPhase("error");
+              setScanError(mismatch);
+              return;
+            }
+            setScanUid(uid);
+            setScanPhase("success");
             return;
           }
           if (data.status === "timeout") {
@@ -517,7 +665,7 @@ export function StaffDeskView() {
       setScanPhase("error");
       setScanError("Không kết nối được bridge service (port 5050).");
     }
-  }, [stopScanPolling]);
+  }, [stopScanPolling, validateScannedCardForEntry]);
 
   // Khi scan RFID thành công mà KHÔNG có xe camera chờ → luồng idle
   // (tra thẻ / auto-create sau khi staff nhập biển ở form chờ).
@@ -665,7 +813,6 @@ export function StaffDeskView() {
         if (opts?.fromIdleForm) {
           setShowManualEntryForm(false);
           setManualEntryPlate("");
-          setManualEntryConfirmationNote("");
         }
         if (opts?.fromIngestCorrection || activeIngest) {
           setManualPlate("");
@@ -693,6 +840,7 @@ export function StaffDeskView() {
           );
           return;
         }
+        entryGateOpenedAtRef.current = Date.now();
         setBarrierMsg("Đã tạo phiên thủ công — đã mở barie cổng vào.");
         setPhase("done");
         setEntrySuccessNotice(
@@ -707,7 +855,6 @@ export function StaffDeskView() {
           setEntrySuccessNotice(null);
           setShowManualEntryForm(false);
           setManualEntryPlate("");
-          setManualEntryConfirmationNote("");
           setManualEntryError("");
           setManualEntryVehicle(null);
           setPendingManualEntryRfid(false);
@@ -875,7 +1022,9 @@ export function StaffDeskView() {
       method: "POST",
       body: JSON.stringify({ direction: entryLaneRef.current }),
     }).catch(() => undefined);
+    entryGateOpenedAtRef.current = 0;
     setActiveIngest(null);
+    setEntryBlockingSession(null);
     setPhase("idle");
     setCreateMsg("");
     setBarrierMsg("");
@@ -918,6 +1067,11 @@ export function StaffDeskView() {
     setBarrierMsg("");
     setEntrySuccessNotice(null);
     setCreatedSession(null);
+    // Đánh dấu ngay ID này do chính màn hình này xử lý — tránh echo SSE "entry_confirmed"
+    // bắn về kích hoạt dismissActive() xóa thẻ trước khi hoàn tất mở barie.
+    selfHandledEntryIdsRef.current.add(ingestId);
+    rememberDismissedPlate(normalized);
+    if (detected) rememberDismissedPlate(detected);
     try {
       const res = await apiFetch(
         `/camera-logs/entry-reviews/${encodeURIComponent(ingestId)}/confirm`,
@@ -939,6 +1093,14 @@ export function StaffDeskView() {
           data.message || `Xác nhận thất bại (${res.status}). Không mở barie.`,
         );
         // 409 = sự kiện đã xử lý ở nơi khác/đã đóng → xóa thẻ, chờ xe mới.
+        if (res.status === 409 && /đang có phiên.*chưa checkout/i.test(data.message || "")) {
+          setActiveIngest((current) =>
+            current
+              ? { ...current, duplicateSession: true, action: "duplicate" }
+              : current,
+          );
+          return;
+        }
         if (res.status === 409) {
           selfHandledEntryIdsRef.current.add(ingestId);
           await dismissActive();
@@ -968,6 +1130,7 @@ export function StaffDeskView() {
             : "Đã tạo phiên cho khách.",
       );
       setPhase("opening");
+      entryGateOpenedAtRef.current = Date.now();
       // Phiên đã tạo thành công ở backend → mở barie. Lỗi bridge KHÔNG được
       // giả báo thành công: staff phải mở tay ngoài bốt.
       let openRes;
@@ -976,6 +1139,8 @@ export function StaffDeskView() {
           method: "POST",
         });
       } catch {
+        setActiveIngest(null);
+        activeIngestIdRef.current = null;
         setPhase("error");
         setBarrierMsg(
           "Đã tạo phiên nhưng KHÔNG kết nối được bridge — mở barie thủ công ngoài bốt.",
@@ -983,13 +1148,17 @@ export function StaffDeskView() {
         return;
       }
       if (!openRes.ok) {
+        setActiveIngest(null);
+        activeIngestIdRef.current = null;
         setPhase("error");
         setBarrierMsg(
           `Đã tạo phiên nhưng mở barie thất bại (${openRes.status}). Mở tay ngoài bốt.`,
         );
         return;
       }
-      selfHandledEntryIdsRef.current.add(ingestId);
+      entryGateOpenedAtRef.current = Date.now();
+      setActiveIngest(null);
+      activeIngestIdRef.current = null;
       setBarrierMsg("Đã xác nhận thông tin — mở barie cổng vào.");
       setPhase("done");
       setEntrySuccessNotice(
@@ -1003,6 +1172,7 @@ export function StaffDeskView() {
     activeIngest,
     dismissActive,
     manualPlate,
+    rememberDismissedPlate,
     reviewNote,
     scanPhase,
     scanUid,
@@ -1013,6 +1183,7 @@ export function StaffDeskView() {
     if (!activeIngest) return;
     const ingestId = activeIngest.id;
     selfHandledEntryIdsRef.current.add(ingestId);
+    rememberDismissedPlate(activeIngest.plate || activeIngest.detectedPlate);
     try {
       await apiFetch(
         `/camera-logs/entry-reviews/${encodeURIComponent(ingestId)}/dismiss`,
@@ -1022,12 +1193,14 @@ export function StaffDeskView() {
       // Vẫn đóng UI local; log còn pending sẽ hiện lại khi reload — staff bấm lại.
     }
     await dismissActive();
-  }, [activeIngest, dismissActive]);
+    forgetDismissedPlate(activeIngest.plate || activeIngest.detectedPlate);
+  }, [activeIngest, dismissActive, forgetDismissedPlate, rememberDismissedPlate]);
 
   // Khi SSE mở lại (reload/reconnect), khôi phục hàng đợi xe vào chờ xác nhận.
   useEffect(() => {
     if (streamStatus !== "open") return;
     if (activeIngestRef.current) return;
+    if (Date.now() - entryGateOpenedAtRef.current < ENTRY_BANNER_MS) return;
     apiFetch("/camera-logs/entry-reviews/pending")
       .then(async (response) => {
         if (!response.ok) return;
@@ -1050,6 +1223,8 @@ export function StaffDeskView() {
         };
         const review = data.reviews?.[0];
         if (!review || activeIngestRef.current) return;
+        // Biển này đã bị nhân viên bỏ qua trong phiên làm việc → không khôi phục.
+        if (isPlateDismissed(review.plate || review.detectedPlate)) return;
         setActiveIngest({
           id: review.id,
           direction: "in",
@@ -1088,6 +1263,9 @@ export function StaffDeskView() {
       const res = await bridgeFetch(`/gate/${entryLaneRef.current}/open`, {
         method: "POST",
       });
+      if (res.ok) {
+        entryGateOpenedAtRef.current = Date.now();
+      }
       setBarrierMsg(
         res.ok ? "Đã mở barie cổng vào." : `Mở barie thất bại (${res.status}).`,
       );
@@ -1308,6 +1486,98 @@ export function StaffDeskView() {
   }, [completeOfflineExit, openExitBarrier]);
 
   // ====== Exit RFID scan & verify ======
+  // Khởi động lại đầu đọc: clear state quét cũ, sync lại thẻ, connect lại
+  // serial, rồi bật scan cho direction cổng ra. Khắc phục đầu đọc bị kẹt
+  // cache cũ hoặc dùng chung 1 board cho 2 cổng (in/out).
+  const reloadExitReader = useCallback(async () => {
+    if (exitScanIntervalRef.current !== null) {
+      window.clearInterval(exitScanIntervalRef.current);
+      exitScanIntervalRef.current = null;
+    }
+    setExitScanError("");
+    setExitScanUid("");
+    setExitScanPhase("starting");
+    setExitReaderReloading(true);
+    try {
+      const res = await bridgeFetch("/api/rfid/reader/reload", {
+        method: "POST",
+        body: JSON.stringify({ direction: exitLaneRef.current }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setExitScanPhase("error");
+        setExitScanError(data.message || "Không khởi động lại được đầu đọc.");
+        return;
+      }
+    } catch {
+      setExitScanPhase("error");
+      setExitScanError("Không kết nối được bridge service (port 5050).");
+      return;
+    } finally {
+      setExitReaderReloading(false);
+    }
+    // Scan đã được bridge bật trong endpoint reload → chỉ cần poll kết quả.
+    exitScanStartRef.current = Date.now();
+    setExitScanPhase("waiting");
+    exitScanIntervalRef.current = window.setInterval(async () => {
+      try {
+        const poll = await bridgeFetch(
+          `/api/rfid/scan/poll?direction=${exitLaneRef.current}`,
+        );
+        if (!poll.ok) {
+          if (exitScanIntervalRef.current !== null) {
+            window.clearInterval(exitScanIntervalRef.current);
+            exitScanIntervalRef.current = null;
+          }
+          setExitScanPhase("error");
+          setExitScanError(`Bridge trả ${poll.status}.`);
+          return;
+        }
+        const data = await poll.json();
+        if (data.status === "waiting") return;
+        if (data.status === "success" || data.status === "duplicate") {
+          if (exitScanIntervalRef.current !== null) {
+            window.clearInterval(exitScanIntervalRef.current);
+            exitScanIntervalRef.current = null;
+          }
+          setExitScanUid(data.uid || "");
+          setExitScanPhase("success");
+          await bridgeFetch("/api/rfid/scan/cancel", {
+            method: "POST",
+            body: JSON.stringify({ direction: exitLaneRef.current }),
+          }).catch(() => undefined);
+          return;
+        }
+        if (data.status === "timeout") {
+          if (exitScanIntervalRef.current !== null) {
+            window.clearInterval(exitScanIntervalRef.current);
+            exitScanIntervalRef.current = null;
+          }
+          setExitScanPhase("timeout");
+          return;
+        }
+        if (data.status === "error") {
+          if (exitScanIntervalRef.current !== null) {
+            window.clearInterval(exitScanIntervalRef.current);
+            exitScanIntervalRef.current = null;
+          }
+          if (data.uid) {
+            setExitScanUid(data.uid);
+            setExitScanPhase("success");
+          } else {
+            setExitScanPhase("error");
+            setExitScanError(
+              data.message || "Thẻ RFID không hợp lệ hoặc đã bị vô hiệu hóa.",
+            );
+          }
+          return;
+        }
+      } catch {
+        // poll lỗi → tiếp tục thử
+      }
+    }, SCAN_POLL_MS);
+  }, []);
+
   const startExitScan = useCallback(async () => {
     if (!activeExit?.sessionId || activeExit.action === "no_session") {
       setExitScanError("Chưa tìm thấy phiên đang gửi cho biển số này.");
@@ -1457,6 +1727,8 @@ export function StaffDeskView() {
             paymentStatus: data.paymentStatus,
             isSubscriber: data.isSubscriber,
             canOpenGate: data.canOpenGate,
+            freeMinutes: data.freeMinutes ?? null,
+            totalMinutes: data.totalMinutes ?? null,
           });
           setExitPaymentData(null);
           if (!(data.amountDue > 0) && data.canOpenGate) {
@@ -1635,6 +1907,8 @@ export function StaffDeskView() {
           paymentStatus: data.paymentStatus,
           isSubscriber: data.isSubscriber,
           canOpenGate: data.canOpenGate,
+          freeMinutes: data.freeMinutes ?? null,
+          totalMinutes: data.totalMinutes ?? null,
         });
         setExitPaymentData(null);
         const fullHardwareOutage =
@@ -1678,6 +1952,8 @@ export function StaffDeskView() {
           paymentStatus: data.paymentStatus,
           isSubscriber: data.isSubscriber,
           canOpenGate: data.canOpenGate,
+          freeMinutes: data.freeMinutes ?? null,
+          totalMinutes: data.totalMinutes ?? null,
         });
         setExitPaymentData(null);
         setActiveExit((current) =>
@@ -1830,9 +2106,7 @@ export function StaffDeskView() {
             }
           />
           <div className="staff-desk__panel">
-            {(phase === "done" || phase === "error") &&
-            createdSession &&
-            !activeIngest ? (
+            {(phase === "done" || phase === "error") && createdSession ? (
               <div className="staff-desk__waiting staff-desk__waiting--entry">
                 <div
                   className="staff-desk__waiting-icon"
@@ -1893,6 +2167,8 @@ export function StaffDeskView() {
                     setPendingManualEntryRfid(false);
                     setScanPhase("idle");
                     setScanUid("");
+                    entryGateOpenedAtRef.current = 0;
+                    void dismissActive();
                   }}
                 >
                   Xong
@@ -2018,12 +2294,10 @@ export function StaffDeskView() {
                 manualEntryError={manualEntryError}
                 manualEntryLoading={manualEntryLoading}
                 manualEntryVehicle={manualEntryVehicle}
-                manualEntryConfirmationNote={manualEntryConfirmationNote}
                 onToggleManualEntryForm={() => {
                   setShowManualEntryForm((v) => !v);
                   setManualEntryError("");
                   setManualEntryVehicle(null);
-                  setManualEntryConfirmationNote("");
                 }}
                 onManualEntryPlateChange={(v) => {
                   setManualEntryPlate(v.toUpperCase());
@@ -2043,11 +2317,21 @@ export function StaffDeskView() {
                 }}
                 onSubmitManualEntry={() => void startManualEntryRfidFlow()}
                 onConfirmManualPlate={(plate) => {
-                  // Staff xác nhận biển số + ghi chú → chuyển sang bước quét RFID.
+                  // Staff xác nhận biển số bằng mắt/ghi chú → chuyển sang bước quét RFID.
                   // Kết quả quét sẽ tự tạo phiên (effect pendingManualEntryRfid).
                   setManualPlate(plate.trim().toUpperCase().replace(/[\s-]+/g, ""));
                   setPendingManualEntryRfid(true);
                   void startScan();
+                }}
+                onConfirmManualPlateNoRfid={(plate) => {
+                  // Bridge offline: không quét RFID được — tạo phiên thủ công
+                  // ngay (uid undefined → entryRfidUnverified=true).
+                  void createSessionManual(undefined, plate, {
+                    fromIdleForm: true,
+                    manualRfidReason:
+                      "Bridge mất kết nối — staff đối chiếu biển số bằng mắt, không quét RFID",
+                  });
+                }}
                 }}
                 phase={phase}
                 onOpenVerifiedMember={() =>
@@ -2065,6 +2349,7 @@ export function StaffDeskView() {
             ) : (
               <IngestCard
                 event={activeIngest}
+                blockingSession={entryBlockingSession}
                 phase={phase}
                 createMsg={createMsg}
                 barrierMsg={barrierMsg}
@@ -2097,11 +2382,15 @@ export function StaffDeskView() {
             title="Xe ra"
             streamUrl={`${bridgeBaseUrl}/video_feed/${laneRoles.exitLane}`}
             direction="out"
+            onStreamStateChange={(state) =>
+              setExitBridgeAvailable(state === "live")
+            }
           />
           <div className="staff-desk__panel">
             {!activeExit ? (
               <WaitingCard
                 direction="out"
+                rfidAvailable={exitBridgeAvailable}
                 scanPhase={exitScanPhase}
                 onStartScan={startExitScan}
                 onManualUid={submitManualExitUid}
@@ -2135,6 +2424,8 @@ export function StaffDeskView() {
                 }}
                 onOpenBarrier={openExitBarrier}
                 onScanRfid={startExitScan}
+                onReloadReader={reloadExitReader}
+                readerReloading={exitReaderReloading}
                 scanPhase={exitScanPhase}
                 gateError={exitScanPhase === "error" ? exitScanError : ""}
                 exitVerifyData={exitVerifyData}
@@ -2257,13 +2548,12 @@ function WaitingCard({
   manualEntryError,
   manualEntryLoading,
   manualEntryVehicle,
-  manualEntryConfirmationNote,
   onToggleManualEntryForm,
   onManualEntryPlateChange,
-  onManualEntryConfirmationNoteChange,
   onSubmitManualEntry,
   onOpenVerifiedMember,
   onConfirmManualPlate,
+  onConfirmManualPlateNoRfid,
   plateConfirmed,
   onCancelPlateConfirm,
   phase,
@@ -2287,7 +2577,6 @@ function WaitingCard({
   manualEntryPlate?: string;
   manualEntryError?: string;
   manualEntryLoading?: boolean;
-  manualEntryConfirmationNote?: string;
   manualEntryVehicle?: {
     ownerName?: string;
     isSubscriber?: boolean;
@@ -2301,10 +2590,10 @@ function WaitingCard({
   } | null;
   onToggleManualEntryForm?: () => void;
   onManualEntryPlateChange?: (value: string) => void;
-  onManualEntryConfirmationNoteChange?: (value: string) => void;
   onSubmitManualEntry?: () => void;
   onOpenVerifiedMember?: () => void;
   onConfirmManualPlate?: (plate: string) => void;
+  onConfirmManualPlateNoRfid?: (plate: string) => void;
   plateConfirmed?: boolean;
   onCancelPlateConfirm?: () => void;
   phase?: string;
@@ -2325,10 +2614,43 @@ function WaitingCard({
   const submitLabel = isEntry ? "Xác Nhận" : "Xác nhận biển số";
   const loadingLabel = isEntry ? "Đang tạo…" : "Đang tra…";
 
+  const bridgeOfflineAlert = !rfidAvailable ? (
+    <div
+      className="staff-desk__alert staff-desk__alert--warn"
+      role="alert"
+      style={{
+        width: "100%",
+        maxWidth: 420,
+        margin: "0 0 0.75rem",
+        textAlign: "left",
+      }}
+    >
+      <CircleAlert
+        size={20}
+        style={{ color: "#ef4444", flexShrink: 0, marginTop: 2 }}
+      />
+      <div>
+        <strong
+          style={{ color: "#dc2626", display: "block", marginBottom: 2 }}
+        >
+          Mất kết nối thiết bị
+        </strong>
+        <span
+          style={{ fontSize: "0.85rem", color: "#374151", lineHeight: 1.4 }}
+        >
+          Hiện tại camera, barie và RFID đều mất kết nối. Hãy nhập thủ công biển
+          số bằng tay để cho khách {isEntry ? "vào" : "ra"} bãi, barie sẽ mở thủ
+          công ngoài bốt.
+        </span>
+      </div>
+    </div>
+  ) : null;
+
   // Entry manual form: simple confirm plate screen (wireframe)
   if (isEntry && showManualForm) {
     return (
       <div className="staff-desk__waiting staff-desk__waiting--entry staff-desk__waiting--manual-confirm">
+        {bridgeOfflineAlert}
         <p className="staff-desk__manual-confirm-title">
           Vui lòng nhập chính xác biển số xe hiện tại ở cổng chờ
         </p>
@@ -2395,6 +2717,7 @@ function WaitingCard({
         )}
       </div>
       <h2>{isEntry ? "Đang chờ xe vào" : "Đang chờ xe ra"}</h2>
+      {bridgeOfflineAlert}
       <p>
         Nếu camera không thể nhận diện biển số hãy dùng nút nhập thủ công biển
         số xe
@@ -2410,6 +2733,10 @@ function WaitingCard({
           )}
           {manualEntryVehicle?.isSubscriber ? (
             <span>Gói thành viên đang hiệu lực</span>
+          ) : manualEntryVehicle?.cardUid ? (
+            <span style={{ color: "#b91c1c", fontWeight: 600 }}>
+              Gói đăng ký: Đã hết hạn
+            </span>
           ) : null}
           {manualEntryVehicle?.cardUid ? (
             <span>RFID Member: {manualEntryVehicle.cardUid}</span>
@@ -2437,7 +2764,6 @@ function WaitingCard({
           />
         </div>
       ) : null}
-
       {isEntry &&
       manualEntryPlate &&
       !showManualForm &&
@@ -2530,14 +2856,15 @@ function WaitingCard({
                 borderColor: "#15803d",
                 fontWeight: 700,
               }}
-              disabled={
-                Boolean(manualLoading) ||
-                phase === "creating" ||
-                !manualEntryConfirmationNote?.trim()
-              }
+              disabled={Boolean(manualLoading) || phase === "creating"}
               onClick={() => {
-                if (manualEntryPlate) {
+                if (!manualEntryPlate) return;
+                if (rfidAvailable) {
                   onConfirmManualPlate?.(manualEntryPlate);
+                } else {
+                  // Bridge offline: không quét được RFID — xác nhận mắt thường
+                  // rồi tạo phiên luôn (entryRfidUnverified trong payload).
+                  onConfirmManualPlateNoRfid?.(manualEntryPlate);
                 }
               }}
             >
@@ -2546,7 +2873,9 @@ function WaitingCard({
               ) : (
                 <CheckCircle2 size={18} />
               )}
-              Xác nhận biển số chính xác &amp; Quét RFID ngay
+              {rfidAvailable
+                ? "Xác nhận biển số chính xác & Quét RFID ngay"
+                : "Xác nhận biển số chính xác & Cho xe vào"}
             </button>
           )
         ) : null}
@@ -3011,6 +3340,7 @@ function ManualPlateCard({
 
 function IngestCard(props: {
   event: CameraIngestEvent;
+  blockingSession?: { plate: string; checkInAt?: string; slot?: string } | null;
   phase: Phase;
   createMsg: string;
   barrierMsg: string;
@@ -3034,12 +3364,31 @@ function IngestCard(props: {
     typeof event.metadata?.expectedRfidUid === "string"
       ? event.metadata.expectedRfidUid
       : "";
+  // Thẻ Member khách đã mua đứt cho biển số này (kể cả khi gói đăng ký đã
+  // hết hạn) — hiện UID để nhân viên đối chiếu thẻ vật lý của khách.
+  const purchasedCardUid =
+    typeof event.metadata?.purchasedCardUid === "string"
+      ? event.metadata.purchasedCardUid
+      : "";
+  const linkedRfidUid = purchasedCardUid || expectedRfidUid;
   const displayUserType =
     event.userType === "resident" || Boolean(event.metadata?.isSubscriber)
       ? "resident"
       : event.userType;
+  // Gói đăng ký gắn với biển số: còn hiệu lực / hết hạn / không có.
+  const subscriptionLabel = event.metadata?.isSubscriber
+    ? "Còn hiệu lực"
+    : typeof event.metadata?.subscriptionStatus === "string" &&
+        event.metadata.subscriptionStatus
+      ? "Hết hạn"
+      : "Không có";
   const duplicateSession =
-    event.duplicateSession === true || event.action === "duplicate";
+    event.duplicateSession === true ||
+    event.action === "duplicate" ||
+    Boolean(props.blockingSession);
+  const duplicateCheckInAt = props.blockingSession?.checkInAt
+    ? new Date(props.blockingSession.checkInAt).toLocaleString("vi-VN")
+    : "";
   const eventIsStale =
     event.sessionStatus === "Đang gửi" ||
     event.sessionStatus === "Đã hoàn thành";
@@ -3055,10 +3404,37 @@ function IngestCard(props: {
     Boolean(detected) && edited.length >= 5 && edited !== detected;
   const rfidConflict = parseRfidConflict(props.scanError);
   const busy = props.phase === "creating" || props.phase === "opening";
+  // Đang có lỗi thẻ RFID (thẻ member sai xe...) thì CHƯA cho tạo phiên/mở
+  // barie: nhân viên phải quét lại đúng thẻ hoặc hủy quét trước.
+  const scanBlocked = props.scanPhase === "error" && !!props.scanError;
   const canConfirm =
     edited.length >= 5 &&
     (!plateCorrected || props.reviewNote.trim().length >= 8) &&
-    !busy;
+    !busy &&
+    !scanBlocked;
+
+  // Sau khi AI đọc biển, hỏi nhân viên xác nhận biển đúng chưa TRƯỚC khi
+  // bật quét RFID: "ask" → hỏi, "confirmed" → biển đúng, đang quét thẻ,
+  // "edit" → sai, nhập lại biển.
+  const [plateStep, setPlateStep] = useState<"ask" | "confirmed" | "edit">(
+    detected ? "ask" : "edit",
+  );
+  const ingestEventId = event.id || detected;
+  useEffect(() => {
+    setPlateStep(detected ? "ask" : "edit");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ingestEventId]);
+  const showAsk = plateStep === "ask" && !busy && !eventIsStale;
+  // Chỉ hiện nút "Tạo phiên & Mở barie" sau khi mọi bước kiểm tra đã xong:
+  // biển số đã được xác nhận (không còn đang hỏi/nhập lại) VÀ không còn bước
+  // quét RFID nào đang chờ, đang lỗi hay đang chờ nhân viên bấm quét.
+  const rfidPending =
+    !showAsk &&
+    (props.scanPhase === "starting" ||
+      props.scanPhase === "waiting" ||
+      props.scanPhase === "error" ||
+      props.scanPhase === "timeout");
+  const showConfirmButton = !showAsk && !rfidPending;
 
   // Sau khi AI đọc biển, hỏi nhân viên xác nhận biển đúng chưa TRƯỚC khi
   // bật quét RFID: "ask" → hỏi, "confirmed" → biển đúng, đang quét thẻ,
@@ -3154,7 +3530,12 @@ function IngestCard(props: {
         <MetaRow
           icon={<Nfc size={14} />}
           label="Thẻ RFID gắn với biển số"
-          value={expectedRfidUid || "RFID không gắn sẵn"}
+          value={linkedRfidUid || "RFID không gắn sẵn"}
+        />
+        <MetaRow
+          icon={<CalendarCheck size={14} />}
+          label="Gói đăng ký"
+          value={subscriptionLabel}
         />
         {(event.ownerName || displayUserType === "resident") && (
           <MetaRow
@@ -3169,10 +3550,11 @@ function IngestCard(props: {
         <div className="staff-desk__alert staff-desk__alert--warn" role="alert">
           <CircleAlert size={18} />
           <div>
-            <strong>Xe đang có phiên gửi trong bãi</strong>
+            <strong>Từ chối cho xe vào: xe đang có phiên gửi trong bãi</strong>
             <span>
-              Biển {event.plate || event.detectedPlate} chưa checkout. Không tạo
-              phiên mới và không mở barie cổng vào.
+              Biển {props.blockingSession?.plate || event.plate || event.detectedPlate}
+              {duplicateCheckInAt ? ` đã vào lúc ${duplicateCheckInAt}` : ""} chưa
+              checkout. Không cho phép quét RFID, tạo phiên mới hoặc mở barie cổng vào.
             </span>
           </div>
         </div>
@@ -3235,7 +3617,15 @@ function IngestCard(props: {
                   {aiPlateMissing
                     ? "Nhập biển số xe thủ công"
                     : plateStep === "confirmed"
-                      ? `Biển số ${props.reviewPlate} — quẹt thẻ RFID của khách vào đầu đọc`
+                      ? linkedRfidUid
+                        ? <>
+                            Biển số {props.reviewPlate} — quẹt thẻ RFID
+                            <code className="staff-desk__ingest-uid">
+                              {linkedRfidUid}
+                            </code>
+                            của khách vào đầu đọc
+                          </>
+                        : `Biển số ${props.reviewPlate} — quẹt thẻ RFID của khách vào đầu đọc`
                       : "Đối chiếu biển số AI nhận diện"}
                 </p>
                 {plateStep !== "edit" && !aiPlateMissing ? null : (
@@ -3360,16 +3750,23 @@ function IngestCard(props: {
                       </p>
                     </div>
                   ) : (
-                    <p className="staff-desk__hint staff-desk__hint--danger">
-                      <CircleAlert size={14} /> {props.scanError}
-                    </p>
+                    <div
+                      className="staff-desk__scan-error"
+                      role="alert"
+                      aria-live="assertive"
+                    >
+                      <CircleAlert
+                        size={22}
+                        className="shrink-0 text-red-600"
+                      />
+                      <p className="staff-desk__scan-error-text">
+                        {props.scanError}
+                      </p>
+                    </div>
                   ))}
-                <p className="staff-desk__hint staff-desk__hint--warn">
-                  Có thể xác nhận không cần RFID (ghi nhận chưa quẹt thẻ).
-                </p>
               </div>
             ))}
-            {!showAsk && (
+            {showConfirmButton && !showAsk && (
               <div className="staff-desk__exit-manual-actions">
               <button
                 type="submit"
@@ -3386,6 +3783,12 @@ function IngestCard(props: {
                   </>
                 )}
               </button>
+              {scanBlocked ? (
+                <p className="staff-desk__hint staff-desk__hint--warn">
+                  Đang có lỗi thẻ RFID — quét lại đúng thẻ hoặc hủy quét trước
+                  khi mở barie.
+                </p>
+              ) : null}
               </div>
             )}
           </form>
@@ -3516,6 +3919,8 @@ function ExitCard({
   onDismiss,
   onOpenBarrier,
   onScanRfid,
+  onReloadReader,
+  readerReloading,
   scanPhase,
   gateError,
   paymentData,
@@ -3547,6 +3952,8 @@ function ExitCard({
   onDismiss: () => void;
   onOpenBarrier: () => void;
   onScanRfid?: () => void;
+  onReloadReader?: () => void;
+  readerReloading?: boolean;
   scanPhase?: "idle" | "starting" | "waiting" | "success" | "timeout" | "error";
   gateError?: string;
   paymentData?: {
@@ -3559,6 +3966,8 @@ function ExitCard({
     paymentStatus: string;
     isSubscriber: boolean;
     canOpenGate: boolean;
+    freeMinutes?: number | null;
+    totalMinutes?: number | null;
   } | null;
   onOpenGate?: () => void;
   mismatch?: ExitMismatch | null;
@@ -3604,6 +4013,8 @@ function ExitCard({
     typeof event.metadata?.replacementCardUid === "string"
       ? event.metadata.replacementCardUid
       : "";
+  // UID thẻ khách cần quẹt lúc ra: thẻ thay thế nếu đổi thẻ, ngược lại thẻ lúc vào.
+  const expectedExitRfidUid = replacementCardUid || entryRfidUid || "";
   const exitRfidManualNote =
     typeof event.metadata?.exitRfidManualNote === "string"
       ? event.metadata.exitRfidManualNote
@@ -3629,6 +4040,24 @@ function ExitCard({
     event.metadata?.customerType === "member" || event.userType === "resident"
       ? "member"
       : "guest";
+  // Gói đăng ký của thành viên đã hết hạn/hủy (từ metadata phiên xe ra) —
+  // không còn miễn phí, staff phải thu phí phiên.
+  const subscriptionStatus =
+    typeof event.metadata?.subscriptionStatus === "string"
+      ? (event.metadata.subscriptionStatus as string)
+      : "";
+  // Tên gói + ngày hết hạn (cả gói còn hạn lẫn hết hạn) để staff đối chiếu.
+  const subscriptionPlan =
+    typeof event.metadata?.subscriptionPlan === "string"
+      ? (event.metadata.subscriptionPlan as string)
+      : "";
+  const subscriptionEndDate = event.metadata?.subscriptionEndDate as
+    | string
+    | null;
+  const subscriptionLapsed =
+    customerType === "member" &&
+    subscriptionStatus !== "" &&
+    subscriptionStatus !== "active";
   const displayOwnerName = event.ownerName || "—";
   const vehicleTypeLabel =
     typeof event.metadata?.vehicleBrand === "string" &&
@@ -3684,7 +4113,39 @@ function ExitCard({
     // Owning an RFID card does not grant a free package; only an active
     // subscription should be labeled as free.
     if (isSubscriber) {
-      return "Miễn phí (thành viên)";
+      return "Khách có gói đăng ký";
+    }
+    // Gói đã hết hạn/hủy: vẫn là thành viên nhưng phải thu phí phiên.
+    if (subscriptionLapsed) {
+      return "Gói đăng ký hết hạn";
+    }
+    if (customerType === "member") {
+      return "Khách có gói đăng ký";
+    }
+    // "Miễn phí theo quy định" chỉ khi thời gian ra thực sự nằm trong khoảng
+    // miễn phí admin cài (totalMinutes <= freeMinutes) — từ verify hoặc metadata
+    // pending-exit (bridge offline chưa qua verify).
+    const freeWin =
+      exitVerifyData?.freeMinutes != null &&
+      exitVerifyData.totalMinutes != null
+        ? {
+            free: exitVerifyData.freeMinutes,
+            total: exitVerifyData.totalMinutes,
+          }
+        : typeof event.metadata?.freeMinutes === "number" &&
+            typeof event.metadata?.totalMinutes === "number"
+          ? {
+              free: event.metadata.freeMinutes as number,
+              total: event.metadata.totalMinutes as number,
+            }
+          : null;
+    if (
+      freeWin &&
+      freeWin.free > 0 &&
+      freeWin.total <= freeWin.free &&
+      amountDue <= 0
+    ) {
+      return "Miễn phí theo quy định";
     }
 
     const fromVerify = statusFrom(exitVerifyData?.paymentStatus);
@@ -3715,11 +4176,15 @@ function ExitCard({
   })();
 
   const paymentTone =
-    paymentLabel === "Đã thanh toán" || paymentLabel.includes("Miễn phí")
-      ? "ok"
-      : paymentLabel === "Chưa thanh toán"
-        ? "warn"
-        : "muted";
+    paymentLabel === "Gói đăng ký hết hạn"
+      ? "warn"
+      : paymentLabel === "Khách có gói đăng ký"
+        ? "member"
+        : paymentLabel === "Đã thanh toán" || paymentLabel.includes("Miễn phí")
+          ? "ok"
+          : paymentLabel === "Chưa thanh toán"
+            ? "warn"
+            : "muted";
   const barrierTone = barrierStatus === "Đang đóng" ? "warn" : "ok";
 
   const needsPaymentChoice =
@@ -3739,14 +4204,18 @@ function ExitCard({
     if (needsPaymentChoice) return "Quét Thẻ RFID Thành Công";
     if (hasPaymentData) return "Thanh toán qua PAYOS";
     if (scanPhase === "starting" || scanPhase === "waiting") {
-      return "Hãy đặt thẻ RFID của khách vào đầu đọc";
+      return expectedExitRfidUid
+        ? `Hãy đặt thẻ RFID ${expectedExitRfidUid} của khách vào đầu đọc`
+        : "Hãy đặt thẻ RFID của khách vào đầu đọc";
     }
     if (scanPhase === "success" && !exitVerifyData)
       return "Đang xác minh thẻ RFID…";
     if (scanPhase === "error") return "Thẻ không hợp lệ — quét lại";
     if (scanPhase === "timeout") return "Hết thời gian — quét lại thẻ RFID";
     if (exitVerifyData?.canOpenGate) return "Thẻ hợp lệ — có thể mở barie";
-    return "Hãy đặt thẻ RFID của khách vào đầu đọc";
+    return expectedExitRfidUid
+      ? `Hãy đặt thẻ RFID ${expectedExitRfidUid} của khách vào đầu đọc`
+      : "Hãy đặt thẻ RFID của khách vào đầu đọc";
   })();
 
   // Camera đọc biển không khớp phiên đang gửi. Không được cho luồng RFID,
@@ -3919,6 +4388,21 @@ function ExitCard({
             <div className="staff-desk__exit-field">
               <span className="staff-desk__exit-label">Tên chủ xe</span>
               <strong>{displayOwnerName}</strong>
+            </div>
+            <div className="staff-desk__exit-field">
+              <span className="staff-desk__exit-label">Gói đăng ký</span>
+              <strong
+                className={
+                  "staff-desk__exit-status staff-desk__exit-status--" +
+                  (isSubscriber ? "ok" : subscriptionLapsed ? "warn" : "muted")
+                }
+              >
+                {subscriptionPlan
+                  ? `${subscriptionPlan} — ${subscriptionEndDate ? "còn hạn đến " + formatDateTime(subscriptionEndDate) : ""}`.trim()
+                  : subscriptionLapsed
+                    ? `Hết hạn${subscriptionEndDate ? " " + formatDateTime(subscriptionEndDate) : ""}`
+                    : "Không có"}
+              </strong>
             </div>
             <div className="staff-desk__exit-field">
               <span className="staff-desk__exit-label">Phí phiên gửi xe</span>
@@ -4371,6 +4855,16 @@ function ExitCard({
                     <Nfc size={32} className="animate-pulse" />
                   </div>
                   <span>Đang chờ quét thẻ…</span>
+                  {onReloadReader ? (
+                    <button
+                      className="btn btn-primary btn-lg"
+                      disabled={readerReloading}
+                      onClick={() => void onReloadReader()}
+                    >
+                      <RefreshCcw size={18} className={readerReloading ? "animate-spin" : ""} />
+                      {readerReloading ? "Đang khởi động lại…" : "Khởi động lại đầu đọc"}
+                    </button>
+                  ) : null}
                   {onManualMissingEntryRfid && entryRfidUid ? (
                     <div className="staff-desk__manual-rfid-form">
                       <label htmlFor="manual-rfid-note-waiting">
@@ -4415,6 +4909,16 @@ function ExitCard({
                     onClick={onScanRfid}
                   >
                     <Nfc size={18} /> Quét lại thẻ RFID
+                  </button>
+                ) : null}
+                {onReloadReader ? (
+                  <button
+                    className="btn btn-ghost btn-lg"
+                    disabled={readerReloading}
+                    onClick={() => void onReloadReader()}
+                  >
+                    <RefreshCcw size={18} className={readerReloading ? "animate-spin" : ""} />
+                    {readerReloading ? "Đang khởi động lại…" : "Khởi động lại đầu đọc"}
                   </button>
                 ) : null}
                 {entryRfidUid && onManualMissingEntryRfid ? (

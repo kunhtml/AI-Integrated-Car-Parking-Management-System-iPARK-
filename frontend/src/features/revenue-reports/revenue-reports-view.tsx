@@ -212,11 +212,8 @@ export function RevenueReportsView() {
               <option value="this-month">This month</option>
               <option value="custom">Custom range</option>
             </SelectField>
-            <SelectField label="Parking area" onChange={setParkingArea} value={parkingArea}>
-              <option value="all">All areas</option>
-              <option value="zone-a">Zone A</option>
-              <option value="zone-b">Zone B</option>
-              <option value="zone-c">Zone C</option>
+            <SelectField label="Khu vực đỗ xe" onChange={setParkingArea} value={parkingArea}>
+              <option value="all">Bãi đỗ xe tổng</option>
             </SelectField>
             <SelectField label="Vehicle type" onChange={setVehicleType} value={vehicleType}>
               <option value="car">Ô tô</option>
@@ -403,10 +400,7 @@ function periodLabel(value: string) {
 }
 
 function areaLabel(value: string) {
-  if (value === "zone-a") return "Zone A";
-  if (value === "zone-b") return "Zone B";
-  if (value === "zone-c") return "Zone C";
-  return "All areas";
+  return "Bãi đỗ xe tổng";
 }
 
 function vehicleLabel(value: string) {

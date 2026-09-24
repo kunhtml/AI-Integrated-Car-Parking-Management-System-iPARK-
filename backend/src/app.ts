@@ -13,7 +13,15 @@ app.use(
   cors({
     origin: (origin, callback) => {
       const normalizedOrigin = origin?.replace(/\/$/, "");
-      if (!normalizedOrigin || env.corsOrigins.includes(normalizedOrigin)) {
+      const isLocalhost =
+        env.allowLocalhostCors &&
+        !!normalizedOrigin &&
+        /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(normalizedOrigin);
+      if (
+        !normalizedOrigin ||
+        isLocalhost ||
+        env.corsOrigins.includes(normalizedOrigin)
+      ) {
         callback(null, true);
       } else {
         callback(new Error(`CORS: Origin ${origin} not allowed`));

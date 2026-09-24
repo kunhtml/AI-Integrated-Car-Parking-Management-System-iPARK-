@@ -204,43 +204,49 @@ function ParkingAvailability() {
       </div>
 
       {/* ── Controls Row ── */}
-      <div className="pkav-controls">
-        <div className="pkav-search">
-          <Search size={16} className="pkav-search-icon" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Tìm khu vực đỗ xe…"
-          />
-          {search && (
+      <div className={`pkav-controls ${zones.length <= 1 ? "pkav-controls--single" : ""}`}>
+        {zones.length > 1 && (
+          <div className="pkav-search">
+            <Search size={16} className="pkav-search-icon" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Tìm khu vực đỗ xe…"
+            />
+            {search && (
+              <button
+                className="pkav-search-clear"
+                onClick={() => setSearch("")}
+                type="button"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        )}
+        {zones.length > 1 && (
+          <div className="pkav-filters">
             <button
-              className="pkav-search-clear"
-              onClick={() => setSearch("")}
+              className={`pkav-filter-btn ${activeZone === "Tất cả" ? "active" : ""}`}
+              onClick={() => setActiveZone("Tất cả")}
               type="button"
             >
-              ✕
+              Tất cả
             </button>
-          )}
-        </div>
-        <div className="pkav-filters">
-          <button
-            className={`pkav-filter-btn ${activeZone === "Tất cả" ? "active" : ""}`}
-            onClick={() => setActiveZone("Tất cả")}
-            type="button"
-          >
-            Tất cả
-          </button>
-          {zones.map((z) => (
-            <button
-              key={z.zone}
-              className={`pkav-filter-btn ${activeZone === z.zone ? "active" : ""}`}
-              onClick={() => setActiveZone(z.zone)}
-              type="button"
-            >
-              Khu {z.zone}
-            </button>
-          ))}
-        </div>
+            {zones.map((z) => (
+              <button
+                key={z.zone}
+                className={`pkav-filter-btn ${activeZone === z.zone ? "active" : ""}`}
+                onClick={() => setActiveZone(z.zone)}
+                type="button"
+              >
+                {z.zone.startsWith("Khu") || z.zone.startsWith("Bãi")
+                  ? z.zone
+                  : `Khu ${z.zone}`}
+              </button>
+            ))}
+          </div>
+        )}
         <button
           className={`pkav-refresh-btn ${isRefreshing ? "refreshing" : ""}`}
           onClick={() => load()}
@@ -280,7 +286,7 @@ function ParkingAvailability() {
       {!isLoading && (
         <>
           {filtered.length > 0 ? (
-            <div className="pkav-grid">
+            <div className={`pkav-grid ${filtered.length === 1 ? "pkav-grid--single" : ""}`}>
               {filtered.map((zone) => (
                 <div
                   className={`pkav-card ${zone.isFull ? "pkav-card--full" : ""}`}
@@ -290,7 +296,11 @@ function ParkingAvailability() {
                   <div className="pkav-card-header">
                     <div className="pkav-card-title">
                       <div>
-                        <h4>Khu {zone.zone}</h4>
+                        <h4>
+                          {zone.zone.startsWith("Bãi") || zone.zone.startsWith("Khu")
+                            ? zone.zone
+                            : `Khu ${zone.zone}`}
+                        </h4>
                         {zone.description && (
                           <p className="pkav-card-desc">{zone.description}</p>
                         )}
@@ -299,7 +309,7 @@ function ParkingAvailability() {
                     <div
                       className={`pkav-card-badge ${zone.isFull ? "badge--full" : "badge--available"}`}
                     >
-                      {zone.isFull ? "Đầy" : `${zone.available} trống`}
+                      {zone.isFull ? "Đầy" : `${zone.available} chỗ trống`}
                     </div>
                   </div>
 
@@ -339,12 +349,12 @@ function ParkingAvailability() {
                   {/* Quick CTA */}
                   {!zone.isFull && (
                     <div className="pkav-card-cta">
-                      <span>Còn {zone.available} chỗ</span>
+                      <span>Còn {zone.available} chỗ trống sẵn sàng đón xe</span>
                     </div>
                   )}
                   {zone.isFull && (
                     <div className="pkav-card-cta pkav-card-cta--full">
-                      <span>Bãi đã đầy — vui lòng chọn khu khác</span>
+                      <span>Bãi đã đầy xe</span>
                     </div>
                   )}
                 </div>
@@ -372,15 +382,32 @@ function ParkingAvailability() {
       {/* ── Summary footer ── */}
       {!isLoading && zones.length > 0 && (
         <div className="pkav-summary">
-          <span>
-            Hiển thị <strong>{filtered.length}</strong> /{" "}
-            <strong>{zones.length}</strong> khu vực
-            {search && ` · Tìm thấy "${search}"`}
-          </span>
-          <span>
-            {zones.filter((z) => z.isFull).length} khu đầy ·{" "}
-            {zones.filter((z) => !z.isFull).length} khu còn chỗ
-          </span>
+          {zones.length > 1 ? (
+            <>
+              <span>
+                Hiển thị <strong>{filtered.length}</strong> /{" "}
+                <strong>{zones.length}</strong> khu vực
+                {search && ` · Tìm thấy "${search}"`}
+              </span>
+              <span>
+                {zones.filter((z) => z.isFull).length} khu đầy ·{" "}
+                {zones.filter((z) => !z.isFull).length} khu còn chỗ
+              </span>
+            </>
+          ) : (
+            <>
+              <span>
+                Trạng thái:{" "}
+                <strong>
+                  {zones[0]?.isFull ? "Bãi đã đầy xe" : "Bãi còn chỗ trống"}
+                </strong>
+              </span>
+              <span>
+                Đang phục vụ {totalOccupied} / {totalCapacity} phương tiện · Còn{" "}
+                {totalAvailable} chỗ trống
+              </span>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -998,8 +1025,9 @@ function HeroSection({
             Bãi xe không vé · Nhận diện biển số bằng AI
           </span>
           <h1>
-            Gửi xe thông minh,{" "}
-            <span className="highlight">thanh toán qua PayOS</span>
+            Hệ thống đỗ xe hiện đại
+            <br />
+            <span className="highlight">Thanh toán qua PAYOS</span>
           </h1>
           <p>
             Dành cho khách vãng lai: không giữ vé giấy, không cài ứng dụng. Xe

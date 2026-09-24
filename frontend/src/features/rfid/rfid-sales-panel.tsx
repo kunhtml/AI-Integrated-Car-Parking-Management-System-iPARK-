@@ -29,6 +29,7 @@ import {
   createRfidSale,
   getRfidInventory,
   getRfidTransactions,
+  getRfidCardDetails,
   replaceRfidCard,
   returnRfidCard,
   RfidInventoryItem,
@@ -78,19 +79,7 @@ type InventoryForm = {
   uid: string;
   notes: string;
 };
-type RfidDetails = {
-  card: RfidInventoryItem;
-  owner?: { name?: string; email?: string; phone?: string };
-  vehicle?: {
-    plate?: string;
-    ownerName?: string;
-    brand?: string;
-    model?: string;
-    color?: string;
-    status?: string;
-  };
-  history: RfidTransaction[];
-};
+type RfidDetails = Awaited<ReturnType<typeof getRfidCardDetails>>;
 
 const EMPTY_INVENTORY_FORM: InventoryForm = { uid: "", notes: "" };
 
@@ -657,6 +646,21 @@ export function RfidSalesPanel() {
           error instanceof Error
             ? error.message
             : "Không tải được thông tin thẻ RFID.",
+      });
+    } finally {
+      setRfidDetailsLoading(false);
+    }
+  }
+
+  async function loadDetails(cardId: string) {
+    if (rfidDetailsLoading) return;
+    setRfidDetailsLoading(true);
+    try {
+      setRfidDetails(await getRfidCardDetails(cardId));
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        text: error instanceof Error ? error.message : "Không tải được thông tin thẻ RFID.",
       });
     } finally {
       setRfidDetailsLoading(false);

@@ -17,6 +17,8 @@ export type SubscriptionDocument = {
   autoRenew: boolean;
   transactionId?: mongoose.Types.ObjectId;
   renewalCount: number;
+  /** Thời điểm gia hạn gần nhất (set mỗi lần gia hạn thành công). */
+  lastRenewedAt?: Date | null;
   /** "Xe đang bị giữ bởi gói còn sống" — chỉ set khi status thuộc live set (xem partial index). */
   activeVehicleId?: mongoose.Types.ObjectId | null;
   createdAt: Date;
@@ -68,6 +70,7 @@ const subscriptionSchema = new Schema<SubscriptionDocument>(
     autoRenew: { type: Boolean, default: false },
     transactionId: { type: Schema.Types.ObjectId, ref: "Transaction" },
     renewalCount: { type: Number, default: 0 },
+    lastRenewedAt: { type: Date, default: null },
   },
   { timestamps: true },
 );

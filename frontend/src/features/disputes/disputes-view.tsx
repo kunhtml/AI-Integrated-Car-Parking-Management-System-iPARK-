@@ -70,7 +70,7 @@ function formatDateTime(value: string) {
 
 export function DisputesView() {
   const router = useRouter();
-  const { currentUser, setActionLog } = useParkingApp();
+  const { currentUser, viewAs, setActionLog } = useParkingApp();
 
   const [disputes, setDisputes] = useState<DisputeItem[]>([]);
   const [sessionRefs, setSessionRefs] = useState<DisputeSessionRef[]>([]);
@@ -98,7 +98,7 @@ export function DisputesView() {
     setLoading(true);
     try {
       const [disputeRes, referenceRes] = await Promise.all([
-        apiFetch("/disputes"),
+        apiFetch(viewAs === "customer" ? "/disputes?as=customer" : "/disputes"),
         apiFetch("/disputes/references"),
       ]);
       if (disputeRes.ok) {
@@ -116,7 +116,7 @@ export function DisputesView() {
     } finally {
       setLoading(false);
     }
-  }, [setActionLog]);
+  }, [setActionLog, viewAs]);
 
   useEffect(() => {
     loadData();

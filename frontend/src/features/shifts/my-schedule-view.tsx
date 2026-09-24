@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useParkingApp } from "@/context/parking-app-context";
+import { ShiftDetailModal } from "@/features/shifts/shift-detail-modal";
 import type { ParkingSession, ShiftScheduleItem } from "@/types";
 
 const SHIFT_LABELS: Record<string, string> = {
@@ -262,6 +263,8 @@ export function ShiftCalendar({
     const d = new Date();
     return { year: d.getFullYear(), month: d.getMonth() };
   });
+  const [detailSchedule, setDetailSchedule] =
+    useState<ShiftScheduleItem | null>(null);
 
   const mySchedules = useMemo(
     () =>
@@ -359,6 +362,10 @@ export function ShiftCalendar({
                   <div
                     key={s.id}
                     className="staff-shift-event"
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => { e.stopPropagation(); setDetailSchedule(s); }}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDetailSchedule(s); } }}
                     style={{
                       background: SHIFT_COLORS[s.shiftType]?.bg,
                       color: SHIFT_COLORS[s.shiftType]?.color,
@@ -397,6 +404,13 @@ export function ShiftCalendar({
           </div>
         ))}
       </div>
+
+      {detailSchedule && (
+        <ShiftDetailModal
+          schedule={detailSchedule}
+          onClose={() => setDetailSchedule(null)}
+        />
+      )}
     </div>
   );
 }

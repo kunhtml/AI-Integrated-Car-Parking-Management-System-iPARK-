@@ -469,7 +469,9 @@ export function ParkingSlotsView() {
     updateGlobalCapacity,
     pricingConfigState,
   } = useParkingApp();
-  const [activePool, setActivePool] = useState<QuotaType | "all">("all");
+  const [activePool, setActivePool] = useState<QuotaType | "all" | "empty">(
+    "all",
+  );
   const [selectedStatus, setSelectedStatus] = useState<SlotStatus | "">("");
   const [query, setQuery] = useState("");
   const [detailSlot, setDetailSlot] = useState<ParkingSlot | null>(null);
@@ -514,7 +516,14 @@ export function ParkingSlotsView() {
       slotList
         .filter((slot) => {
           const quota = slotQuota(slot as SlotWithQuota);
-          if (activePool !== "all" && quota !== activePool) return false;
+          if (activePool === "empty") {
+            if (slot.status !== "empty") return false;
+          } else {
+            if (activePool !== "all") {
+              if (quota !== activePool) return false;
+              if (slot.status !== "occupied") return false;
+            }
+          }
           if (selectedStatus && slot.status !== selectedStatus) return false;
           return (
             !query ||
@@ -830,6 +839,13 @@ export function ParkingSlotsView() {
               {pool.shortLabel}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => setActivePool("empty")}
+            className={activePool === "empty" ? "active" : ""}
+          >
+            Slot trống
+          </button>
         </div>
         <div className="quota-filters">
           <label className="quota-search">
@@ -877,10 +893,19 @@ export function ParkingSlotsView() {
               <LayoutGrid size={18} />
             </span>
             <div>
-              <h2>Tất cả slot</h2>
+              <h2>
+                {activePool === "all"
+                  ? "Tất cả slot"
+                  : activePool === "empty"
+                    ? "Slot trống"
+                    : `Slot ${activePool === "member" ? "thành viên" : "vãng lai"} đang sử dụng`}
+              </h2>
               <p>
-                Danh sách slot quản lý chung; loại quota hiển thị ngay trên từng
-                thẻ.
+                {activePool === "all"
+                  ? "Danh sách slot quản lý chung; loại quota hiển thị ngay trên từng thẻ."
+                  : activePool === "empty"
+                    ? "Các slot sẵn sàng cấp ở mọi khu vực."
+                    : "Chỉ hiển thị các slot đang có xe checkin."}
               </p>
             </div>
           </div>

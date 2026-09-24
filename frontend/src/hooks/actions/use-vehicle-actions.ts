@@ -1,5 +1,5 @@
 import { apiFetch } from "@/lib/client-api";
-import type { RegisteredVehicle, VehicleRequest } from "@/types";
+import type { RegisteredVehicle, VehicleRequest, ViewAsMode } from "@/types";
 
 type VehicleActionsParams = {
   setRegisteredVehicles: (
@@ -11,12 +11,14 @@ type VehicleActionsParams = {
     requests: VehicleRequest[] | ((prev: VehicleRequest[]) => VehicleRequest[]),
   ) => void;
   setActionLog: (log: string) => void;
+  viewAs: ViewAsMode;
 };
 
 export function createVehicleActions({
   setRegisteredVehicles,
   setVehicleRequests,
   setActionLog,
+  viewAs,
 }: VehicleActionsParams) {
   async function createEditRequest(
     vehicleId: string,
@@ -117,7 +119,9 @@ export function createVehicleActions({
   }
 
   async function loadVehicles() {
-    const response = await apiFetch("/vehicles");
+    const response = await apiFetch(
+      viewAs === "customer" ? "/vehicles?as=customer" : "/vehicles",
+    );
     if (!response.ok) return;
     const data = await response.json();
     setRegisteredVehicles((data.vehicles as RegisteredVehicle[]) ?? []);

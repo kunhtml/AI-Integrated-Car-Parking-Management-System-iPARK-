@@ -26,6 +26,8 @@ class YoloDetector:
             try:
                 from .openvino_yolo import OpenVinoYoloDetector
                 self._ov = OpenVinoYoloDetector(self.model_path)
+                if getattr(self._ov, "compiled", None) is None:
+                    raise FileNotFoundError(f"OpenVINO IR not found for {self.model_path}")
                 self.model = self._ov  # type: ignore[assignment]
                 self._backend_name = "openvino"
             except Exception as exc:

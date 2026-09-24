@@ -6,6 +6,7 @@ import { ParkingCameraLog } from "../models/ParkingCameraLog.js";
 import {
   findActiveSubscriptionByPlate,
   findLatestSubscriptionEndByPlate,
+  findSubscriptionStateByPlate,
 } from "../services/subscription.service.js";
 import { calculateParkingFee } from "../services/pricing.service.js";
 import { getActivePricingConfig } from "../services/pricing.service.js";
@@ -385,8 +386,36 @@ export async function completeOfflineExit(
   }
 
   const activeSubscription = await findActiveSubscriptionByPlate(session.plate);
+  // Phiên miễn phí (free time ngắn, fee = 0) không bao giờ tới bước thanh toán
+  // → paymentStatus vẫn "unpaid"/"free". Xét theo số tiền còn thiếu, giống
+  // luồng verify: fee - paidAmount <= 0 hoặc có subscription là kết thúc được.
+  if (
+    !activeSubscription &&
+    (session.fee == null || session.fee === 0) &&
+    session.paymentStatus !== "fully_paid"
+  ) {
+    // Cầu offline bỏ qua bước verify — phải tính phí trước khi kết luận 0đ,
+    // nếu không phiên chưa tính phí bị coi là miễn phí.
+    const checkInAt = new Date(session.checkInAt);
+    const now = new Date();
+    const pricing = await getActivePricingConfig();
+    const subscriptionEnd = await findLatestSubscriptionEndByPlate(
+      session.plate,
+    );
+    const billableFrom =
+      subscriptionEnd && subscriptionEnd > checkInAt && subscriptionEnd < now
+        ? subscriptionEnd
+        : checkInAt;
+    const feeBreakdown = calculateParkingFee(billableFrom, now, pricing);
+    session.fee = feeBreakdown.totalFee;
+    session.feeBreakdown = feeBreakdown;
+    await session.save();
+  }
+  const amountDue = (session.fee || 0) - (session.paidAmount || 0);
   const paid =
-    session.paymentStatus === "fully_paid" || Boolean(activeSubscription);
+    session.paymentStatus === "fully_paid" ||
+    Boolean(activeSubscription) ||
+    amountDue <= 0;
   if (!paid) {
     response
       .status(403)
@@ -470,6 +499,35 @@ export async function getPendingExit(request: Request, response: Response) {
     .select("rfidUid")
     .lean();
 
+  // Khoảng miễn phí theo cấu hình + thời lượng thực tế → UI phân biệt
+  // "Miễn phí theo quy định" ngay cả khi bridge offline (chưa qua verify).
+  const pendingPricing = await getActivePricingConfig();
+  const pendingFreeMinutes =
+    pendingPricing.gracePeriod ?? pendingPricing.freeMinutes ?? 0;
+  const pendingExitAt = session.exitDetectedAt ?? new Date();
+  const pendingTotalMinutes = Math.max(
+    0,
+    Math.ceil(
+      (pendingExitAt.getTime() - session.checkInAt.getTime()) / 60000,
+    ),
+  );
+
+  // Thành viên có gói đã hết hạn/hủy → UI báo "Gói đăng ký hết hạn" và phải
+  // thu phí phiên, không được hiện "Khách có gói đăng ký" (miễn phí).
+  const pendingSubscriptionState =
+    session.customerType === "member"
+      ? await findSubscriptionStateByPlate(session.plate)
+      : null;
+  const pendingLapsedSubscription =
+    pendingSubscriptionState && !pendingSubscriptionState.isActive
+      ? pendingSubscriptionState
+      : null;
+  // Gói còn hạn: hiển thị tên gói + ngày hết hạn lên card xe ra (MBR_01).
+  const pendingActiveSubscription =
+    session.customerType === "member"
+      ? await findActiveSubscriptionByPlate(session.plate)
+      : null;
+
   response.json({
     pending: true,
     event: {
@@ -494,6 +552,18 @@ export async function getPendingExit(request: Request, response: Response) {
       metadata: {
         customerType: session.customerType,
         quotaType: session.quotaType ?? null,
+        ...(pendingLapsedSubscription
+          ? {
+              subscriptionStatus: pendingLapsedSubscription.status,
+              subscriptionEndDate: pendingLapsedSubscription.endDate,
+            }
+          : {}),
+        ...(pendingActiveSubscription
+          ? {
+              subscriptionPlan: pendingActiveSubscription.planName,
+              subscriptionEndDate: pendingActiveSubscription.endDate,
+            }
+          : {}),
         // Manual Member entry has no physical scan UID, but the registered card
         // is still the expected entry card and must be visible to staff.
         entryRfidUid:
@@ -520,6 +590,8 @@ export async function getPendingExit(request: Request, response: Response) {
         entrySource: session.entrySource || "camera",
         manualEntryReason: session.manualEntryReason || null,
         entryPhotoStatus: session.entryPhotoStatus || null,
+        freeMinutes: pendingFreeMinutes,
+        totalMinutes: pendingTotalMinutes,
       },
       createdAt: (session.exitDetectedAt ?? session.checkInAt).toISOString(),
     },
@@ -911,3 +983,152 @@ export async function resolveExitMismatch(
     .status(400)
     .json({ ok: false, message: `Action không hợp lệ: ${action}` });
 }
+
+/**
+ * POST /api/exit/lost-card-penalty
+ * Khách báo mất thẻ tại cổng ra (EXP_01).
+ * 1. Đánh dấu thẻ RFID thành "lost" và vô hiệu hóa.
+ * 2. Lập vé phạt mất thẻ (Penalty record violationType="lost_card").
+ * 3. Tính lại tổng phí phiên = phí gửi + tiền phạt mất thẻ.
+ * 4. Xác nhận thủ công cho phiên ra để sẵn sàng thanh toán.
+ */
+export async function handleLostCardPenalty(request: Request, response: Response) {
+  const body = request.body as {
+    sessionId?: string;
+    penaltyAmount?: number;
+    reason?: string;
+  };
+  const sessionId = String(body.sessionId || "").trim();
+  if (!sessionId || !mongoose.Types.ObjectId.isValid(sessionId)) {
+    response.status(400).json({ ok: false, message: "Thiếu sessionId hợp lệ." });
+    return;
+  }
+  const session = await ParkingSession.findById(sessionId);
+  if (!session || session.status !== "Đang gửi") {
+    response.status(404).json({ ok: false, message: "Không tìm thấy phiên xe đang gửi." });
+    return;
+  }
+
+  // 1. Tìm thẻ RFID liên quan đến phiên lúc vào
+  const cardUid = (session.entryRfidUid || session.rfidCardId || "").trim();
+  let cardDoc = null;
+  if (cardUid) {
+    cardDoc = await RfidCard.findOne({
+      $or: [
+        ...(mongoose.Types.ObjectId.isValid(cardUid) ? [{ _id: new mongoose.Types.ObjectId(cardUid) }] : []),
+        { uid: cardUid },
+        { cardId: cardUid },
+      ],
+    });
+    if (cardDoc) {
+      cardDoc.status = "lost";
+      cardDoc.lostAt = new Date();
+      cardDoc.blockedReason = "Báo mất thẻ tại cổng ra";
+      await cardDoc.save();
+
+      try {
+        const { RfidScanLog } = await import("../models/RfidScanLog.js");
+        await RfidScanLog.create({
+          cardId: cardDoc.cardId || cardDoc.uid,
+          action: "report-lost",
+          status: "success",
+          performedBy: request.user?.id,
+          metadata: { note: `Báo mất thẻ tại cổng ra cho biển số ${session.plate}` },
+        });
+      } catch (logErr) {
+        console.warn("[handleLostCardPenalty] Log scan warning:", logErr);
+      }
+    }
+  }
+
+  // 2. Mức phạt: Mặc định không tính phạt (0đ), chỉ áp dụng nếu được truyền > 0
+  const penaltyAmount =
+    body.penaltyAmount != null && !isNaN(body.penaltyAmount) && body.penaltyAmount > 0
+      ? body.penaltyAmount
+      : 0;
+
+  // 3. Tạo vé phạt Penalty nếu có mức phạt
+  let penalty = null;
+  if (penaltyAmount > 0) {
+    const { Penalty } = await import("../models/Penalty.js");
+    penalty = await Penalty.create({
+      plate: session.plate,
+      violationType: "lost_card",
+      amount: penaltyAmount,
+      sessionId: session._id,
+      slotCode: session.slot || "GATE-OUT",
+      slotId: session.slotId,
+      note: body.reason || `Phạt mất thẻ RFID (${cardDoc?.uid || cardUid || "không rõ UID"}) lúc ra`,
+      status: "pending",
+      issuedBy: actorId(request),
+    });
+  }
+
+  // 4. Tính phí gửi xe cơ bản nếu chưa có
+  let baseFee = session.fee || 0;
+  if (baseFee <= 0) {
+    const pricing = await getActivePricingConfig();
+    const checkInAt = new Date(session.checkInAt);
+    const now = new Date();
+    const feeBreakdown = calculateParkingFee(checkInAt, now, pricing);
+    baseFee = feeBreakdown.totalFee;
+    session.feeBreakdown = feeBreakdown;
+  }
+
+  // 5. Cộng phí phạt vào phiên
+  const totalFee = baseFee + penaltyAmount;
+  session.fee = totalFee;
+  if (session.feeBreakdown) {
+    session.feeBreakdown.penaltyFine = penaltyAmount;
+    session.feeBreakdown.lostCardFee = penaltyAmount;
+    session.feeBreakdown.lostCardUid = cardDoc?.uid || cardUid;
+    session.feeBreakdown.totalFee = totalFee;
+  } else {
+    session.feeBreakdown = {
+      totalMinutes: 0,
+      freeMinutes: 0,
+      billableMinutes: 0,
+      billableHours: 0,
+      hourlyRate: 0,
+      parkingFee: baseFee,
+      overdueFine: 0,
+      totalFee,
+      dailyBreakdown: [],
+      penaltyFine: penaltyAmount,
+      lostCardFee: penaltyAmount,
+      lostCardUid: cardDoc?.uid || cardUid,
+    };
+  }
+
+  // Đánh dấu xác minh thủ công do mất thẻ
+  session.exitRfidManualVerified = true;
+  session.exitRfidVerifiedAt = new Date();
+  session.exitState = "rfid_verified";
+  session.matchStatus = "Khớp";
+  session.verificationStatus = "Đã duyệt";
+  session.verificationNote = penaltyAmount > 0 ? `Khách báo mất thẻ - Phạt mất thẻ ${penaltyAmount.toLocaleString("vi-VN")}đ` : "Khách báo mất thẻ - Không tính phạt";
+  session.exitDetectedPlate = session.exitDetectedPlate || session.plate;
+  session.exitSource = session.exitSource || "manual";
+  await session.save();
+
+  cameraEventBus.emitExitState({
+    sessionId: session._id.toString(),
+    status: session.status,
+    exitState: session.exitState,
+  });
+
+  const amountDue = session.fee - (session.paidAmount || 0);
+
+  response.json({
+    ok: true,
+    message: penaltyAmount > 0 ? `Đã ghi nhận mất thẻ và áp dụng phí phạt ${penaltyAmount.toLocaleString("vi-VN")}đ.` : "Đã ghi nhận mất thẻ RFID (không tính phạt).",
+    session,
+    penalty,
+    amountDue,
+    totalFee,
+    penaltyAmount,
+    lostCardUid: cardDoc?.uid || cardUid,
+  });
+}
+
+

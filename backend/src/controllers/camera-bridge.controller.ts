@@ -14,6 +14,7 @@ import { freeSlot } from "../services/parkingSlot.service.js";
 import {
   findActiveSubscriptionByPlate,
   findLatestSubscriptionEndByPlate,
+  findSubscriptionStateByPlate,
 } from "../services/subscription.service.js";
 import { createPendingTransactionForSession } from "../services/transaction.service.js";
 import {
@@ -260,6 +261,9 @@ export async function pushCameraLog(request: Request, response: Response) {
         openSession.fee = feeBreakdown.totalFee;
         openSession.feeBreakdown = feeBreakdown;
       }
+      if (!openSession.vehicleType) {
+        openSession.vehicleType = "Ô tô";
+      }
       await openSession.save();
       sessionId = openSession._id;
       action = "skipped"; // skipped = camera detect, chưa finalize
@@ -289,13 +293,35 @@ export async function pushCameraLog(request: Request, response: Response) {
   const activeMemberSubscription = plate
     ? await findActiveSubscriptionByPlate(plate)
     : null;
+  // Gói đăng ký đã hết hạn/hủy — bảng xe ra phải báo "Gói đăng ký hết hạn"
+  // thay vì "Khách có gói đăng ký" để staff thu phí phiên.
+  const lapsedSubscription =
+    !activeMemberSubscription && plate
+      ? await findSubscriptionStateByPlate(plate)
+      : null;
+  // Thẻ Member khách đã mua đứt cho biển số — tra cả khi gói dịch vụ đã hết
+  // hạn: bàn nhân viên cần hiện UID thẻ khách đang giữ để đối chiếu thẻ vật lý.
   const memberCardForPlate = activeMemberSubscription
     ? await RfidCard.findOne({
         plate,
         cardType: "member",
         status: { $in: ["active", "in-use"] },
-      }).select("uid")
+      })
+      .sort({ soldAt: -1, updatedAt: -1 })
+      .select("uid")
+      .lean()
     : null;
+  const purchasedCardForPlate =
+    !memberCardForPlate && plate
+      ? await RfidCard.findOne({
+          plate,
+          cardType: "member",
+          status: { $in: ["active", "in-use"] },
+        })
+        .sort({ soldAt: -1, updatedAt: -1 })
+        .select("uid")
+        .lean()
+      : null;
   const eventUserType =
     openSession?.customerType === "member" || activeMemberSubscription
       ? "resident"
@@ -307,6 +333,10 @@ export async function pushCameraLog(request: Request, response: Response) {
     "Chưa xác định";
   const expectedRfidUid =
     openSession?.expectedExitRfidUid || memberCardForPlate?.uid || null;
+  // UID thẻ Member khách đã mua đứt (kể cả khi gói đăng ký đã hết hạn) —
+  // frontend dùng để hiện thẻ khách đang giữ trên bàn nhân viên.
+  const purchasedCardUid =
+    memberCardForPlate?.uid || purchasedCardForPlate?.uid || null;
   const entryCardId = String(openSession?.rfidCardId || "");
   const entryCard = entryCardId
     ? await RfidCard.findOne({
@@ -342,8 +372,20 @@ export async function pushCameraLog(request: Request, response: Response) {
     vehicleBrand: vehicle?.brand || null,
     vehicleModel: vehicle?.model || null,
     vehicleType: (vehicle as any)?.type || vehicle?.vehicleType || null,
+    purchasedCardUid,
     ...(activeMemberSubscription
-      ? { isSubscriber: true, expectedRfidUid }
+      ? {
+          isSubscriber: true,
+          expectedRfidUid,
+          subscriptionPlan: activeMemberSubscription.planName,
+          subscriptionEndDate: activeMemberSubscription.endDate,
+        }
+      : {}),
+    ...(lapsedSubscription && !lapsedSubscription.isActive
+      ? {
+          subscriptionStatus: lapsedSubscription.status,
+          subscriptionEndDate: lapsedSubscription.endDate,
+        }
       : {}),
     entryRfidUnverified: Boolean(openSession?.entryRfidUnverified),
     entryRfidExpected: Boolean(
@@ -887,6 +929,31 @@ export async function dismissEntryReview(
       message: "Sự kiện không còn ở trạng thái chờ xác nhận.",
     });
     return;
+  }
+  // Camera đẩy liên tục các frame OCR cho cùng một xe (mỗi frame là log
+  // pending mới). Đóng luôn các frame cùng biển để reconnect SSE không
+  // hiện lại thẻ xe mà nhân viên vừa "Bỏ qua".
+  const dismissedPlate = normalizePlate(
+    updated.plate || updated.detectedPlate || "",
+  );
+  if (dismissedPlate) {
+    await ParkingCameraLog.updateMany(
+      {
+        _id: { $ne: updated._id },
+        direction: "in",
+        entryReviewState: "pending_review",
+        sessionId: null,
+        $or: [{ plate: dismissedPlate }, { detectedPlate: dismissedPlate }],
+      },
+      {
+        $set: {
+          entryReviewState: "dismissed",
+          confirmedBy: request.user?.id,
+          confirmedAt: new Date(),
+          confirmationNote: "Đóng tự động: sự kiện cùng biển đã bị bỏ qua.",
+        },
+      },
+    );
   }
   cameraEventBus.emitIngest({
     id: updated._id.toString(),

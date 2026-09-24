@@ -9,7 +9,7 @@
     "start": "node dist/server.js",
     "db:reinit": "node scripts/reinit-and-seed.mjs",
     "db:clean": "mongosh \"$MONGODB_URI\" --quiet < src/scripts/clean_schema.js",
-    "db:seed": "node scripts/seed.mjs"
+    "db:seed": "tsx scripts/seed.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

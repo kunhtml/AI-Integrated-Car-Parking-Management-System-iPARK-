@@ -26,6 +26,7 @@ import {
 import { useParkingApp } from "@/context/parking-app-context";
 import { apiFetch } from "@/lib/client-api";
 import { roleLabels } from "@/lib/constants";
+import { isStrongPassword, passwordErrorMessage } from "@/lib/password";
 import type { DemoUser } from "@/types";
 
 import { StaffApplicationCard } from "./staff-application-card";
@@ -203,6 +204,10 @@ function EditFieldModal({
     }
     if (field === "phone" && !/^0\d{9,10}$/.test(trimmed)) {
       setError("Số điện thoại phải bắt đầu bằng số 0 và có từ 10 đến 11 chữ số.");
+      return;
+    }
+    if (field === "address" && trimmed.length > 200) {
+      setError("Địa chỉ tối đa 200 ký tự.");
       return;
     }
     setError("");
@@ -450,8 +455,8 @@ function ForgotPasswordModal({
       setMsg({ text: "Mã OTP gồm 6 chữ số.", type: "error" });
       return;
     }
-    if (newPassword.length < 6) {
-      setMsg({ text: "Mật khẩu mới tối thiểu 6 ký tự.", type: "error" });
+    if (!isStrongPassword(newPassword)) {
+      setMsg({ text: passwordErrorMessage(newPassword), type: "error" });
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -954,8 +959,8 @@ function ChangePasswordModal({
       setMsg({ text: "Vui lòng nhập mật khẩu hiện tại.", type: "error" });
       return;
     }
-    if (newPassword.length < 6) {
-      setMsg({ text: "Mật khẩu mới tối thiểu 6 ký tự.", type: "error" });
+    if (!isStrongPassword(newPassword)) {
+      setMsg({ text: passwordErrorMessage(newPassword), type: "error" });
       return;
     }
     if (newPassword === currentPassword) {
@@ -1393,7 +1398,7 @@ function AvatarSection({
       });
       const d = await r.json();
       if (r.ok) {
-        onUpdate(preview!);
+        onUpdate(d.user?.avatarUrl || preview!);
         setPreview(null);
         setAvatarFile(null);
         setMsg("Đã cập nhật ảnh đại diện.");
@@ -2046,6 +2051,150 @@ function TwoFactorModal({
   );
 }
 
+function ChangeEmailModal({
+  currentEmail,
+  onClose,
+  onUpdated,
+}: {
+  currentEmail: string;
+  onClose: () => void;
+  onUpdated: (user: DemoUser) => void;
+}) {
+  const [step, setStep] = useState<"email" | "otp">("email");
+  const [newEmail, setNewEmail] = useState("");
+  const [tokenId, setTokenId] = useState("");
+  const [otp, setOtp] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function requestOtp(event: FormEvent) {
+    event.preventDefault();
+    const email = newEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError("Email không hợp lệ.");
+      return;
+    }
+    if (email === currentEmail.toLowerCase()) {
+      setError("Email mới phải khác email hiện tại.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const response = await apiFetch("/auth/request-change-email", {
+        method: "POST",
+        body: JSON.stringify({ newEmail: email }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.changeEmailTokenId) {
+        setError(data.message || "Không gửi được mã OTP.");
+        return;
+      }
+      setTokenId(data.changeEmailTokenId);
+      setStep("otp");
+    } catch {
+      setError("Lỗi kết nối máy chủ.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function verifyOtp(event: FormEvent) {
+    event.preventDefault();
+    if (!/^\d{6}$/.test(otp)) {
+      setError("Mã OTP phải gồm 6 chữ số.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const response = await apiFetch("/auth/verify-change-email", {
+        method: "POST",
+        body: JSON.stringify({ changeEmailTokenId: tokenId, otp }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.user) {
+        setError(data.message || "Mã OTP không đúng hoặc đã hết hạn.");
+        return;
+      }
+      onUpdated(data.user);
+      onClose();
+    } catch {
+      setError("Lỗi kết nối máy chủ.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 220,
+        background: "rgba(255,255,255,0.85)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 20,
+      }}
+    >
+      <form
+        onSubmit={step === "email" ? requestOtp : verifyOtp}
+        style={{
+          background: "var(--surface)",
+          borderRadius: 16,
+          padding: 24,
+          width: "100%",
+          maxWidth: 420,
+          border: "1px solid var(--border, #e2e6ef)",
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
+        }}
+      >
+        <h3 style={{ margin: 0 }}>Đổi email</h3>
+        <p style={{ margin: 0, color: "var(--muted)", fontSize: "0.85rem" }}>
+          {step === "email"
+            ? "Mã OTP sẽ được gửi tới email mới."
+            : `Nhập mã OTP đã gửi tới ${newEmail}.`}
+        </p>
+        {step === "email" ? (
+          <input
+            type="email"
+            value={newEmail}
+            autoFocus
+            disabled={loading}
+            onChange={(event) => setNewEmail(event.target.value)}
+            placeholder="email-moi@example.com"
+          />
+        ) : (
+          <input
+            value={otp}
+            autoFocus
+            disabled={loading}
+            inputMode="numeric"
+            maxLength={6}
+            onChange={(event) =>
+              setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))
+            }
+            placeholder="000000"
+          />
+        )}
+        {error && <AlertBanner message={error} type="error" />}
+        <div style={{ display: "flex", gap: 8 }}>
+          <button type="button" onClick={onClose} disabled={loading}>
+            Hủy
+          </button>
+          <button type="submit" disabled={loading}>
+            {loading ? "Đang xử lý..." : step === "email" ? "Gửi OTP" : "Xác nhận"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 // Mask email helper: a***@gmail.com
 function maskEmail(email: string): string {
   if (!email || !email.includes("@")) return email;
@@ -2068,12 +2217,16 @@ export function ProfileView() {
     type: "success" | "error";
   } | null>(null);
   const [forgotOpen, setForgotOpen] = useState(false);
+  const [changeEmailOpen, setChangeEmailOpen] = useState(false);
   const [changePwOpen, setChangePwOpen] = useState(false);
   const [twoFactorOpen, setTwoFactorOpen] = useState(false);
 
   if (!currentUser) return null;
 
   async function handleFieldSave(field: string, value: string): Promise<void> {
+    if (field === "email") {
+      throw new Error("Email phải xác minh bằng mã OTP.");
+    }
     const r = await apiFetch("/auth/profile", {
       method: "PUT",
       body: JSON.stringify({ [field]: value }),
@@ -2171,9 +2324,7 @@ export function ProfileView() {
               icon={Mail}
               editable
               editing={editingField === "email"}
-              onEdit={() =>
-                setEditingField(editingField === "email" ? null : "email")
-              }
+              onEdit={() => setChangeEmailOpen(true)}
             />
             <FieldRow
               label="Số điện thoại"
@@ -2187,7 +2338,7 @@ export function ProfileView() {
             />
             <FieldRow
               label="Địa chỉ"
-              value="Chưa cập nhật"
+              value={currentUser.address || "Chưa cập nhật"}
               icon={MapPin}
               editable
               editing={editingField === "address"}
@@ -2501,6 +2652,14 @@ export function ProfileView() {
         <ChangePasswordModal
           onClose={() => setChangePwOpen(false)}
           onLogout={logout}
+        />
+      )}
+
+      {changeEmailOpen && (
+        <ChangeEmailModal
+          currentEmail={currentUser.email}
+          onClose={() => setChangeEmailOpen(false)}
+          onUpdated={(user) => setCurrentUser(user)}
         />
       )}
 

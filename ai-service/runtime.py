@@ -16,6 +16,32 @@ try:
 except Exception as exc:
     print(f"[ENV] dotenv unavailable: {exc}")
 
+# ==== SINGLETON GUARD ====
+# Hai AI service chạy song song sẽ tranh COM port ESP32 (Windows chỉ cho 1
+# connection/COM) → mỗi instance giữ 1 board, cổng ra không quét được thẻ.
+# Giữ khóa file cấp OS trước khi mở serial; instance thứ hai thoát ngay.
+_singleton_lock = None
+if os.environ.get("IPARK_ALLOW_MULTI_INSTANCE", "").strip().lower() not in (
+    "1", "true", "yes", "on",
+):
+    try:
+        import msvcrt
+
+        _lock_path = BASE_DIR / ".ai-service.lock"
+        _singleton_lock = open(_lock_path, "a+")
+        _singleton_lock.seek(0)
+        msvcrt.locking(_singleton_lock.fileno(), msvcrt.LK_NBLCK, 1)
+    except OSError:
+        print(
+            "[BOOT][FATAL] Đã có một AI service khác đang chạy (khóa "
+            f"{_lock_path} đang bị giữ). Chạy 2 instance song song sẽ tranh "
+            "COM port và làm cổng ra không quét được thẻ. Thoát. "
+            "(Đặt IPARK_ALLOW_MULTI_INSTANCE=1 để bỏ qua.)"
+        )
+        sys.exit(1)
+    except ImportError:
+        _singleton_lock = None
+
 from flask import Flask, Response, jsonify, request
 from config import FLASK_PORT, STATIC_DIR
 from services.orchestration import Orchestrator

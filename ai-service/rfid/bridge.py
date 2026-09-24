@@ -18,6 +18,7 @@ Two transports are supported:
 from __future__ import annotations
 
 import os
+import sys
 import threading
 import time
 import re
@@ -25,6 +26,14 @@ from typing import Optional
 
 from rfid.reader import RfidReader
 from rfid.scanner import RfidScanner
+
+# Console Windows mặc định là cp1252 → in tiếng Việt crash thread serial.
+# Ép UTF-8 ngay lúc import để không bao giờ UnicodeEncodeError nữa.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 
 def detect_rfid_port_spec(baudrate: int = 9600, timeout: float = 2.5) -> str:

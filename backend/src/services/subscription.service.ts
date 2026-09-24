@@ -571,6 +571,7 @@ export async function renewSubscription(
     await setLiveVehicleHold(sub, true); // gói sống lại → giữ xe (partial index)
     sub.status = "active";
     sub.renewalCount += 1;
+    sub.lastRenewedAt = new Date();
     await sub.save();
     await (
       await import("./parkingQuota.service.js")
@@ -719,6 +720,7 @@ export async function applyPaidSubscriptionTransaction(transaction: {
     await setLiveVehicleHold(sub, true); // RENEW thành công → gói sống lại → giữ xe
     sub.status = "active";
     sub.renewalCount += 1;
+    sub.lastRenewedAt = new Date();
     await sub.save();
     await (
       await import("./parkingQuota.service.js")
@@ -1043,6 +1045,43 @@ export async function findActiveSubscriptionByPlate(plate: string): Promise<{
  * Lấy mốc hết hạn gần nhất của gói gắn với biển số, kể cả khi gói đã hết hạn.
  * Dùng để chỉ tính phí cho phần thời gian sau khi quyền lợi subscription kết thúc.
  */
+/**
+ * Tra cứu gói đăng ký mới nhất theo biển số — kể cả gói đã hết hạn/hủy.
+ * Bảng xe ra dùng để phân biệt "Khách có gói đăng ký" (còn hiệu lực, miễn phí)
+ * với "Gói đăng ký hết hạn" (phải thu phí phiên gửi xe).
+ */
+export async function findSubscriptionStateByPlate(plate: string): Promise<{
+  isActive: boolean;
+  status: string;
+  endDate: Date | null;
+  planName: string | null;
+} | null> {
+  const normPlate = normalizePlate(plate);
+  if (!normPlate) return null;
+
+  const vehicle = await Vehicle.findOne({ plate: normPlate }).select("_id");
+  if (!vehicle) return null;
+
+  const sub = await Subscription.findOne({
+    primaryVehicleId: vehicle._id,
+    status: { $in: ["active", "expired", "cancelled"] },
+  })
+    .sort({ endDate: -1 })
+    .select("status endDate planName")
+    .lean();
+  if (!sub) return null;
+
+  const isActive =
+    (sub.status === "active" || sub.status === "cancelled") &&
+    sub.endDate > new Date();
+  return {
+    isActive,
+    status: isActive ? "active" : sub.status,
+    endDate: sub.endDate,
+    planName: sub.planName ?? null,
+  };
+}
+
 export async function findLatestSubscriptionEndByPlate(
   plate: string,
 ): Promise<Date | null> {

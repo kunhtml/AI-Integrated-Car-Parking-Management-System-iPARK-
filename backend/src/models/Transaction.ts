@@ -26,6 +26,7 @@ export type TransactionDocument = {
   createdBy?: mongoose.Types.ObjectId;
   method: "payos" | "cash" | "wallet";
   amount: number;
+  penaltyAmount?: number;
   salePrice?: number;
   depositAmount?: number;
   status: TransactionStatus;
@@ -60,6 +61,7 @@ const transactionSchema = new Schema<TransactionDocument>(
     createdBy: { type: Schema.Types.ObjectId, ref: "User" },
     method: { type: String, enum: ["payos", "cash", "wallet"], default: "payos" },
     amount: { type: Number, required: true, min: 0 },
+    penaltyAmount: { type: Number, min: 0 },
     salePrice: { type: Number, min: 0, default: 0 },
     depositAmount: { type: Number, min: 0, default: 0 },
     status: { type: String, enum: ["pending", "paid", "failed", "cancelled", "refunded"], default: "pending" },
@@ -83,3 +85,4 @@ transactionSchema.index({ transactionType: 1, createdAt: -1 });
 
 export const Transaction: Model<TransactionDocument> =
   mongoose.models.Transaction || mongoose.model<TransactionDocument>("Transaction", transactionSchema);
+

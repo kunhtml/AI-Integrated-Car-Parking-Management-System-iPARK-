@@ -23,7 +23,14 @@ jest.mock("../src/models/OtpToken.js", () => ({
   OtpToken: {
     findOne: jest.fn(),
     create: jest.fn(),
+    updateMany: jest.fn().mockResolvedValue({}),
   },
+}));
+
+jest.mock("../src/services/session.service.js", () => ({
+  createActiveSession: jest.fn().mockResolvedValue({
+    _id: { toString: () => "session_id_1" },
+  }),
 }));
 
 jest.mock("bcryptjs", () => ({
@@ -91,7 +98,6 @@ import {
 import { User } from "../src/models/User.js";
 import bcrypt from "bcryptjs";
 import { signSession } from "../src/services/token.service.js";
-import { decryptSecret } from "../src/services/secret.service.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -148,6 +154,8 @@ function makeUser(overrides: Record<string, any> = {}): any {
     passwordHash: "hashed_password",
     role: "customer",
     status: "Đang hoạt động",
+    provider: "credentials",
+    isVerified: true,
     twoFactorEnabled: false,
     twoFactorSecret: undefined,
     save: jest.fn().mockResolvedValue(undefined),
@@ -280,7 +288,7 @@ describe("login (password)", () => {
     expect(User.findOne).toHaveBeenCalledWith({ email: "test@example.com" });
   });
 
-  it("TC-LOGIN-09: 2FA bật nhưng không gửi twoFactorCode → trả 202 yêu cầu nhập mã", async () => {
+  it("TC-LOGIN-09: 2FA bật nhưng SMTP chưa cấu hình → trả 503, không cấp session", async () => {
     const fakeUser = makeUser({
       twoFactorEnabled: true,
       twoFactorSecret: "encrypted_secret",
@@ -293,55 +301,28 @@ describe("login (password)", () => {
 
     await login(req, res);
 
-    expect(res._status).toBe(202);
-    expect(res._json).toMatchObject({ requiresTwoFactor: true });
+    expect(res._status).toBe(503);
+    expect(res._json).toMatchObject({
+      message: expect.stringContaining("SMTP"),
+    });
     expect(signSession).not.toHaveBeenCalled();
   });
 
-  it("TC-LOGIN-10: 2FA bật + mã đúng → đăng nhập thành công", async () => {
-    const fakeUser = makeUser({
-      twoFactorEnabled: true,
-      twoFactorSecret: "encrypted_secret",
-    });
+  it("TC-LOGIN-10: Email credentials chưa xác minh → gửi OTP và trả 403", async () => {
+    const fakeUser = makeUser({ isVerified: false });
     (User.findOne as jest.Mock).mockResolvedValue(fakeUser);
     (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+    const { smtpConfigured, sendMail } = require("../src/services/mail.service.js");
+    smtpConfigured.mockReturnValueOnce(true);
 
-    // verifySync đã được mock qua moduleNameMapper (otplib.js) → mặc định trả { valid: true }
-    const req = mockRequest({
-      body: { ...validBody, twoFactorCode: "123456" },
-    });
+    const req = mockRequest({ body: validBody });
     const res = mockResponse();
 
     await login(req, res);
 
-    expect(decryptSecret).toHaveBeenCalledWith("encrypted_secret");
-    expect(signSession).toHaveBeenCalled();
-    expect(res._json).toMatchObject({
-      user: expect.objectContaining({ email: "test@example.com" }),
-    });
-  });
-
-  it("TC-LOGIN-11: 2FA bật + mã sai → trả 401", async () => {
-    const fakeUser = makeUser({
-      twoFactorEnabled: true,
-      twoFactorSecret: "encrypted_secret",
-    });
-    (User.findOne as jest.Mock).mockResolvedValue(fakeUser);
-    (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-
-    // Override mock verifySync trả về valid = false cho test này
-    const otplib = require("otplib");
-    otplib.verifySync.mockReturnValueOnce({ valid: false });
-
-    const req = mockRequest({
-      body: { ...validBody, twoFactorCode: "000000" },
-    });
-    const res = mockResponse();
-
-    await login(req, res);
-
-    expect(res._status).toBe(401);
-    expect(res._json).toMatchObject({ message: "Mã 2FA không đúng." });
+    expect(sendMail).toHaveBeenCalled();
+    expect(res._status).toBe(403);
+    expect(res._json).toMatchObject({ requiresEmailVerification: true });
     expect(signSession).not.toHaveBeenCalled();
   });
 });

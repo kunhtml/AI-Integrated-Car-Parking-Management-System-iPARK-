@@ -110,7 +110,7 @@ authRoutes.post(
 );
 authRoutes.get("/google", googleLogin);
 authRoutes.get("/google/callback", asyncHandler(googleCallback));
-authRoutes.post("/logout", logout);
+authRoutes.post("/logout", asyncHandler(logout));
 authRoutes.get("/me", requireAuth, me);
 authRoutes.post(
   "/avatar",

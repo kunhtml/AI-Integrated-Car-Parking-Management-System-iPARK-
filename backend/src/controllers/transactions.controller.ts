@@ -59,26 +59,33 @@ export async function listTransactions(request: Request, response: Response) {
 
   let transactions: TransactionDocument[];
   let total: number;
-  if (request.user?.role === "customer") {
-    const user = await User.findById(request.user.id).select("email");
+  // Staff bấm "Khu vực Người dùng" (viewAs=customer) -> xem giao dịch của
+  // chính họ với tư cách khách hàng, không phải danh sách nhân viên.
+  const asCustomer =
+    request.query.as === "customer" &&
+    request.user?.role !== "admin" &&
+    request.user?.role !== "manager";
+  if (request.user?.role === "customer" || asCustomer) {
+    const authUser = request.user!;
+    const user = await User.findById(authUser.id).select("email");
     const emailMatch = user?.email
       ? { ownerEmail: user.email.toLowerCase() }
       : null;
-    const userIdMatch = { ownerUserId: request.user.id };
+    const userIdMatch = { ownerUserId: authUser.id };
     const sessionFilter = emailMatch
       ? { $or: [userIdMatch, emailMatch] }
       : userIdMatch;
     const userSessions = await ParkingSession.find(sessionFilter, { _id: 1 });
     const sessionIds = userSessions.map((s) => s._id);
     const userSubscriptions = await Subscription.find(
-      { userId: request.user.id },
+      { userId: authUser.id },
       { _id: 1 },
     );
     const subscriptionIds = userSubscriptions.map((s) => s._id);
     const accessFilter: Record<string, unknown> = {
       $or: [
         ...(Array.isArray(filter.$or) ? filter.$or : []),
-        { userId: request.user.id },
+        { userId: authUser.id },
         { sessionId: { $in: sessionIds } },
         { subscriptionId: { $in: subscriptionIds } },
       ],
@@ -90,6 +97,28 @@ export async function listTransactions(request: Request, response: Response) {
         .skip(skip)
         .limit(limitNum),
       Transaction.countDocuments(customerFilter),
+    ]);
+  } else if (request.user?.role === "staff") {
+    // Nhân viên chỉ thấy giao dịch mình tạo (thu tiền tại quầy / bán RFID)
+    // hoặc giao dịch thuộc phiên mình check-in/check-out.
+    const staffId = request.user.id;
+    const staffSessions = await ParkingSession.find(
+      { $or: [{ checkInStaff: staffId }, { checkOutStaff: staffId }] },
+      { _id: 1 },
+    );
+    const staffSessionIds = staffSessions.map((s) => s._id);
+    const staffFilter = {
+      $and: [
+        { $or: [{ createdBy: staffId }, { sessionId: { $in: staffSessionIds } }] },
+        filter,
+      ],
+    };
+    [transactions, total] = await Promise.all([
+      Transaction.find(staffFilter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum),
+      Transaction.countDocuments(staffFilter),
     ]);
   } else {
     [transactions, total] = await Promise.all([
@@ -495,3 +524,4 @@ export async function getTransaction(request: Request, response: Response) {
     transaction: serializeTransaction(transaction, session, subscription),
   });
 }
+

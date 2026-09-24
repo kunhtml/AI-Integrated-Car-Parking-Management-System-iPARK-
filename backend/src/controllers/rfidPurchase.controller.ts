@@ -6,8 +6,7 @@ import { Vehicle } from "../models/Vehicle.js";
 import { RfidCard } from "../models/RfidCard.js";
 import { Transaction } from "../models/Transaction.js";
 import { checkPayOSPaymentStatus, createPayOSPayment } from "../services/payos.service.js";
-
-const cardPrice = () => Number(process.env.RFID_CARD_SALE_PRICE || 50000);
+import { getActivePricingConfig } from "../services/pricing.service.js";
 
 async function reconcilePurchaseRequestPayment(item: InstanceType<typeof RfidPurchaseRequest>) {
   if (item.status !== "pending_payment" || !item.transactionId) return false;
@@ -39,7 +38,8 @@ export async function createPurchaseRequest(request: Request, response: Response
   if (existingCard) return void response.status(409).json({ message: "Phương tiện đã có RFID Member đang hoạt động." });
   const existingRequest = await RfidPurchaseRequest.findOne({ vehicleId: vehicle._id, status: { $in: ["pending_payment", "waiting_issuance", "approved_waiting_assignment"] } });
   if (existingRequest) return void response.status(409).json({ message: "Phương tiện đã có yêu cầu mua thẻ đang xử lý." });
-  const item = await RfidPurchaseRequest.create({ userId: request.user!.id, vehicleId: vehicle._id, salePrice: cardPrice(), note: body.note });
+  const pricing = await getActivePricingConfig();
+  const item = await RfidPurchaseRequest.create({ userId: request.user!.id, vehicleId: vehicle._id, salePrice: pricing.rfidCardSalePrice, note: body.note });
   const transaction = await Transaction.create({ transactionType: "rfid_sale", rfidCardType: "member", plate: vehicle.plate, userId: request.user!.id, vehicleId: vehicle._id, method: "payos", amount: item.salePrice, salePrice: item.salePrice, status: "pending" });
   item.transactionId = transaction._id; await item.save();
   response.status(201).json({ request: serialize(item), transactionId: transaction._id.toString() });

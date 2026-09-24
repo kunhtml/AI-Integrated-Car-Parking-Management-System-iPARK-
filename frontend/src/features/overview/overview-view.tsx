@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { useParkingApp } from "@/context/parking-app-context";
 import { apiFetch } from "@/lib/client-api";
+import { ShiftDetailModal } from "@/features/shifts/shift-detail-modal";
 import { useDashboardPolling } from "@/hooks/use-dashboard-polling";
 import { currency } from "@/lib/constants";
 import type {
@@ -328,6 +329,8 @@ function ShiftCalendar({ schedules, currentUserId }: ShiftCalendarProps) {
     const d = new Date();
     return { year: d.getFullYear(), month: d.getMonth() };
   });
+  const [detailSchedule, setDetailSchedule] =
+    useState<ShiftScheduleItem | null>(null);
 
   const mySchedules = useMemo(
     () =>
@@ -420,6 +423,18 @@ function ShiftCalendar({ schedules, currentUserId }: ShiftCalendarProps) {
                   <div
                     key={s.id}
                     className="staff-shift-event"
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDetailSchedule(s);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setDetailSchedule(s);
+                      }
+                    }}
                     style={{
                       background: SHIFT_COLORS[s.shiftType]?.bg,
                       color: SHIFT_COLORS[s.shiftType]?.color,
@@ -458,6 +473,13 @@ function ShiftCalendar({ schedules, currentUserId }: ShiftCalendarProps) {
           </div>
         ))}
       </div>
+
+      {detailSchedule && (
+        <ShiftDetailModal
+          schedule={detailSchedule}
+          onClose={() => setDetailSchedule(null)}
+        />
+      )}
     </div>
   );
 }
@@ -678,24 +700,11 @@ function RecentSessions({ sessions }: { sessions: ParkingSession[] }) {
     <div className="staff-session-list">
       {recent.map((s) => (
         <div key={s.id} className="staff-session-row">
-          <div className="staff-session-plate">{s.plate}</div>
-          <div className="staff-session-info">
-            <span>{s.owner}</span>
-            <span className="staff-session-slot">{s.slot}</span>
+          <div className="staff-session-identity">
+            <div className="staff-session-plate">{s.plate}</div>
+            <span className="staff-session-owner">{s.owner}</span>
           </div>
-          <div className="staff-session-meta">
-            {getSessionCheckInDate(s) && (
-              <span className="staff-session-time">
-                <Clock size={10} />
-                {getSessionCheckInDate(s)!.toLocaleString("vi-VN", {
-                  day: "2-digit",
-                  month: "2-digit",
-                  year: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </span>
-            )}
+          <div className="staff-session-aside">
             <span
               className={`staff-session-badge ${
                 s.status === "Đang gửi"
@@ -710,10 +719,26 @@ function RecentSessions({ sessions }: { sessions: ParkingSession[] }) {
               {s.status === "Chờ thanh toán" && <XCircle size={10} />}
               {s.status}
             </span>
+            <span className="staff-session-facts">
+              {getSessionCheckInDate(s) && (
+                <span className="staff-session-time">
+                  <Clock size={10} />
+                  {getSessionCheckInDate(s)!.toLocaleString("vi-VN", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+              )}
+              <span className="staff-session-slot">Ô {s.slot}</span>
+              {s.fee > 0 && (
+                <span className="staff-session-fee">
+                  {currency.format(s.fee)}
+                </span>
+              )}
+            </span>
           </div>
-          {s.fee > 0 && (
-            <span className="staff-session-fee">{currency.format(s.fee)}</span>
-          )}
         </div>
       ))}
     </div>
@@ -736,10 +761,7 @@ function TopCustomersList({ customers }: { customers: TopCustomer[] }) {
           <div className="staff-customer-info">
             <span className="staff-customer-name">{c.name}</span>
             <span className="staff-customer-sessions">
-              Biển số: {c.plate || "—"}
-            </span>
-            <span className="staff-customer-sessions">
-              {c.sessionCount} phiên
+              {c.plate || "—"} · {c.sessionCount} phiên
             </span>
           </div>
           <strong className="staff-customer-spent">
@@ -795,7 +817,7 @@ function ActivityFeed({ sessions }: { sessions: ParkingSession[] }) {
                 })}
             </span>
           </div>
-          <span className="staff-feed-slot">{s.slot}</span>
+          <span className="staff-feed-slot">Ô {s.slot}</span>
         </div>
       ))}
     </div>
@@ -1008,6 +1030,8 @@ function StaffDashboard() {
     useState<StaffDashboardOverview | null>(null);
   const [generalOverview, setGeneralOverview] =
     useState<DashboardOverview | null>(null);
+  // "" = hôm nay; khác => ngày cụ thể YYYY-MM-DD để lọc KPI.
+  const [filterDate, setFilterDate] = useState("");
 
   const loadStaffOverview = useCallback(async () => {
     try {
@@ -1022,14 +1046,17 @@ function StaffDashboard() {
 
   const loadGeneralOverview = useCallback(async () => {
     try {
-      const response = await apiFetch("/dashboard/overview?range=today");
+      const dateParam = filterDate ? `&date=${filterDate}` : "";
+      const response = await apiFetch(
+        `/dashboard/overview?range=today${dateParam}`,
+      );
       if (!response.ok) return;
       const data = await response.json();
       setGeneralOverview(data.overview ?? null);
     } catch {
       setGeneralOverview(null);
     }
-  }, []);
+  }, [filterDate]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -1072,8 +1099,9 @@ function StaffDashboard() {
   }, [myTodayShifts]);
 
   // Real lot-wide metrics (from backend overview or fallback to context)
+  // Khi chọn ngày filter, fallback client-side cũng lọc theo ngày đó.
+  const statDate = filterDate || today;
   const totalSlots = slotList.length || generalOverview?.capacity || 200;
-  const freeSlots = slotList.filter((s) => s.status === "empty").length;
 
   const activeCount =
     generalOverview?.active ??
@@ -1090,17 +1118,22 @@ function StaffDashboard() {
   const activeGuestCount =
     generalOverview?.activeGuest ??
     Math.max(0, activeCount - activeMemberCount);
+  // ponytail: suy ra chỗ trống từ số xe đang trong bãi để khớp với card
+  // "Đang trong bãi"; slot DB sync lag nên không đáng tin. Nâng cấp = backend
+  // trả occupancy chuẩn theo session.
+  const freeSlots = Math.max(0, totalSlots - activeCount);
 
   const entryCount =
     generalOverview?.entryCount ??
-    sessions.filter((s) => s.status !== "Đã hủy" && sessionDateKey(s) === today)
-      .length;
+    sessions.filter(
+      (s) => s.status !== "Đã hủy" && sessionDateKey(s) === statDate,
+    ).length;
   const entryMemberCount =
     generalOverview?.entryMemberCount ??
     sessions.filter(
       (s) =>
         s.status !== "Đã hủy" &&
-        sessionDateKey(s) === today &&
+        sessionDateKey(s) === statDate &&
         (s.customerType === "member" ||
           s.isRegisteredMember ||
           s.quotaType === "member"),
@@ -1112,14 +1145,14 @@ function StaffDashboard() {
   const exitCount =
     generalOverview?.exitCount ??
     sessions.filter(
-      (s) => s.status === "Đã hoàn thành" && sessionDateKey(s) === today,
+      (s) => s.status === "Đã hoàn thành" && sessionDateKey(s) === statDate,
     ).length;
   const exitMemberCount =
     generalOverview?.exitMemberCount ??
     sessions.filter(
       (s) =>
         s.status === "Đã hoàn thành" &&
-        sessionDateKey(s) === today &&
+        sessionDateKey(s) === statDate &&
         (s.customerType === "member" ||
           s.isRegisteredMember ||
           s.quotaType === "member"),
@@ -1136,6 +1169,13 @@ function StaffDashboard() {
   const cashCount = generalOverview?.cashCount ?? 0;
 
   const userName = currentUser?.name || currentUser?.email || "Nhân viên";
+  const statDateLabel = filterDate
+    ? new Date(`${filterDate}T00:00:00`).toLocaleDateString("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      })
+    : "Hôm nay";
   const greeting = (() => {
     const h = new Date().getHours();
     if (h < 12) return "Chào buổi sáng";
@@ -1166,6 +1206,54 @@ function StaffDashboard() {
           </div>
         </div>
         <div className="staff-header-right">
+          {/* Filter ngày cho KPI lưu lượng & doanh thu */}
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              fontSize: 12,
+              fontWeight: 600,
+              color: "#64748b",
+            }}
+          >
+            <Calendar size={14} />
+            <input
+              type="date"
+              value={filterDate || today}
+              max={today}
+              onChange={(e) => {
+                const v = e.target.value;
+                setFilterDate(!v || v === today ? "" : v);
+              }}
+              style={{
+                border: "1px solid #e2e8f0",
+                borderRadius: 8,
+                padding: "4px 8px",
+                fontSize: 12,
+                background: "#fff",
+                color: "#334155",
+              }}
+            />
+            {filterDate && (
+              <button
+                type="button"
+                onClick={() => setFilterDate("")}
+                style={{
+                  border: "none",
+                  background: "rgba(59,130,246,0.1)",
+                  color: "#2563eb",
+                  borderRadius: 6,
+                  padding: "3px 8px",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Hôm nay
+              </button>
+            )}
+          </label>
           {/* Current shift badge */}
           {myActiveShift && (
             <div className="staff-shift-badge active">
@@ -1195,7 +1283,7 @@ function StaffDashboard() {
         <KpiGroup
           title="Lưu lượng phương tiện"
           icon={<Car size={16} />}
-          tag="Hôm nay"
+          tag={statDateLabel}
           color="cyan"
           className="cards-2"
         >
@@ -1214,7 +1302,7 @@ function StaffDashboard() {
             icon={<ArrowUp size={16} />}
             label="Xe ra"
             value={String(exitCount)}
-            sub="lượt xuất bến"
+            sub="đã checkout thành công"
             color="orange"
             layers={[
               { label: "Khách vãng lai", value: exitGuestCount },
@@ -1260,7 +1348,7 @@ function StaffDashboard() {
         <KpiGroup
           title="Doanh thu & Giao dịch"
           icon={<Wallet size={16} />}
-          tag="Hôm nay"
+          tag={statDateLabel}
           color="amber"
           className="cards-4"
         >
@@ -1298,12 +1386,12 @@ function StaffDashboard() {
         <KpiGroup
           title="Ca trực & Vận hành"
           icon={<Calendar size={16} />}
-          tag="Cá nhân"
+          tag="Hiện tại"
           color="purple"
         >
           <StatCard
             icon={<Calendar size={16} />}
-            label="Tổng số ca đã làm"
+            label="Số ca làm việc hoàn thành"
             value={String(myCompletedShifts.length)}
             sub="ca đã hoàn thành"
             color="purple"
@@ -1334,9 +1422,7 @@ function StaffDashboard() {
                   : "Không có ca"
             }
             sub={
-              myUpcomingShift
-                ? `bắt đầu lúc ${myUpcomingShift.startTime}`
-                : "lịch làm việc"
+              myUpcomingShift ? `bắt đầu lúc ${myUpcomingShift.startTime}` : ""
             }
             color="blue"
           />
@@ -1513,7 +1599,7 @@ function AdminDashboard() {
             icon={<ArrowUp size={16} />}
             label="Xe ra"
             value={String(overview?.exitCount ?? 0)}
-            sub="lượt xuất bến"
+            sub="đã checkout thành công"
             color="orange"
             layers={[
               {
@@ -1638,7 +1724,7 @@ function AdminDashboard() {
             icon={<Activity size={16} />}
             label="Phiên miễn phí"
             value={String(overview?.freeSessionCount ?? 0)}
-            sub="vé ưu đãi / 0đ"
+            sub="có gói đăng ký"
             color="blue"
           />
         </KpiGroup>
@@ -1657,7 +1743,6 @@ function AdminDashboard() {
                 <h2 className="staff-panel-title">Phiên gần đây</h2>
               </div>
             </div>
-            <span className="staff-panel-count">{sessions.length}</span>
           </div>
           <RecentSessions sessions={sessions} />
         </div>

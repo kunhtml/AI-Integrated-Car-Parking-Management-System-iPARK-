@@ -17,7 +17,6 @@ import {
   AlertTriangle,
   Save,
   Plus,
-  CreditCard,
 } from "lucide-react";
 
 import { useParkingApp } from "@/context/parking-app-context";
@@ -226,7 +225,14 @@ export function PricingView() {
     const form = e.currentTarget;
     const formData = new FormData(form);
 
-    const success = await updatePricing(formData);
+    // Giá thẻ RFID Member được quản lý ở tab Thẻ RFID (/rfid). Ở đây chỉ giữ
+    // nguyên giá trị hiện tại để không ghi đè về 0 khi lưu bảng giá.
+    formData.set(
+      "rfidCardSalePrice",
+      String(pricingConfigState?.rfidCardSalePrice ?? pricingForm.rfidCardSalePrice),
+    );
+
+    const success = await updatePricing(formData, pricingConfigState?.rfidCardSalePrice);
     if (success) {
       setPricingModalOpen(false);
     }
@@ -593,32 +599,6 @@ export function PricingView() {
         title="Chỉnh sửa bảng giá"
       >
         <form className="pricing-edit-form" onSubmit={handleSavePricing}>
-          <div className="form-section">
-            <h4>
-              <CreditCard size={18} /> Giá thẻ RFID Member
-            </h4>
-            <label className="form-label">
-              <span>Giá bán thẻ (VND)</span>
-              <input
-                name="rfidCardSalePrice"
-                type="number"
-                min={0}
-                step={1000}
-                value={pricingForm.rfidCardSalePrice}
-                onChange={(e) =>
-                  setPricingForm({
-                    ...pricingForm,
-                    rfidCardSalePrice: Number(e.target.value),
-                  })
-                }
-                required
-              />
-            </label>
-            <p className="pricing-form-hint">
-              Giá này được dùng khi khách mua thẻ RFID Member trực tiếp trên
-              website.
-            </p>
-          </div>
           <div className="form-section">
             <h4>
               <Sun size={18} /> Giá ban ngày

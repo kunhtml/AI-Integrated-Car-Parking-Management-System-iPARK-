@@ -7,6 +7,7 @@ import {
   completeOfflineExit,
   dismissPendingExit,
   resolveExitMismatch,
+  handleLostCardPenalty,
 } from "../controllers/exit.controller.js";
 import { requireAuth, requireRole } from "../middlewares/auth.middleware.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -54,4 +55,11 @@ exitRoutes.post(
   requireAuth,
   requireRole("admin", "staff"),
   asyncHandler(resolveExitMismatch),
+);
+
+exitRoutes.post(
+  "/lost-card-penalty",
+  requireAuth,
+  requireRole("admin", "staff"),
+  asyncHandler(handleLostCardPenalty),
 );

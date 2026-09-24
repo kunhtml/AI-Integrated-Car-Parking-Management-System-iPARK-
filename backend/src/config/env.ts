@@ -78,6 +78,7 @@ export const env = {
   encryptionKey: readSecret("ENCRYPTION_KEY", localEncryptionKey),
   frontendUrl: process.env.FRONTEND_URL || "http://localhost:3000",
   corsOrigins: [...new Set(corsOrigins)],
+  allowLocalhostCors: !isProduction,
   aiServiceUrl: process.env.AI_SERVICE_URL || "http://127.0.0.1:5000",
   bridgeServiceUrl:
     process.env.CAMERA_SERVICE_URL || "http://127.0.0.1:5050",

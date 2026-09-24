@@ -15,11 +15,13 @@ import type {
   Subscription,
   SubscriptionPlan,
   TransactionItem,
+  ViewAsMode,
   Zone,
 } from "@/types";
 
 type OperationalDataParams = {
   currentUser: DemoUser | null;
+  viewAs: ViewAsMode;
   setSessions: (
     sessions:
       | ParkingSession[]
@@ -72,6 +74,7 @@ type OperationalDataParams = {
 
 export function useOperationalData({
   currentUser,
+  viewAs,
   setSessions,
   setRegisteredVehicles,
   setUserList,
@@ -95,7 +98,7 @@ export function useOperationalData({
       return;
     }
 
-    const loadKey = `${currentUser.id}:${currentUser.role}`;
+    const loadKey = `${currentUser.id}:${currentUser.role}:${viewAs}`;
     if (loadedForUserRef.current === loadKey) {
       return;
     }
@@ -108,7 +111,9 @@ export function useOperationalData({
       try {
         const [sessionResponse, vehicleResponse] = await Promise.all([
           apiFetch("/parking-sessions"),
-          apiFetch("/vehicles"),
+          apiFetch(
+            viewAs === "customer" ? "/vehicles?as=customer" : "/vehicles",
+          ),
         ]);
         if (cancelled) {
           return;
@@ -151,7 +156,9 @@ export function useOperationalData({
           setPricingConfigState(data.pricingConfig);
         }
         const [transactionResponse, notificationResponse] = await Promise.all([
-          apiFetch("/transactions"),
+          apiFetch(
+            viewAs === "customer" ? "/transactions?as=customer" : "/transactions",
+          ),
           apiFetch("/notifications"),
         ]);
         if (cancelled) {
@@ -237,6 +244,7 @@ export function useOperationalData({
   }, [
     currentUser?.id,
     currentUser?.role,
+    viewAs,
     setSessions,
     setRegisteredVehicles,
     setUserList,

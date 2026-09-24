@@ -181,7 +181,7 @@ type ParkingAppContextValue = {
   cameraEntry: (deviceId: string) => Promise<void>;
   cameraExit: (deviceId: string) => Promise<void>;
   triggerGate: (gateId: string, reason?: string) => Promise<void>;
-  updatePricing: (form: FormData) => Promise<boolean>;
+  updatePricing: (form: FormData, previousRfidPrice?: number) => Promise<boolean>;
   confirmTransaction: (id: string) => Promise<void>;
   createPaymentForSession: (id: string) => Promise<void>;
   loadReportSummary: (from: string, to: string) => Promise<void>;
@@ -698,6 +698,7 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
 
   useOperationalData({
     currentUser: state.currentUser,
+    viewAs: state.viewAs,
     setSessions,
     setRegisteredVehicles,
     setUserList,
@@ -790,8 +791,9 @@ export function ParkingAppProvider({ children }: { children: ReactNode }) {
         setRegisteredVehicles,
         setVehicleRequests,
         setActionLog,
+        viewAs: state.viewAs,
       }),
-    [setRegisteredVehicles, setVehicleRequests, setActionLog],
+    [setRegisteredVehicles, setVehicleRequests, setActionLog, state.viewAs],
   );
   const zoneActions = useMemo(
     () => createZoneActions({ setZoneList, setActionLog }),

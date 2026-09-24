@@ -29,6 +29,7 @@ export function CustomerRfidRegistrationView() {
   const [purchaseRequests, setPurchaseRequests] = useState<RfidPurchaseRequest[]>([]);
   const [buyingVehicleId, setBuyingVehicleId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [cardPrice, setCardPrice] = useState<number | null>(null);
   const [showIssuePanel, setShowIssuePanel] = useState(false);
   const [now] = useState(() => Date.now());
 
@@ -57,17 +58,36 @@ export function CustomerRfidRegistrationView() {
   }
 
   useEffect(() => {
+    let cancelled = false;
+    async function refreshPrice() {
+      try {
+        const response = await apiFetch("/pricing-config", { cache: "no-store" });
+        const data = await response.json();
+        const price = data.pricingConfig?.rfidCardSalePrice;
+        if (!cancelled) {
+          setCardPrice(response.ok && typeof price === "number" && Number.isFinite(price) && price >= 0 ? price : null);
+        }
+      } catch {
+        if (!cancelled) setCardPrice(null);
+      }
+    }
     const refresh = () => {
       void refreshMyRfidCards();
       void refreshPurchaseRequests();
+      void refreshPrice();
     };
     refresh();
     const intervalId = window.setInterval(refresh, 10_000);
-    return () => window.clearInterval(intervalId);
+    window.addEventListener("focus", refresh);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", refresh);
+    };
   }, []);
 
   async function handleBuyRfid(vehicleId: string, plate: string) {
-    if (buyingVehicleId) return;
+    if (buyingVehicleId || cardPrice === null) return;
     setBuyingVehicleId(vehicleId);
     setNotice(null);
     try {
@@ -94,6 +114,11 @@ export function CustomerRfidRegistrationView() {
       <section className="customer-subs-section">
         <h2 className="section-title"><Radio size={18} /> Đăng ký mua thẻ RFID Member</h2>
         <p className="muted-cell">Chọn xe đã được xác minh, thanh toán phí phát hành qua QR PayOS, sau đó chờ Parking Manager duyệt và cấp thẻ vật lý từ kho.</p>
+        <p className="muted-cell" aria-live="polite">
+          {cardPrice === null
+            ? "Chưa tải được giá thẻ RFID. Hệ thống sẽ tự thử lại."
+            : `Giá thẻ RFID: ${new Intl.NumberFormat("vi-VN").format(cardPrice)} VND. Giá được chốt khi tạo yêu cầu mua thẻ.`}
+        </p>
         {notice && <div className="feedback-banner info">{notice}</div>}
         <div className="table-wrap rfid-purchase-table">
           <table>
@@ -125,7 +150,7 @@ export function CustomerRfidRegistrationView() {
                     <td>{membershipStatus}</td>
                     <td className="rfid-purchase-action">
                       {!card && !purchaseRequest && (
-                        <button className="small-button" type="button" disabled={!!buyingVehicleId} onClick={() => void handleBuyRfid(vehicle.id, vehicle.plate)}>
+                        <button className="small-button" type="button" disabled={!!buyingVehicleId || cardPrice === null} onClick={() => void handleBuyRfid(vehicle.id, vehicle.plate)}>
                           {buyingVehicleId === vehicle.id ? "Đang tạo QR…" : "Mua thẻ ngay"}
                         </button>
                       )}

@@ -17,6 +17,8 @@ import {
 
 import type { RfidCard, RfidScanLog, RfidCardStatus } from "@/types";
 import * as rfidApi from "./rfid-api";
+import { getRfidTransactions } from "./rfid-sales-api";
+import type { RfidTransaction } from "./rfid-sales-api";
 import { RfidCardTable } from "./components/RfidCardTable";
 
 const STATUS_LABELS: Partial<Record<RfidCardStatus, string>> = {
@@ -103,8 +105,9 @@ export function RfidCardsView() {
   const [historyCardId, setHistoryCardId] = useState<string | null>(null);
   const [historyLogs, setHistoryLogs] = useState<RfidScanLog[]>([]);
   const [historyAuditLogs, setHistoryAuditLogs] = useState<any[]>([]);
-  const [historyTab, setHistoryTab] = useState<"audit" | "scans">("audit");
+  const [historyTab, setHistoryTab] = useState<"audit" | "scans" | "transactions">("audit");
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyTransactions, setHistoryTransactions] = useState<RfidTransaction[]>([]);
 
   // ─── Load cards ───
   const loadCards = useCallback(async () => {
@@ -258,12 +261,12 @@ export function RfidCardsView() {
         const data = await res.json();
         setHistoryLogs(data.scanHistory || data.scans || data.logs || data.history || []);
         setHistoryAuditLogs(data.auditHistory || []);
-        if (data.auditHistory && data.auditHistory.length > 0) {
-          setHistoryTab("audit");
-        } else {
-          setHistoryTab("scans");
-        }
+        setHistoryTab("audit");
       }
+      const transactions = await getRfidTransactions({ status: "paid", limit: 100 });
+      setHistoryTransactions(
+        transactions.items.filter((t) => t.uid === (card.cardId ?? card.uid))
+      );
     } catch {
       /* silent */
     } finally {
@@ -676,6 +679,14 @@ export function RfidCardsView() {
               >
                 Lịch sử quét qua cổng ({historyLogs.length})
               </button>
+              <button
+                type="button"
+                className={historyTab === "transactions" ? "primary-button" : "ghost-button"}
+                onClick={() => setHistoryTab("transactions")}
+                style={{ fontSize: 13, padding: "6px 14px" }}
+              >
+                Lịch sử thanh toán ({historyTransactions.length})
+              </button>
             </div>
 
             <div style={{ overflowY: "auto", flex: 1, paddingRight: 4 }}>
@@ -805,6 +816,50 @@ export function RfidCardsView() {
                   Chưa có lịch sử quét cho thẻ này.
                 </p>
               )}
+              {historyTab === "transactions" ? (
+                historyTransactions.length > 0 ? (
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Thời gian</th>
+                          <th>Kiểu giao dịch</th>
+                          <th>Phương thức</th>
+                          <th>Số tiền</th>
+                          <th>Trạng thái</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {historyTransactions.map((t) => (
+                          <tr key={t.id}>
+                            <td style={{ whiteSpace: "nowrap" }}>{fmt(t.createdAt)}</td>
+                            <td>{t.transactionType}</td>
+                            <td>{t.method}</td>
+                            <td>{Number(t.amount).toLocaleString("vi-VN")} ₫</td>
+                            <td>
+                              <span
+                                className={
+                                  t.status === "paid"
+                                    ? "badge success"
+                                    : t.status === "pending"
+                                      ? "badge warning"
+                                      : "badge danger"
+                                }
+                              >
+                                {t.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="muted-text" style={{ padding: "20px 0", textAlign: "center" }}>
+                    Chưa có lịch sử thanh toán cho thẻ này.
+                  </p>
+                )
+              ) : null}
             </div>
 
             <div className="modal-actions" style={{ marginTop: 16, paddingTop: 10, borderTop: "1px solid var(--border)", display: "flex", justifyContent: "flex-end" }}>

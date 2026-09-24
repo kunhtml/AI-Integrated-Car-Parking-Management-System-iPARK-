@@ -70,3 +70,24 @@ outputs/
 markdown/
 audit.json
 frontend/src/app/(dashboard)/audit-logs/page.tsx
+
+# media & evidence
+/bak_media/
+/evidence/
+
+# test scripts, temporary files & dumps
+shot_*
+**/shot_*
+shot_*.mjs
+shot_*.js
+shot_*.py
+tmp*
+**/tmp*
+tmp_*
+**/tmp_*
+USER.txt
+test_*.docx
+*.docx
+*.err
+*.out
+*.patch

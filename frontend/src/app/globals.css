@@ -748,9 +748,11 @@ tr:hover td {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 4px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle, color-mix(in srgb, var(--border) 25%, var(--bg-elevated)));
 }
 
 .admin-disputes-filter {
@@ -759,28 +761,77 @@ tr:hover td {
   gap: 8px;
   font-size: 13px;
   color: var(--fg-muted);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .admin-disputes-filter select {
   font-size: 13px;
-  padding: 4px 8px;
+  font-weight: 500;
+  padding: 6px 30px 6px 10px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
-  background: var(--bg-base);
+  background: var(--bg-elevated);
   color: var(--fg-base);
   cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.admin-disputes-filter select:hover {
+  border-color: var(--fg-muted);
+}
+
+.admin-disputes-filter select:focus-visible {
+  outline: none;
+  border-color: var(--accent, #3b82f6);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #3b82f6) 20%, transparent);
 }
 
 .admin-disputes-count {
   margin-left: auto;
-  font-size: 13px;
-  color: var(--fg-muted);
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--accent, #3b82f6);
+  background: color-mix(in srgb, var(--accent, #3b82f6) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent, #3b82f6) 22%, transparent);
+  border-radius: var(--radius-full);
+  padding: 4px 12px;
+  white-space: nowrap;
 }
 
 .admin-disputes-msg-count {
-  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 7px;
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-base);
+  background: color-mix(in srgb, var(--fg-muted) 12%, transparent);
+  border-radius: var(--radius-full);
+}
+
+/* "—" = chưa có tin nhắn, render mờ không thành chip */
+.admin-disputes-msg-count:empty,
+.admin-disputes-msg-count[data-empty="true"] {
+  background: none;
   color: var(--fg-muted);
+  font-weight: 400;
+}
+
+.admin-disputes-view table td .monospace {
+  font-size: 12px;
+  color: var(--accent, #3b82f6);
+  background: color-mix(in srgb, var(--accent, #3b82f6) 8%, transparent);
+  padding: 3px 8px;
+  border-radius: var(--radius-sm, 6px);
+  white-space: nowrap;
 }
 
 /* ── Dispute chat meta row ───────────────────────────────────── */
@@ -1858,9 +1909,9 @@ tr:hover td {
 }
 
 .landing-hero h1 {
-  font-size: clamp(36px, 5vw, 56px);
+  font-size: clamp(28px, 4vw, 42px);
   font-weight: 800;
-  line-height: 1.1;
+  line-height: 1.2;
   letter-spacing: -0.02em;
   color: var(--landing-fg);
   margin: 0;
@@ -2257,6 +2308,29 @@ tr:hover td {
   font-size: 16px;
   font-weight: 600;
   line-height: 1.4;
+}
+.staff-desk__scan-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 10px;
+  padding: 11px 12px;
+  border: 2px solid #dc2626;
+  border-radius: 10px;
+  background: #fef2f2;
+  box-shadow: 0 2px 10px rgba(220, 38, 38, 0.18);
+}
+.staff-desk__scan-error-text {
+  margin: 0;
+  color: #b91c1c;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+}
+.staff-desk__scan-error-text--sm {
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .staff-desk__rfid-conflict {
@@ -2759,6 +2833,17 @@ tr:hover td {
   color: #334155;
 }
 
+.staff-desk__ingest-manual-title .staff-desk__ingest-uid {
+  margin: 0 4px;
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: rgba(47, 111, 176, 0.12);
+  color: #1d4ed8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
 input.staff-desk__manual-confirm-input {
   width: 100%;
   min-height: 56px;
@@ -3606,6 +3691,10 @@ input.staff-desk__manual-confirm-input:focus {
   flex-wrap: wrap;
 }
 
+.pkav-controls--single {
+  justify-content: flex-end;
+}
+
 .pkav-search {
   display: flex;
   align-items: center;
@@ -3766,6 +3855,14 @@ input.staff-desk__manual-confirm-input:focus {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 16px;
+}
+
+.pkav-grid--single {
+  grid-template-columns: 1fr;
+}
+
+.pkav-grid--single .pkav-card {
+  padding: 24px 28px;
 }
 
 /* Zone Card */
@@ -13408,6 +13505,13 @@ textarea.form-input {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 16px;
+  align-items: stretch;
+}
+
+.staff-bottom-row > .staff-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 /* Panels */
@@ -13603,17 +13707,18 @@ textarea.form-input {
 
 /* Sessions list */
 .staff-session-list {
+  flex: 1;
+  min-height: 0;
   padding: 4px 0;
-  max-height: 320px;
   overflow-y: auto;
 }
 
 .staff-session-row {
-  display: grid;
-  grid-template-columns: auto 1fr auto auto;
+  display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 16px;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 16px;
   border-bottom: 1px solid rgba(15, 23, 42, 0.04);
   transition: background 0.12s ease;
 }
@@ -13626,44 +13731,58 @@ textarea.form-input {
   border-bottom: none;
 }
 
+.staff-session-identity {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+}
+
 .staff-session-plate {
   font-family: monospace;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   background: rgba(139, 92, 246, 0.08);
   color: #8b5cf6;
   padding: 2px 7px;
   border-radius: 5px;
   letter-spacing: 0.04em;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.staff-session-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.staff-session-info > span:first-child {
+.staff-session-owner {
   font-size: 12px;
   font-weight: 500;
   color: var(--fg, #0f172a);
-  white-space: nowrap;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.staff-session-aside {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.staff-session-facts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .staff-session-slot {
   font-size: 10px;
+  font-weight: 600;
   color: var(--fg-muted, #64748b);
-}
-
-.staff-session-meta {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 3px;
+  white-space: nowrap;
 }
 
 .staff-session-time {
@@ -13672,6 +13791,8 @@ textarea.form-input {
   gap: 3px;
   font-size: 10px;
   color: var(--fg-muted, #64748b);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .staff-session-badge {
@@ -13703,6 +13824,7 @@ textarea.form-input {
   font-weight: 700;
   color: #10b981;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Customers */
@@ -13796,6 +13918,7 @@ textarea.form-input {
   font-weight: 800;
   color: var(--fg, #0f172a);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Feed */
@@ -13860,6 +13983,8 @@ textarea.form-input {
   font-size: 10px;
   font-weight: 700;
   color: var(--fg-muted, #64748b);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ─── Shift Calendar ─────────────────────────────────────────────── */
@@ -13969,6 +14094,18 @@ textarea.form-input {
   border-radius: 3px;
   white-space: nowrap;
   overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.1s ease, filter 0.1s ease;
+  user-select: none;
+}
+
+.staff-shift-event:hover {
+  transform: scale(1.04);
+  filter: brightness(0.95);
+}
+
+.staff-shift-event:active {
+  transform: scale(0.98);
 }
 
 .staff-shift-more {
@@ -15825,8 +15962,14 @@ textarea.form-input {
 .wallet-stats {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   margin-bottom: 16px;
+}
+
+@media (max-width: 1180px) {
+  .wallet-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .wallet-stat-card {
@@ -17720,6 +17863,42 @@ textarea.staff-desk__manual-confirm-input {
 .history-cancelled {
   color: #64748b;
 }
+.history-plate {
+  font-weight: 700 !important;
+  color: #1e293b !important;
+  font-size: 0.88rem !important;
+  letter-spacing: 0.02em;
+}
+.history-detail {
+  display: flex !important;
+  gap: 6px;
+  align-items: baseline;
+  color: #64748b !important;
+}
+.history-detail b {
+  color: #334155;
+  font-size: 0.82rem;
+}
+.history-renew-btn {
+  margin-top: 6px;
+  align-self: flex-start;
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  color: #fff;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.history-renew-btn:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+.history-renew-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 @media (max-width: 640px) {
   .subscription-history-row {
     align-items: flex-start;
@@ -19355,6 +19534,11 @@ textarea.staff-desk__manual-confirm-input {
   color: #15803d !important;
 }
 
+.staff-desk__exit-status--member {
+  color: #0284c7 !important;
+  font-weight: 700;
+}
+
 .staff-desk__exit-status--warn {
   color: #b45309 !important;
 }
@@ -19766,6 +19950,42 @@ textarea.staff-desk__manual-confirm-input {
 }
 .history-cancelled {
   color: #64748b;
+}
+.history-plate {
+  font-weight: 700 !important;
+  color: #1e293b !important;
+  font-size: 0.88rem !important;
+  letter-spacing: 0.02em;
+}
+.history-detail {
+  display: flex !important;
+  gap: 6px;
+  align-items: baseline;
+  color: #64748b !important;
+}
+.history-detail b {
+  color: #334155;
+  font-size: 0.82rem;
+}
+.history-renew-btn {
+  margin-top: 6px;
+  align-self: flex-start;
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  color: #fff;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.history-renew-btn:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+.history-renew-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 @media (max-width: 640px) {
   .subscription-history-row {

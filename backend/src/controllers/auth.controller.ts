@@ -12,7 +12,7 @@ import {
   createActiveSession,
   revokeUserSessions,
 } from "../services/session.service.js";
-import { signSession } from "../services/token.service.js";
+import { signSession, verifySession } from "../services/token.service.js";
 import { serializeUser } from "../utils/serializers.js";
 import { passwordSchema } from "../validations/password.validation.js";
 
@@ -183,35 +183,40 @@ export async function verifyEmailOtp(request: Request, response: Response) {
     return;
   }
 
-  if (!token.pendingUser) {
+  // Tài khoản credentials đã tồn tại nhưng chưa xác minh: kích hoạt, không tạo mới.
+  const existed = await User.findOne({ email });
+  if (existed?.isVerified) {
+    response.status(409).json({ message: "Email đã tồn tại." });
+    return;
+  }
+
+  if (!token.pendingUser && !existed) {
     response.status(400).json({
       message: "Không tìm thấy thông tin đăng ký. Vui lòng đăng ký lại.",
     });
     return;
   }
 
-  // Tranh user tao cung luc
-  const existed = await User.findOne({ email });
-  if (existed) {
-    response.status(409).json({ message: "Email đã tồn tại." });
-    return;
+  let user = existed;
+  if (!user) {
+    const pending = token.pendingUser as {
+      name: string;
+      passwordHash: string;
+      phone?: string;
+    };
+    user = await User.create({
+      name: pending.name,
+      email,
+      passwordHash: pending.passwordHash,
+      role: "customer",
+      phone: pending.phone,
+      isVerified: true,
+      provider: "credentials",
+    });
+  } else {
+    user.isVerified = true;
+    await user.save();
   }
-
-  const pending = token.pendingUser as {
-    name: string;
-    passwordHash: string;
-    phone?: string;
-  };
-
-  const user = await User.create({
-    name: pending.name,
-    email,
-    passwordHash: pending.passwordHash,
-    role: "customer",
-    phone: pending.phone,
-    isVerified: true,
-    provider: "credentials",
-  });
 
   token.usedAt = new Date();
   await token.save();
@@ -256,15 +261,16 @@ export async function resendVerificationOtp(
     usedAt: { $exists: false },
   }).sort({ createdAt: -1 });
 
-  if (!existing) {
+  const userExists = await User.findOne({ email });
+  // Tài khoản credentials đã tạo nhưng chưa xác minh (user cũ) vẫn được gửi lại OTP.
+  // Chỉ từ chối khi không còn gì để xác minh, hoặc tài khoản đã xác minh xong.
+  if (!existing && !userExists) {
     response.status(404).json({
       message: "Không có yêu cầu đăng ký nào đang chờ. Vui lòng đăng ký lại.",
     });
     return;
   }
-
-  const userExists = await User.findOne({ email });
-  if (userExists) {
+  if (userExists?.isVerified || (userExists && userExists.provider !== "credentials")) {
     response.status(409).json({ message: "Email đã được đăng ký." });
     return;
   }
@@ -281,7 +287,7 @@ export async function resendVerificationOtp(
     email,
     otpHash,
     purpose: "verify-email",
-    pendingUser: existing.pendingUser,
+    pendingUser: existing?.pendingUser,
     expiresAt: new Date(Date.now() + OTP_TTL_MS),
   });
 
@@ -317,13 +323,40 @@ export async function login(request: Request, response: Response) {
     return;
   }
 
-  // Chan dang nhap neu email chua xac minh (chi ap dung voi tai khoan credentials)
+  // Tài khoản credentials cũ có thể được tạo trước luồng OTP nên isVerified=false
+  // nhưng không còn OtpToken đăng ký. Gửi mã mới ngay tại đây để user không bị kẹt.
   if (!user.isVerified && user.provider === "credentials") {
+    if (!smtpConfigured()) {
+      response.status(503).json({
+        message:
+          "SMTP chưa được cấu hình. Không thể gửi mã xác minh email.",
+      });
+      return;
+    }
+
+    const otp = generateOtp();
+    const otpHash = await bcrypt.hash(otp, 12);
+    await OtpToken.updateMany(
+      { email: user.email, purpose: "verify-email", usedAt: { $exists: false } },
+      { $set: { usedAt: new Date() } },
+    );
+    await OtpToken.create({
+      email: user.email,
+      otpHash,
+      purpose: "verify-email",
+      expiresAt: new Date(Date.now() + OTP_TTL_MS),
+    });
+    await sendMail(
+      user.email,
+      "Mã OTP xác minh tài khoản iPARK",
+      `Mã OTP xác minh tài khoản iPARK của bạn là ${otp}. Mã có hiệu lực trong 5 phút.`,
+    );
+
     response.status(403).json({
       requiresEmailVerification: true,
       email: user.email,
       message:
-        "Email chưa được xác minh. Vui lòng nhập mã OTP đã gửi đến email để kích hoạt tài khoản.",
+        "Email chưa được xác minh. Mã OTP mới đã được gửi đến email để kích hoạt tài khoản.",
     });
     return;
   }
@@ -883,10 +916,11 @@ export async function verifyLoginTwoFactor(
 }
 
 export async function logout(request: Request, response: Response) {
-  const sid = request.user?.sid;
+  // Không dùng requireAuth: cookie hết hạn/phiên đã chết vẫn phải xóa được.
+  // Token còn hợp lệ thì thu hồi đúng ActiveSession theo sid trong JWT.
+  const claims = await verifySession(request.cookies?.[cookieName]);
+  const sid = claims?.sid;
   if (sid && mongoose.isValidObjectId(sid)) {
-    // SEC: thu hồi ActiveSession hiện tại (khớp sid trong JWT) thay vì
-    // chỉ xoá cookie — nếu không, token vẫn còn hiệu lực 8h phía server.
     await ActiveSession.updateOne(
       { _id: sid, isRevoked: false },
       { $set: { isRevoked: true } },
@@ -954,11 +988,6 @@ const profileUpdateSchema = z
       .min(2, "Họ tên phải có ít nhất 2 ký tự")
       .max(100)
       .optional(),
-    email: z
-      .string()
-      .trim()
-      .email("Email không hợp lệ")
-      .optional(),
     phone: z
       .string()
       .trim()
@@ -1007,19 +1036,6 @@ export async function updateProfile(request: Request, response: Response) {
   if (!user) {
     response.status(404).json({ message: "Không tìm thấy tài khoản." });
     return;
-  }
-
-  // Email uniqueness check
-  if (body.email && body.email.toLowerCase() !== user.email.toLowerCase()) {
-    const emailExisted = await User.findOne({
-      email: body.email.toLowerCase(),
-      _id: { $ne: user._id },
-    });
-    if (emailExisted) {
-      response.status(409).json({ message: "Email này đã được sử dụng bởi tài khoản khác." });
-      return;
-    }
-    user.email = body.email.toLowerCase();
   }
 
   // Phone uniqueness check

@@ -1,7 +1,7 @@
 import mongoose, { Model, Schema } from "mongoose";
 
 // Loại lỗi đỗ xe. Hiện chỉ hỗ trợ "đỗ lấn vạch".
-export type PenaltyViolationType = "over_line";
+export type PenaltyViolationType = "over_line" | "lost_card";
 
 export type PenaltyConfigDocument = {
   _id: mongoose.Types.ObjectId;
@@ -19,7 +19,7 @@ const penaltyConfigSchema = new Schema<PenaltyConfigDocument>(
   {
     violationType: {
       type: String,
-      enum: ["over_line"],
+      enum: ["over_line", "lost_card"],
       required: true,
       unique: true,
     },
@@ -35,3 +35,4 @@ const penaltyConfigSchema = new Schema<PenaltyConfigDocument>(
 export const PenaltyConfig: Model<PenaltyConfigDocument> =
   mongoose.models.PenaltyConfig ||
   mongoose.model<PenaltyConfigDocument>("PenaltyConfig", penaltyConfigSchema);
+
