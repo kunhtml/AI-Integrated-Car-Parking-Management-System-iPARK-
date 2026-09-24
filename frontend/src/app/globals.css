@@ -13507,6 +13507,13 @@ textarea.form-input {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 16px;
+  align-items: stretch;
+}
+
+.staff-bottom-row > .staff-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 /* Panels */
@@ -13702,17 +13709,18 @@ textarea.form-input {
 
 /* Sessions list */
 .staff-session-list {
+  flex: 1;
+  min-height: 0;
   padding: 4px 0;
-  max-height: 320px;
   overflow-y: auto;
 }
 
 .staff-session-row {
-  display: grid;
-  grid-template-columns: auto 1fr auto auto;
+  display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 16px;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 16px;
   border-bottom: 1px solid rgba(15, 23, 42, 0.04);
   transition: background 0.12s ease;
 }
@@ -13725,44 +13733,58 @@ textarea.form-input {
   border-bottom: none;
 }
 
+.staff-session-identity {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+}
+
 .staff-session-plate {
   font-family: monospace;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   background: rgba(139, 92, 246, 0.08);
   color: #8b5cf6;
   padding: 2px 7px;
   border-radius: 5px;
   letter-spacing: 0.04em;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.staff-session-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.staff-session-info > span:first-child {
+.staff-session-owner {
   font-size: 12px;
   font-weight: 500;
   color: var(--fg, #0f172a);
-  white-space: nowrap;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.staff-session-aside {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.staff-session-facts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .staff-session-slot {
   font-size: 10px;
+  font-weight: 600;
   color: var(--fg-muted, #64748b);
-}
-
-.staff-session-meta {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 3px;
+  white-space: nowrap;
 }
 
 .staff-session-time {
@@ -13771,6 +13793,8 @@ textarea.form-input {
   gap: 3px;
   font-size: 10px;
   color: var(--fg-muted, #64748b);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .staff-session-badge {
@@ -13802,6 +13826,7 @@ textarea.form-input {
   font-weight: 700;
   color: #10b981;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Customers */
@@ -13895,6 +13920,7 @@ textarea.form-input {
   font-weight: 800;
   color: var(--fg, #0f172a);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Feed */
@@ -13959,6 +13985,8 @@ textarea.form-input {
   font-size: 10px;
   font-weight: 700;
   color: var(--fg-muted, #64748b);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ─── Shift Calendar ─────────────────────────────────────────────── */

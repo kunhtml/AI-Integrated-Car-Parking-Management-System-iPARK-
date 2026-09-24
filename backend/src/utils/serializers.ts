@@ -60,6 +60,7 @@ export function serializeUser(user: UserDocument) {
     provider: user.provider,
     twoFactorEnabled: user.twoFactorEnabled,
     phone: user.phone ?? null,
+    address: user.address ?? null,
     isVerified: user.isVerified,
     lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
     createdAt: user.createdAt ? user.createdAt.toISOString() : null,

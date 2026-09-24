@@ -700,24 +700,11 @@ function RecentSessions({ sessions }: { sessions: ParkingSession[] }) {
     <div className="staff-session-list">
       {recent.map((s) => (
         <div key={s.id} className="staff-session-row">
-          <div className="staff-session-plate">{s.plate}</div>
-          <div className="staff-session-info">
-            <span>{s.owner}</span>
-            <span className="staff-session-slot">{s.slot}</span>
+          <div className="staff-session-identity">
+            <div className="staff-session-plate">{s.plate}</div>
+            <span className="staff-session-owner">{s.owner}</span>
           </div>
-          <div className="staff-session-meta">
-            {getSessionCheckInDate(s) && (
-              <span className="staff-session-time">
-                <Clock size={10} />
-                {getSessionCheckInDate(s)!.toLocaleString("vi-VN", {
-                  day: "2-digit",
-                  month: "2-digit",
-                  year: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </span>
-            )}
+          <div className="staff-session-aside">
             <span
               className={`staff-session-badge ${
                 s.status === "Đang gửi"
@@ -732,10 +719,26 @@ function RecentSessions({ sessions }: { sessions: ParkingSession[] }) {
               {s.status === "Chờ thanh toán" && <XCircle size={10} />}
               {s.status}
             </span>
+            <span className="staff-session-facts">
+              {getSessionCheckInDate(s) && (
+                <span className="staff-session-time">
+                  <Clock size={10} />
+                  {getSessionCheckInDate(s)!.toLocaleString("vi-VN", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+              )}
+              <span className="staff-session-slot">Ô {s.slot}</span>
+              {s.fee > 0 && (
+                <span className="staff-session-fee">
+                  {currency.format(s.fee)}
+                </span>
+              )}
+            </span>
           </div>
-          {s.fee > 0 && (
-            <span className="staff-session-fee">{currency.format(s.fee)}</span>
-          )}
         </div>
       ))}
     </div>
@@ -758,10 +761,7 @@ function TopCustomersList({ customers }: { customers: TopCustomer[] }) {
           <div className="staff-customer-info">
             <span className="staff-customer-name">{c.name}</span>
             <span className="staff-customer-sessions">
-              Biển số: {c.plate || "—"}
-            </span>
-            <span className="staff-customer-sessions">
-              {c.sessionCount} phiên
+              {c.plate || "—"} · {c.sessionCount} phiên
             </span>
           </div>
           <strong className="staff-customer-spent">
@@ -817,7 +817,7 @@ function ActivityFeed({ sessions }: { sessions: ParkingSession[] }) {
                 })}
             </span>
           </div>
-          <span className="staff-feed-slot">{s.slot}</span>
+          <span className="staff-feed-slot">Ô {s.slot}</span>
         </div>
       ))}
     </div>
@@ -1723,7 +1723,7 @@ function AdminDashboard() {
             icon={<Activity size={16} />}
             label="Phiên miễn phí"
             value={String(overview?.freeSessionCount ?? 0)}
-            sub="vé ưu đãi / 0đ"
+            sub="có gói đăng ký"
             color="blue"
           />
         </KpiGroup>
@@ -1742,7 +1742,6 @@ function AdminDashboard() {
                 <h2 className="staff-panel-title">Phiên gần đây</h2>
               </div>
             </div>
-            <span className="staff-panel-count">{sessions.length}</span>
           </div>
           <RecentSessions sessions={sessions} />
         </div>

@@ -94,6 +94,7 @@ export type DemoUser = {
   provider?: string;
   twoFactorEnabled?: boolean;
   phone?: string | null;
+  address?: string | null;
   isVerified?: boolean;
   lastLoginAt?: string | null;
   createdAt?: string;

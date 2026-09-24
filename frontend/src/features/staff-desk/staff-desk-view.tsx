@@ -221,6 +221,11 @@ export function StaffDeskView() {
     }
     processedIngestIdRef.current = pendingIngest.id || "";
     if (pendingIngest.direction === "in") {
+      // Barie vừa mở cho xe vào: bỏ qua ingest mới trong grace period (xe đang đi qua cổng)
+      // tránh camera bắt lại đuôi/thân xe làm mất màn hình thông báo hoàn thành.
+      if (Date.now() - entryGateOpenedAtRef.current < ENTRY_BANNER_MS) {
+        return;
+      }
       // Echo xác nhận/hủy từ backend (kể cả từ màn hình staff khác): đóng thẻ.
       if (
         pendingIngest.action === "entry_confirmed" ||
@@ -387,6 +392,9 @@ export function StaffDeskView() {
   const scanIntervalRef = useRef<number | null>(null);
   const activeIngestIdRef = useRef<string | null>(null);
   const autoExitScanFiredRef = useRef(false);
+  // Timestamp barie cổng vào vừa mở: giữ màn hình thành công cho xe đi qua
+  // trước khi cho phép SSE / frame camera mới xóa UI.
+  const entryGateOpenedAtRef = useRef<number>(0);
   // Timestamp barie vừa mở: giữ màn hình thành công 5s (cho xe đi qua)
   // trước khi cho phép SSE xóa UI.
   const exitGateOpenedAtRef = useRef<number>(0);
@@ -832,6 +840,7 @@ export function StaffDeskView() {
           );
           return;
         }
+        entryGateOpenedAtRef.current = Date.now();
         setBarrierMsg("Đã tạo phiên thủ công — đã mở barie cổng vào.");
         setPhase("done");
         setEntrySuccessNotice(
@@ -1013,6 +1022,7 @@ export function StaffDeskView() {
       method: "POST",
       body: JSON.stringify({ direction: entryLaneRef.current }),
     }).catch(() => undefined);
+    entryGateOpenedAtRef.current = 0;
     setActiveIngest(null);
     setEntryBlockingSession(null);
     setPhase("idle");
@@ -1057,6 +1067,11 @@ export function StaffDeskView() {
     setBarrierMsg("");
     setEntrySuccessNotice(null);
     setCreatedSession(null);
+    // Đánh dấu ngay ID này do chính màn hình này xử lý — tránh echo SSE "entry_confirmed"
+    // bắn về kích hoạt dismissActive() xóa thẻ trước khi hoàn tất mở barie.
+    selfHandledEntryIdsRef.current.add(ingestId);
+    rememberDismissedPlate(normalized);
+    if (detected) rememberDismissedPlate(detected);
     try {
       const res = await apiFetch(
         `/camera-logs/entry-reviews/${encodeURIComponent(ingestId)}/confirm`,
@@ -1115,6 +1130,7 @@ export function StaffDeskView() {
             : "Đã tạo phiên cho khách.",
       );
       setPhase("opening");
+      entryGateOpenedAtRef.current = Date.now();
       // Phiên đã tạo thành công ở backend → mở barie. Lỗi bridge KHÔNG được
       // giả báo thành công: staff phải mở tay ngoài bốt.
       let openRes;
@@ -1123,6 +1139,8 @@ export function StaffDeskView() {
           method: "POST",
         });
       } catch {
+        setActiveIngest(null);
+        activeIngestIdRef.current = null;
         setPhase("error");
         setBarrierMsg(
           "Đã tạo phiên nhưng KHÔNG kết nối được bridge — mở barie thủ công ngoài bốt.",
@@ -1130,13 +1148,17 @@ export function StaffDeskView() {
         return;
       }
       if (!openRes.ok) {
+        setActiveIngest(null);
+        activeIngestIdRef.current = null;
         setPhase("error");
         setBarrierMsg(
           `Đã tạo phiên nhưng mở barie thất bại (${openRes.status}). Mở tay ngoài bốt.`,
         );
         return;
       }
-      selfHandledEntryIdsRef.current.add(ingestId);
+      entryGateOpenedAtRef.current = Date.now();
+      setActiveIngest(null);
+      activeIngestIdRef.current = null;
       setBarrierMsg("Đã xác nhận thông tin — mở barie cổng vào.");
       setPhase("done");
       setEntrySuccessNotice(
@@ -1150,6 +1172,7 @@ export function StaffDeskView() {
     activeIngest,
     dismissActive,
     manualPlate,
+    rememberDismissedPlate,
     reviewNote,
     scanPhase,
     scanUid,
@@ -1177,6 +1200,7 @@ export function StaffDeskView() {
   useEffect(() => {
     if (streamStatus !== "open") return;
     if (activeIngestRef.current) return;
+    if (Date.now() - entryGateOpenedAtRef.current < ENTRY_BANNER_MS) return;
     apiFetch("/camera-logs/entry-reviews/pending")
       .then(async (response) => {
         if (!response.ok) return;
@@ -1239,6 +1263,9 @@ export function StaffDeskView() {
       const res = await bridgeFetch(`/gate/${entryLaneRef.current}/open`, {
         method: "POST",
       });
+      if (res.ok) {
+        entryGateOpenedAtRef.current = Date.now();
+      }
       setBarrierMsg(
         res.ok ? "Đã mở barie cổng vào." : `Mở barie thất bại (${res.status}).`,
       );
@@ -2080,9 +2107,7 @@ export function StaffDeskView() {
             }
           />
           <div className="staff-desk__panel">
-            {(phase === "done" || phase === "error") &&
-            createdSession &&
-            !activeIngest ? (
+            {(phase === "done" || phase === "error") && createdSession ? (
               <div className="staff-desk__waiting staff-desk__waiting--entry">
                 <div
                   className="staff-desk__waiting-icon"
@@ -2131,18 +2156,8 @@ export function StaffDeskView() {
                   className="btn btn-primary"
                   style={{ marginTop: "1rem" }}
                   onClick={() => {
-                    setPhase("idle");
-                    setCreatedSession(null);
-                    setCreateMsg("");
-                    setBarrierMsg("");
-                    setEntrySuccessNotice(null);
-                    setShowManualEntryForm(false);
-                    setManualEntryPlate("");
-                    setManualEntryError("");
-                    setManualEntryVehicle(null);
-                    setPendingManualEntryRfid(false);
-                    setScanPhase("idle");
-                    setScanUid("");
+                    entryGateOpenedAtRef.current = 0;
+                    void dismissActive();
                   }}
                 >
                   Xong

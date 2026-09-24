@@ -27,6 +27,21 @@ export default function LoginPage() {
       });
       const data = await response.json().catch(() => ({}));
 
+      // 202 = mật khẩu đúng nhưng còn bước 2FA; 403 = email chưa xác minh.
+      // Cả hai đều chưa có cookie, nên không được coi là đăng nhập xong.
+      if (response.status === 202 && data.requiresTwoFactor) {
+        setMessage(
+          data.message ||
+            "Tài khoản bật xác thực 2 lớp. Vui lòng đăng nhập ở trang chính để nhập mã.",
+        );
+        return;
+      }
+      if (response.status === 403 && data.requiresEmailVerification) {
+        setMessage(
+          data.message || "Email chưa được xác minh. Vui lòng nhập mã OTP đã gửi.",
+        );
+        return;
+      }
       if (!response.ok) {
         setMessage(data.message || "Không đăng nhập được.");
         return;
