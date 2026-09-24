@@ -18,6 +18,7 @@ export type CameraIngestEvent = {
   ownerName?: string;
   userType: "resident" | "guest" | "unknown";
   imagePath?: string;
+  plateCropPath?: string;
   entryImagePath?: string;
   barrierOpened: boolean;
   sessionId?: string | null;

@@ -2469,17 +2469,21 @@ tr:hover td {
   display: grid;
   place-items: center;
   min-height: 110px;
+  padding: 8px;
   overflow: hidden;
   border: 1px solid var(--desk-line);
   border-radius: 8px;
   background: #edf1f5;
 }
 
+/* Ảnh crop biển: cao cố định + sắc nét để staff đọc tay đối chiếu. */
 .staff-desk__ingest-img img {
   display: block;
-  width: 100%;
-  max-height: 160px;
+  width: auto;
+  max-width: 100%;
+  max-height: 180px;
   object-fit: contain;
+  image-rendering: -webkit-optimize-contrast;
 }
 
 .staff-desk__ingest-img--empty {

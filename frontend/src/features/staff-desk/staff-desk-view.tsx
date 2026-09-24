@@ -3366,7 +3366,10 @@ function IngestCard(props: {
   onConfirm: () => void;
 }) {
   const { event } = props;
-  const imgUrl = resolveBridgeImageUrl(event.imagePath);
+  // Ưu tiên crop biển (luôn căn giữa, dễ đọc); thiếu thì lùi về full frame.
+  const imgUrl =
+    resolveBridgeImageUrl(event.plateCropPath) ??
+    resolveBridgeImageUrl(event.imagePath);
   const expectedRfidUid =
     typeof event.metadata?.expectedRfidUid === "string"
       ? event.metadata.expectedRfidUid

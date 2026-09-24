@@ -371,6 +371,7 @@ class BackendClient:
         plate: str = None,
         user_type: str = "unknown",
         image_path: str = None,
+        plate_crop_path: str = None,
         barrier_opened: bool = False,
         metadata: dict = None,
     ):
@@ -384,6 +385,7 @@ class BackendClient:
                 "plate": plate,
                 "userType": user_type,
                 "imagePath": image_path,
+                "plateCropPath": plate_crop_path,
                 "barrierOpened": barrier_opened,
                 "metadata": metadata or {},
             }
@@ -1417,17 +1419,51 @@ def set_rfid_scan_enabled(value: bool, direction: str = "in", mode: str = "gate"
 
 
 # ==== OCR & XỬ LÝ FRAME ====
-def _save_plate_snapshot(crop_img, full_frame, direction: str, plate_hint: str = "") -> str:
+def _make_plate_display_crop(frame, box, min_width: int = 360):
+    """Crop vùng biển để staff đọc tay, luôn cùng kích thước bất kể vị trí xe.
+
+    Pad theo TỈ LỆ box (không phải số px cứng) để biển 1 dòng lẫn 2 dòng đều
+    có nền trống vừa đủ, rồi upscale nếu crop quá nhỏ. Kết quả luôn tập trung
+    biển ở giữa khung thay vì trôi theo vị trí xe trong tầm quét.
     """
-    Lưu bằng chứng là ảnh toàn bộ khung hình camera tại thời điểm OCR xác nhận
-    biển số. Ảnh crop chỉ phục vụ OCR trong RAM, không được dùng làm evidence.
+    if frame is None or box is None:
+        return None
+    h, w = frame.shape[:2]
+    x1, y1, x2, y2 = [int(v) for v in box[:4]]
+    pad_x = max(8, int((x2 - x1) * 0.15))
+    pad_y = max(8, int((y2 - y1) * 0.25))
+    cx1 = max(0, x1 - pad_x)
+    cy1 = max(0, y1 - pad_y)
+    cx2 = min(w, x2 + pad_x)
+    cy2 = min(h, y2 + pad_y)
+    crop = frame[cy1:cy2, cx1:cx2]
+    if crop.size == 0:
+        return None
+    ch, cw = crop.shape[:2]
+    if cw < min_width:
+        scale = min_width / float(cw)
+        crop = cv2.resize(
+            crop,
+            (min_width, max(1, int(round(ch * scale)))),
+            interpolation=cv2.INTER_CUBIC,
+        )
+    return crop
+
+
+def _save_plate_snapshot(crop_img, full_frame, direction: str, plate_hint: str = ""):
+    """
+    Lưu 2 ảnh cho 1 sự kiện xe vào/ra, trả về (full_rel, crop_rel).
+
+      - _full.jpg  : toàn khung hình, làm minh chứng khi có khiếu nại.
+      - _plate.jpg : crop riêng quanh biển, staff dùng để đối chiếu tay.
+
     Tên file chứa direction + timestamp + plate để tránh nhầm camera vào/ra.
-    Nếu lỗi I/O trả về "" — caller vẫn tiếp tục xử lý OCR trong RAM.
+    Nếu lỗi I/O trả về ("", "") — caller vẫn tiếp tục xử lý OCR trong RAM.
     """
     try:
         os.makedirs(SNAPSHOT_DIR, exist_ok=True)
     except Exception:
-        return ""
+        return "", ""
 
     direction_norm = (direction or "in").lower().strip()
     if direction_norm not in ("in", "out"):
@@ -1437,15 +1473,21 @@ def _save_plate_snapshot(crop_img, full_frame, direction: str, plate_hint: str =
     plate_norm = _normalize_plate(plate_hint) or "nopl"
     base_name = f"{direction_norm}_{ts}_{plate_norm}"
 
-    full_path = os.path.join(SNAPSHOT_DIR, f"{base_name}_full.jpg")
+    full_rel = ""
+    if full_frame is not None:
+        full_path = os.path.join(SNAPSHOT_DIR, f"{base_name}_full.jpg")
+        # Backend sẽ dùng path này cho entryImageUrl/exitImageUrl tương ứng.
+        if _safe_imwrite(full_path, full_frame):
+            # Trả về path tương đối để frontend dùng qua Flask static handler.
+            full_rel = f"/static/snapshots/{base_name}_full.jpg"
 
-    # Chỉ lưu và trả về full frame. Backend sẽ dùng path này cho
-    # entryImageUrl hoặc exitImageUrl tương ứng với direction.
-    if full_frame is None or not _safe_imwrite(full_path, full_frame):
-        return ""
+    crop_rel = ""
+    if crop_img is not None and getattr(crop_img, "size", 0) > 0:
+        crop_path = os.path.join(SNAPSHOT_DIR, f"{base_name}_plate.jpg")
+        if _safe_imwrite(crop_path, crop_img):
+            crop_rel = f"/static/snapshots/{base_name}_plate.jpg"
 
-    # Trả về path tương đối để frontend dùng qua Flask static handler.
-    return f"/static/snapshots/{base_name}_full.jpg"
+    return full_rel, crop_rel
 
 
 def _find_plate_boxes_opencv(frame) -> list:
@@ -1615,10 +1657,12 @@ def process_frame(frame, plate_counter, last_plate, last_seen_time, prefix, ser,
     global last_boxes_in, last_boxes_out, _ai_metrics
     # OCR tắt -> trả frame nguyên bản, không tốn CPU.
     if not OCR_ENABLED or paddle_ocr is None:
-        return frame, plate_counter, last_plate, last_seen_time, "", ""
+        return frame, plate_counter, last_plate, last_seen_time, "", "", ""
 
     detected_snap = ""
+    detected_crop = ""
     pending_crop = None
+    best_box = None
     is_in = (direction == "in")
     t0 = time.time()
     candidate = None
@@ -1655,7 +1699,7 @@ def process_frame(frame, plate_counter, last_plate, last_seen_time, prefix, ser,
                 print(f"[YOLO][ERROR] {direction}: {type(e).__name__}: {e}")
                 if "not enough memory" in str(e).lower() or "out of memory" in str(e).lower():
                     _set_memory_degraded("oom")
-                return frame, plate_counter, last_plate, last_seen_time, "", ""
+                return frame, plate_counter, last_plate, last_seen_time, "", "", ""
 
             if results and len(results) > 0:
                 for r in results:
@@ -1754,9 +1798,12 @@ def process_frame(frame, plate_counter, last_plate, last_seen_time, prefix, ser,
                 pending_crop = frame[cy1:cy2, cx1:cx2]
 
             if pending_crop is not None and pending_crop.size > 0:
+                # Crop trưng bày dùng padding theo tỉ lệ riêng, không dùng
+                # crop OCR (đã pad cứng 10px) để staff đọc thoải mái hơn.
+                display_crop = _make_plate_display_crop(frame, best_box)
                 if not SNAPSHOT_ON_VALID_PLATE_ONLY:
-                    detected_snap = _save_plate_snapshot(
-                        pending_crop, frame, direction, plate_hint=""
+                    detected_snap, detected_crop = _save_plate_snapshot(
+                        display_crop, frame, direction, plate_hint=""
                     )
 
             if candidate:
@@ -1786,8 +1833,9 @@ def process_frame(frame, plate_counter, last_plate, last_seen_time, prefix, ser,
             plate_counter.clear()
 
             if not detected_snap:
-                detected_snap = _save_plate_snapshot(
-                    pending_crop, frame, direction, plate_hint=candidate
+                display_crop = _make_plate_display_crop(frame, best_box)
+                detected_snap, detected_crop = _save_plate_snapshot(
+                    display_crop, frame, direction, plate_hint=candidate
                 )
 
             try:
@@ -1806,7 +1854,15 @@ def process_frame(frame, plate_counter, last_plate, last_seen_time, prefix, ser,
         last_plate = ""
 
     detected = candidate if (candidate and pattern.match(candidate)) else ""
-    return frame, plate_counter, last_plate, last_seen_time, detected, detected_snap
+    return (
+        frame,
+        plate_counter,
+        last_plate,
+        last_seen_time,
+        detected,
+        detected_snap,
+        detected_crop,
+    )
 
 
 # ==== ĐỌC TỪ ARDUINO ====
@@ -2046,7 +2102,7 @@ def close_gate(gate='in'):
 
 
 # ==== CAMERA LOOP / OCR SCHEDULER ====
-def _handle_ocr_side_effects(direction_key, last_plate, detected, detected_snap):
+def _handle_ocr_side_effects(direction_key, last_plate, detected, detected_snap, detected_crop=""):
     """Cập nhật state + push/lookup nền sau khi process_frame xong."""
     global last_detected_plate_in, last_detected_plate_out
     global last_snapshot_in, last_snapshot_out
@@ -2072,13 +2128,14 @@ def _handle_ocr_side_effects(direction_key, last_plate, detected, detected_snap)
     setattr(_handle_ocr_side_effects, f"last_push_{direction_key}", time.time())
 
     snap_path = detected_snap or ""
+    crop_path = detected_crop or ""
     conf_val = 0.0
     boxes = last_boxes_in if direction_key == "in" else last_boxes_out
     if boxes:
         conf_val = float(boxes[0][4]) if len(boxes[0]) > 4 else 0.0
 
     def _push_ocr_log(plate=detected, direction=direction_key,
-                      snap=snap_path, conf=conf_val):
+                      snap=snap_path, crop=crop_path, conf=conf_val):
         try:
             backend.push_camera_log(
                 direction=direction,
@@ -2087,6 +2144,7 @@ def _handle_ocr_side_effects(direction_key, last_plate, detected, detected_snap)
                 plate=plate,
                 user_type="guest",
                 image_path=snap,
+                plate_crop_path=crop,
                 metadata={"source": "camera-ocr"},
             )
             print(f"[OCR][PUSH] direction={direction} plate={plate} conf={conf:.2f}")
@@ -2097,7 +2155,7 @@ def _handle_ocr_side_effects(direction_key, last_plate, detected, detected_snap)
 
     if direction_key == "in":
         def _lookup_vehicle_info(plate=detected, direction=direction_key,
-                                 snap=snap_path, conf=conf_val):
+                                 snap=snap_path, crop=crop_path, conf=conf_val):
             global pending_vehicle_info
             try:
                 info = backend.rfid_lookup_plate(plate)
@@ -2122,6 +2180,7 @@ def _handle_ocr_side_effects(direction_key, last_plate, detected, detected_snap)
                         plate=plate,
                         user_type="resident",
                         image_path=snap,
+                        plate_crop_path=crop,
                         metadata={"source": "camera-ocr", "lookupResult": "registered-or-subscriber"},
                     )
                     print(f"[OCR][PUSH-UPDATE] {plate} → resident")
@@ -2158,18 +2217,22 @@ def _ocr_worker(frame_copy, plate_counter, last_plate, last_seen_time,
     global _ai_metrics
     _ai_metrics["ocr_busy"] = True
     try:
-        _, pc, lp, lst, detected, detected_snap = process_frame(
+        _, pc, lp, lst, detected, detected_snap, detected_crop = process_frame(
             frame_copy, plate_counter, last_plate, last_seen_time,
             prefix, ser, lock, direction_key,
         )
-        _ocr_worker.results[direction_key] = (pc, lp, lst, detected, detected_snap)
-        _handle_ocr_side_effects(direction_key, last_plate, detected, detected_snap)
+        _ocr_worker.results[direction_key] = (
+            pc, lp, lst, detected, detected_snap, detected_crop,
+        )
+        _handle_ocr_side_effects(
+            direction_key, last_plate, detected, detected_snap, detected_crop
+        )
     except Exception as e:
         print(f"[OCR][WORKER][ERROR] {direction_key}: {type(e).__name__}: {e}")
         if "not enough memory" in str(e).lower() or "out of memory" in str(e).lower():
             _set_memory_degraded("oom")
         _ocr_worker.results[direction_key] = (
-            plate_counter, last_plate, last_seen_time, "", ""
+            plate_counter, last_plate, last_seen_time, "", "", ""
         )
     finally:
         _ai_metrics["ocr_busy"] = False
@@ -2256,7 +2319,7 @@ class OcrScheduler:
             prev_last_plate = st["last_plate"]
             _ai_metrics["ocr_busy"] = True
             try:
-                _, pc, lp, lst, detected, detected_snap = process_frame(
+                _, pc, lp, lst, detected, detected_snap, detected_crop = process_frame(
                     frame,
                     st["plate_counter"],
                     st["last_plate"],
@@ -2283,7 +2346,9 @@ class OcrScheduler:
                     if detected_snap:
                         last_snapshot_out = detected_snap
 
-                _handle_ocr_side_effects(direction, prev_last_plate, detected, detected_snap)
+                _handle_ocr_side_effects(
+                    direction, prev_last_plate, detected, detected_snap, detected_crop
+                )
             except Exception as e:
                 print(f"[OCR][SCHED][ERROR] {direction}: {type(e).__name__}: {e}")
                 if "not enough memory" in str(e).lower() or "out of memory" in str(e).lower():
@@ -2428,7 +2493,7 @@ def camera_loop():
                 for key in ("in", "out"):
                     res = _ocr_worker.results.pop(key, None)
                     if res is not None:
-                        pc, lp, lst, detected, detected_snap = res
+                        pc, lp, lst, detected, detected_snap, detected_crop = res
                         if key == "in":
                             plate_counter_in = pc
                             last_plate_in = lp

@@ -18,6 +18,8 @@ export type ParkingCameraLogDocument = {
   plate?: string;
   userType?: "resident" | "guest" | "unknown";
   imagePath?: string;
+  /** Crop riêng quanh biển số — staff dùng để đối chiếu tay. */
+  plateCropPath?: string;
   barrierOpened: boolean;
   sessionId?: mongoose.Types.ObjectId;
   vehicleId?: mongoose.Types.ObjectId;
@@ -61,6 +63,7 @@ const parkingCameraLogSchema = new Schema<ParkingCameraLogDocument>(
       default: "unknown",
     },
     imagePath: { type: String },
+    plateCropPath: { type: String },
     barrierOpened: { type: Boolean, default: false },
     sessionId: {
       type: Schema.Types.ObjectId,

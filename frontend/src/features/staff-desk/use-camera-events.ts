@@ -14,6 +14,8 @@ export type CameraIngestEvent = {
   ownerName?: string;
   userType: "resident" | "guest" | "unknown";
   imagePath?: string;
+  /** Crop riêng quanh biển — ưu tiên hiển thị để staff đối chiếu tay. */
+  plateCropPath?: string;
   entryImagePath?: string;
   barrierOpened: boolean;
   sessionId?: string | null;

@@ -113,6 +113,7 @@ async function finalizeBridgeCheckout(
  *   plate?: string,           // biển số đã biết (ưu tiên hơn detectedPlate)
  *   userType?: "resident" | "guest" | "unknown",
  *   imagePath?: string,
+ *   plateCropPath?: string,   // crop riêng quanh biển (staff đối chiếu tay)
  *   barrierOpened?: boolean,
  *   metadata?: object
  * }
@@ -128,6 +129,7 @@ export async function pushCameraLog(request: Request, response: Response) {
       plate: z.string().trim().optional(),
       userType: z.enum(["resident", "guest", "unknown"]).default("unknown"),
       imagePath: z.string().trim().optional(),
+      plateCropPath: z.string().trim().optional(),
       barrierOpened: z.boolean().default(false),
       metadata: z.record(z.string(), z.any()).optional(),
     })
@@ -281,6 +283,7 @@ export async function pushCameraLog(request: Request, response: Response) {
     plate,
     userType: body.userType,
     imagePath: body.imagePath,
+    plateCropPath: body.plateCropPath,
     barrierOpened: body.barrierOpened,
     sessionId,
     vehicleId: vehicle?._id,
@@ -415,6 +418,7 @@ export async function pushCameraLog(request: Request, response: Response) {
     ownerName: eventOwnerName,
     userType: eventUserType,
     imagePath: body.imagePath,
+    plateCropPath: body.plateCropPath,
     entryImagePath: openSession?.entryImageUrl,
     barrierOpened: body.barrierOpened,
     sessionId: sessionId?.toString() ?? null,
@@ -501,6 +505,7 @@ export async function listCameraLogs(request: Request, response: Response) {
         userType: l.userType,
         barrierOpened: l.barrierOpened,
         imagePath: l.imagePath,
+        plateCropPath: l.plateCropPath,
         sessionId: sid ?? null,
         sessionStatus: sess?.status ?? null,
         sessionPaymentStatus: sess?.paymentStatus ?? null,
@@ -604,6 +609,7 @@ function serializeEntryReview(log: {
   ownerName?: string | null;
   userType?: string | null;
   imagePath?: string | null;
+  plateCropPath?: string | null;
   entryReviewState?: string | null;
   confirmedPlate?: string | null;
   createdAt: Date;
@@ -619,6 +625,7 @@ function serializeEntryReview(log: {
     ownerName: log.ownerName,
     userType: log.userType || "unknown",
     imagePath: log.imagePath,
+    plateCropPath: log.plateCropPath,
     entryReviewState: log.entryReviewState || "pending_review",
     confirmedPlate: log.confirmedPlate,
     createdAt: log.createdAt.toISOString(),
@@ -881,6 +888,7 @@ export async function confirmEntryReview(
     ownerName: claimed.ownerName,
     userType: (claimed.userType || "unknown") as "resident" | "guest" | "unknown",
     imagePath: claimed.imagePath,
+    plateCropPath: claimed.plateCropPath,
     barrierOpened: false,
     sessionId: sessionId ?? null,
     action: "entry_confirmed",
@@ -965,6 +973,7 @@ export async function dismissEntryReview(
     ownerName: updated.ownerName,
     userType: (updated.userType || "unknown") as "resident" | "guest" | "unknown",
     imagePath: updated.imagePath,
+    plateCropPath: updated.plateCropPath,
     barrierOpened: false,
     sessionId: null,
     action: "entry_dismissed",

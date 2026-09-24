@@ -2,17 +2,23 @@ import { Request, Response } from "express";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { StaffApplication } from "../models/StaffApplication.js";
 import { User, UserRole } from "../models/User.js";
 import { ShiftSchedule } from "../models/ShiftSchedule.js";
 import { createAuditLog } from "../services/auditLog.service.js";
+import {
+  appendHistory,
+  getApplicationPayload,
+} from "../services/staffApplications.service.js";
 import { revokeUserSessions } from "../services/session.service.js";
 import { serializeUser } from "../utils/serializers.js";
 import { passwordSchema } from "../validations/password.validation.js";
 
-// Vai trò mà mỗi actor được phép quản lý.
+// Vai trò mà mỗi actor được phép quản lý. Admin cần thấy/gán được "manager"
+// để khớp với dropdown vai trò ở frontend; không actor nào tự gán được "admin".
 function manageableRoles(actorRole?: string): UserRole[] {
-  if (actorRole === "admin" || actorRole === "manager")
-    return ["staff", "customer"];
+  if (actorRole === "admin") return ["manager", "staff", "customer"];
+  if (actorRole === "manager") return ["staff", "customer"];
   if (actorRole === "staff") return ["customer"];
   return [];
 }
@@ -91,7 +97,7 @@ export async function createUser(request: Request, response: Response) {
       name: z.string().min(2, "Họ tên phải có ít nhất 2 ký tự"),
       email: z.string().email("Email không hợp lệ"),
       password: passwordSchema,
-      role: z.enum(["admin", "staff", "customer"]),
+      role: z.enum(["admin", "manager", "staff", "customer"]),
       status: z.enum(["Đang hoạt động", "Đã khóa"]).optional(),
       phone: phoneInputSchema,
     })
@@ -147,22 +153,27 @@ export async function createUser(request: Request, response: Response) {
     throw error;
   }
 
-  // OPS-01: audit tạo tài khoản (không ghi password/hash).
-  await createAuditLog({
-    action: "user_created",
-    entityType: "User",
-    entityId: user._id,
-    performedBy: request.user!.id,
-    changes: {
-      new: {
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        status: user.status,
-        phone: user.phone ?? null,
+  // OPS-01: audit tạo tài khoản (không ghi password/hash). Tài khoản đã tồn tại
+  // ở DB → audit hỏng không được 500 và làm admin tưởng tạo tài khoản thất bại.
+  try {
+    await createAuditLog({
+      action: "user_created",
+      entityType: "User",
+      entityId: user._id,
+      performedBy: request.user!.id,
+      changes: {
+        new: {
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          status: user.status,
+          phone: user.phone ?? null,
+        },
       },
-    },
-  });
+    });
+  } catch (error) {
+    console.error("[users] Không ghi được audit log tạo tài khoản:", error);
+  }
 
   response.status(201).json({ user: serializeUser(user) });
 }
@@ -174,7 +185,7 @@ export async function updateUser(request: Request, response: Response) {
       id: z.string().min(1),
       name: z.string().min(2).optional(),
       email: z.string().email("Email không hợp lệ").optional(),
-      role: z.enum(["admin", "staff", "customer"]).optional(),
+      role: z.enum(["admin", "manager", "staff", "customer"]).optional(),
       status: z.enum(["Đang hoạt động", "Đã khóa"]).optional(),
       password: passwordSchema.optional(),
       phone: phoneInputSchema,
@@ -273,6 +284,44 @@ export async function updateUser(request: Request, response: Response) {
 
   await target.save();
 
+  // Hạ nhân viên về khách hàng → đơn đăng ký đã "approved" không còn đúng với
+  // thực tế nữa. Giữ nguyên "approved" làm trang hồ sơ tự mâu thuẫn (vai trò
+  // "Khách hàng" nhưng card báo "Bạn đang làm Nhân viên") và chặn người dùng
+  // đăng ký lại. Chuyển sang "cancelled" — canApply đã chấp nhận trạng thái này.
+  if (body.role === "customer" && previousRole === "staff") {
+    try {
+      const approvedApplication = await StaffApplication.findOneAndUpdate(
+        { userId: target._id, status: "approved" },
+        {
+          $set: {
+            status: "cancelled",
+            reviewNote: "Quản trị viên chuyển tài khoản về khách hàng.",
+          },
+        },
+        { new: true, sort: { createdAt: -1 } },
+      );
+      if (approvedApplication) {
+        const snapshot = getApplicationPayload(approvedApplication);
+        await appendHistory({
+          application: approvedApplication,
+          action: "CANCELLED",
+          oldStatus: "approved",
+          newStatus: "cancelled",
+          performedBy: request.user!.id,
+          performedRole: "admin",
+          note: "Quản trị viên chuyển tài khoản về khách hàng.",
+          before: snapshot,
+          after: snapshot,
+          changedFields: [],
+        });
+      }
+    } catch (error) {
+      // target.save() đã commit; lỗi đồng bộ đơn không được 500 cả request và
+      // khiến admin tưởng việc hạ quyền thất bại trong khi thực tế đã xong.
+      console.error("[users] Không đồng bộ được đơn đăng ký nhân viên:", error);
+    }
+  }
+
   // SEC-01: khóa / đổi vai trò / đặt lại mật khẩu phải vô hiệu hóa phiên cũ
   // của tài khoản bị tác động để claims trong JWT không còn được tin theo.
   if (
@@ -297,13 +346,19 @@ export async function updateUser(request: Request, response: Response) {
     changes.new.password = "(đã thay đổi)";
   }
   if (Object.keys(changes.old).length) {
-    await createAuditLog({
-      action: "user_updated",
-      entityType: "User",
-      entityId: target._id,
-      performedBy: request.user!.id,
-      changes,
-    });
+    // target.save() đã commit từ trước: audit log hỏng không được biến thành 500
+    // khiến admin tưởng thao tác hạ quyền thất bại trong khi dữ liệu đã đổi.
+    try {
+      await createAuditLog({
+        action: "user_updated",
+        entityType: "User",
+        entityId: target._id,
+        performedBy: request.user!.id,
+        changes,
+      });
+    } catch (error) {
+      console.error("[users] Không ghi được audit log cập nhật:", error);
+    }
   }
 
   response.json({ user: serializeUser(target) });

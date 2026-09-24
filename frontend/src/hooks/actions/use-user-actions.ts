@@ -44,7 +44,7 @@ export function createUserActions({
       method: "POST",
       body: JSON.stringify(body),
     });
-    const data = await response.json();
+    const data = await response.json().catch(() => ({}));
     if (!response.ok) {
       const error = new Error(data.message || "Không tạo được người dùng.");
       setActionLog(error.message);
@@ -60,7 +60,10 @@ export function createUserActions({
       method: "PATCH",
       body: JSON.stringify({ id, ...updates }),
     });
-    const data = await response.json();
+    // .catch trước khi kiểm tra response.ok: body HTML từ proxy/500 sẽ ném
+    // SyntaxError và báo tay "Unexpected token '<'", khiến thông báo lỗi thật
+    // (dòng dưới) không bao giờ hiển thị cho người dùng.
+    const data = await response.json().catch(() => ({}));
     if (!response.ok) {
       const error = new Error(
         data.message || "Không cập nhật được người dùng.",
@@ -74,7 +77,7 @@ export function createUserActions({
 
   async function deleteUser(id: string) {
     const response = await apiFetch(`/users/${id}`, { method: "DELETE" });
-    const data = await response.json();
+    const data = await response.json().catch(() => ({}));
     if (!response.ok) {
       const error = new Error(data.message || "Không xóa được người dùng.");
       setActionLog(error.message);

@@ -24,6 +24,7 @@ import { useParkingApp } from "@/context/parking-app-context";
 import { PasswordInput } from "@/features/auth/password-input";
 import type { UserUpdatePayload } from "@/hooks/actions/use-user-actions";
 import { roleLabels } from "@/lib/constants";
+import { showError } from "@/lib/toast";
 import type { DemoUser, Role } from "@/types";
 
 function show(value?: string | number | null) {
@@ -345,12 +346,26 @@ export function UsersView() {
     };
     // DATA-01: chỉ gửi các trường backend hỗ trợ; phone rỗng = xóa SĐT.
     updates.phone = form.phone?.trim() ?? "";
-    await updateUser(String(editing.id), updates);
+    try {
+      await updateUser(String(editing.id), updates);
+    } catch (err) {
+      // Giữ modal mở để nhân viên sửa lại; báo lỗi thay vì nuốt im lặng.
+      showError(
+        err instanceof Error
+          ? err.message
+          : "Không cập nhật được người dùng.",
+      );
+      return;
+    }
     setEditing(null);
   }
 
   async function handleCreate(event: React.FormEvent<HTMLFormElement>) {
-    await createUser(event);
+    try {
+      await createUser(event);
+    } catch {
+      return; // createUser đã ghi log + ném lỗi có message; giữ form mở.
+    }
     setShowCreate(false);
   }
 
@@ -361,7 +376,13 @@ export function UsersView() {
       )
     )
       return;
-    await deleteUser(String(user.id));
+    try {
+      await deleteUser(String(user.id));
+    } catch (err) {
+      showError(
+        err instanceof Error ? err.message : "Không xóa được người dùng.",
+      );
+    }
   }
 
   return (
